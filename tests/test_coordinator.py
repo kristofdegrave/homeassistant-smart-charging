@@ -3693,7 +3693,7 @@ async def test_read_owned_entities_clamps_soc_limit_override_via_existing_setter
     assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
 
 
-async def test_should_apply_store_dates_when_read_owned_entities_runs(hass):
+async def test_should_apply_home_day_dates_when_the_store_resolves_a_date(hass):
     # Arrange
     tomorrow = dt_util.now().date() + timedelta(days=1)
     store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): {tomorrow}})

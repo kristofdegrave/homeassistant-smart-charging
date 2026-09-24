@@ -27,14 +27,14 @@ T = TypeVar("T", str, float, bool, time)
 _LOGGER = logging.getLogger(__name__)
 
 
-def parse_iso_dates(raw: object) -> set[date]:
+def parse_iso_dates(raw: list[object]) -> set[date]:
     """Parses a list of ISO ("YYYY-MM-DD") date strings into a `set[date]`, dropping anything
-    that isn't a well-formed date rather than raising; a non-list `raw` yields an empty set.
-    Shared by `Store.read_home_day_dates` below (the coordinator-side read) and
-    `HomeDaySwitch`'s own restore path (switch.py, the entity-side read) so the one parsing of
-    NF14's `ATTR_APPLIES_TO` value can't drift between the two call sites."""
-    if not isinstance(raw, list):
-        return set()
+    that isn't a well-formed date rather than raising. Shared by `Store.read_home_day_dates`
+    below (the coordinator-side read) and `HomeDaySwitch`'s own restore path (switch.py, the
+    entity-side read) so the one parsing of NF14's `ATTR_APPLIES_TO` value can't drift between
+    the two call sites. Callers each already decide what a non-list `raw` means to them (one
+    resolves it to `None`, the other to a dataclass-construction failure) before calling this,
+    so it takes a `list` rather than repeating that check a third time."""
     dates: set[date] = set()
     for iso in raw:
         try:

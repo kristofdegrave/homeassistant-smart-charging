@@ -2,10 +2,9 @@
 
 Bound to the calendar date it was set for (R13's last acceptance criterion, NF14): a flag set
 on date D applies to D+1 alone, until D+1 ends at local midnight, and survives a restart and a
-reload still bound to that date however long the system was stopped. That is why this entity
-restores via `RestoreEntity` -- every other runtime-configuration entity already does
-(`select.py`, `number.py`, `time.py`); this one previously did not, silently clearing the flag
-on every restart or options-change reload.
+reload still bound to that date however long the system was stopped -- like every other
+runtime-configuration entity (`select.py`, `number.py`, `time.py`), this one restores via
+`RestoreEntity`.
 
 A plain on/off restore cannot carry which date the flag is bound to, so the state itself is
 derived, not restored: `_applies_to` holds the set of dates the flag currently applies to (at
@@ -35,7 +34,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import Platform
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_time_change
@@ -83,7 +82,6 @@ class HomeDaySwitch(SmartChargingEntity, RestoreEntity, SwitchEntity):
     def __init__(self, entry_id: str) -> None:
         super().__init__(entry_id)
         self._applies_to: set[date] = set()
-        self._unsub_midnight_refresh: CALLBACK_TYPE | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -96,15 +94,13 @@ class HomeDaySwitch(SmartChargingEntity, RestoreEntity, SwitchEntity):
                 # drop it rather than carrying it forever.
                 today = dt_util.now().date()
                 self._applies_to = {d for d in parse_iso_dates(data.applies_to) if d >= today}
-        self._unsub_midnight_refresh = async_track_time_change(
-            self.hass, self._async_refresh_at_midnight, hour=0, minute=0, second=0
+        # async_on_remove unsubscribes this for us on entity removal -- no hand-rolled
+        # unsubscribe field or async_will_remove_from_hass override needed.
+        self.async_on_remove(
+            async_track_time_change(
+                self.hass, self._async_refresh_at_midnight, hour=0, minute=0, second=0
+            )
         )
-
-    async def async_will_remove_from_hass(self) -> None:
-        if self._unsub_midnight_refresh is not None:
-            self._unsub_midnight_refresh()
-            self._unsub_midnight_refresh = None
-        await super().async_will_remove_from_hass()
 
     @callback
     def _async_refresh_at_midnight(self, now: datetime) -> None:

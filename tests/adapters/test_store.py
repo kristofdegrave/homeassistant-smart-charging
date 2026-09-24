@@ -146,6 +146,23 @@ async def test_should_return_none_when_the_switch_is_unregistered(hass):
     assert result is None
 
 
+async def test_should_return_none_when_the_switch_is_registered_but_has_no_state(hass):
+    """Distinct from the unregistered case above: the entity registry knows about the switch
+    (e.g. its platform set up before the first state write) but `hass.states.get` has nothing
+    for it yet -- still unresolvable, not a resolved empty set."""
+    # Arrange
+    er.async_get(hass).async_get_or_create(
+        Platform.SWITCH, DOMAIN, "entry1_home_day", suggested_object_id="smart_charging_home_day"
+    )
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
 async def test_should_return_none_when_the_switch_is_unavailable(hass):
     # Arrange
     _register(

@@ -25,6 +25,10 @@ from tests.helpers import entry_data_base, entry_options_base, seed_charger_stat
 _ENTITY_ID = "switch.smart_charging_home_day"
 
 
+def _applies_to_attr(hass):
+    return hass.states.get(_ENTITY_ID).attributes[ATTR_APPLIES_TO]
+
+
 async def test_should_default_to_off_when_never_set(hass):
     # Arrange
     entity = HomeDaySwitch(entry_id="abc")
@@ -38,7 +42,7 @@ async def test_should_default_to_off_when_never_set(hass):
     await entity.async_remove()
 
 
-async def test_should_turn_on_and_off_when_the_user_toggles_it(hass):
+async def test_should_turn_on_when_the_user_turns_it_on(hass):
     # Arrange
     entity = HomeDaySwitch(entry_id="abc")
     platform = MockEntityPlatform(hass, domain="switch")
@@ -49,6 +53,15 @@ async def test_should_turn_on_and_off_when_the_user_toggles_it(hass):
 
     # Assert
     assert entity.is_on is True
+    await entity.async_remove()
+
+
+async def test_should_turn_off_when_the_user_turns_it_off(hass):
+    # Arrange
+    entity = HomeDaySwitch(entry_id="abc")
+    platform = MockEntityPlatform(hass, domain="switch")
+    await platform.async_add_entities([entity])
+    await entity.async_turn_on()
 
     # Act
     await entity.async_turn_off()
@@ -85,6 +98,33 @@ async def test_should_show_off_on_the_real_state_machine_when_local_midnight_pas
     await entity.async_remove()
 
 
+async def test_should_prune_an_elapsed_date_when_midnight_refresh_runs(hass, freezer):
+    """The other half of `_async_refresh_at_midnight`, distinct from the display reset above:
+    a date that has fully elapsed is dropped from `_applies_to`/`applies_to`, not just from
+    the switch's own on/off display -- otherwise the set grows by one entry per home day for
+    as long as the switch runs without a restart (the module docstring's own reasoning)."""
+    # Arrange
+    freezer.move_to("2026-01-17 20:00:00")
+    entity = HomeDaySwitch(entry_id="abc")
+    entity.entity_id = _ENTITY_ID
+    platform = MockEntityPlatform(hass, domain="switch")
+    await platform.async_add_entities([entity])
+    await entity.async_turn_on()  # binds 2026-01-18
+    freezer.move_to("2026-01-18 08:30:00")  # 00:30 local on 01-18 -- 01-18 has begun, not ended
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+    assert _applies_to_attr(hass) == ["2026-01-18"]
+
+    # Act
+    freezer.move_to("2026-01-19 08:30:00")  # 00:30 local on 01-19 -- 01-18 has now fully ended
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+
+    # Assert
+    assert _applies_to_attr(hass) == []
+    await entity.async_remove()
+
+
 async def test_should_keep_a_flag_bound_to_today_when_midnight_rolls_the_new_tomorrow_over(
     hass, freezer
 ):
@@ -94,20 +134,20 @@ async def test_should_keep_a_flag_bound_to_today_when_midnight_rolls_the_new_tom
     # Arrange
     freezer.move_to("2026-01-17 20:00:00")
     entity = HomeDaySwitch(entry_id="abc")
+    entity.entity_id = _ENTITY_ID
     platform = MockEntityPlatform(hass, domain="switch")
     await platform.async_add_entities([entity])
     await entity.async_turn_on()  # binds 2026-01-18
-    bound_date = dt_util.now().date() + timedelta(days=1)
 
     # Act
     # freezer.move_to takes a UTC instant; this harness's local zone is US/Pacific (UTC-8 in
-    # January), so 08:30 UTC is 00:30 local -- bound_date has now begun.
+    # January), so 08:30 UTC is 00:30 local -- 01-18 has now begun.
     freezer.move_to("2026-01-18 08:30:00")
     async_fire_time_changed(hass, dt_util.utcnow())
     await hass.async_block_till_done()
 
     # Assert
-    assert bound_date in entity._applies_to  # 01-18's own binding is untouched
+    assert _applies_to_attr(hass) == ["2026-01-18"]  # 01-18's own binding is untouched
     await entity.async_remove()
 
 
@@ -117,9 +157,11 @@ async def test_should_reset_the_new_tomorrows_slot_to_unset_when_midnight_rolls_
     # Arrange
     freezer.move_to("2026-01-17 20:00:00")
     entity = HomeDaySwitch(entry_id="abc")
+    entity.entity_id = _ENTITY_ID
     platform = MockEntityPlatform(hass, domain="switch")
     await platform.async_add_entities([entity])
     await entity.async_turn_on()  # binds 2026-01-18
+    assert hass.states.get(_ENTITY_ID).state == STATE_ON
 
     # Act
     freezer.move_to("2026-01-18 08:30:00")  # 00:30 local, per the note above
@@ -127,7 +169,7 @@ async def test_should_reset_the_new_tomorrows_slot_to_unset_when_midnight_rolls_
     await hass.async_block_till_done()
 
     # Assert
-    assert entity.is_on is False  # the NEW tomorrow (01-19) is unset
+    assert hass.states.get(_ENTITY_ID).state == STATE_OFF  # the NEW tomorrow (01-19) is unset
     await entity.async_remove()
 
 
@@ -138,6 +180,7 @@ async def test_should_add_a_new_binding_without_clearing_todays_when_turned_on_a
     # Arrange
     freezer.move_to("2026-01-17 20:00:00")
     entity = HomeDaySwitch(entry_id="abc")
+    entity.entity_id = _ENTITY_ID
     platform = MockEntityPlatform(hass, domain="switch")
     await platform.async_add_entities([entity])
     await entity.async_turn_on()  # binds 01-18
@@ -149,7 +192,7 @@ async def test_should_add_a_new_binding_without_clearing_todays_when_turned_on_a
     await entity.async_turn_on()  # binds 01-19, must not disturb 01-18
 
     # Assert
-    assert entity._applies_to == {date(2026, 1, 18), date(2026, 1, 19)}
+    assert _applies_to_attr(hass) == ["2026-01-18", "2026-01-19"]
     await entity.async_remove()
 
 
@@ -159,6 +202,7 @@ async def test_should_cancel_only_tomorrows_not_yet_begun_binding_when_turned_of
     # Arrange
     freezer.move_to("2026-01-17 20:00:00")
     entity = HomeDaySwitch(entry_id="abc")
+    entity.entity_id = _ENTITY_ID
     platform = MockEntityPlatform(hass, domain="switch")
     await platform.async_add_entities([entity])
     await entity.async_turn_on()  # binds 01-18
@@ -171,7 +215,7 @@ async def test_should_cancel_only_tomorrows_not_yet_begun_binding_when_turned_of
     await entity.async_turn_off()  # cancels 01-19 only
 
     # Assert
-    assert entity._applies_to == {date(2026, 1, 18)}
+    assert _applies_to_attr(hass) == ["2026-01-18"]
     await entity.async_remove()
 
 
@@ -194,7 +238,7 @@ async def test_should_restore_bound_dates_when_ha_restarts(hass):
     await platform.async_add_entities([entity])
 
     # Assert
-    assert date.fromisoformat(far_future) in entity._applies_to
+    assert _applies_to_attr(hass) == [far_future]
     await entity.async_remove()
 
 
@@ -216,7 +260,28 @@ async def test_should_drop_a_date_already_in_the_past_when_restoring(hass, freez
     await platform.async_add_entities([entity])
 
     # Assert
-    assert entity._applies_to == {date(2026, 1, 21)}  # only the still-future date survives
+    assert _applies_to_attr(hass) == ["2026-01-21"]  # only the still-future date survives
+    await entity.async_remove()
+
+
+async def test_should_return_none_when_restored_extra_data_is_not_a_list(hass):
+    """`_HomeDayExtraStoredData.from_dict`'s own malformed-input branch: a restored
+    `ATTR_APPLIES_TO` that isn't a list at all (e.g. a corrupted store) is rejected rather
+    than raising or silently coercing -- `async_added_to_hass` then leaves `_applies_to` at
+    its default (empty), same as no restored data at all."""
+    # Arrange
+    mock_restore_cache_with_extra_data(
+        hass, ((State(_ENTITY_ID, STATE_OFF), {ATTR_APPLIES_TO: "not-a-list"}),)
+    )
+    entity = HomeDaySwitch(entry_id="abc")
+    entity.entity_id = _ENTITY_ID
+    platform = MockEntityPlatform(hass, domain="switch")
+
+    # Act
+    await platform.async_add_entities([entity])
+
+    # Assert
+    assert entity._applies_to == set()
     await entity.async_remove()
 
 
@@ -225,8 +290,7 @@ async def test_should_still_apply_a_flag_when_a_restart_happens_after_its_date_h
 ):
     """NF14's named scenario: HA is stopped the evening the flag was set (bound to tomorrow)
     and restarted the NEXT day, after the bound date has already begun -- the flag must still
-    apply to that day once restored, exactly as it would have without the restart, and the
-    switch's own display (tomorrow's slot) must be freshly unset again."""
+    apply to that day once restored, exactly as it would have without the restart."""
     # Arrange
     bound_date = date(2026, 1, 18)
     mock_restore_cache_with_extra_data(
@@ -241,8 +305,7 @@ async def test_should_still_apply_a_flag_when_a_restart_happens_after_its_date_h
     await platform.async_add_entities([entity])
 
     # Assert
-    assert bound_date in entity._applies_to  # still bound, applies exactly as it would have
-    assert entity.is_on is False  # tomorrow (01-19) is a fresh, unset slot
+    assert _applies_to_attr(hass) == [bound_date.isoformat()]
     await entity.async_remove()
 
 
@@ -250,11 +313,20 @@ async def test_should_no_longer_apply_a_flag_when_a_restart_spans_the_home_days_
     """The other restart scenario NF14 names, distinct from the one above: a flag bound to
     date D survives being stopped WHILE D is still in force, but a restart that happens only
     AFTER D has fully ended (D+1 has begun) must not resurrect it -- "keeps it from carrying
-    into a day it was not set for" (requirements.md NF14)."""
+    into a day it was not set for" (requirements.md NF14). A second, still-future date is
+    restored alongside the ended one so the test can tell "restore ran and pruned D" apart
+    from "restore never ran at all" (both would otherwise leave D absent)."""
     # Arrange
-    bound_date = date(2026, 1, 18)
+    ended_date = date(2026, 1, 18)
+    still_future_date = date(2026, 1, 25)
     mock_restore_cache_with_extra_data(
-        hass, ((State(_ENTITY_ID, STATE_OFF), {ATTR_APPLIES_TO: [bound_date.isoformat()]}),)
+        hass,
+        (
+            (
+                State(_ENTITY_ID, STATE_OFF),
+                {ATTR_APPLIES_TO: [ended_date.isoformat(), still_future_date.isoformat()]},
+            ),
+        ),
     )
     freezer.move_to("2026-01-19 09:00:00")  # local 01:00 on 01-19 -- 01-18 has fully ended
     entity = HomeDaySwitch(entry_id="abc")
@@ -264,8 +336,8 @@ async def test_should_no_longer_apply_a_flag_when_a_restart_spans_the_home_days_
     # Act
     await platform.async_add_entities([entity])
 
-    # Assert
-    assert bound_date not in entity._applies_to
+    # Assert -- the ended date is gone, but the still-future one proves restore actually ran.
+    assert _applies_to_attr(hass) == [still_future_date.isoformat()]
     await entity.async_remove()
 
 
@@ -298,6 +370,35 @@ async def test_should_keep_the_flag_on_when_the_config_entry_reloads(hass, freez
     # Assert
     assert hass.states.get(entity_id).state == STATE_ON
     assert hass.states.get(entity_id).attributes[ATTR_APPLIES_TO] == [bound_date]
+
+
+async def test_should_apply_the_restored_flag_from_the_first_cycle_after_a_reload(hass, freezer):
+    """NF14: "holds the value last set ... from the first control cycle that follows" -- the
+    coordinator itself, not only the switch's own displayed state, must have picked up the
+    restored/reloaded flag by the time its first post-reload cycle runs."""
+    # Arrange
+    freezer.move_to("2026-01-17 20:00:00")
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SWITCH, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_HOME_DAY}"
+    )
+    await hass.services.async_call("switch", "turn_on", {"entity_id": entity_id}, blocking=True)
+    await hass.async_block_till_done()
+    bound_date = dt_util.now().date() + timedelta(days=1)
+
+    # Act
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    coordinator = entry.runtime_data.coordinator
+    await coordinator.async_refresh()
+    assert bound_date in coordinator.home_day_dates
 
 
 def test_should_seed_the_unique_id_when_constructed():

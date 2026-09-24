@@ -217,8 +217,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # matter before the first read.
         # NF14: the set of calendar dates the home-day flag currently applies to -- at most
         # today's and tomorrow's at once (switch.py's own module docstring explains why a
-        # single date/bool can't represent both). Membership, not a bare bool, is what R14's
-        # resolve_deadline_for and R9's resolve_solar_reserve_gate now query per date.
+        # single date/bool can't represent both). R14's resolve_deadline_for and R9's
+        # resolve_solar_reserve_gate each query membership in this set for the concrete date
+        # being resolved, so the flag for one date can never leak into another's resolution.
         self.home_day_dates: set[date] = set()
         self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
         self.departure_holiday_override: time_of_day | None = None
