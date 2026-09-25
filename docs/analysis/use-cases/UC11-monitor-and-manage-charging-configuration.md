@@ -30,9 +30,6 @@ mode.
   configuration](../system-overview.md#ubiquitous-language), never install-time setup (R19).
 - The household energy manager or EV driver has access to the Home Assistant UI the dashboard is
   rendered in.
-- The `auto-entities` dashboard card, which the dashboard's runtime configuration section and its
-  departure-time rows are built on and which Home Assistant does not ship, is installed from HACS,
-  as the installation instructions say (NF5). Without it the goal is not met (Exception flows).
 
 ## Trigger
 
@@ -121,7 +118,7 @@ every dashboard open (ADR-0028).
 **4c — The user has enabled or disabled one of the System's entities** — branches from step 4.
 Given the user has, outside this dashboard, disabled one of the System's entities, or enabled one
 that a capability now absent had disabled
-When a later capability change, restart or reload rebuilds the dashboard (1b)
+When a later capability change, restart or reload rebuilds the dashboard (step 1, 1b)
 Then the rebuilt dashboard finds the entity in the enabled state the user gave it, which R18 keeps
 through a capability change, restart or reload until the user changes it again; this use-case
 shows that state and does not decide it. A runtime entity the user has disabled can no longer be
@@ -144,11 +141,12 @@ Given a role C5 lists as required on this control cycle is unavailable — for e
 net-power meter behind [net import](../system-overview.md#ubiquitous-language) — so the System is in
 [fault](../system-overview.md#ubiquitous-language) (C5)
 When the user opens the dashboard, or has it open
-Then the System's status reads `Fault`, the charger current reads the 0 A C5 sets, any value
-sourced from the unavailable role — the charger current itself, when it is that role — is shown as
-unavailable rather than a stale or fabricated number, and every other section of the dashboard
-continues to render normally. The status reads `OK` again once the fault
-has ended, on the cycle C5 names; whether and when charging then resumes is C5's and the active
+Then the System's status reads `Fault`.
+And the charger current reads the 0 A C5 sets — or reads unavailable, when the charger current is
+itself the unavailable role.
+And every other value sourced from the unavailable role is shown as unavailable rather than a stale
+or fabricated number, while every other section of the dashboard continues to render normally.
+The status reads `OK` again once the fault has ended, on the cycle C5 names; whether and when charging then resumes is C5's and the active
 mode's, not this use-case's.
 
 **An optional reading is unavailable.**
@@ -160,7 +158,9 @@ an optional role is never a fault (C5) — and every other section of the dashbo
 render normally.
 
 **The `auto-entities` card is not installed.**
-Given the `auto-entities` card the Preconditions name is not installed
+Given the `auto-entities` dashboard card is not installed — the card the runtime configuration
+section and the departure-time rows are built on, which Home Assistant does not ship and which the
+installation instructions name for installing from HACS (NF5)
 When the user opens the dashboard
 Then the runtime configuration section and the departure-time rows render as broken cards, so no
 runtime value can be set from the dashboard, while the charging-status section, the active-mode
@@ -216,22 +216,27 @@ that entity, not by this one.
 flowchart TD
     Setup["System set up: installation,<br/>restart or reload"] --> Build{"Dashboard can<br/>be provided?"}
     Build -- no --> Absent["No dashboard; failure logged;<br/>charging control unaffected (NF13)"]
-    Build -- yes --> Provided["Dashboard rebuilt from current<br/>configuration, in the sidebar,<br/>not user-editable (step 1, 1a, 1b)"]
+    Build -- yes --> Catalog["Build from entity-catalog.md<br/>Setup classification and the<br/>current configuration (step 1, 1b)"]
+    Catalog --> SolarFilter{"Solar capability<br/>declared? (R18)"}
+    SolarFilter -- yes --> Surplus["Include solar surplus"]
+    SolarFilter -- no --> OmitSurplus["Omit solar surplus (3a)"]
+    Catalog --> Filter{"Runtime entity gated by an<br/>absent capability? (R18)"}
+    Filter -- yes --> Omit["Omit from dashboard (4a),<br/>even if the user enabled it (4c)"]
+    Filter -- no --> Include["Include, editable"]
+    Surplus --> Provided["Dashboard in the sidebar,<br/>not user-editable (1a)"]
+    OmitSurplus --> Provided
+    Omit --> Provided
+    Include --> Provided
     Provided --> Open["User opens dashboard"]
-    Open --> Catalog["Read entity-catalog.md<br/>Setup classification"]
-    Catalog --> Status["Render charging-status section<br/>(charger status, active profile,<br/>active mode, active SOC limit,<br/>charger current, System status,<br/>net import)"]
+    Open --> Status["Show charging-status section<br/>(charger status, active profile,<br/>active mode, active SOC limit,<br/>charger current, System status,<br/>net import)"]
     Status --> Fault{"Required reading<br/>unavailable? (C5)"}
     Fault -- yes --> ShowFault["Status reads Fault; charger 0 A;<br/>missing value shown unavailable"]
     Fault -- no --> ShowOk["Status reads OK"]
-    Status --> SolarFilter{"Solar capability<br/>declared? (R18)"}
-    SolarFilter -- yes --> Surplus["Show solar surplus"]
-    SolarFilter -- no --> OmitSurplus["Omit solar surplus (3a)"]
-    Catalog --> Card{"auto-entities card<br/>installed? (NF5)"}
+    Open --> Card{"auto-entities card<br/>installed? (NF5)"}
     Card -- no --> Broken["Runtime section and departure<br/>rows render as broken cards"]
-    Card -- yes --> Runtime["Render every runtime-classified<br/>config / state entity, editable"]
-    Runtime --> Filter{"Entity gated by an<br/>absent capability? (R18)"}
-    Filter -- yes --> Omit["Omit from dashboard (4a),<br/>even if the user enabled it (4c)"]
-    Filter -- no --> Show["Show, editable"]
+    Card -- yes --> Disabled{"Entity disabled<br/>by the user? (4c)"}
+    Disabled -- yes --> NoValue["Cannot be seen or set"]
+    Disabled -- no --> Show["Show, editable"]
     Show --> Edit["User edits a value"]
     Edit --> Validate{"Within configured<br/>range?"}
     Validate -- no --> Reject["Reject edit, keep<br/>previous value (5a)"]
@@ -248,10 +253,7 @@ flowchart TD
   shown; the dashboard present with no user step (step 1); not user-editable and rebuilt on every
   restart and reload (1a, 1b); new runtime entities require no dashboard-specific logic change).
 
-Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — for
-its criterion that a capability change never overrides the user's own choice to enable or disable
-an entity, only what the dashboard shows of that choice (4c); keeping the choice itself is R18's
-own, realized outside this use-case (ADR-0028). It also satisfies the
+Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
 manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered by
 `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent, 4b and
 Postconditions above). This is a distinct mechanism from R19 AC4's entity omission (3a, 4a) —
@@ -261,7 +263,9 @@ absence remains `resolution-rules.md`'s claim, not this one's.
 
 Inherited, referenced rather than restated: what a [fault](../system-overview.md#ubiquitous-language)
 is, which roles are required, and when a fault ends (C5), of which this use-case shows only the
-status; what happens when the dashboard cannot be provided (NF13); that the dashboard's
+status; that a capability change never overrides the user's own choice to enable or disable an
+entity (R18, realized outside this use-case, ADR-0028), of which this use-case shows only the
+result (4c, under R19 AC3 and AC4); what happens when the dashboard cannot be provided (NF13); that the dashboard's
 `auto-entities` card is named in the installation instructions and installable from HACS (NF5);
 and, from the shared mechanism, the [install-time / runtime
 configuration](../system-overview.md#ubiquitous-language) classification and the `Setup` column in
@@ -281,6 +285,5 @@ that a runtime edit here ultimately feeds; the capability gating of runtime enti
   computes charging behaviour nor overrides it.
 - Gated by the declared capabilities (R18) for the runtime entities each one gates — the
   departure-time rows under the deadline capability, the only gating that reaches the runtime
-  configuration section (4a) — the
-  same gating `select.smart_charging_mode`'s selector already applies for modes
-  (`entity-catalog.md`).
+  configuration section (4a). The same capability declarations also fix
+  `select.smart_charging_mode`'s option list, by a distinct mechanism (4b, `entity-catalog.md`).
