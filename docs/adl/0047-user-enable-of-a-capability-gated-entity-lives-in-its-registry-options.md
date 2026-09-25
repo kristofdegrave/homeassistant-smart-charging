@@ -156,8 +156,8 @@ them.
 | `custom_components/smart_charging/sensor.py:418` | Calls `sync_disabled_by`; no listener registered | Point 2 |
 
 47 other hits conform: `entity.py:36` (re-enables an `INTEGRATION` row once the capability
-returns, unchanged by point 4); `sensor.py:389` (a config mirror is never resynced, so a user's enable
-already stays); the tests in `test_entity_labels.py`, `test_time.py`, `test_sensor.py` and
+returns, unchanged by point 4); `sensor.py:389` (a config mirror is never resynced, so a user's
+enable already stays); the tests in `test_entity_labels.py`, `test_time.py`, `test_sensor.py` and
 `test_init.py` (ADR-0028's contract and the user's disable, which still hold); and
 `project-plan.md`, `system-design.md` and `entity-catalog.md`, which state the behaviour this
 record delivers. Out of scope: R18 (`requirements.md:323`) and UC11 (l. 266) state the rule this
