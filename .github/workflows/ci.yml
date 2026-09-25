@@ -99,6 +99,18 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/check-authoring-rules.sh "$BASE_SHA"
+      # The word budget (.github/check-word-budget.py, caps in .claude/profile.yml): diff-scoped
+      # like the check above, and in this job for the same non-blocking weight.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyyaml==6.0.3
+      - name: Word-budget check self-test
+        run: bash .github/test-check-word-budget.sh
+      - name: Word budget (no process file grows past its cap, or at all once over it)
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/check-word-budget.sh "$BASE_SHA"
 
   method:
     # The method check: heading anchors in both directions between CLAUDE.md and the files

@@ -250,6 +250,25 @@ review:
 #              above gives.
 #   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
 #              the developer's machine by the plugin named, and not part of this repository
+# A cap in words per class of process file. The word-budget check (.github/check-word-budget.py,
+# run by ci.yml) fails a change that grows a file past the larger of its cap and its size on the
+# merge base, so a file already over its cap may only shrink. The first glob a path matches is
+# its class. `added_only`: only files the change adds are scored.
+word_budgets:
+  - glob: "CLAUDE.md"
+    cap: 2000
+  - glob: ".claude/skills/*/SKILL.md"
+    cap: 1500
+  - glob: ".claude/agents/*.md"
+    cap: 1000
+  - glob: "docs/reference/method/*.md"
+    cap: 4000
+  - glob: "docs/reference/work-types/**/*.md"
+    cap: 1500
+  - glob: "docs/adl/*.md"
+    cap: 2000
+    added_only: true
+
 dependencies:
   method:
     # Skills the method's own work files name per step, from the superpowers plugin.
