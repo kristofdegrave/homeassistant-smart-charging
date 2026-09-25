@@ -40,7 +40,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
      item 4 again).
    - **Consequences** — follow-up work, what gets easier or harder (the bar's item 5,
      *Consequences follow from the Decision*), and the Blast radius per the template (the bar's
-     item 6, *The Blast radius enumeration is complete*).
+     item 6, *The Blast radius is complete, and closes the record*).
    - **Summary** — written once the Decision is settled, from the Decision and the chosen
      option's Cons, never from memory of the argument (the bar's item 12, *The Summary matches
      the record*).
