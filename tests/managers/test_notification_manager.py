@@ -156,8 +156,9 @@ async def test_should_translate_prompt_text_when_the_system_language_is_dutch(
     hass,
 ):
     """NF8 AC2: the home-day prompt's message and action-button labels follow Home
-    Assistant's *system* language. The action ids themselves are unchanged (asserted by
-    test_sends_actionable_prompt_when_uc08_trigger_holds above)."""
+    Assistant's *system* language. The action ids themselves stay unchanged even under a
+    Dutch send -- `labels_by_action`'s keys below are exactly `ACTION_HOMEDAY_YES`/
+    `ACTION_HOMEDAY_NO`, not their Dutch labels."""
     # Arrange
     hass.config.language = "nl"
     calls = _register_notify_capture(hass)
@@ -590,14 +591,35 @@ async def test_should_translate_the_deadline_unreachable_message_when_the_system
     )
 
 
+async def test_should_keep_the_deadline_notice_title_untranslated_when_the_system_language_is_dutch(
+    hass,
+):
+    """The deadline-unreachable notice's title stays the untranslated product name
+    (NF8 AC1), the same as the home-day prompt's own title -- pinned separately from the
+    Dutch message above (NF8 AC2), one behaviour per test."""
+    # Arrange
+    hass.config.language = "nl"
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    # Act
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    # Assert
+    assert calls[0]["title"] == "Smart Charging"
+
+
 async def test_should_translate_deadline_message_when_language_changes_mid_run(
     hass,
 ):
     """NF8 AC2's "including after that language is changed": the manager re-fetches the
     system text on every send, so a single running instance picks up a language change with
-    no reload -- unlike the dashboard (system_text.py's own docstring). The precondition (an
-    English delivery on the first occasion) is set up in Arrange, not asserted here, so a
-    failure under this test's own name always means the *second*, Dutch delivery."""
+    no reload -- unlike the dashboard (system_text.py's own docstring). The English first
+    delivery is asserted in Arrange as its own precondition, kept separate from `# Assert`
+    below so a failure there reads as "the precondition didn't hold", not as this test's own
+    behaviour (the *second*, Dutch delivery) failing."""
     # Arrange -- one English occasion, delivered and then cleared/re-armed.
     calls = _register_notify_capture(hass)
     manager = _manager(hass)
