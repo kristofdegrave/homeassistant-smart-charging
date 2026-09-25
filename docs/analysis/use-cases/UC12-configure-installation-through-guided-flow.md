@@ -184,10 +184,20 @@ managed; and `notifications`' notification-target mapping when notifications are
 `core`, `grid`, `ev_charger`, and `vehicle` mapping halves are shown unconditionally; `captar`,
 `solar`, `deadline`, and `notifications` each appear only while their own capability is declared
 present. The `power` step never appears, since it has no mapping half.
-Submitting updates only the data bucket and reloads the config entry. A capability declared absent
+Submitting updates only the data bucket. A capability declared absent
 here that was present before drops that capability's mapping fields from the data bucket on save;
 any of its thresholds already stored in the options bucket are left untouched (changing them is the
 options flow's job, 1b).
+When the user submits the last step the reconfigure flow showed them
+Then the System [reloads](../system-overview.md#ubiquitous-language)
+([ADR-0008](../../adl/0008-reconfigure-reload-behavior.md)), and the first control cycle after the
+reload uses the saved values (NF11 AC3).
+The reload ends every post-surplus hold, peak-breach grace period, cooldown and restart debounce
+running at the moment of the save (R11's restart and reload criterion). It also empties the
+smoothing window, which refills, while every [runtime
+configuration](../system-overview.md#ubiquitous-language) value keeps what the household last set. NF14 states the whole of what a reload clears and what it keeps.
+A household that saves mid-cooldown therefore loses the rest of that cooldown's protection, a
+trade-off ADR-0008 accepts.
 
 **1b — Options flow** — replaces the install flow from the Trigger onward.
 Given the user opens Configure on an existing entry
@@ -209,6 +219,10 @@ when solar is installed, `deadline`'s reminder lead time when deadlines are mana
 toggles](../system-overview.md#ubiquitous-language) and evening-prompt time when
 notifications are wanted.
 Submitting updates only the options bucket.
+When the user submits the last step the options flow showed them
+Then the System reloads, exactly as a reconfigure save does (1a): the first control cycle after the
+reload uses the saved values, the control interval included (NF11 AC3), and the reload ends and
+keeps exactly what 1a states.
 
 **4a — When the car-at-home mapping is required** — branches from step 4.
 Given the user is on the `vehicle` step
@@ -429,7 +443,7 @@ flowchart TD
         OD -- deadline --> O8["8 deadline threshold"]
         OD -- notifications --> O9["9 notifications thresholds"]
         OD -- "absent" --> OSkip["Skip that step"]
-        O6 --> OSubmit["Update options bucket only"]
+        O6 --> OSubmit["Update options bucket only<br/>+ reload entry"]
         O7 --> OSubmit
         O8 --> OSubmit
         O9 --> OSubmit
@@ -525,7 +539,9 @@ and carries the matching acceptance criteria (AC9, AC10, AC11).
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this
 use-case presents is ultimately stored; [NF3](../requirements.md#nf3--all-device-io-via-adapter-roles)
-governs why every mapping field exists at all (adapter roles).
+governs why every mapping field exists at all (adapter roles). What a save through 1a or 1b
+ends and keeps is owned by R11's restart and reload criterion and by NF14, and when the saved
+values take effect by NF11 AC3; 1a cites them rather than restating them.
 
 ## Relationships
 
