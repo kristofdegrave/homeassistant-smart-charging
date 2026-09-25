@@ -11,7 +11,7 @@ section routes to the doc that owns the step.
 
 `address-review-remarks` stays the single source for everything that does not vary by artifact
 type, and none of it is restated here. Read it there for: locating findings from both sources
-(its §1), the severity-based fix policy and what becomes a **Skipped** entry (§2), the
+(its §1), the fix policy and what becomes a **Skipped** entry (§2), the
 one-per-run summary and the markers it must and must not carry (§5), and the local
 commit-and-push half (§6). Its §4 — the reply call and the `ai-fix-ack` marker — is reached
 through `resolve-review-thread`, not from here, so one thread gets one reply. Its §3 — dispatch

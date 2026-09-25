@@ -39,6 +39,8 @@ stop — do not invent work.
 
 - Fix every **Critical** and **Major** finding.
 - Also fix **Minor**/**Nit** findings when the change is trivial and local.
+- Fix by the first that works: **reword** the text the finding names, **delete** it or point
+  to its owner instead of copying, and only then **add** text.
 - If you disagree with a finding, leave the document unchanged for that finding and record why —
   it becomes a **Skipped** entry in the summary. Never half-apply a fix you think is wrong.
 - A finding whose request is outside the PR's scope is not fixed in this PR. Locally the fix
@@ -101,6 +103,8 @@ Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
 - One bullet or table row per finding — AI findings **and** human comments alike: **Fixed**
   (what changed, with file references), **Skipped** (and why you disagree), or **Partially
   fixed**. Keep it short.
+- The run's **net word change** (words added minus removed). If positive: which findings grew
+  it, and why rewording or deleting could not fix them.
 - **CRITICAL: the comment must NOT contain the text "ai-review-verdict" anywhere — not even
   quoted.** The workflows route and count fix cycles by searching comment bodies for that
   marker; a summary containing it would be miscounted as a review and break the cycle limit.
