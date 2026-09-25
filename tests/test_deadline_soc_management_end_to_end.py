@@ -602,16 +602,18 @@ async def test_should_start_power_charging_without_a_reading_after_a_mode_switch
     hass, freezer
 ):
     """Should command Power's target current on a cycle with no ev_soc reading, when Power was
-    genuinely charging before the user switched away from it -- not the case a genuine
-    Charging -> SocReached stop protects. Power's own "is it currently charging" fact must not
-    survive a mode switch: without that reset, a reading taken at or above the limit while a
-    *different* mode was active would be misread, on switching back, as evidence Power itself
-    had just made a stop there, even though this session's Power dispatch never saw a reading
-    above the limit at all."""
+    genuinely charging before the user switched away from it, then switched back to a reading
+    at the limit -- not the case a genuine Charging -> SocReached stop protects. Power's own
+    "is it currently charging" fact must not survive a mode switch: without that reset, the
+    reading blocking Charging on the switch-back cycle (UC04's Idle row, not a stop) would be
+    misread, once it later goes missing, as evidence Power itself had just made a stop there --
+    even though this session's Power dispatch never actually charged at or above the limit."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
-    # Arrange: Power charges below the limit, then the user switches to Off before the reading
-    # ever reaches the limit.
+    # Arrange: Power charges below the limit, the user switches to Off before the reading ever
+    # reaches the limit, the reading then reaches it while Off is active, and Power is
+    # selected again with that reading still present -- blocked by UC04's Idle row, not yet a
+    # stop (the mode-switch reset is exactly what keeps it that way instead of latching).
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=75.0)
     coordinator = await _setup(
@@ -626,14 +628,16 @@ async def test_should_start_power_charging_without_a_reading_after_a_mode_switch
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert calls[-1]["value"] == 0.0  # Off's own 0 A
-
-    # Act: the reading reaches the limit while Off (not Power) is active, then Power is
-    # selected again on a cycle where the reading has since gone unavailable.
     hass.states.async_set("sensor.ev_soc", "85.0")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-1]["value"] == 0.0  # blocked by the reading (Idle), not yet latched
+
+    # Act: the reading goes unavailable.
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
