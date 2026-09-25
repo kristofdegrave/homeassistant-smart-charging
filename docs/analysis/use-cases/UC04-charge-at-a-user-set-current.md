@@ -13,11 +13,11 @@
 
 - `Power` is the [active mode](../system-overview.md#ubiquitous-language). (`Power` is available regardless of either the solar or CapTar [capability](../system-overview.md#ubiquitous-language) — R18.)
 - The car is connected at home ([charger status](../system-overview.md#ubiquitous-language) is `connected` or `charging`).
-- State of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`).
+- State of charge is below the [active SOC limit](../system-overview.md#ubiquitous-language) (resolved per `resolution-rules.md`), or unavailable (Exception flows, *State of charge unavailable*).
 
 ## Trigger
 
-A [control cycle](../system-overview.md#ubiquitous-language) observes that `Power` mode is active while the car is connected at home and state of charge is below the active SOC limit.
+A [control cycle](../system-overview.md#ubiquitous-language) observes that `Power` mode is active while the car is connected at home and state of charge is below the active SOC limit or unavailable.
 
 ## Main success scenario
 
@@ -71,10 +71,10 @@ Then, from `Charging`, the System enters Cooldown for the `Power`-mode cooldown,
 
 ## Postconditions
 
-- While `Power` mode is active, the car is connected below the active SOC limit, and headroom permits, the charger draws at the configured Power target current.
+- While `Power` mode is active, the car is connected below the active SOC limit (or with state of charge unavailable, R17), and headroom permits, the charger draws at the configured Power target current.
 - While the CapTar capability is present (R18) and the peak-protection option is enabled, net import stays at or below the effective peak limit minus the safety margin, so a `Power` session never raises the billed [monthly peak demand](../system-overview.md#ubiquitous-language) beyond what is already incurred (R3, C3). When the option is disabled (3a), or whenever the CapTar capability is absent whatever the option holds (3a′), net import may exceed that limit but never the grid supply ceiling minus the grid safety offset (C4).
 - The charger current is only ever 0 A or between the minimum and maximum charging current (C1); the configured target current itself is always within that same range.
-- Charging never resumes above the active SOC limit (R7).
+- On every cycle that reads state of charge, charging never resumes above the active SOC limit (R7). On a cycle without a reading, a stop already made at the limit still holds, and stopping there otherwise is left to the vehicle's own charge limit (R17, R6).
 
 ## State model
 
@@ -120,13 +120,16 @@ diagram does not draw it either.
 A cycle on which state of charge is unavailable is not a fault in `Power` (C5) and moves no state
 of its own (R17): Idle and Cooldown treat the SOC condition as met, Charging stays in Charging with
 no reading to reach the limit by, and SocReached stays in SocReached, since neither of its exits
-needs a reading (R7).
+needs a reading (R7). Only a stop made at the limit is held this way: a car resting in Idle or
+Cooldown at or above the limit has no such stop behind it, so it starts charging on such a cycle
+once no cooldown runs,
+until the first cycle with a reading stops it.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | SOC < active SOC limit, or SOC unavailable (R17), & no cooldown → Charging |
 | Charging | configured Power target current requested; if the CapTar capability is present *and* `power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; without the capability the R3 clamp does not run whatever the option holds (3a′); either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while the CapTar capability is present and respecting peak — inapplicable without the capability, where R3 never runs (3a′) (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
-| Cooldown | 0 A | `Power`-mode cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
+| Cooldown | 0 A | `Power`-mode cooldown (10 min) elapsed → Charging if charging conditions hold (SOC unavailable counts as met, R17), else Idle |
 | SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
 
 **A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
