@@ -4,12 +4,12 @@
 
 **Stakeholders & interests:**
 
-- Household energy manager — wants tonight's overnight grid top-up skipped when tomorrow's solar
+- Household energy manager — wants tonight's overnight grid top-up skipped when the reserved day's solar
   can fill the battery instead, so solar self-consumption stays high and unnecessary grid cost
   (and CapTar exposure) is avoided.
-- EV driver — wants a departure deadline resolved for tomorrow, or one already missed and still
+- EV driver — wants a departure deadline resolved for the reserved day, or one already missed and still
   being chased, to always take priority over this reserve policy; when no such deadline exists, accepts a lower overnight limit in exchange for it
-  being refilled by solar the next day.
+  being refilled by the reserved day's solar.
 
 **Scope / level:** sea-level (a single SOC-limit-coordination goal), realized entirely
 through two existing resolution rules rather than a mode's own behaviour or a dedicated
@@ -29,15 +29,15 @@ has no charging mode of its own.
 - The [home-day flag](../system-overview.md#ubiquitous-language) is set for the
   [reserved day](../system-overview.md#ubiquitous-language) — sourced from UC08's evening prompt or
   an external source (calendar, presence) per NF3.
-- The next-day [solar forecast](../system-overview.md#ubiquitous-language) exceeds its configured
-  threshold (default 12 kWh).
-- No [departure deadline](../system-overview.md#ubiquitous-language) is resolved for tomorrow
-  (`resolution-rules.md`, R14, evaluated one day ahead) — if one is, the deadline takes priority
+- The [solar forecast](../system-overview.md#ubiquitous-language) for the reserved day exceeds its
+  configured threshold (default 12 kWh).
+- No [departure deadline](../system-overview.md#ubiquitous-language) is resolved for the reserved day
+  (`resolution-rules.md`, R14, evaluated for that day) — if one is, the deadline takes priority
   and this use case does not apply.
 - No [missed-deadline hold](../system-overview.md#ubiquitous-language) is in effect
   (`resolution-rules.md`, R5) — i.e. the car is not still being charged under urgency for a deadline
-  that has already elapsed today. Such a hold takes priority for the same reason a deadline resolved
-  for tomorrow does, and more sharply: capping the active SOC limit at 60 % would lower it out from
+  that has already elapsed. Such a hold takes priority for the same reason a deadline resolved
+  for the reserved day does, and more sharply: capping the active SOC limit at 60 % would lower it out from
   under the very session the driver is waiting on ([UC05](UC05-guarantee-ready-by-departure.md)).
 - Without the [deadline capability](../system-overview.md#ubiquitous-language) (R18) no deadline is
   ever resolved and no hold can arise, so both deadline preconditions above are always satisfied.
@@ -50,8 +50,9 @@ hold — or, if the sun is already down, the moment the last of the precondition
 ## Main success scenario
 
 1. **Given** the active profile provides SOC-limit coordination, the
-   home-day flag is set for the reserved day, the next-day solar forecast exceeds its threshold, no
-   departure deadline is resolved for tomorrow, and no missed-deadline hold is in effect.
+   home-day flag is set for the reserved day, the solar forecast for the reserved day exceeds its
+   threshold, no departure deadline is resolved for the reserved day, and no missed-deadline hold is
+   in effect.
 2. **When** the sun is down, **then** the active-SOC-limit rule's *Solar-reserve cap* row (`resolution-rules.md`,
    R7) resolves the active SOC limit to the [solar-reserve cap](../system-overview.md#ubiquitous-language)
    (default 60%) instead of any solar step-up or the default limit.
@@ -61,7 +62,7 @@ hold — or, if the sun is already down, the moment the last of the precondition
 4. **And** the next morning, once the sun is up, the cap lifts (Postconditions) and the active SOC
    limit resolves normally again — so whichever solar mode `Auto` now selects charges from the
    reserved headroom up to that normal (uncapped) limit, which is the reserve's purpose: tonight's
-   grid top-up was skipped so tomorrow's solar has genuine room to fill.
+   grid top-up was skipped so the reserved day's solar has genuine room to fill.
 
 ## Alternate flows
 
@@ -76,7 +77,7 @@ coordinating it, and the user's manually selected mode is never second-guessed.
 
 None — resolving the active SOC limit to the solar-reserve cap and withholding baseline overnight
 charging cannot themselves fail; the only way the goal is not achieved is a precondition not
-holding, which is covered by 1a and the Postconditions reset. A departure deadline for tomorrow
+holding, which is covered by 1a and the Postconditions reset. A departure deadline for the reserved day
 becoming resolved, or a missed-deadline hold beginning, while the cap is already active is not an
 exception either — it is simply one of the two deadline preconditions ceasing to hold, handled the
 same way as any other precondition lapsing (Postconditions).
@@ -86,14 +87,16 @@ same way as any other precondition lapsing (Postconditions).
 - While the cap is active, the active SOC limit in force is the solar-reserve cap (not the
   default or any solar step-up), and Auto mode-selection has not selected a mode for baseline
   overnight grid top-up.
-- While the cap is active, no departure deadline is resolved for tomorrow and no missed-deadline
-  hold is in effect. If a deadline becomes resolved on a later cycle (e.g. an external sensor sets
+- While the cap is active, no departure deadline is resolved for the reserved day and no
+  missed-deadline hold is in effect. If a deadline becomes resolved on a later cycle (e.g. an external sensor sets
   one, or the home-day override is reconfigured away from "no deadline"), or a hold begins, it
   takes priority: the cap lifts on the very next control cycle, the same as any other precondition
   ceasing to hold.
 - The cap lifts on the next control cycle when any one of these occurs: the sun comes up; the
-  active profile no longer provides SOC-limit coordination; a departure deadline becomes resolved
-  for tomorrow; or a missed-deadline hold begins. The active-SOC-limit rule then falls through to
+  active profile no longer provides SOC-limit coordination; the home-day flag is no longer set for
+  the reserved day; the solar forecast for the reserved day no longer exceeds its threshold; a
+  departure deadline becomes resolved for the reserved day; or a missed-deadline hold begins.
+  Midnight is not among them, since the reserved day does not change at midnight (R9). The active-SOC-limit rule then falls through to
   *Solar step-up* or *Default limit*, and Auto mode-selection is no longer withheld by the
   *Overnight top-up* row's reserve condition — the reserved headroom is then available for a solar mode to fill (step 4).
 
@@ -102,7 +105,7 @@ same way as any other precondition lapsing (Postconditions).
 The reserve decision is itself a re-evaluated-every-cycle condition, not a value the System
 stores between cycles — unlike deadline urgency, which is entered by a per-cycle test and then
 carried as a pursued occurrence until its own handback releases it ([UC05](UC05-guarantee-ready-by-departure.md), R5): each cycle the coordinator re-checks the profile,
-the sun position, the reserved day's home-day flag, the forecast, tomorrow's departure-deadline
+the sun position, the reserved day's home-day flag, solar forecast and departure-deadline
 resolution, and whether a [missed-deadline hold](../system-overview.md#ubiquitous-language) is in
 effect, so a change in any of them moves the System directly between the two states below on the
 very next cycle. (The hold is session-scoped rather than recomputed from this cycle's readings — as is the
@@ -113,18 +116,18 @@ use-case only reads either.)
   step-up or the default (R7), and Auto mode-selection's *Overnight top-up* row is free to select `Captar` for
   overnight top-up (R16).
 - **Reserved** — the active profile provides SOC-limit coordination, the sun is down, the home-day
-  flag is set for the reserved day, the forecast exceeds its threshold, no departure deadline is
-  resolved for tomorrow, and no missed-deadline hold is in effect; the limit resolves to the
+  flag is set for the reserved day, the reserved day's forecast exceeds its threshold, no departure
+  deadline is resolved for the reserved day, and no missed-deadline hold is in effect; the limit resolves to the
   solar-reserve cap (R7's *Solar-reserve cap* row) and Auto mode-selection's *Overnight top-up* row
   is withheld (R16). Those last two conditions are what makes this state mutually exclusive with
-  deadline urgency (R9): if either a deadline for tomorrow or a hold appears, the System leaves
-  Reserved on the next cycle. A deadline resolved for *today* and still ahead of now is deliberately
-  not excluded — it is not competing for tomorrow's reserve.
+  deadline urgency (R9): if either a deadline for the reserved day or a hold appears, the System
+  leaves Reserved on the next cycle. A deadline still ahead of now for any other date is deliberately
+  not excluded — it is not competing for the reserve (R9).
 
 | State | Active SOC limit | Leaves when |
 | --- | --- | --- |
-| Normal | Solar step-up or default (R7's *Solar step-up* / *Default limit* rows) | Active profile provides SOC-limit coordination, sun down, home-day flag set for the reserved day, forecast above threshold, no departure deadline resolved for tomorrow, and no missed-deadline hold in effect → Reserved |
-| Reserved | Solar-reserve cap (R7's *Solar-reserve cap* row) | Active profile no longer provides SOC-limit coordination, sun up, home-day flag clear for the reserved day, forecast at/below threshold, a departure deadline becomes resolved for tomorrow, or a missed-deadline hold begins → Normal |
+| Normal | Solar step-up or default (R7's *Solar step-up* / *Default limit* rows) | Active profile provides SOC-limit coordination, sun down, home-day flag set for the reserved day, the reserved day's forecast above threshold, no departure deadline resolved for the reserved day, and no missed-deadline hold in effect → Reserved |
+| Reserved | Solar-reserve cap (R7's *Solar-reserve cap* row) | Active profile no longer provides SOC-limit coordination, sun up, home-day flag clear for the reserved day, the reserved day's forecast at/below threshold, a departure deadline becomes resolved for the reserved day, or a missed-deadline hold begins → Normal |
 
 ## Domain events produced
 
@@ -133,13 +136,13 @@ since they correspond to the active-SOC-limit rule's *Solar-reserve cap* row and
 mode-selection's *Overnight top-up* row in `resolution-rules.md` switching in and out.
 
 - `SolarReserveCapEngaged` — the sun is down, the home-day flag is set for the reserved day, the
-  solar-forecast precondition holds, no departure deadline is resolved for tomorrow, and no
-  missed-deadline hold is in effect: the active SOC limit resolves to the solar-reserve cap and Auto
+  solar-forecast precondition holds for the reserved day, no departure deadline is resolved for the
+  reserved day, and no missed-deadline hold is in effect: the active SOC limit resolves to the solar-reserve cap and Auto
   mode-selection withholds baseline overnight grid top-up (Normal → Reserved).
 - `SolarReserveCapLifted` — the sun comes up, the home-day flag is no longer set for the reserved
-  day, the forecast no longer exceeds its threshold, the active profile no longer provides SOC-limit
-  coordination, a departure deadline becomes resolved for tomorrow, or a missed-deadline hold
-  begins: the active SOC limit resolves normally again and Auto mode-selection's *Overnight top-up*
+  day, the reserved day's forecast no longer exceeds its threshold, the active profile no longer
+  provides SOC-limit coordination, a departure deadline becomes resolved for the reserved day, or a
+  missed-deadline hold begins: the active SOC limit resolves normally again and Auto mode-selection's *Overnight top-up*
   row is re-enabled (Reserved → Normal).
 
 ## Diagram
@@ -147,8 +150,8 @@ mode-selection's *Overnight top-up* row in `resolution-rules.md` switching in an
 ```mermaid
 stateDiagram-v2
     [*] --> Normal
-    Normal --> Reserved: SOC-limit coordination<br/>active, sun down,<br/>home-day flag set<br/>for the reserved day,<br/>forecast > threshold,<br/>no deadline for tomorrow,<br/>no missed-deadline hold<br/>(SolarReserveCapEngaged)
-    Reserved --> Normal: SOC-limit coordination<br/>no longer active, sun up,<br/>home-day flag clear<br/>for the reserved day,<br/>forecast ≤ threshold,<br/>deadline resolved for tomorrow, or<br/>missed-deadline hold begins<br/>(SolarReserveCapLifted)
+    Normal --> Reserved: SOC-limit coordination<br/>active, sun down,<br/>home-day flag set<br/>for the reserved day,<br/>its forecast > threshold,<br/>no deadline for it,<br/>no missed-deadline hold<br/>(SolarReserveCapEngaged)
+    Reserved --> Normal: SOC-limit coordination<br/>no longer active, sun up,<br/>home-day flag clear<br/>for the reserved day,<br/>its forecast ≤ threshold,<br/>deadline resolved for it, or<br/>missed-deadline hold begins<br/>(SolarReserveCapLifted)
     note right of Reserved
         Active SOC limit = solar-reserve
         cap (R7, Solar-reserve cap row).
@@ -157,7 +160,8 @@ stateDiagram-v2
         (R16). Mutually exclusive with
         deadline urgency (R9) via its two
         deadline preconditions: no deadline
-        for tomorrow, no missed-deadline hold.
+        for the reserved day, no missed-deadline
+        hold.
     end note
     note right of Normal
         Active SOC limit resolves to a
@@ -172,17 +176,18 @@ stateDiagram-v2
 ## Requirements satisfied
 
 - **R9** — Solar-reserve overnight cap (the cap's activation conditions, including its two deadline
-  preconditions — no departure deadline resolved for tomorrow, and no missed-deadline hold in
-  effect; resolving the active SOC limit to the solar-reserve cap while the sun is down; withholding
+  preconditions — no departure deadline resolved for the reserved day, and no missed-deadline hold in
+  effect; all three date-bearing conditions reading the reserved day; resolving the active SOC limit to the solar-reserve cap while the sun is down; withholding
   Auto mode-selection's own opportunistic overnight grid top-up; inapplicability under `Manual`; the
   mutual exclusivity with deadline urgency; and the reset when the sun rises, the active profile no
-  longer provides SOC-limit coordination, such a deadline appears, or such a hold begins).
+  longer provides SOC-limit coordination, the reserved day's home-day flag or forecast condition
+  stops holding, such a deadline appears, or such a hold begins).
 
 Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
 R9 portion of AC3 (the cap never applies while the solar capability is absent, since this
 use-case's own precondition above requires it present) and the solar-reserve portion of AC8 (while
 the deadline capability is absent, both deadline preconditions — no deadline resolved for
-tomorrow, and no missed-deadline hold in effect — are always satisfied, since neither can ever
+the reserved day, and no missed-deadline hold in effect — are always satisfied, since neither can ever
 arise, so the cap depends only on its remaining conditions). AC8's R15 clause (R15 still resolves
 as configured but has no remaining effect once the deadline capability is absent) is
 `resolution-rules.md`'s to claim, not this use-case's — R15 feeds only the required-current
@@ -190,7 +195,7 @@ computation there, which this use-case's own preconditions never reach.
 
 Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution
 (R7, `resolution-rules.md`) and Auto mode-selection (R16, `resolution-rules.md`); the
-departure-deadline resolution (R14, `resolution-rules.md`), evaluated one day ahead as this
+departure-deadline resolution (R14, `resolution-rules.md`), evaluated for the reserved day as this
 use-case's precondition; the required-current and EV-battery-capacity computations and the
 missed-deadline hold that feed deadline urgency elsewhere (R5, R15, `resolution-rules.md`); and the
 home-day flag itself, set by
@@ -202,11 +207,11 @@ home-day flag itself, set by
   or an external source (calendar, presence) per NF3 — this use-case only reads the flag, it never
   sets it.
 - **Mutually exclusive with [UC05](UC05-guarantee-ready-by-departure.md).** Two things are each a
-  precondition against this use-case engaging at all: a departure deadline resolved for tomorrow
-  (R14), and a missed-deadline hold in effect from a deadline already elapsed today (R5). Whichever
+  precondition against this use-case engaging at all: a departure deadline resolved for the reserved
+  day (R14), and a missed-deadline hold in effect from a deadline already elapsed (R5). Whichever
   applies, the deadline takes priority. Those two preconditions are the whole of what "mutually
-  exclusive" means here: a deadline resolved for *today* and still ahead of now is not excluded, since
-  it is not competing for tomorrow's reserve. Neither use-case restates the other's mechanism — they share the R14
+  exclusive" means here: a deadline still ahead of now for any other date is not excluded, since
+  it is not competing for the reserve (R9). Neither use-case restates the other's mechanism — they share the R14
   departure-deadline resolution and the R5 hold as the switch between them.
 - **Realized entirely by two existing resolution rules, not by a mode.** Whichever solar or
   overnight mode `Auto` selects — [UC01](UC01-charge-from-solar-surplus.md),
