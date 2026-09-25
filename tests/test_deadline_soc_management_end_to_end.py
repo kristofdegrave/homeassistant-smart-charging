@@ -399,7 +399,9 @@ async def test_should_keep_power_stopped_when_the_soc_reading_becomes_unavailabl
     assert coordinator.active_mode == MODE_POWER
 
 
-async def test_should_clear_the_stop_when_the_car_is_unplugged_and_replugged(hass, freezer):
+async def test_should_resume_power_charging_without_a_soc_reading_when_unplugged_and_replugged(
+    hass, freezer
+):
     """Should resume commanding Power's target current, even with no ev_soc reading, once the
     car has been disconnected and reconnected after Power stopped at the active SOC limit --
     UC04/R7 AC5's resume condition 2. Proven the same way the missing-reading test above proves
@@ -440,8 +442,82 @@ async def test_should_clear_the_stop_when_the_car_is_unplugged_and_replugged(has
     await hass.async_block_till_done()
 
     # Assert
+    assert calls[-3]["value"] == 0.0  # stopped, before the disconnect (the Arrange refresh)
     assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- the stop did not survive
     assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
+
+
+async def test_should_resume_power_charging_when_the_limit_changes_while_unavailable(hass, freezer):
+    """Should resume commanding Power's target current when the active SOC limit itself
+    changes on a cycle where the ev_soc reading is unavailable -- UC04 line 64/R7 AC5 name the
+    active SOC limit changing as a clearing condition on its own, "not a reading": unlike the
+    missing-reading test above (where nothing else changed), the limit override rising here is
+    the coordinator's own edge-detected `soc_limit_changed` signal, which the stop's fix reads
+    even with no reading to confirm SOC against the new limit."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: same stopped starting condition as the missing-reading test above.
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=85.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Act: the reading goes unavailable AND the limit override rises, on the same cycle.
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
+    seed_owned_entity(hass, "number.smart_charging_soc_limit_override", "90.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert coordinator.data.active_soc_limit == 90.0
+    assert calls[-2]["value"] == 0.0  # stopped, before the limit changed (the Arrange refresh)
+    assert calls[-1]["value"] == 10.0  # resumed -- the limit change alone was enough
+    assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
+
+
+async def test_should_refresh_the_stop_while_a_different_mode_is_active(hass, freezer):
+    """Should reflect a reading taken while a *different* mode was active the next time Power
+    dispatches, rather than acting on a stale comparison from Power's own last cycle -- the
+    active SOC limit and ev_soc are cycle-wide facts, resolved once per cycle regardless of
+    which mode consumes them (#1335), so a limit raised while Solar was active and charging
+    (with its own reading) has to be visible to Power immediately on switching back, not only
+    once Power itself next sees a reading."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: Power stopped at the default 80% limit by an 85% reading, then switched to
+    # Solar with the same reading still at 85% (Solar is itself SOC-gated, so it stays stopped
+    # too -- this step only proves the starting condition, not the behaviour under test).
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=85.0, net_w=100.0, charger_w=500.0)
+    hass.states.async_set("sun.sun", SUN_STATE_ABOVE_HORIZON)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: True}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Act: the limit override rises above the still-85% reading while Solar (not Power) is
+    # active, then Manual switches straight back to Power.
+    seed_owned_entity(hass, "number.smart_charging_soc_limit_override", "90.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert coordinator.data.active_soc_limit == 90.0
+    assert calls[-1]["value"] == 10.0  # resumes immediately -- the refresh wasn't Power's own
 
 
 # --- UC06: Baseline -> SteppedUp -> Baseline, across a Solar/SolarOnly switch ---

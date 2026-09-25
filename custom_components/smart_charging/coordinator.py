@@ -155,63 +155,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # select.smart_charging_profile.
         self.active_profile: str = PROFILE_MANUAL
         self.soc_limit_override: float = DEFAULT_SOC_LIMIT
-        # R8's lifecycle state, threaded across cycles -- cleared only via
-        # SolarStepUpGate.resolve's own is_solar_mode_charging=False branch, never by
-        # the generic per-mode-switch reset below (that would wrongly clear an in-effect
-        # step-up on a Solar<->SolarOnly switch, R7/UC06 alternate flow 4a). ADR-0023:
-        # SolarStepUpGate owns the SolarStepUpState itself; `.state` is a plain mutable
-        # attribute, same seeding pattern as before via `self._step_up_gate.state = ...`.
-        self._step_up_gate = SolarStepUpGate()
-        # R11's has-charged flag (issue #757), owned outside `_mode_state` for the exact same
-        # structural reason as `_step_up_gate` above: `_reset_mode_state_if_changed`/
-        # `_fresh_mode_state` rebuild EVERY SOC-gated mode's state on any mode switch,
-        # including a Solar<->SolarOnly switch -- but per R11/system-overview.md's
-        # `has-charged flag` glossary entry, this flag must survive exactly that switch (it's
-        # scoped to the connection, not the active mode). A plain bool suffices here, unlike
-        # `SolarStepUpState`'s own richer shape -- there's no per-mode data to carry, only a
-        # single flip-once-per-connection bit. Set True in `_dispatch_mode` the first time a
-        # solar mode's own step() transitions into Phase.CHARGING while it was False; cleared
-        # back to False only on disconnect (`_dispatch_mode`'s own early branch) -- a fresh
-        # coordinator instance (a restart) already starts at False for free, so there is
-        # nothing to persist/restore for that case (R11's third clearing condition).
-        self._has_charged: bool = False
-        # R11's rapid-cycling cooldown (issue #974), owned outside `_mode_state` for the exact
-        # same structural reason as `_has_charged`/`_step_up_gate` above:
-        # `_reset_mode_state_if_changed`/`_fresh_mode_state` rebuild EVERY SOC-gated mode's
-        # state on any mode switch, including the mode that started a still-running cooldown --
-        # but requirements.md's R11 (and control-cycle.md's "Mode switched mid-operation" edge
-        # case) requires a running cooldown to survive exactly that switch, blocking a restart
-        # in whichever mode is active when it would otherwise happen, for the duration fixed at
-        # the moment charging stopped. `None` means no cooldown is running. Set in
-        # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`;
-        # in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry (R3); and,
-        # since issue #1311, in `_start_fault_stop_cooldown` for a fault stop -- the latter two
-        # both through the shared `_start_cooldown` helper. Cleared to `None` only on disconnect
-        # (`_dispatch_mode`'s own early branch) -- same reset trigger as `_mode_state`/
-        # `_has_charged` there, per R7's resume condition for a car unplugged and replugged.
-        # Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the entire point
-        # (issue #974).
-        self._active_cooldown: ActiveCooldown | None = None
-        # R17 AC4/R7 (#1335), and UC04's *State of charge unavailable* exception flow (A5a/
-        # #1300, merged as UC04's own "State of charge unavailable" flow): whether Power is
-        # currently stopped at the active SOC limit. Coordinator-scoped like `_active_cooldown`
-        # right above -- not `_mode_state`, which Power never gains an entry in
-        # (`_fresh_mode_state` derives only from `is_soc_gated`, and `_PowerModeHandler.
-        # is_soc_gated` must stay False, ADR-0042). A cycle with a real reading is the only
-        # thing that sets or clears it (`_power_reached_soc_limit`); a missing-reading cycle
-        # leaves it exactly as it was -- never clears it, so an already-stopped Power stays
-        # stopped -- and never sets it either, so a still-charging Power is untouched by one.
-        # UC04/R7 AC5 name this stop's only clearing conditions explicitly: the active SOC
-        # limit changing (resume condition 1 -- `_power_reached_soc_limit` clearing it in
-        # place against a present reading, no reset needed here) or the car being unplugged
-        # and replugged (resume condition 2 -- the disconnect reset in `_dispatch_mode`'s own
-        # early branch, same trigger as `_active_cooldown` above). Neither names a mode switch
-        # -- deliberately NOT reset by `_reset_mode_state_if_changed`; see that method's own
-        # docstring for why. A restart or reload needs no code of its own: both rebuild the
-        # coordinator from scratch (`__init__`), so this field is never persisted across
-        # either, matching NF14/UC04's "a restart or reload clears that stop" the same way
-        # every other in-memory field here already does.
-        self._power_soc_limit_reached: bool = False
+        # Four fields whose lifecycle must survive `_reset_mode_state_if_changed`'s per-mode-
+        # switch rebuild of `_mode_state` -- each is genuinely its own concern (two connection-
+        # scoped, two stop-scoped; `_init_mode_switch_survivors`'s own docstring says which is
+        # which and points at each field's full reasoning), grouped into one call only so
+        # __init__ stays under the ADR-0046 statement guard as this class keeps growing.
+        self._init_mode_switch_survivors()
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
         # early-faulted cycle never reaches it) always reports changed=True.
@@ -252,19 +201,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             required_a=None, urgent=False, unreachable=False
         )
         self._last_active_mode: str | None = None
-        # Latches the last raw value set_active_mode/set_active_profile rejected -- None once a
-        # valid value is set again. Lets each log its warning once per bad-value "outage" rather
-        # than once per cycle (ADR-0007's once-per-outage discipline, same idea as
+        # Latches the last raw value set_active_mode rejected -- None once a valid
+        # mode is set again. Lets set_active_mode log its warning once per bad-value "outage"
+        # rather than once per cycle (ADR-0007's once-per-outage discipline, same idea as
         # `_was_faulted`/`_log_fault` below), since a corrupted Store-read value would otherwise
-        # re-reject identically every cycle. `_last_rejected_mode` backs `set_active_mode`;
-        # `_last_rejected_profile` backs `set_active_profile`'s own registry guard (issue #718's
-        # PROFILE_POLICIES lookup). One tuple assignment (ADR-0046: keeps this constructor under
-        # the statement guard) -- the two fields are otherwise unrelated, each read/written only
-        # by its own setter.
-        self._last_rejected_mode, self._last_rejected_profile = (
-            None,
-            None,
-        )  # both str | None
+        # re-reject identically every cycle.
+        self._last_rejected_mode: str | None = None
+        # Same once-per-outage discipline as `_last_rejected_mode`, for `set_active_profile`'s
+        # own registry guard (issue #718's PROFILE_POLICIES lookup) -- a corrupted stored
+        # profile would otherwise re-read and re-reject identically every cycle.
+        self._last_rejected_profile: str | None = None
         self._net_window: tuple[float, ...] = ()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
@@ -308,6 +254,67 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # before the fault.
         self._role_readings: dict[str, Any] = {}
         self._role_readings_at: datetime | None = None
+
+    def _init_mode_switch_survivors(self) -> None:
+        """Constructs/defaults the four fields `__init__` calls this for -- each survives
+        `_reset_mode_state_if_changed`'s per-mode-switch rebuild of `_mode_state` for its own
+        reason, stated here in full since none of the four has an assignment of its own left
+        in `__init__` to hang a comment on:
+
+        - `_step_up_gate` (R8's lifecycle state, threaded across cycles) -- cleared only via
+          `SolarStepUpGate.resolve`'s own `is_solar_mode_charging=False` branch, never by the
+          per-mode-switch reset (that would wrongly clear an in-effect step-up on a
+          Solar<->SolarOnly switch, R7/UC06 alternate flow 4a). ADR-0023: `SolarStepUpGate`
+          owns `SolarStepUpState` itself; `.state` is a plain mutable attribute, same seeding
+          pattern as before via `self._step_up_gate.state = ...`.
+        - `_has_charged` (R11's has-charged flag, issue #757) -- owned outside `_mode_state`
+          for the exact same structural reason as `_step_up_gate`: `_reset_mode_state_if_changed`/
+          `_fresh_mode_state` rebuild EVERY SOC-gated mode's state on any mode switch, including
+          a Solar<->SolarOnly switch, but per R11/system-overview.md's `has-charged flag`
+          glossary entry this flag must survive exactly that switch (scoped to the connection,
+          not the active mode). A plain bool suffices here, unlike `SolarStepUpState`'s own
+          richer shape -- there's no per-mode data to carry, only a single flip-once-per-
+          connection bit. Set True in `_dispatch_mode` the first time a solar mode's own
+          step() transitions into `Phase.CHARGING` while it was False; cleared back to False
+          only on disconnect (`_dispatch_mode`'s own early branch) -- a fresh coordinator
+          instance (a restart) already starts at False for free, so there is nothing to
+          persist/restore for that case (R11's third clearing condition).
+        - `_active_cooldown` (R11's rapid-cycling cooldown, issue #974) -- owned outside
+          `_mode_state` for the exact same structural reason as the two above:
+          `_reset_mode_state_if_changed`/`_fresh_mode_state` rebuild EVERY SOC-gated mode's
+          state on any mode switch, including the mode that started a still-running cooldown,
+          but requirements.md's R11 (and control-cycle.md's "Mode switched mid-operation" edge
+          case) requires a running cooldown to survive exactly that switch, blocking a restart
+          in whichever mode is active when it would otherwise happen, for the duration fixed at
+          the moment charging stopped. `None` means no cooldown is running. Set in
+          `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`;
+          in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry (R3); and,
+          since issue #1311, in `_start_fault_stop_cooldown` for a fault stop -- the latter two
+          both through the shared `_start_cooldown` helper. Cleared to `None` only on disconnect
+          (`_dispatch_mode`'s own early branch) -- same reset trigger as `_mode_state`/
+          `_has_charged` there, per R7's resume condition for a car unplugged and replugged.
+          Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the entire point
+          (issue #974).
+        - `_power_soc_limit_reached` (R17 AC4/R7, #1335, and UC04's *State of charge
+          unavailable* exception flow, A5a/#1300) -- whether Power is currently stopped at the
+          active SOC limit. Coordinator-scoped like `_active_cooldown` above -- not
+          `_mode_state`, which Power never gains an entry in (`_fresh_mode_state` derives only
+          from `is_soc_gated`, and `_PowerModeHandler.is_soc_gated` must stay False, ADR-0042).
+          Refreshed once per cycle, whatever the active mode, by
+          `_refresh_power_soc_limit_reached` -- see that method's own docstring for the full
+          rule (a present reading always wins; with none, only the active SOC limit itself
+          changing this cycle can clear an existing stop, never set one). Also cleared on a
+          disconnect (`_dispatch_mode`'s own early branch, same trigger as `_active_cooldown`
+          above -- resume condition 2, unplug/replug); neither that nor the per-cycle refresh
+          is reached from `_reset_mode_state_if_changed` on a mode switch -- see that method's
+          own docstring for why. A restart or reload needs no code of its own: both rebuild
+          the coordinator from scratch (`__init__`), so this field is never persisted across
+          either, matching NF14/UC04's "a restart or a reload clears that stop" the same way
+          every other in-memory field here already does."""
+        self._step_up_gate = SolarStepUpGate()
+        self._has_charged: bool = False
+        self._active_cooldown: ActiveCooldown | None = None
+        self._power_soc_limit_reached: bool = False
 
     async def _async_update_data(self) -> CycleResult:
         try:
@@ -666,17 +673,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(
             ctx, now_dt
         )
-        active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
-            self.soc_limit_override,
-            solar_reserve_active=ctx.solar_reserve_active,
-            solar_reserve_soc=self._config.solar_reserve_soc,
-            step_up_state=self._step_up_gate.state,
-        )
-        if soc_limit_changed:
-            self.hass.bus.async_fire(
-                EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
-            )
-        ctx.active_soc_limit = active_soc_limit
+        active_soc_limit = self._resolve_active_soc_limit(ctx, ev_soc)
 
         # `auto_dispatchable` is also this cycle's own gate for actually resolving Auto's
         # active mode below -- computed once here and reused there (and inside
@@ -1098,34 +1095,61 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and not self._active_cooldown.elapsed(now)
         )
 
-    def _power_reached_soc_limit(self, ctx: CycleContext) -> bool:
-        """R17 AC4/R6 (#1335), amended by UC04's *State of charge unavailable* exception flow
-        (A5a/#1300): Power's own stop at the active SOC limit (R7), kept separate from
-        `_PowerModeHandler.is_soc_gated` -- ADR-0042 keeps that flag `False` so Power never
-        *needs* a state-of-charge reading, and a missing reading stays a non-fault in Power
-        while charging (C5). Only a cycle with a present reading can change the stop: at or
-        above the active limit it latches `_power_soc_limit_reached` (or keeps it latched);
-        below the limit it clears it (resume condition 1, R7). A missing reading (`None`)
-        changes nothing this cycle -- neither starts the stop nor ends it, so an already-
-        stopped Power stays at 0 A through a missing-reading cycle, and a still-charging Power
-        is untouched by one. The latch itself is cleared only by the disconnect reset in
-        `_dispatch_mode`'s own early branch (resume condition 2, unplug/replug) -- never by
-        this method re-evaluating a missing reading."""
-        if ctx.ev_soc is not None:
-            self._power_soc_limit_reached = ctx.ev_soc >= ctx.active_soc_limit
-        return self._power_soc_limit_reached
+    def _resolve_active_soc_limit(self, ctx: CycleContext, ev_soc: float | None) -> float:
+        """This cycle's active SOC limit (ADR-0011/ADR-0012's `SocGateResolver`): resolves it,
+        fires `ActiveSocLimitChanged` on a change, writes it onto `ctx`, and -- #1335 -- feeds
+        the same resolution straight into `_refresh_power_soc_limit_reached`. That refresh has
+        to happen here, at the one place this cycle's limit and `ev_soc` are both already in
+        hand, rather than waiting for `_dispatch_mode`'s Power branch to run: see that
+        method's own docstring for why it must run every cycle, whatever the active mode.
+        Named and called as one step from `_run_cycle` (ADR-0046) rather than left inline,
+        the same reason `_resolve_deadline_and_reserve` beside it already is one."""
+        active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
+            self.soc_limit_override,
+            solar_reserve_active=ctx.solar_reserve_active,
+            solar_reserve_soc=self._config.solar_reserve_soc,
+            step_up_state=self._step_up_gate.state,
+        )
+        if soc_limit_changed:
+            self.hass.bus.async_fire(
+                EVENT_ACTIVE_SOC_LIMIT_CHANGED, {ATTR_ACTIVE_SOC_LIMIT: active_soc_limit}
+            )
+        ctx.active_soc_limit = active_soc_limit
+        self._refresh_power_soc_limit_reached(
+            ev_soc, active_soc_limit, limit_changed=soc_limit_changed
+        )
+        return active_soc_limit
 
-    def _power_would_stop_at_soc_limit(self, ev_soc: float, active_soc_limit: float) -> bool:
-        """Read-only echo of `_power_reached_soc_limit`'s comparison for the Auto baseline dry
-        run (`_mode_desired_current`) -- mirrors what the real dispatch would report for a
-        present reading, without mutating `self._power_soc_limit_reached`, since the dry run
-        must mutate no persisted state (`_mode_desired_current`'s own docstring). `ev_soc` is
-        never `None` here: `_mode_desired_current` is only ever reached (via
-        `resolve_deadline_urgency`) once `deadline_resolvable` has already required a present
-        reading, so this need not -- and must not -- fall back to the latch the way
-        `_power_reached_soc_limit` does; that fallback only has meaning for a missing reading,
-        which this method is never called with."""
-        return ev_soc >= active_soc_limit
+    def _refresh_power_soc_limit_reached(
+        self, ev_soc: float | None, active_soc_limit: float, *, limit_changed: bool
+    ) -> None:
+        """R17 AC4/R7 (#1335), UC04's *State of charge unavailable* exception flow: refreshes
+        `self._power_soc_limit_reached` -- Power's own stop at the active SOC limit, kept
+        separate from `_PowerModeHandler.is_soc_gated` (ADR-0042 keeps that flag `False` so
+        Power never *needs* a reading, and a missing one stays a non-fault in Power while
+        charging, C5).
+
+        Called once per cycle from `_run_cycle`, immediately after `active_soc_limit`
+        resolves -- unconditionally, whatever the active mode, not only while `Power` is
+        dispatching: the active SOC limit and `ev_soc` are cycle-wide facts, not scoped to
+        whichever mode consumes them this cycle, so a limit change or a reading while a
+        *different* mode is active still has to be reflected for the next time `Power`
+        dispatches (a mode switch is deliberately NOT itself a reset trigger --
+        `_reset_mode_state_if_changed`'s own docstring says why).
+
+        A present reading always wins: the direct comparison, matching UC04's main flow
+        exactly (`>=` sets the stop, `<` clears it -- resume condition 1). With no reading,
+        UC04 line 64/R7 AC5 both name what can still end an already-made stop: "the active
+        SOC limit changes ... not a reading" -- so `limit_changed` (the coordinator's own
+        edge-detected signal over `soc_limit_override`, ADR-0012's `SocGateResolver`) clears
+        the stop on its own. It can only ever CLEAR, never SET one: UC04 line 63 is explicit
+        that a missing reading gives the System nothing to judge the limit by, so it "cannot
+        itself stop there on that cycle" -- a limit change witnessed without a reading is
+        evidence of a *change*, not evidence of where `ev_soc` now stands against it."""
+        if ev_soc is not None:
+            self._power_soc_limit_reached = ev_soc >= active_soc_limit
+        elif limit_changed:
+            self._power_soc_limit_reached = False
 
     def _dispatch_mode(self, ctx: CycleContext) -> float:
         """The disconnect/Off/Power/SOC-gated-stop guards around the ModeHandler registry lookup
@@ -1133,8 +1157,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         that decide *whether* to look one up at all). Reads ev_soc/active_soc_limit off ctx rather
         than as separate parameters -- both are already there (set earlier this cycle, before this
         call), and threading them again as loose kwargs would reintroduce the two-sources-of-truth
-        problem CycleContext exists to eliminate. Mutates self._mode_state exactly as today;
-        returns the desired current before any clamp (ADR-0023)."""
+        problem CycleContext exists to eliminate. Mutates self._mode_state exactly as today,
+        plus self._active_cooldown/self._power_soc_limit_reached on a disconnect (their own
+        field docstrings, in `_init_mode_switch_survivors`); returns the desired current
+        before any clamp (ADR-0023)."""
         if ctx.status not in CHARGEABLE_STATES:
             # R7/R11: disconnect resets every mode's state, clearing hold/cooldown -- and, for
             # a solar mode or Captar, also ends any SOC gate (resume condition 2: unplug/replug).
@@ -1169,7 +1195,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # escape R11 forbids.
             if self._cooldown_blocks(Phase.CHARGING, ctx.now):
                 return 0.0
-            if self._power_reached_soc_limit(ctx):
+            # #1335: already refreshed for this cycle, before `_dispatch_mode` ever runs, by
+            # `_refresh_power_soc_limit_reached` (called from `_run_cycle` as soon as this
+            # cycle's `active_soc_limit` resolves) -- a plain read here, not a second write.
+            if self._power_soc_limit_reached:
                 return 0.0
             desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
             return desired
@@ -1575,12 +1604,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 return 0.0
         elif mode == MODE_POWER:
             # Mirrors `_dispatch_mode`'s own Power branch's two stop conditions (#1335): the
-            # cooldown check, and the SOC-limit stop via the read-only
-            # `_power_would_stop_at_soc_limit` (not `_power_reached_soc_limit`, which mutates
-            # the real latch -- this dry run must not, per this method's own docstring).
+            # cooldown check, and the SOC-limit stop. `self._power_soc_limit_reached` is
+            # already refreshed for this cycle by the time `_run_cycle` reaches here (it runs
+            # `_refresh_power_soc_limit_reached` as soon as `active_soc_limit` resolves,
+            # before `resolve_deadline_urgency`/this method) -- a plain read, mutating
+            # nothing, matching this method's own no-mutation docstring.
             if self._cooldown_blocks(Phase.CHARGING, now):
                 return 0.0
-            if self._power_would_stop_at_soc_limit(ev_soc, active_soc_limit):
+            if self._power_soc_limit_reached:
                 return 0.0
         return current
 
