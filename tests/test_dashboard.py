@@ -159,7 +159,7 @@ def test_charging_status_section_has_the_eight_documented_tiles():
     assert all(c["type"] == "tile" for c in cards)
 
 
-def test_should_lead_charging_status_with_the_system_status_tile_when_no_role_is_mapped():
+def test_should_lead_charging_status_with_the_status_tile_when_no_optional_role_is_mapped():
     """R19 AC1/UC11 (#1349): the status tile leads the section on a default entry -- it does
     not depend on CONF_EV_SOC_ENTITY the way the battery tile does (the two tests below cover
     that dependency for the battery tile itself)."""
