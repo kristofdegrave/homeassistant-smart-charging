@@ -41,8 +41,7 @@ What becomes easier or harder as a result? Include follow-up work this decision
 creates (new issues to open, docs to update) and anything it forecloses.
 
 **Blast radius** — required, and the last part of the record: nothing follows it. Every site
-this decision governs *today*, bounded so it stays decidable instead of becoming an open-ended
-audit:
+this decision governs *today*:
 
 1. State the **search** that enumerates the candidate sites — one ripgrep pattern with a
    repo-rooted path, or a short explicitly listed set of them, runnable as written by a reader
