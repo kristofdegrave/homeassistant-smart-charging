@@ -46,26 +46,27 @@ audit:
 
 1. State the **search** that enumerates the candidate sites — one ripgrep pattern with a
    repo-rooted path, or a short explicitly listed set of them, runnable as written by a reader
-   holding nothing but `Grep`/`Glob` — and why its pattern is wide enough: a pattern keyed on
-   the narrowest name silently drops subclasses, aliases and re-exports the decision also
-   governs.
+   holding nothing but `Grep`/`Glob` — and why its pattern is wide enough (the *width test*):
+   a pattern keyed on the narrowest name silently drops subclasses, aliases and re-exports the
+   decision also governs.
 2. **One row per hit that does not conform**: the site, what it does today, its follow-up.
 3. **One line counting the hits that conform**, not a row each.
 4. **Out of scope, one line per group**: which hits, and what they keep doing instead. Silence
    is not out-of-scope.
 
-It is complete when every hit is a row, in the count or in an out-of-scope group — not when the
-codebase has been audited. A search that genuinely returns no hits means the decision governs
+A hit is one matching line, as `rg -n` prints it. It is complete when every hit is a
+non-conforming row, counted as conforming, or in an out-of-scope group — not when the codebase
+has been audited. A search that genuinely returns no hits means the decision governs
 no existing site; say so, and give the search. A process decision is not automatically that
 case: it usually governs a tree of its own. The shape, with invented sites:
 
 ```markdown
-**Blast radius.** `rg -n 'unit_of_measurement' custom_components/ tests/` — 12 hits, wide
-enough because every power read passes through that attribute.
+**Blast radius.** `rg -n 'power_unit' example/` — 12 hits, wide enough because every
+power read passes through that attribute.
 
 | Site | Today | Follow-up |
 |---|---|---|
-| `custom_components/smart_charging/adapters/peak.py:41` | Reads the value without a unit check | Convert per this decision |
+| `example/adapters/peak.py:41` | Reads the value without a unit check | Convert per this decision |
 
-8 other hits conform. Out of scope: the 3 hits in `tests/fixtures/` keep asserting raw values.
+8 other hits conform. Out of scope: the 3 hits in `example/fixtures/` keep asserting raw values.
 ```

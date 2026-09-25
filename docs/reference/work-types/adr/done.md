@@ -55,17 +55,16 @@ stake.
 **Minor**.
 
 **(6) The Blast radius is complete, and closes the record.** Consequences end with the Blast
-radius `docs/adl/template.md` specifies. Run the search exactly as written; one that needs translating first
-fails the width test below. **Major** in each case, naming the sites missed:
+radius `docs/adl/template.md` specifies. Run the search exactly as written; one that needs
+translating first fails the width test below. **Major** in each case, naming the sites missed:
 - the section is absent;
 - the search fails the template's width test, dropping something the decision also governs;
-- a hit is not accounted for — not a row, in the count or in an out-of-scope group — or the
-  count differs from the conforming hits.
+- a hit is not accounted for — not a non-conforming row, counted as conforming, or in an
+  out-of-scope group — or the count differs from the conforming hits.
 
 An empty result fails the width test when the ADR's table lists hits, or when the ADR does not
 claim the template's no-hits case: the search is then defective, not the blast radius empty.
-**Minor**: a row missing what the site does today or its follow-up; a conforming hit given a
-row; an out-of-scope group not saying what it keeps doing; anything after the Blast radius.
+**Minor**: a row missing what the site does today or its follow-up; an out-of-scope group not saying what it keeps doing; anything after the Blast radius.
 
 **(7) One problem, one decision.** An ADR bundling two or more independent structural choices
 → **Major**; split it.
