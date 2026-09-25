@@ -433,8 +433,9 @@ The home-day flag drives the solar-reserve cap (R9) and, while the deadline capa
   `solar_available` is off, everything under *Solar configuration* is not required, and the `Auto`
   rule skips the solar mode accordingly. This reaches one row filed outside that area:
   `sensor.smart_charging_solar_surplus_w` (*General → Diagnostic outputs*) is registry-disabled
-  while the capability is off (ADR-0028), which is what removes the solar surplus reading from the
-  runtime dashboard's charging-status section (R19 AC4, UC11 3a). No *Solar configuration* row is a
+  while the capability is off (ADR-0028), unless the user has enabled it themselves (R18). The
+  dashboard leaves the solar surplus reading out of its charging-status section whenever the
+  capability is off, enabled or not (R19 AC4, UC11 3a). No *Solar configuration* row is a
   runtime entity, so the solar capability gates nothing in the dashboard's runtime configuration
   section.
 - **Captar-dependent rows are conditional on the CapTar capability (R18).** When
