@@ -499,7 +499,7 @@ How the ids are pinned is decided by [ADR-0013](../adl/0013-stable-owned-entity-
 
 **Acceptance criteria:**
 
-- [ ] On the lowest-specification hardware Home Assistant officially supports as an installation target — as listed at the time of testing, and again as listed when the integration version under test is published, holding on each where the two lists differ — the mean processing time of one control cycle over any 200 consecutive cycles — excluding time spent waiting for a device or entity to respond — is at most 1 % of the configured control interval (NF11): 100 ms at the default 10 s, 50 ms at the 5 s minimum.
+- [ ] On the lowest-specification hardware Home Assistant officially supports as an installation target, the mean processing time of one control cycle over any 200 consecutive cycles — excluding time spent waiting for a device or entity to respond — is at most 1 % of the configured control interval (NF11): 100 ms at the default 10 s, 50 ms at the 5 s minimum. That target is taken from Home Assistant's official list both at the time of testing and when the integration version under test is published; where the two lists name different targets, the bound holds on each.
 - [ ] Under unchanged configuration and unchanged readings, with control cycles the only work the Home Assistant process runs: once the window a [smoothed value](system-overview.md#ubiquitous-language) is averaged over (R10) and R21's 15-minute averaging window for [monthly peak demand](system-overview.md#ubiquitous-language) are both full and a further 200 cycles have run, the process's resident memory does not exceed its level at that point by 5 MB or more at any time during the following 24 hours of continuous running.
 
 ---
