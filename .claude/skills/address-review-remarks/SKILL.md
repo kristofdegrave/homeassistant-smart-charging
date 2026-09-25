@@ -39,6 +39,8 @@ stop — do not invent work.
 
 - Fix every **Critical** and **Major** finding.
 - Also fix **Minor**/**Nit** findings when the change is trivial and local.
+- Fix by the first that works: **reword** the text the finding names; else **delete** it, or
+  replace it with a pointer to its owner; only then **add** text.
 - If you disagree with a finding, leave the document unchanged for that finding and record why —
   it becomes a **Skipped** entry in the summary. Never half-apply a fix you think is wrong.
 - A finding whose request is outside the PR's scope is not fixed in this PR. Locally the fix
@@ -70,7 +72,7 @@ Fixing is re-authoring — work with the same context the original author had:
   still bound by the `adr` work file's rule on changing a merged record.
 - **Where neither the label nor a changed tree yields a work file** — no linked issue, no
   context label, or rows that name none — there is nothing to re-author with. Fix what the
-  finding states, keep the severity policy of section 2, and say in the summary that no work
+  finding states, keep section 2's fix policy, and say in the summary that no work
   file governed the change.
 - **A work file's rule about changing an already-merged artifact overrides the finding**,
   including the conditions that file attaches to when the rule applies. Such a finding becomes
@@ -101,6 +103,9 @@ Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
 - One bullet or table row per finding — AI findings **and** human comments alike: **Fixed**
   (what changed, with file references), **Skipped** (and why you disagree), or **Partially
   fixed**. Keep it short.
+- The run's **net lines added**, from `git diff --shortstat` against the head the run started
+  from; a file the run created counts in full, named. If positive: which findings grew it, and
+  why rewording or deleting could not fix them.
 - **CRITICAL: the comment must NOT contain the text "ai-review-verdict" anywhere — not even
   quoted.** The workflows route and count fix cycles by searching comment bodies for that
   marker; a summary containing it would be miscounted as a review and break the cycle limit.
