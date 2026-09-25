@@ -532,5 +532,16 @@
         "name": "Home-day departure time"
       }
     }
+  },
+  "common": {
+    "dashboard_section_charging_status": "Charging status",
+    "dashboard_section_power_flow": "Power flow",
+    "dashboard_section_runtime_settings": "Runtime settings",
+    "dashboard_view_deadline": "Deadline",
+    "dashboard_section_departure_times": "Departure times",
+    "notification_home_day_prompt_message": "Will the car be home tomorrow?",
+    "notification_deadline_unreachable_message": "Charging at the maximum rate but still won't reach your target by departure (would need {required_a:.1f} A).",
+    "notification_home_day_action_yes": "Yes",
+    "notification_home_day_action_no": "No"
   }
 }
