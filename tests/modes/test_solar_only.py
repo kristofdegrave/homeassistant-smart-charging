@@ -16,7 +16,7 @@ DEFAULTS = dict(
     midpoint=0.5,
 )
 
-# NOTE (reconciling with the design doc's minor finding): at nominal 230 V, 1300 W is
+# NOTE (a known boundary case): at nominal 230 V, 1300 W is
 # 5.65 A -- below the 6 A minimum (which needs 1380 W). Surplus in 1300-1379 W therefore
 # enters "charging" per this threshold but is floored to 0 A by the coordinator's E8
 # stage downstream, in slight tension with UC02's "threshold chosen so the minimum can

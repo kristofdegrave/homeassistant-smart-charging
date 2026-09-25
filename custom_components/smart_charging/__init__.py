@@ -34,6 +34,7 @@ from .const import (
     CONF_NOMINAL_VOLTAGE,
     CONF_PEAK_FLOOR_KW,
     CONF_PEAK_GRACE_MIN,
+    CONF_POWER_COOLDOWN_MIN,
     CONF_POWER_RESPECT_PEAK,
     CONF_SAFETY_MARGIN_W,
     CONF_SMOOTHING_WINDOW,
@@ -62,6 +63,7 @@ from .const import (
     DEFAULT_MAX_SOLAR_SOC,
     DEFAULT_PEAK_FLOOR_KW,
     DEFAULT_PEAK_GRACE_MIN,
+    DEFAULT_POWER_COOLDOWN_MIN,
     DEFAULT_POWER_RESPECT_PEAK,
     DEFAULT_SAFETY_MARGIN_W,
     DEFAULT_SMOOTHING_WINDOW,
@@ -140,7 +142,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     default_target_current = opts[CONF_DEFAULT_TARGET_CURRENT]
     default_soc_limit = opts.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
     interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
-    # E5's 15-minute averaging window expressed in cycle counts (design doc Sec 6.4) -- derived
+    # E5's 15-minute averaging window (R21) expressed in cycle counts -- derived
     # here, once, from the same control interval the coordinator ticks on (issue #570: the only
     # other reader of PEAK_WINDOW_SECONDS was coordinator.py's own now-removed duplicate fallback).
     peak_window_size = max(1, round(PEAK_WINDOW_SECONDS / interval_s))
@@ -178,6 +180,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         peak_grace_min=opts.get(CONF_PEAK_GRACE_MIN, DEFAULT_PEAK_GRACE_MIN),
         captar_cooldown_min=opts.get(CONF_CAPTAR_COOLDOWN_MIN, DEFAULT_CAPTAR_COOLDOWN_MIN),
         power_respect_peak=opts.get(CONF_POWER_RESPECT_PEAK, DEFAULT_POWER_RESPECT_PEAK),
+        power_cooldown_min=opts.get(CONF_POWER_COOLDOWN_MIN, DEFAULT_POWER_COOLDOWN_MIN),
         ev_battery_capacity_kwh=opts.get(
             CONF_EV_BATTERY_CAPACITY_KWH, DEFAULT_EV_BATTERY_CAPACITY_KWH
         ),
@@ -219,8 +222,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
         },
     )
     # M2 is only constructed when vehicle_charge_limit is mapped (UC09 precondition) --
-    # design §9.5: M2 self-wires its own three listeners below, mirroring the M1/M3
-    # self-wiring precedent in this same function, rather than a dedicated C6 client.
+    # M2 self-wires its own three listeners below, mirroring the M1/M3 self-wiring precedent
+    # in this same function, rather than a dedicated C6 client.
     vehicle_limit_manager = (
         VehicleLimitManager(hass, adapters=adapters, entry_id=entry.entry_id, store=store)
         if entry.data.get(CONF_VEHICLE_CHARGE_LIMIT_ENTITY)
@@ -282,7 +285,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     # real change, not left stale). `prime_status` runs first: a freshly registered listener
     # only observes changes AFTER it subscribes, so without priming, a reload/restart with
     # the vehicle already connected would lose the connected->disconnected edge on the next
-    # disconnect (design §5.3).
+    # disconnect.
     if vehicle_limit_manager is not None:
         await vehicle_limit_manager.prime_status()
         for unsub in vehicle_limit_manager.register_listeners(

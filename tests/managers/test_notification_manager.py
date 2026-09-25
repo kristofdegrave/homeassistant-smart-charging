@@ -1,4 +1,4 @@
-"""HA-harness tests for the Notification Manager (M3 -- UC08/ADR-0011/notifications design).
+"""HA-harness tests for the Notification Manager (M3 -- UC08, ADR-0011).
 
 Drives M3 through its public `async_evaluate` tick directly (not HA listener/timer plumbing --
 that is Task 5.2's job), against fake RA1/RA2 read adapters + a fake Store (mirroring
@@ -129,6 +129,67 @@ async def test_sends_actionable_prompt_when_uc08_trigger_holds(hass):
     action_ids = {a["action"] for a in calls[0]["data"]["actions"]}
     assert action_ids == {ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO}
     assert manager._state is PromptState.PENDING
+
+
+async def test_should_send_english_prompt_text_when_the_system_language_is_english(
+    hass,
+):
+    """NF8: the home-day prompt's message and action-button labels are in English by
+    default -- pinned here at the manager's own send path, not only at the loader
+    (test_system_text.py already pins the loader's own English default)."""
+    # Arrange -- the `hass` fixture's default system language is English.
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+
+    # Act
+    await manager.async_evaluate(EVENING)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert len(calls) == 1
+    assert calls[0]["message"] == "Will the car be home tomorrow?"
+    labels_by_action = {a["action"]: a["title"] for a in calls[0]["data"]["actions"]}
+    assert labels_by_action == {ACTION_HOMEDAY_YES: "Yes", ACTION_HOMEDAY_NO: "No"}
+
+
+async def test_should_translate_prompt_text_when_the_system_language_is_dutch(
+    hass,
+):
+    """NF8 AC2: the home-day prompt's message and action-button labels follow Home
+    Assistant's *system* language. The action ids themselves are unchanged (asserted by
+    test_sends_actionable_prompt_when_uc08_trigger_holds above)."""
+    # Arrange
+    hass.config.language = "nl"
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+
+    # Act
+    await manager.async_evaluate(EVENING)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert len(calls) == 1
+    assert calls[0]["message"] == "Is de auto morgen thuis?"
+    labels_by_action = {a["action"]: a["title"] for a in calls[0]["data"]["actions"]}
+    assert labels_by_action == {ACTION_HOMEDAY_YES: "Ja", ACTION_HOMEDAY_NO: "Nee"}
+
+
+async def test_should_keep_the_notification_title_untranslated_when_the_system_language_is_dutch(
+    hass,
+):
+    """The notify title stays the untranslated product name (NF8 AC1), even though the
+    message and the action labels around it follow the Dutch system language."""
+    # Arrange
+    hass.config.language = "nl"
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+
+    # Act
+    await manager.async_evaluate(EVENING)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert calls[0]["title"] == "Smart Charging"
 
 
 async def test_yes_response_writes_home_day_flag(hass):
@@ -283,8 +344,8 @@ async def test_stale_prompt_response_is_not_misread(hass):
 
 
 async def test_missing_notification_target_adapter_stays_inert(hass):
-    """No ROLE_NOTIFICATION_TARGET mapped -- M3 stays inert (mirrors M2's design
-    success-criterion 6 analog for a missing required adapter)."""
+    """No ROLE_NOTIFICATION_TARGET mapped -- M3 stays inert, mirroring M2, which stays inert
+    when its own required adapter role is unmapped."""
     manager = NotificationManager(
         hass,
         adapters={
@@ -437,7 +498,8 @@ async def test_unavailable_home_day_external_reading_sends_normally(hass):
     """Fail-OPEN default (deliberate, unlike the other two roles' fail-closed reads):
     home_day_external is mapped but read() returns None (ADR-0003 fault signal) -> folds
     to False, same as unmapped, so the prompt still sends -- a transient misread must not
-    silently skip a genuine evening (design: the driver can always answer "no")."""
+    silently skip a genuine evening -- the driver can always answer "no"
+    (UC08 alternate flow 3a), which leaves the flag unset just as a fold to False would."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass, home_day_external=None)
 
@@ -504,6 +566,61 @@ async def test_delivers_deadline_unreachable_notice_on_subscribed_event(hass):
         "(would need 12.5 A)."
     )
     assert "data" not in calls[0]  # plain notice, not actionable (no tag/actions payload)
+
+
+async def test_should_translate_the_deadline_unreachable_message_when_the_system_language_is_dutch(
+    hass,
+):
+    """NF8 AC2: the required-current figure (R5) is still included, in the Dutch text."""
+    # Arrange
+    hass.config.language = "nl"
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+
+    # Act
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+
+    # Assert
+    assert len(calls) == 1
+    assert calls[0]["message"] == (
+        "Laadt op het maximale vermogen, maar bereikt uw streefwaarde niet voor vertrek "
+        "(zou 12.5 A nodig hebben)."
+    )
+
+
+async def test_should_translate_deadline_message_when_language_changes_mid_run(
+    hass,
+):
+    """NF8 AC2's "including after that language is changed": the manager re-fetches the
+    system text on every send, so a single running instance picks up a language change with
+    no reload -- unlike the dashboard (system_text.py's own docstring). The precondition (an
+    English delivery on the first occasion) is set up in Arrange, not asserted here, so a
+    failure under this test's own name always means the *second*, Dutch delivery."""
+    # Arrange -- one English occasion, delivered and then cleared/re-armed.
+    calls = _register_notify_capture(hass)
+    manager = _manager(hass)
+    manager.register_listeners()
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 12.5})
+    await hass.async_block_till_done()
+    assert calls[0]["message"] == (
+        "Charging at the maximum rate but still won't reach your target by departure "
+        "(would need 12.5 A)."
+    )
+    manager.on_deadline_unreachable_cleared()
+    hass.config.language = "nl"
+
+    # Act -- a second occasion, on the same manager instance, after the language changed.
+    hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, {ATTR_REQUIRED_CURRENT_A: 14.0})
+    await hass.async_block_till_done()
+
+    # Assert
+    assert len(calls) == 2
+    assert calls[1]["message"] == (
+        "Laadt op het maximale vermogen, maar bereikt uw streefwaarde niet voor vertrek "
+        "(zou 14.0 A nodig hebben)."
+    )
 
 
 async def test_deadline_unreachable_notice_is_delivered_only_once(hass):

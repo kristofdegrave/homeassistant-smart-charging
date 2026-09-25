@@ -33,7 +33,7 @@ async def test_unknown_reads_none(hass):
 
 async def test_unrecognized_zone_state_reads_false(hass):
     # A person entity in a named zone (not "home") is still "not at home" for the C2
-    # gate this role backs -- deliberately not the ADR-0007 None/fault path (design §9.1).
+    # gate this role backs -- deliberately not the ADR-0007 None/fault path.
     hass.states.async_set("person.driver", "work")
     assert await PresenceReadAdapter(hass, "person.driver").read() is False
 

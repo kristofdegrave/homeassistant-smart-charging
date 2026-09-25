@@ -8,7 +8,7 @@ non-identical English copy), and (2) an entity `_attr_translation_key` with no m
 `entity.<platform>.<key>.name`.
 
 Config-flow step/field label parity (the config-flow-specific regression class this module
-used to also cover) now lives in tests/test_config_flow_translations.py instead (plan T12) --
+used to also cover) now lives in tests/test_config_flow_translations.py instead --
 its dynamic per-step-id parity checks, discovered from config_flow.py's own tables and schema
 fragments, superseded this module's single hardcoded test against the three flat blocks
 (config.step.user/reconfigure, options.step.init) the guided config flow's tables replaced.
@@ -56,7 +56,7 @@ def test_nl_json_has_the_same_keys_as_en_json():
 
 
 # test_every_config_flow_field_has_a_label is removed here, not updated in place -- see the
-# module docstring above for why (superseded by test_config_flow_translations.py, plan T12).
+# module docstring above for why (superseded by test_config_flow_translations.py).
 
 
 def test_every_entity_translation_key_has_a_name():
@@ -78,8 +78,9 @@ def test_every_entity_translation_key_has_a_name():
         "monthly_peak_kw",
         "effective_peak_limit",
         "active_soc_limit",
-        # ADR-0031 config-mirror sensors (T1-T4, #888) -- the full 35-row mapping table's
-        # object_id_suffix values, matching sensor.py's mirror_specs list exactly.
+        # ADR-0031 config-mirror sensors (#888) -- the object_id_suffix of every
+        # config-mirror row entity-catalog.md documents, matching sensor.py's mirror_specs
+        # list exactly.
         "solar_available",
         "captar_available",
         "deadline_available",

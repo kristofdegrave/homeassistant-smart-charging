@@ -8,7 +8,7 @@ from ._read_only import _ReadOnlyAdapter
 class BooleanReadAdapter(_ReadOnlyAdapter):
     """Reads a boolean-flag entity's native on/off state.
 
-    Added for the `home_day_external` role (design doc §4 note): its mapped entity is a
+    Added for the `home_day_external` role: its mapped entity is a
     calendar/presence source whose native state is the fixed `on`/`off` vocabulary, not a
     float (`NumericReadAdapter`) or a user-translated canonical string (`StatusReadAdapter`
     exists to let the user map arbitrary firmware strings onto the three canonical charger

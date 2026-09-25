@@ -6,7 +6,8 @@ cross-midnight worked example this docstring now states: plug in at 22:00 agains
 departure, an 8-hour window, charging 75 kWh * 30% over 8 h at 230 V needs 12.228 A. Under
 the old no-next-day-rollover contract, that 22:00-to-06:00 pairing could not produce a
 positive window, so the tests were kept same-day to stay within that contract. Issue #1005
-resolved the underlying inconsistency in favour of requirements.md R15: choosing the
+resolved the underlying inconsistency in favour of requirements.md R14's next-occurrence
+rule ("the next occurrence of that resolution still ahead of the current time"): choosing the
 occurrence is now `resolve_next_occurrence`'s job, and `resolve_required_current` takes the
 already-chosen datetime, so the two concerns are testable separately and the cross-midnight
 worked example above is expressible. The same-day constants below are kept only because they
@@ -325,7 +326,7 @@ def test_boundary_required_equals_maximum_rate_is_still_reachable():
     assert result.unreachable is False
 
 
-# --- Next-occurrence resolution (R15, issue #1005) ---------------------------------------
+# --- Next-occurrence resolution (R14, issue #1005) ---------------------------------------
 
 
 def test_next_occurrence_is_today_when_departure_time_still_ahead():
@@ -339,7 +340,7 @@ def test_next_occurrence_is_today_when_departure_time_still_ahead():
 def test_next_occurrence_rolls_to_tomorrow_once_todays_departure_time_has_passed():
     # THE #1005 REGRESSION. 07:00 against an afternoon `now` used to resolve as a deadline
     # 8 hours in the PAST, saturating required_a to infinity and pinning `urgent` True for
-    # the rest of the day. R15: judged as the next day's occurrence instead.
+    # the rest of the day. R14: judged as the next day's occurrence instead.
     assert resolve_next_occurrence(
         deadline_today=time(7, 0),
         deadline_tomorrow=time(7, 0),
@@ -755,9 +756,11 @@ def test_should_release_the_pursued_occurrence_when_the_handback_clears_urgency(
 def test_should_keep_the_original_occurrence_when_the_deadline_resolves_to_a_different_time():
     """THE RULE THAT MAKES A HOLD REACHABLE AT ALL, on the ordinary path.
 
-    The pursued occurrence "survives a later occurrence resolving to 'no deadline' OR TO A
-    DIFFERENT TIME" (resolution-rules.md, 'Missed-deadline hold'). This case pins the second
-    half, which is the one the ordinary path implements: an occurrence still in the FUTURE,
+    The pursued occurrence is anchored: resolution-rules.md's 'Missed-deadline hold' says
+    "the departure-deadline rule rolling forward cannot move it, and that later occurrence
+    resolving to 'no deadline' cannot end it". This case pins the first half — a deadline
+    resolving to a DIFFERENT TIME, which is the one the ordinary path implements: an
+    occurrence still in the FUTURE,
     with `deadline_at` resolving elsewhere, must come back unmoved.
 
     It is deliberately set up with `pursued_occurrence != deadline_at`. An earlier version of

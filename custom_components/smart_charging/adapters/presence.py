@@ -12,7 +12,7 @@ class PresenceReadAdapter(_ReadOnlyAdapter):
 
     None when the entity is missing/unavailable/unknown -- for this role that is not the
     ADR-0007 fault path (M2 is outside the control cycle); the Manager treats None as
-    "cannot confirm presence" and suppresses a System write (design §9.1 alternative).
+    "cannot confirm presence" and suppresses a System write.
 
     Any other state (e.g. a `person` entity's named zone, or a garbage state) reads as
     False -- deliberately, unlike `BooleanReadAdapter`'s None-for-unrecognized-state: a

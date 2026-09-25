@@ -114,8 +114,8 @@ async def test_end_to_end_commands_target_current(hass):
     # happens to also match the pre-pin translated name, so this line doesn't itself guard
     # the pin (T2.3's enumeration test does)...
     assert hass.states.get("number.smart_charging_target_current") is not None
-    # ...the mode selector defaults to Off when never set (T6.1/design doc §2 criterion 1),
-    # so the setup cycle wrote 0 A -- pin that down before selecting Power explicitly, same
+    # ...the mode selector defaults to Off when never set, so the setup cycle wrote 0 A --
+    # pin that down before selecting Power explicitly, same
     # as a real install's first manual step.
     coordinator = entry.runtime_data.coordinator
     assert coordinator.active_mode == MODE_OFF
@@ -164,7 +164,7 @@ async def test_reload_does_not_recreate_the_sc_runtime_label(hass):
 async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_not(hass):
     """C5 (#601): every runtime-classified owned entity carries `sc_runtime`; every diagnostic/
     status sensor carries no labels at all -- the property the dashboard's `auto-entities`
-    filter depends on structurally, per 2026-07-08-runtime-dashboard-design.md Decision 1."""
+    filter depends on structurally, rather than on a hand-kept entity list."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_SOLAR_AVAILABLE] = True
@@ -200,10 +200,10 @@ async def test_runtime_entities_carry_the_sc_runtime_label_and_diagnostics_do_no
 
 
 async def test_reload_capability_flip_leaves_correct_registry_state_across_entities(hass):
-    """ADR-0028, design doc §6 integration checkpoint: a single config entry carrying both
+    """ADR-0028 end to end: a single config entry carrying both
     solar_available and deadline_available (SmartChargingDepartureTime is the only entity
     gated by both disabled_by *and* label sync at once; SolarSurplusSensor carries no label at
-    all -- design §2.2) flips each capability twice across two ADR-0008 reloads
+    all) flips each capability twice across two ADR-0008 reloads
     (`async_update_entry`'s own update listener performs the unload/setup pair -- no separate
     `async_reload` call needed, matching test_sensor.py/test_time.py's ADR-0028 tests). This is
     the one place in the suite both entities share a config entry through a reload, so a
@@ -385,8 +385,9 @@ async def test_select_entity_is_registered_on_setup(hass):
     assert entity_id is not None
     state = hass.states.get(entity_id)
     assert state is not None
-    # CONF_CAPTAR_AVAILABLE predates this entry's data too -- defaults to True (design doc
-    # §3), so Captar is offered alongside Solar/SolarOnly without being set explicitly.
+    # CONF_CAPTAR_AVAILABLE predates this entry's data too -- defaults to True (entity-catalog.md's
+    # captar_available row: "on (present)"), so Captar is offered alongside Solar/SolarOnly
+    # without being set explicitly.
     assert state.attributes["options"] == ["Off", "Power", "Solar", "SolarOnly", "Captar"]
 
     # ADR-0013: these two flip a real, catalog-diverging id with no other covering
@@ -457,7 +458,7 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     assert config.peak_grace_min == 3.0
     assert config.captar_cooldown_min == 15.0
     assert config.power_respect_peak is False
-    # 900s (15-minute) window / 60s control interval -- design doc Sec 6.4.
+    # 900s (15-minute) window / 60s control interval -- R21's monthly peak demand tracking.
     assert config.peak_window_size == 15
 
 
@@ -465,8 +466,8 @@ async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
     """T6.1: behavioral companion to the dict-wiring test above -- proves
     CONF_POWER_RESPECT_PEAK actually flows from the config entry's options into a live cycle's
     R17 opt-out (coordinator.py's `power_respect_peak` read), not just into an inert dict entry.
-    With zero tracked peak headroom, Power would otherwise be clamped to 0 A by R3 (design doc
-    Sec 7) -- turning the opt-out on must still command the full default target current."""
+    With zero tracked peak headroom, Power would otherwise be clamped to 0 A by R3 -- turning
+    the opt-out on must still command the full default target current."""
     calls = capture_charger_current_writes(hass)
     seed_charger_states(hass, status="Charging")  # net_power/charger_power both 0.0 -- no headroom.
     options = entry_options_base()
@@ -522,8 +523,8 @@ async def test_setup_falls_back_to_every_default_for_a_pre_solar_entry(hass):
     field's DEFAULT_* fallback there and nowhere else -- pin that against regression for a
     representative sample of the fields the two dict-wiring tests above only ever exercise as
     NON-default overrides. `entry_options_base()` (tests/helpers.py) carries none of these
-    keys, mirroring a real config entry that predates them (no migration needed, design doc
-    §3) -- exactly the scenario the removed `self._config.get(CONF_X, DEFAULT_X)` fallbacks
+    keys, mirroring a real config entry that predates them (no migration needed) -- exactly the
+    scenario the removed `self._config.get(CONF_X, DEFAULT_X)` fallbacks
     used to cover inside coordinator.py/coordinator_cycle.py before this issue."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
@@ -623,8 +624,7 @@ async def test_select_omits_captar_when_unavailable(hass):
 
 
 async def test_every_owned_entity_id_matches_entity_catalog(hass):
-    """ADR-0013: every owned entity registers under its documented entity-catalog id (or,
-    for `target_current`, its pre-existing id -- no catalog row exists for it, design §2),
+    """ADR-0013: every owned entity registers under its documented entity-catalog id,
     independent of the translated display name. Looked up by unique_id so the test asserts
     the GENERATED id equals the catalog id (the property under test)."""
     seed_charger_states(hass, status="Charging")
@@ -646,7 +646,7 @@ async def test_every_owned_entity_id_matches_entity_catalog(hass):
     expected = {
         "mode": "select.smart_charging_mode",
         "profile": "select.smart_charging_profile",
-        "target_current": "number.smart_charging_target_current",  # no catalog row (design §2)
+        "target_current": "number.smart_charging_target_current",
         "soc_limit_override": "number.smart_charging_soc_limit_override",
         "status": "sensor.smart_charging_status",
         "charger_status": "sensor.smart_charging_charger_status",
@@ -775,8 +775,8 @@ async def test_every_owned_state_entity_matches_entity_catalog_unit_and_class(ha
     only catches a `state`-role catalog row whose *implementation* diverges from an existing
     entity -- it cannot notice a `state`-role row with no implementation at all, since there is
     then no registered entity to compare against. Two such rows currently exist:
-    `sensor.smart_charging_desired_current` (entity-catalog.md:183) and
-    `binary_sensor.smart_charging_plug_in_reminder` (entity-catalog.md:296, and no
+    `sensor.smart_charging_desired_current` (its own entity-catalog.md row) and
+    `binary_sensor.smart_charging_plug_in_reminder` (likewise, and no
     `binary_sensor` platform is even wired up in `PLATFORMS`) are documented but not yet built.
     """
     seed_charger_states(hass, status="Charging")
@@ -992,10 +992,10 @@ async def test_reload_does_not_leak_the_notify_adapters_action_listener(hass):
 
 
 async def test_setup_schedules_the_notification_manager_tick_on_the_configured_interval(hass):
-    """Task 5.2: M3's periodic evaluation runs on the same control interval M1 uses (design
-    Sec5's C1-style timer, not a bespoke schedule of its own) -- a non-default interval, to
-    catch an implementation that hardcodes DEFAULT_CONTROL_INTERVAL_S instead of reading the
-    entry's own configured value."""
+    """Task 5.2: M3's periodic evaluation is scheduled on the entry's own configured control
+    interval -- the same interval value M1 ticks on, not a schedule of its own. Uses a
+    non-default interval to catch an implementation that hardcodes
+    DEFAULT_CONTROL_INTERVAL_S instead of reading the entry's configured value."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
@@ -1264,8 +1264,9 @@ async def test_vehicle_limit_manager_constructed_when_mapped(hass):
 
 
 async def test_no_vehicle_limit_manager_when_unmapped(hass):
-    """UC09 precondition / design §5.4 success criterion 6: no vehicle_charge_limit mapping
-    -> M2 stays uninstantiated and registers no listeners at all -- driving the
+    """UC09 precondition / exception flow "The vehicle does not expose a settable charge
+    limit": no vehicle_charge_limit mapping -> M2 stays uninstantiated and registers no
+    listeners at all -- driving the
     active-SOC-limit sensor afterwards must not raise (no manager to react) or write
     anything (there is no vehicle adapter to write through in the first place)."""
     seed_charger_states(hass, status="Charging")
@@ -1319,7 +1320,7 @@ async def test_vehicle_limit_listener_resets_vehicle_on_disconnect(hass):
     Setup seeds `_last_status` from the already-current "Connected" reading via
     `prime_status` (Task 5.1) -- without it, a freshly registered listener would only ever
     observe changes after subscription, never the state that was already current, and this
-    single disconnect transition would be silently missed (design §5.3)."""
+    single disconnect transition would be silently missed."""
     await _setup_vehicle_limit_entry(hass, status="Connected")
     calls = capture_service_calls(hass, "number", "set_value")
     events = async_capture_events(hass, EVENT_VEHICLE_CHARGE_LIMIT_RESET)
@@ -1434,7 +1435,7 @@ async def test_end_to_end_external_monthly_peak_reflected_in_sensors(hass):
     reading on sensor.smart_charging_adapter_readings (ADR-0021), and the merged, higher
     operand on sensor.smart_charging_effective_peak_limit (ADR-0030/ADR-0032) -- while
     sensor.smart_charging_monthly_peak_kw keeps reporting only the internally-tracked value,
-    never the merged one (D-6). deadline_available is turned off not merely for isolation but
+    never the merged one. deadline_available is turned off not merely for isolation but
     because leaving it at its True default would fail Mon-Fri: R14's 06:00 weekday default
     departure time reads as already-passed against this entry's ev_soc/active_soc_limit gap,
     forcing `urgent=True` and row 1's max_peak_kw regardless of the merge -- the flag keeps

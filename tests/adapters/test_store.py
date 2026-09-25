@@ -301,7 +301,7 @@ async def test_write_unregistered_entity_returns_false(hass):
 
 
 async def test_write_unsupported_domain_returns_false(hass):
-    """Scope guard (design doc): only `number`/`switch` are supported today -- a wrong domain
+    """Scope guard: only `number`/`switch` are supported today -- a wrong domain
     must not issue a service call against an entity that cannot take it. Targets the mode
     select (a real select.py entity, OWNED_SUFFIX_MODE), not soc_limit_override/home_day --
     those live in the now-supported number/switch domains and would return False via the
@@ -316,7 +316,7 @@ async def test_write_unsupported_domain_returns_false(hass):
 
 
 async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchanged(hass):
-    """The clamp is the caller's job (design: Managers hold R6's 50-100 policy) -- the
+    """The clamp is the caller's job (Managers hold R6's 50-100 policy) -- the
     entity's own bounds are the backstop, and a violation is a logged no-op, never an
     exception escaping into a Manager's reaction path."""
     entry = await _setup_entry(hass)
@@ -330,8 +330,9 @@ async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchange
 
 
 async def test_write_switch_true_turns_the_real_entity_on(hass):
-    """RA3 Store write half, switch domain (ADR-0018; M3's home_day_flag write, notifications
-    design doc §7): `True` calls `switch.turn_on` against the real HomeDaySwitch entity, going
+    """RA3 Store write half, switch domain (ADR-0018; M3's home_day_flag write,
+    entity-catalog.md's `switch.smart_charging_home_day` row): `True` calls `switch.turn_on`
+    against the real HomeDaySwitch entity, going
     through the entity (not around it) exactly like the `number` case."""
     entry = await _setup_entry(hass)
     store = Store(hass, entry.entry_id)
