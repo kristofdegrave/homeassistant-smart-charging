@@ -194,7 +194,12 @@ class ModeHandler(Protocol):
     branch or extending a tuple at every call site."""
 
     is_soc_gated: bool
-    """R7: whether SOC reaching the active limit stops this mode. False for Off/Power."""
+    """R7: whether this mode requires an SOC reading and holds a `resume_state()` at the
+    active limit via the coordinator's shared SOC-gated-stop guard. False for Off/Power --
+    Power still stops at the active limit when a reading is present (#1335), but through its
+    own coordinator-side latch (`_power_reached_soc_limit`/`_power_soc_limit_reached`) rather
+    than through this flag or `_mode_state`, since Power must never be made to *need* a
+    reading (ADR-0042: a missing reading stays a non-fault in Power)."""
 
     is_solar_mode: bool
     """R8/R9: whether this mode counts as "charging on solar" for the step-up/reserve-cap

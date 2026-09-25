@@ -666,8 +666,11 @@ async def test_soc_gate_release_without_surplus_still_debounces_next_start(hass)
 
 
 @pytest.mark.parametrize("mode", [MODE_POWER, MODE_OFF])
-async def test_power_and_off_ignore_soc_entirely(hass, mode):
+async def test_power_and_off_never_require_an_ev_soc_reading(hass, mode):
     # Arrange: no ev_soc role configured at all -- Power/Off must not regress to needing one.
+    # Power does stop at the active SOC limit once a reading is present (#1335) -- this test's
+    # own no-role-mapped case is the one C5/ADR-0042 still guarantee: a missing reading is a
+    # non-fault and Power keeps its target current, never gated the way this asserts.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc_role=False)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
