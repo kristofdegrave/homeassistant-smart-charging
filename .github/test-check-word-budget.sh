@@ -15,7 +15,8 @@ fail=0
 
 words() { local n="$1" out=""; for _ in $(seq "$n"); do out="$out w"; done; echo "$out"; }
 
-# A repository at its base commit: one file under its cap, one over it, one ADR.
+# A repository at its base commit: one file under its cap, one over it, one ADR, one file in no
+# class. `special.md` sits in two classes, so the first one listed has to win.
 new_repo() {
   local d
   d="$(mktemp -d)"
@@ -26,7 +27,11 @@ new_repo() {
   mkdir -p "$d/.claude" "$d/docs/method" "$d/docs/adl"
   cat > "$d/.claude/profile.yml" <<'EOF'
 word_budgets:
+  - glob: "docs/method/special.md"
+    cap: 30
   - glob: "docs/method/*.md"
+    cap: 10
+  - glob: "docs/tree/**/*.md"
     cap: 10
   - glob: "docs/adl/*.md"
     cap: 10
@@ -35,6 +40,7 @@ EOF
   words 5 > "$d/docs/method/small.md"
   words 20 > "$d/docs/method/big.md"
   words 20 > "$d/docs/adl/0001-old.md"
+  words 20 > "$d/docs/other.md"
   git -C "$d" add -A && git -C "$d" commit -qm base
   echo "$d"
 }
@@ -79,6 +85,24 @@ expect "an existing ADR is not scored" 0 "clean" "$d"
 
 d="$(new_repo)"; words 50 > "$d/docs/other.md"; commit "$d"
 expect "a file in no class is not scored" 0 "clean" "$d"
+
+d="$(new_repo)"; mkdir -p "$d/docs/tree"; words 12 > "$d/docs/tree/top.md"; commit "$d"
+expect "a ** class matches its top level" 1 "docs/tree/top.md: 12 words (cap 10); cut 2" "$d"
+
+d="$(new_repo)"; mkdir -p "$d/docs/tree/a/b"; words 12 > "$d/docs/tree/a/b/deep.md"; commit "$d"
+expect "a ** class matches nested files" 1 "docs/tree/a/b/deep.md: 12 words (cap 10); cut 2" "$d"
+
+d="$(new_repo)"; words 25 > "$d/docs/method/special.md"; commit "$d"
+expect "the first class a path matches wins" 0 "clean" "$d"
+
+d="$(new_repo)"; git -C "$d" mv docs/other.md docs/adl/0003-moved.md; commit "$d"
+expect "a file renamed into an added_only class is scored" 1 "docs/adl/0003-moved.md: 20 words (cap 10); cut 10" "$d"
+
+d="$(new_repo)"; git -C "$d" mv docs/other.md docs/method/moved-in.md; commit "$d"
+expect "a file renamed in from no class is held to the cap" 1 "docs/method/moved-in.md: 20 words (cap 10); cut 10" "$d"
+
+d="$(new_repo)"; git -C "$d" rm -q docs/method/big.md; commit "$d"
+expect "a deleted file is not scored" 0 "clean" "$d"
 
 d="$(new_repo)"; : > "$d/.claude/profile.yml"; commit "$d"
 expect "no word_budgets exits 2" 2 "no word_budgets" "$d"

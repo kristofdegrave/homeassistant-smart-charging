@@ -5,7 +5,8 @@
 file the change touches may hold at most the larger of its cap and its size on the merge base:
 under the cap it may grow to the cap, over it it may only shrink. A class marked `added_only`
 is scored only on files the change adds -- an existing ADR is immutable, so its size is not the
-change's. A word is a whitespace-separated token; the whole file counts, frontmatter included.
+change's. A file renamed into a class from outside it counts as added. Globs know `*` and `**`
+only. A word is a whitespace-separated token; the whole file counts, frontmatter included.
 
   Usage: check-word-budget.py BASE [--root DIR]
 
@@ -45,7 +46,12 @@ def glob_re(glob: str) -> re.Pattern[str]:
 
 def git(root: str, *args: str) -> str:
     return subprocess.run(
-        ["git", "-C", root, *args], check=True, capture_output=True, text=True, encoding="utf-8"
+        ["git", "-C", root, *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
     ).stdout
 
 
@@ -53,14 +59,16 @@ def words(text: str) -> int:
     return len(text.split())
 
 
-def score(root: str, merge_base: str, classes: list, line: str) -> str | None:
-    status, *paths = line.split("\t")
-    old, new = paths[0], paths[-1]
-    match = next((c for c in classes if c[0].match(new)), None)
+def class_of(classes: list, path: str):
+    return next((c for c in classes if c[0].match(path)), None)
+
+
+def score(root: str, merge_base: str, classes: list, status: str, old: str, new: str) -> str | None:
+    match = class_of(classes, new)
     if status.startswith("D") or match is None:
         return None
     _, cap, added_only = match
-    added = status.startswith("A")
+    added = status.startswith("A") or class_of(classes, old) is not match
     if added_only and not added:
         return None
     size = words(git(root, "show", f"HEAD:{new}"))
@@ -91,8 +99,13 @@ def main() -> int:
 
     try:
         merge_base = git(args.root, "merge-base", args.base, "HEAD").strip()
-        changes = git(args.root, "diff", "--name-status", "-M", merge_base, "HEAD").splitlines()
-        findings = [f for line in changes if (f := score(args.root, merge_base, classes, line))]
+        fields = git(args.root, "diff", "-z", "--name-status", "-M", merge_base, "HEAD").split("\0")
+        changes = []
+        while len(fields) > 1:
+            status, old = fields.pop(0), fields.pop(0)
+            new = fields.pop(0) if status[0] in "RC" else old
+            changes.append((status, old, new))
+        findings = [f for c in changes if (f := score(args.root, merge_base, classes, *c))]
     except subprocess.CalledProcessError as e:
         print(f"check-word-budget: git failed: {e.stderr.strip()}", file=sys.stderr)
         return 2
