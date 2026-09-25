@@ -30,9 +30,10 @@ Engine's included").
 **Where each rule is owned.** The smoothed operand is stated by `requirements.md` R5 `:90-92`
 and by `system-overview.md`'s `escalated maximum permitted rate` and `maximum permitted rate`
 entries, which is where this spec cites it. The design layer now says the same in its own terms —
-`project-plan.md` E5 ("the readout to a raw one, R5's to the smoothed baseline") and
-`system-design.md` §5.1 (`:455`, `:457`), both of which fit the escalated rate's peak and C4
-headrooms to the smoothed baseline. `system-design.md:162` (Billing Protection) carries the
+`project-plan.md` E5 ("the readout to a raw one, R5's to the smoothed baseline") for the peak
+headroom and E6 ("The headroom operation is the one R5 specifies on the smoothed baseline") for
+the C4 headroom, and `system-design.md` §5.1 (`:455`, `:457`), which fits both to the smoothed
+baseline. `system-design.md:162` (Billing Protection) carries the
 in-force-versus-raised limit contrast.
 
 `system-design.md` §5.1's sequence is unchanged by this slice: no step is added, removed or

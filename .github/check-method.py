@@ -70,7 +70,7 @@ A word the method uses everywhere in its own right is deliberately not on it, so
 sentence built only from such words passes; that is judgment, and the `workflow` checklist's.
 
 Why the scope of check 1 is wider than the rule that created it: a CI worker prompt is not
-bound by the routing rule, and neither is an ADR, a design document or a plan, but all of them
+bound by the routing rule, and neither is an ADR, a design document or a plan file, but all of them
 do point at CLAUDE.md sections, so a heading rename would break them exactly as it would
 break a skill. Two trees under docs/ are left out on purpose: docs/postmortems/** is a
 snapshot of reasoning at a date that is never revised, and docs/archive/** is a previous
@@ -165,9 +165,10 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 #
 # docs/plans is a RETIRED tree (ADR-0044) that is not yet empty: the plans of shipped slices are
 # deleted, and the pair of an open slice stays until its epic closes. Its entry here expires with
-# the last file, and so does every other hit of `grep -rnE "docs/plans|plan file" .claude .github
-# docs/reference` -- run it then rather than trusting a list here. The deletion trigger itself is
-# the cleanup skill's transition-period rule, which is one of those hits.
+# the last file, and so does every other hit of
+# `grep -rnE "docs/plans|plan (file|doc)" .claude .github docs/reference` -- run it then rather
+# than trusting a list here. The deletion trigger itself is the cleanup skill's transition-period
+# rule, which is one of those hits.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
