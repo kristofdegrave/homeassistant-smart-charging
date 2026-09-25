@@ -2,8 +2,11 @@
 
 Author `docs/design/system-design.md`: a volatility-based service decomposition — static and
 dynamic architecture — derived from the behaviour already drafted under `docs/analysis/`, per
-Juval Löwy's IDesign Method. Full rationale for why this phase exists and where it sits in the
-pipeline: `docs/plans/2026-07-07-lowy-system-design-method.md`.
+Juval Löwy's IDesign Method. **Why the phase exists:** the analysis-first pipeline settles
+behaviour and then takes structural decisions one ADR at a time, with nothing stating the
+service architecture those decisions sit inside — this document is that statement. Where it sits
+in the pipeline, and what it therefore surfaces, is the **Design** stage of
+[idea-to-product.md](../../../method/idea-to-product.md#7-design).
 
 This file is the `documentation` work type's work file for a change touching
 `docs/design/system-design.md`, reached from the label's own `implement.md` one level up, which

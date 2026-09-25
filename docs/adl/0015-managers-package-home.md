@@ -163,8 +163,7 @@ ADR-0011's no-direct-call rule can be checked for every Manager written from her
 - This unblocks the M2 build from **Phase 3 onward** — the vehicle-limit slice's Task 3.1 is where
   `custom_components/smart_charging/managers/vehicle_limit.py` is first created. That slice
   already builds against `managers/vehicle_limit.py` and `tests/managers/test_vehicle_limit.py`,
-  so its task text needs no edit; the M2 design's §8/§9.4 gate wording ("task set 4") under-states
-  the first affected task and should be corrected in the follow-up.
+  so its task text needs no edit.
 - **M3 moves with the same rule.** The Notifications slice was specified before this decision and
   places M3 at the package root as `notification_manager.py`, "mirroring `coordinator.py`"; under
   this decision M3's Manager module is `managers/notification_manager.py` with

@@ -37,10 +37,6 @@ Always read, in `docs/analysis/`:
 Then [`done.md`](done.md), the completion bar, before you start scoring rather than while you
 write up.
 
-If the caller names a plan or design doc, read it for its coverage table. The template a
-document is judged against is not taken from there — the bar names it, by the same route the
-author drafted against.
-
 ## The checks that are yours alone
 
 [`done.md`](done.md) is the bulk of the checklist: apply every item in it as a review

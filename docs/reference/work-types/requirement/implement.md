@@ -72,8 +72,9 @@ The rules a finished requirement is judged by are the bar's, at the severity eac
 at, and are not repeated here. Two of them have a drafting order this file owns:
 
 - **Where a requirement lives** — the bar's 2.2, *Every requirement has exactly one home*,
-  states it and judges it. What that means while drafting: check the design document's coverage
-  table *before* writing, since a second home is nearly free to avoid and expensive to unpick.
+  states it and judges it. What that means while drafting: search the homes that item lists for
+  the requirement *before* writing, since a second home is nearly free to avoid and expensive to
+  unpick.
 - **What, not how** — the rule itself is `CLAUDE.md`'s **Requirements standard**, and the bar's
   5.2 judges the criterion-level form of it. What that means while drafting: if you cannot
   state the criterion without naming a module, a service call or a data structure, the *what*

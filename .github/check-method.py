@@ -70,7 +70,7 @@ A word the method uses everywhere in its own right is deliberately not on it, so
 sentence built only from such words passes; that is judgment, and the `workflow` checklist's.
 
 Why the scope of check 1 is wider than the rule that created it: a CI worker prompt is not
-bound by the routing rule, and neither is an ADR, a design document or a plan, but all of them
+bound by the routing rule, and neither is an ADR, a design document or a plan file, but all of them
 do point at CLAUDE.md sections, so a heading rename would break them exactly as it would
 break a skill. Two trees under docs/ are left out on purpose: docs/postmortems/** is a
 snapshot of reasoning at a date that is never revised, and docs/archive/** is a previous
@@ -146,10 +146,10 @@ POINTER_TREES = (".claude", "docs", ".github/workflows")
 FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # Check 2 resolves its targets over the trees check 1 walks, minus these. A dated record is a
 # snapshot of what was true when it was written: docs/adl/** states a decision at a date and
-# docs/plans/** a plan or design of a task that has since shipped, so a path in one is a
-# record of where the file was, not a claim about the tree today -- rewriting it to resolve
-# would falsify the record. The two frozen trees are excluded for the reason check 1 excludes
-# them. Every other tree check 1 walks is live prose that has to resolve.
+# docs/plans/** a plan or design of one build slice, so a path in one is a record of where the
+# file was, not a claim about the tree today -- rewriting it to resolve would falsify the
+# record. The two frozen trees are excluded for the reason check 1 excludes them. Every other
+# tree check 1 walks is live prose that has to resolve.
 #
 # Check 1 keeps walking docs/adl and docs/plans, and the difference is not an inconsistency:
 # the two checks ask different questions of the same file. A pointer is about the method's
@@ -162,6 +162,13 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # `tests/test_dashboard.py`). The residual risk is stated rather than designed around -- an
 # upstream refresh could add a path this tree does not hold, and the answer then is a fix
 # upstream or an exclusion decided on that case, not a silent skip now.
+#
+# docs/plans is a RETIRED tree (ADR-0044) that is not yet empty: the plans of shipped slices are
+# deleted, and the pair of an open slice stays until its epic closes. Its entry here expires with
+# the last file, and so does every other hit of
+# `grep -rnE "docs/plans|plan (file|doc)" .claude .github docs/reference` -- run it then rather
+# than trusting a list here. The deletion trigger itself is the cleanup skill's transition-period
+# rule, which is one of those hits.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
@@ -521,8 +528,8 @@ def check_commit_prefixes(root: Path, guide: Guide, enabled: list[str], findings
     whatever the **Definition of Done** topic links to, so moving the file moves the check with
     it. Two stated limits. One direction only: a row for a label the profile no longer declares
     is indistinguishable from the fall-through row's own backticked labels -- the key set below
-    absorbs every backticked span in a row's first cell, `docs/plans/**`, `bug` and `enhancement`
-    included -- so a retired label's row is the reviewer's to catch, not this check's. And the
+    absorbs every backticked span in a row's first cell, `bug` and `enhancement` included -- so a
+    retired label's row is the reviewer's to catch, not this check's. And the
     topic's owner cell is read for its FIRST link: the cell this one carries holds exactly one,
     where other routing-table cells hold two, so a cell that ever leads with another document
     would need the first link that resolves instead.

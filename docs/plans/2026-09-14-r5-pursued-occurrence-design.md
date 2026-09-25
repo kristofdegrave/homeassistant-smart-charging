@@ -18,7 +18,7 @@ a test anchor rather than restated.
 | `engines/soc_target.py` — R9's sixth precondition | R9's cap rule itself; only its precondition set grows |
 | `coordinator.py` / `coordinator_cycle.py` — threading one occurrence where a boolean is threaded, and one further fact out of the same early return for the clear edge (D-9) | ADR-0006's step order — no step added, removed or reordered |
 | Both of the escalated rate's bounds moved to smoothed readings | The R3 clamp, the C4 clamp, and the `peak_headroom` readout — all stay raw |
-| Closing #1006 (there is no separate hold left to build) | `debounce_baseline_w` (ADR-0039) — not on this path; see D-3 |
+| Closing #1006 (there is no separate hold left to build) | `debounce_baseline_w` (ADR-0039) — R3's deferral, which R5 `:92` keeps off the smoothed operand; see D-3 |
 
 ## Project-plan slice this derives from
 
@@ -27,15 +27,17 @@ out by M1"), **E3** (SOC-Target — R9's cap activation), **E5**/**E6** (the pea
 values), and **M1** (Coordinator — "Owns and threads every Engine's cross-cycle state, the Deadline
 Engine's included").
 
-**What those documents do *not* yet say.** On `main`, `project-plan.md`'s E5 entry and
-`system-design.md:157` contrast two *limits* — in-force versus raised — and neither mentions a
-smoothed operand. The rule is owned by `requirements.md` R5 and by `system-overview.md`'s
-`escalated maximum permitted rate` and `maximum permitted rate` entries, which is where this spec
-cites it; the design documents are being brought into line by the pass tracked in **#1141**. This
-spec derives from the analysis layer, not from a sentence in `docs/design/` that is not there yet.
+**Where each rule is owned.** The smoothed operand is stated by `requirements.md` R5 `:90-92`
+and by `system-overview.md`'s `escalated maximum permitted rate` and `maximum permitted rate`
+entries, which is where this spec cites it. The design layer now says the same in its own terms —
+`project-plan.md` E5 ("the readout to a raw one, R5's to the smoothed baseline") for the peak
+headroom and E6 ("The headroom operation is the one R5 specifies on the smoothed baseline") for
+the C4 headroom, and `system-design.md` §5.1 (`:455`, `:457`), which fits both to the smoothed
+baseline. `system-design.md:162` (Billing Protection) carries the
+in-force-versus-raised limit contrast.
 
 `system-design.md` §5.1's sequence is unchanged by this slice: no step is added, removed or
-reordered, and smoothing (`:418`) already precedes the escalated-headroom call (`:430`), so the
+reordered, and smoothing (`:442`) already precedes the escalated-headroom call (`:455`), so the
 smoothed operands are available where they are needed. ADR-0006's call-order spy test should pass
 untouched — a success criterion below.
 
@@ -134,71 +136,20 @@ capability, which release in opposite directions — that distinction is the cal
 
 ### D-3 — both bounds read smoothed; the operand carries no R3 deferral
 
-The one thing #1154 says this spec must resolve rather than assume. Two questions hide in it, and
-they resolve differently.
+**Both questions this decision once argued are now stated outright by the source, and are cited
+here as test anchors rather than re-derived.** `requirements.md` R5:
 
-**Which bounds move.** Both — and this is an **inference, not a stated rule**.
+- `:90` — the escalated maximum permitted rate is computed from a **smoothed** household
+  baseline, not the instantaneous reading, while urgency's own delivery stays clamped on raw.
+- `:91` — **every** bound of that rate which depends on a household reading is fitted to that
+  same smoothed baseline: both the peak headroom R3 would leave and the headroom the grid supply
+  ceiling (C4) leaves. C1's maximum charging current depends on no reading and is unaffected, and
+  the peak bound is a bound at all only where the peak clamp is composed — so not with the CapTar
+  capability absent (R18), nor under `Power`'s R17 opt-out.
+- `:92` — that smoothed baseline carries **no** R3 deferral.
 
-`_escalated_maximum_permitted_rate_a(ctx, *, peak_operand_kw)` composes
-`min(max_current, ceiling_headroom_a(ctx.net_w, ctx.charger_w))` and appends
-`peak_headroom_a(ctx.baseline_w, …)` **only when `self._peak_clamp_would_run()`**
-(`coordinator.py:1233`). So the rate has three bounds at most and often two: the peak bound is
-absent with the CapTar capability absent (R18) and under `Power`'s R17 opt-out, which is the same
-carve-out the clamp takes. C1's `max_current` is config and reads nothing.
-
-That leaves **two baseline-dependent bounds where both exist, and one where the peak bound does
-not.** The analysis scopes the smoothing to the *household baseline*, which is the peak bound's
-operand, and in the same breath names C4's ceiling among the raw readers. So the text can be read
-either way.
-
-This slice reads it as *both bounds smoothed*, because the rate is a **forecast** and a bound fitted
-to this instant defeats that purpose whichever bound it is: a single cycle of household load
-shrinking the forecast through C4 is #1078's own symptom, one bound down. The "C4 reads raw"
-statement is about the **clamp**, which is on the delivery path and must react to this instant — a
-different operation on the same Engine, already split as `ceiling_headroom_a`/`clamp_to_ceiling`.
-The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw.
-
-Because this document holds the only copy of that rule, **#1167** asks R5 or the glossary to state
-which reading each bound is fitted to. The text stays here until it does, and if the answer comes
-back the other way, the source wins.
-
-**Whether the operand carries R3's deferrals.** It does not. The argument, and the one text that
-cuts against it:
-
-- The glossary names two different things: *"the [household baseline]"* — net import minus charger
-  power — and *"the **accepted** baseline R3 solves from"*, which is the first after R3's two
-  deferral cases have been applied (`system-overview.md`, `household baseline`).
-- R3's own acceptance criterion scopes the deferrals to its clamp: *"The household baseline **this
-  check** solves around is this control cycle's own reading, except in exactly two cases"*
-  (`requirements.md` R3).
-- R10's exemption criterion attributes them to R3 and separates them from the smoothing window:
-  *"R3 applies **its own** deferrals to the household baseline it solves around, stated in R3 and
-  authoritative there; they are not this window … and neither is ever substituted for this window in
-  either direction."* (The elided clause is the breaching-increase bound, which the paragraph below
-  addresses directly rather than relies on.)
-- R5's own AC and the `escalated maximum permitted rate` entry use the bare glossary term. The
-  raw-versus-smoothed contrast is drawn in the `maximum permitted rate` entry — *"this one is what
-  the clamp actually delivered, fitted to a raw reading, while that one is a forecast fitted to a
-  smoothed household baseline"*. Neither entry contrasts deferral.
-
-**The counter-text.** R3 AC1 says the household-baseline resolution runs every control cycle
-*"because readouts gated on other capabilities consume its result"* — the one place the analysis has
-a non-R3 consumer reading the *accepted*, deferred baseline. Read hard, that says the deferrals
-attach to the resolved term rather than to R3's check.
-
-It does not carry, for two reasons. The consumer that criterion names is
-`sensor.smart_charging_solar_surplus_w`, a **raw** readout of this instant — the deferrals are part
-of what makes an instantaneous readout trustworthy, which is the opposite of a forecast's need. And
-R3's deferrals bound only what they claim to: `requirements.md` bounds a *breaching increase* at one
-control cycle while explicitly allowing runs of up to **three**. A three-cycle-old operand is a
-defensible input to a clamp that must not over-react and a poor input to a forecast R10's window is
-already smoothing — but it is not, as an earlier draft of this document asserted, forbidden by any
-"never more than one cycle" rule. That rule is about breaches, not about deferral in general.
-
-So: on balance, **undeferred** — a two-of-three argument with the counter-text answered, not an
-airtight derivation. Because it is a derivation across three documents rather than a stated rule,
-**#1164** asks R5 or the glossary to say it in one line. It does not block this slice, and if it
-lands contradicting this, the source wins and D-3 changes with it.
+The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
+criteria.
 
 **Where it lands.** `_run_cycle` already computes `smoothed_net_w`; it is carried on `CycleContext`
 as its own field. `_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so

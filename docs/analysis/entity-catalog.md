@@ -78,10 +78,9 @@ every row of that concern regardless of role; the **Role** column distinguishes 
   canonical; defaults match the values stated in `requirements.md`.
 
 Internal bookkeeping that is pure implementation — cooldown/hold timers, the smoothing ring
-buffer, reminder/prompt "already-sent" flags — is **not** catalogued (it is "how", per the design
-doc). What survives a restart or a reload is NF14's. The catalog covers the configurable
-parameters, the device-I/O adapter roles, and the domain-level state and outputs the
-use-cases reference by name.
+buffer, reminder/prompt "already-sent" flags — is **not** catalogued (it is "how"). What
+survives a restart or a reload is NF14's. The catalog covers the configurable parameters, the
+device-I/O adapter roles, and the domain-level state and outputs the use-cases reference by name.
 
 ---
 
