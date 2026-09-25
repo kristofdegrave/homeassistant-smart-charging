@@ -122,8 +122,7 @@ of its own (R17): Idle and Cooldown treat the SOC condition as met, Charging sta
 no reading to reach the limit by, and SocReached stays in SocReached, since neither of its exits
 needs a reading (R7). Only a stop made at the limit is held this way: a car resting in Idle or
 Cooldown at or above the limit has no such stop behind it, so it starts charging on such a cycle
-once no cooldown runs,
-until the first cycle with a reading stops it.
+once no cooldown runs, until the first cycle with a reading stops it.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
