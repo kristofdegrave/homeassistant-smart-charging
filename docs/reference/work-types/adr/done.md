@@ -54,22 +54,18 @@ stake.
 (issues to open, docs to update), what gets easier or harder. Restating the decision →
 **Minor**.
 
-**(6) The Blast radius enumeration is complete.** Consequences carry the enumeration
-`docs/adl/template.md` specifies: a re-runnable search, a verdict per hit, an explicit
-out-of-scope list. Run the search exactly as written: the template requires it in the dialect you
-hold, so one that needs translating before it runs fails the width test below. **Major** in each
-case, naming the sites missed:
+**(6) The Blast radius is complete, and closes the record.** Consequences end with the Blast
+radius `docs/adl/template.md` specifies. Run the search exactly as written; one that needs
+translating first fails the width test below. **Major** in each case, naming the sites missed:
 - the section is absent;
 - the search fails the template's width test, dropping something the decision also governs;
-- a hit is in neither the table nor the out-of-scope list.
+- a hit is not accounted for — not a non-conforming row, counted as conforming, or in an
+  out-of-scope group — or the count differs from the conforming hits.
 
 An empty result fails the width test when the ADR's table lists hits, or when the ADR does not
 claim the template's no-hits case: the search is then defective, not the blast radius empty.
-**Minor**: a row with a verdict but not what the site does today; a non-conforming row with no
-follow-up entry; an out-of-scope entry not saying what it keeps doing.
-
-Applies to an ADR the change **adds**. An existing record it only modifies is out of scope:
-adding the section there would be the immutability violation the reviewer scores as Critical.
+**Minor**: a row missing what the site does today or its follow-up; an out-of-scope group not
+saying what it keeps doing; anything after the Blast radius.
 
 **(7) One problem, one decision.** An ADR bundling two or more independent structural choices
 → **Major**; split it.

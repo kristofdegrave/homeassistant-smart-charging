@@ -40,23 +40,32 @@ restating them.
 What becomes easier or harder as a result? Include follow-up work this decision
 creates (new issues to open, docs to update) and anything it forecloses.
 
-**Blast radius** — required. Every site this decision governs *today*, and whether each
-conforms. Bound it like this, so it stays decidable instead of becoming an open-ended audit:
+**Blast radius** — required, and the last part of the record: nothing follows it. Every site
+this decision governs *today*:
 
 1. State the **search** that enumerates the candidate sites — one ripgrep pattern with a
    repo-rooted path, or a short explicitly listed set of them, runnable as written by a reader
-   holding nothing but `Grep`/`Glob` — and why its pattern is wide enough: a pattern keyed on
-   the narrowest name silently drops subclasses, aliases and re-exports the decision also
-   governs.
-2. Give **one row per hit**: the site, what it does today, and conforms / does not conform.
-   Rows sharing a verdict may be grouped, as long as every hit is accounted for.
-3. Name the hits this ADR puts **out of scope** and what they keep doing instead. Silence is
-   not out-of-scope.
+   holding nothing but `Grep`/`Glob` — and why its pattern is wide enough (the *width test*):
+   a pattern keyed on the narrowest name silently drops subclasses, aliases and re-exports the
+   decision also governs.
+2. **One row per hit that does not conform**: the site, what it does today, its follow-up.
+3. **One line counting the hits that conform**, not a row each.
+4. **Out of scope, one line per group**: which hits, and what they keep doing instead. Silence
+   is not out-of-scope.
 
-The enumeration is complete when every hit of the stated search appears either in the table or
-in the out-of-scope list — not when the codebase has been audited. A decision whose stated
-search genuinely returns no hits governs no existing site; say so, and give the search that
-shows it. A process decision is not automatically that case: it usually governs a tree of its
-own, and searches it like any other. Non-conforming sites are follow-up work; list them as
-such. `docs/adl/0038-unit-contract-at-the-power-read-adapter-boundary.md` is the worked example
-— for everything but its search string, whose BRE alternation and bare path predate this rule.
+A hit is one matching line, as `rg -n` prints it. It is complete when every hit is a
+non-conforming row, counted as conforming, or in an out-of-scope group — not when the codebase
+has been audited. A search that genuinely returns no hits means the decision governs
+no existing site; say so, and give the search. A process decision is not automatically that
+case: it usually governs a tree of its own. The shape, with invented sites:
+
+```markdown
+**Blast radius.** `rg -n 'power_unit' example/` — 12 hits, wide enough because every
+power read passes through that attribute.
+
+| Site | Today | Follow-up |
+|---|---|---|
+| `example/adapters/peak.py:41` | Reads the value without a unit check | Convert per this decision |
+
+8 other hits conform. Out of scope: the 3 hits in `example/fixtures/` keep asserting raw values.
+```

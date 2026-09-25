@@ -264,14 +264,22 @@ async def test_should_drop_a_date_already_in_the_past_when_restoring(hass, freez
     await entity.async_remove()
 
 
-async def test_should_return_none_when_restored_extra_data_is_not_a_list(hass):
-    """`_HomeDayExtraStoredData.from_dict`'s own malformed-input branch: a restored
-    `ATTR_APPLIES_TO` that isn't a list at all (e.g. a corrupted store) is rejected rather
-    than raising or silently coercing -- `async_added_to_hass` then leaves `_applies_to` at
-    its default (empty), same as no restored data at all."""
+async def test_should_restore_no_dates_when_the_restored_applies_to_is_not_a_list(hass):
+    """NF14: `_HomeDayExtraStoredData.from_dict`'s own malformed-input branch. A restored
+    `ATTR_APPLIES_TO` that isn't a list at all (e.g. a corrupted store) is rejected outright,
+    not merely handed to `parse_iso_dates` and hoped to come back empty -- a plain string
+    would happen to parse to nothing either way (each character fails `date.fromisoformat`),
+    which is why this uses a dict whose own keys are well-formed ISO dates: `parse_iso_dates`
+    only iterates its argument, so without the `isinstance(applies_to, list)` guard those keys
+    would sail through and populate `applies_to`, even though a dict is not a list. This test
+    isolates the guard alone -- that restore itself actually runs (rather than never firing at
+    all, which would leave the same empty result) is what
+    `test_should_restore_bound_dates_when_ha_restarts` above proves, through a well-formed
+    list."""
     # Arrange
+    future_date = (dt_util.now().date() + timedelta(days=365)).isoformat()
     mock_restore_cache_with_extra_data(
-        hass, ((State(_ENTITY_ID, STATE_OFF), {ATTR_APPLIES_TO: "not-a-list"}),)
+        hass, ((State(_ENTITY_ID, STATE_OFF), {ATTR_APPLIES_TO: {future_date: True}}),)
     )
     entity = HomeDaySwitch(entry_id="abc")
     entity.entity_id = _ENTITY_ID
@@ -281,7 +289,7 @@ async def test_should_return_none_when_restored_extra_data_is_not_a_list(hass):
     await platform.async_add_entities([entity])
 
     # Assert
-    assert entity._applies_to == set()
+    assert _applies_to_attr(hass) == []
     await entity.async_remove()
 
 
@@ -375,7 +383,10 @@ async def test_should_keep_the_flag_on_when_the_config_entry_reloads(hass, freez
 async def test_should_apply_the_restored_flag_from_the_first_cycle_after_a_reload(hass, freezer):
     """NF14: "holds the value last set ... from the first control cycle that follows" -- the
     coordinator itself, not only the switch's own displayed state, must have picked up the
-    restored/reloaded flag by the time its first post-reload cycle runs."""
+    restored/reloaded flag by the time its first post-reload cycle runs. Asserts on the state
+    that reload's own first cycle produced, with no extra `async_refresh()` call of this
+    test's own -- an extra refresh would still turn this green even if the reload wired the
+    first cycle before the switch platform (and so before its restored flag) was in place."""
     # Arrange
     freezer.move_to("2026-01-17 20:00:00")
     seed_charger_states(hass, status="Charging")
@@ -397,7 +408,6 @@ async def test_should_apply_the_restored_flag_from_the_first_cycle_after_a_reloa
 
     # Assert
     coordinator = entry.runtime_data.coordinator
-    await coordinator.async_refresh()
     assert bound_date in coordinator.home_day_dates
 
 
