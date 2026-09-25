@@ -64,7 +64,8 @@ translating first fails the width test below. **Major** in each case, naming the
 
 An empty result fails the width test when the ADR's table lists hits, or when the ADR does not
 claim the template's no-hits case: the search is then defective, not the blast radius empty.
-**Minor**: a row missing what the site does today or its follow-up; an out-of-scope group not saying what it keeps doing; anything after the Blast radius.
+**Minor**: a row missing what the site does today or its follow-up; an out-of-scope group not saying
+what it keeps doing; anything after the Blast radius.
 
 **(7) One problem, one decision.** An ADR bundling two or more independent structural choices
 → **Major**; split it.
