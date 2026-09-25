@@ -9,7 +9,9 @@ revert to its constructor default on every HA restart, contradicting `entity-cat
 "runtime" persistence classification for these rows (the same category
 `number.smart_charging_soc_limit_override`/`select.smart_charging_mode` are in, both of which
 the codebase already restores). This class therefore mirrors `ModeSelect` (`select.py`) and
-uses `RestoreEntity`.
+uses `RestoreEntity`. `switch.py`'s `HomeDaySwitch` needs it for the same reason, for NF14 (a
+restart and a reload) -- the entity registry/runtime-state distinction above applies to both,
+not to `time` entities alone.
 """
 
 from __future__ import annotations

@@ -90,13 +90,14 @@ class NotificationManager:
     (notification_state.py module docstring) -- this Manager is exactly the caller that
     docstring describes as owning that anchor across ticks.
 
-    Known gap:
-    - `_state`/`_date` are in-memory only and reset to Not-sent on every HA restart, so a
-      restart between a prompt being sent and midnight can cause a second prompt the same
-      evening (UC08's terminal-for-the-evening state model is only guaranteed within one HA
-      session).
-    Restart persistence is not required by UC08 and is left for a
-    follow-up if it proves to matter in practice.
+    Deliberate per NF14, not a gap:
+    - `_state`/`_date` are in-memory only and start afresh on every HA restart and reload, so
+      a restart between a prompt being sent and midnight -- or an options-change reload --
+      can cause a second prompt the same evening (UC08's Not-sent/answered-yes/answered-no/
+      timed-out states being terminal for the evening is only guaranteed within one HA
+      session). NF14's own list of what a restart and a reload clear names "each
+      notification's record of having been sent" explicitly; this Manager's prompt-sent
+      record is that choice applied here, not something still owed to it.
     """
 
     def __init__(
