@@ -122,12 +122,13 @@ every dashboard open (ADR-0028).
 Given the user has, outside this dashboard, disabled one of the System's entities, or enabled one
 that a capability now absent had disabled
 When a later capability change, restart or reload rebuilds the dashboard (1b)
-Then the entity keeps the enabled state the user gave it — the capability change does not override
-the user's choice, in either direction (R18) — until the user changes it again. A runtime entity
-the user has disabled can no longer be seen or set from the dashboard, since it holds no value. One the user has enabled
-while its gating capability is absent is still omitted, as 4a omits it: whether the dashboard
-shows it follows the capability, not the enabled state (R19). An entity whose enabled state the
-user has left alone follows the capabilities, as 4a and 3a describe.
+Then the rebuilt dashboard finds the entity in the enabled state the user gave it, which R18 keeps
+through a capability change, restart or reload until the user changes it again; this use-case
+shows that state and does not decide it. A runtime entity the user has disabled can no longer be
+seen or set from the dashboard, since it holds no value (R19). One the user has enabled while its
+gating capability is absent is still omitted, as 4a omits it: whether the dashboard shows it
+follows the capability, not the enabled state (R19). An entity whose enabled state the user has
+left alone follows the capabilities, as 4a and 3a describe.
 
 **5a — Edited value is out of its configured range** — branches from step 5.
 Given the user attempts to set a runtime value outside its configured minimum/maximum (e.g. a
@@ -154,8 +155,9 @@ mode's, not this use-case's.
 Given a value shown on the dashboard is sourced from a role C5 does not list as required on this
 control cycle, and that role is unavailable
 When the user opens the dashboard, or has it open
-Then the System shows that value as unavailable, the System's status stays `OK` — an optional role
-is never a fault (C5) — and every other section of the dashboard continues to render normally.
+Then the System shows that value as unavailable, the System's status is not made `Fault` by it —
+an optional role is never a fault (C5) — and every other section of the dashboard continues to
+render normally.
 
 **The `auto-entities` card is not installed.**
 Given the `auto-entities` card the Preconditions name is not installed
@@ -178,7 +180,8 @@ Every runtime configuration entity can still be set directly, with the same effe
   sidebar and reflects the installation's configuration as it stands after that setup; the user
   cannot edit it (1a, 1b, R19), and it is absent only when it cannot be provided (NF13).
 - Every entity `entity-catalog.md` classifies as runtime configuration is both visible and settable
-  from the dashboard, except those gated by an absent capability (4a, R18); no entity classified as
+  from the dashboard, except those gated by an absent capability (4a, R18) and those the user has
+  disabled (4c, R19); no entity classified as
   install-time configuration is presented on it —
   install-time configuration remains reachable only through the integration's configuration flow
   (R19, R20).
@@ -186,10 +189,12 @@ Every runtime configuration entity can still be set directly, with the same effe
   permit — `Solar`/`SolarOnly` and/or `Captar` absent from its option list precisely when the
   capability declaring them is off, `Power` and `Off` always present (4b, R18).
 - The current charging status (charger status, active profile, active mode, active SOC limit,
-  current charger current, the System's status) and the current net import are visible on the dashboard whenever it is
-  open; the current solar surplus is too, except while the solar capability is absent (3a, R18).
-- No capability change, restart or reload has changed the enabled state the user gave one of the
-  System's entities (4c, R18).
+  current charger current, the System's status) and the current net import are visible on the
+  dashboard whenever it is open; the current solar surplus is too, except while the solar
+  capability is absent (3a, R18).
+- The dashboard rebuilt after a capability change, restart or reload shows each of the System's
+  entities according to the enabled state the user gave it and the capabilities declared, as 4c
+  describes; keeping that enabled state is R18's, not this use-case's.
 - A runtime edit made on the dashboard has exactly the same effect as the same edit made directly
   on the underlying entity — this use-case adds no behaviour of its own beyond presenting and
   forwarding.
@@ -243,9 +248,10 @@ flowchart TD
   shown; the dashboard present with no user step (step 1); not user-editable and rebuilt on every
   restart and reload (1a, 1b); new runtime entities require no dashboard-specific logic change).
 
-Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — the
-dashboard's half of its criterion that a capability change never overrides the user's own choice
-to enable or disable an entity (4c), and the
+Partially satisfies [R18](../requirements.md#r18--configurable-installation-capabilities) — for
+its criterion that a capability change never overrides the user's own choice to enable or disable
+an entity, only what the dashboard shows of that choice (4c); keeping the choice itself is R18's
+own, realized outside this use-case (ADR-0028). It also satisfies the
 manual-selection half of AC2 and AC5 (the `Solar`/`SolarOnly` and `Captar` modes are not offered by
 `select.smart_charging_mode` while the solar/CapTar capability declaring them is absent, 4b and
 Postconditions above). This is a distinct mechanism from R19 AC4's entity omission (3a, 4a) —
