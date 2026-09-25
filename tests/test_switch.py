@@ -264,16 +264,18 @@ async def test_should_drop_a_date_already_in_the_past_when_restoring(hass, freez
     await entity.async_remove()
 
 
-async def test_should_return_none_when_restored_extra_data_is_not_a_list(hass):
-    """`_HomeDayExtraStoredData.from_dict`'s own malformed-input branch: a restored
+async def test_should_restore_no_dates_when_the_restored_applies_to_is_not_a_list(hass):
+    """NF14: `_HomeDayExtraStoredData.from_dict`'s own malformed-input branch. A restored
     `ATTR_APPLIES_TO` that isn't a list at all (e.g. a corrupted store) is rejected outright,
     not merely handed to `parse_iso_dates` and hoped to come back empty -- a plain string
     would happen to parse to nothing either way (each character fails `date.fromisoformat`),
     which is why this uses a dict whose own keys are well-formed ISO dates: `parse_iso_dates`
     only iterates its argument, so without the `isinstance(applies_to, list)` guard those keys
-    would sail through and populate `_applies_to`, even though a dict is not a list.
-    `async_added_to_hass` must leave `_applies_to` at its default (empty), same as no restored
-    data at all."""
+    would sail through and populate `applies_to`, even though a dict is not a list. This test
+    isolates the guard alone -- that restore itself actually runs (rather than never firing at
+    all, which would leave the same empty result) is what
+    `test_should_restore_bound_dates_when_ha_restarts` above proves, through a well-formed
+    list."""
     # Arrange
     future_date = (dt_util.now().date() + timedelta(days=365)).isoformat()
     mock_restore_cache_with_extra_data(
@@ -287,7 +289,7 @@ async def test_should_return_none_when_restored_extra_data_is_not_a_list(hass):
     await platform.async_add_entities([entity])
 
     # Assert
-    assert entity._applies_to == set()
+    assert _applies_to_attr(hass) == []
     await entity.async_remove()
 
 
