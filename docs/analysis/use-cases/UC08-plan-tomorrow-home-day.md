@@ -42,7 +42,7 @@ When the trigger condition would otherwise be met
 Then the System skips this use-case entirely for the evening — no notification is sent. R9's cap would not activate regardless of the driver's answer; tomorrow's flag stays unset, which also means R14's home-day departure override does not apply tomorrow (day-of-week default departure time is used instead) unless another mechanism has set it.
 
 **1c — Car never connects before midnight** — branches from the Trigger (the other preconditions in step 1 hold, but the trigger condition never fires).
-Given the notification gating is satisfied, the forecast exceeds the threshold, and no external source has set the flag
+Given the notification gating is satisfied, the forecast exceeds the threshold, and no external source has set the flag for tomorrow
 When the car has not connected at home by midnight
 Then the System never sends the notification for that evening; the home-day flag for tomorrow remains whatever it already was (typically unset), the same outcome as if the driver had answered "no".
 
