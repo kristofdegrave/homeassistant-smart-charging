@@ -56,28 +56,31 @@ from ..const import (
     DEFAULT_SOLAR_FORECAST_THRESHOLD_KWH,
     EVENT_DEADLINE_UNREACHABLE_CLEARED,
     EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
+    KEY_NOTIFICATION_DEADLINE_UNREACHABLE_MESSAGE,
+    KEY_NOTIFICATION_HOME_DAY_ACTION_NO,
+    KEY_NOTIFICATION_HOME_DAY_ACTION_YES,
+    KEY_NOTIFICATION_HOME_DAY_PROMPT_MESSAGE,
     OWNED_SUFFIX_HOME_DAY,
+    PRODUCT_NAME,
     ROLE_CHARGER_STATUS,
     ROLE_HOME_DAY_EXTERNAL,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
 )
 from ..notification_state import PromptState, evaluate_prompt
+from ..system_text import async_get_system_text
 
 _LOGGER = logging.getLogger(__name__)
 
-# UC08 main success scenario step 2's actionable prompt text -- no analysis doc catalogues an
-# exact wording, so it is this Manager's own presentation detail, not a cited anchor.
-_PROMPT_TITLE = "Smart Charging"
-_PROMPT_MESSAGE = "Will the car be home tomorrow?"
-# R5's deadline-unreachable notice -- this Manager's own presentation
-# detail; required_a is the current the deadline would need, per DeadlineUnreachableNotified's
-# own payload (ATTR_REQUIRED_CURRENT_A, coordinator.py) -- included for the driver's context,
-# not re-derived (ADR-0011: consume the published event, never recompute urgency).
-_DEADLINE_UNREACHABLE_MESSAGE = (
-    "Charging at the maximum rate but still won't reach your target by departure "
-    "(would need {required_a:.1f} A)."
-)
+# The product name -- deliberately never translated (NF8 AC1), unlike the message and the
+# action-button labels below, which follow HA's system language via `async_get_system_text`
+# (strings.json's `common` category, KEY_NOTIFICATION_* in const.py). `const.PRODUCT_NAME` is
+# the one literal both this module and dashboard.py read, not two independent ones. UC08 main
+# success scenario step 2's actionable prompt text: no analysis doc catalogues an exact
+# English wording either, so it (and the deadline notice below) stay this Manager's own
+# presentation detail, not a cited anchor -- only their *existence* in both languages is
+# NF8's requirement.
+_PROMPT_TITLE = PRODUCT_NAME
 
 
 class NotificationManager:
@@ -192,11 +195,16 @@ class NotificationManager:
 
         if evaluation.should_send:
             try:
+                text = await async_get_system_text(self._hass)
                 await notify_adapter.write(
                     NotificationRequest(
-                        message=_PROMPT_MESSAGE,
+                        message=text[KEY_NOTIFICATION_HOME_DAY_PROMPT_MESSAGE],
                         title=_PROMPT_TITLE,
                         actions=[ACTION_HOMEDAY_YES, ACTION_HOMEDAY_NO],
+                        action_labels={
+                            ACTION_HOMEDAY_YES: text[KEY_NOTIFICATION_HOME_DAY_ACTION_YES],
+                            ACTION_HOMEDAY_NO: text[KEY_NOTIFICATION_HOME_DAY_ACTION_NO],
+                        },
                     )
                 )
             except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors
@@ -248,13 +256,19 @@ class NotificationManager:
             return
         self._deadline_unreachable_notified = True
         try:
+            text = await async_get_system_text(self._hass)
             await notify_adapter.write(
                 NotificationRequest(
-                    message=_DEADLINE_UNREACHABLE_MESSAGE.format(required_a=required_a),
+                    message=text[KEY_NOTIFICATION_DEADLINE_UNREACHABLE_MESSAGE].format(
+                        required_a=required_a
+                    ),
                     title=_PROMPT_TITLE,
                 )
             )
-        except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors async_evaluate)
+        except Exception as err:  # noqa: BLE001 - best-effort delivery (mirrors async_evaluate);
+            # the translation lookup is inside this try too, so a lookup failure gets the same
+            # "not retried" warning as a delivery failure, rather than escaping this listener
+            # silently while the latch above still suppresses the notice for the occasion.
             _LOGGER.warning(
                 "Failed to deliver the deadline-unreachable notice (not retried -- the "
                 "notify-once latch is already set): %s",
