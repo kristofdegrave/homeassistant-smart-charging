@@ -595,8 +595,9 @@ async def test_should_keep_the_deadline_notice_title_untranslated_when_the_syste
     hass,
 ):
     """The deadline-unreachable notice's title stays the untranslated product name
-    (NF8 AC1), the same as the home-day prompt's own title -- pinned separately from the
-    Dutch message above (NF8 AC2), one behaviour per test."""
+    (NF8 AC1), the same as the home-day prompt's own title -- pinned separately from
+    test_should_translate_the_deadline_unreachable_message_when_the_system_language_is_dutch's
+    Dutch message (NF8 AC2), one behaviour per test."""
     # Arrange
     hass.config.language = "nl"
     calls = _register_notify_capture(hass)
