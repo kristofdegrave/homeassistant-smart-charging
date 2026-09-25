@@ -60,6 +60,7 @@ from .const import (
     OWNED_SUFFIX_CHARGER_STATUS,
     OWNED_SUFFIX_PEAK_HEADROOM_A,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    OWNED_SUFFIX_STATUS,
     OWNED_SUFFIX_TIME_TO_FULL,
     ROLE_CHARGER_STATUS,
     STATE_CHARGING,
@@ -108,8 +109,8 @@ class _CoordinatorFieldSensor(_CoordinatorPushMixin, SensorEntity):
 class ChargingStatusSensor(_CoordinatorPushMixin, SensorEntity):
     """Reports Fault when the last cycle faulted (ADR-0007), else OK."""
 
-    _attr_translation_key = "status"
-    _object_id_suffix = "status"
+    _attr_translation_key = OWNED_SUFFIX_STATUS
+    _object_id_suffix = OWNED_SUFFIX_STATUS
 
     @property
     def native_value(self) -> str:

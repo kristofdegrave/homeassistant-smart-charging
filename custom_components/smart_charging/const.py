@@ -110,6 +110,7 @@ OWNED_SUFFIX_TIME_TO_FULL = "time_to_full"
 OWNED_SUFFIX_PEAK_HEADROOM_A = "peak_headroom_a"
 OWNED_SUFFIX_ADAPTER_READINGS = "adapter_readings"
 OWNED_SUFFIX_CHARGER_STATUS = "charger_status"
+OWNED_SUFFIX_STATUS = "status"
 
 # Runtime dashboard (C5, #601) -- HA label marking every runtime-classified owned entity so the
 # dashboard's `auto-entities` card can select them structurally rather than by a hand-kept list.
