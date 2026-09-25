@@ -83,7 +83,6 @@ from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import ceiling_headroom_a, clamp_to_ceiling
 from .engines.signal_conditioning import resolve_voltage, smooth_net_power
-from .modes import captar
 from .modes._phase import Phase
 from .profiles.policy import PROFILE_POLICIES
 
@@ -184,12 +183,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # case) requires a running cooldown to survive exactly that switch, blocking a restart
         # in whichever mode is active when it would otherwise happen, for the duration fixed at
         # the moment charging stopped. `None` means no cooldown is running. Set in
-        # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`
-        # (and in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry, R3);
-        # cleared to `None` only on disconnect (`_dispatch_mode`'s own early branch) -- same
-        # reset trigger as `_mode_state`/`_has_charged` there, per R7's resume condition for a
-        # car unplugged and replugged. Deliberately NOT reset by
-        # `_reset_mode_state_if_changed` -- that is the entire point (issue #974).
+        # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`;
+        # in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry (R3); and,
+        # since issue #1311, in `_start_fault_stop_cooldown` for a fault stop -- the latter two
+        # both through the shared `_start_cooldown` helper. Cleared to `None` only on disconnect
+        # (`_dispatch_mode`'s own early branch) -- same reset trigger as `_mode_state`/
+        # `_has_charged` there, per R7's resume condition for a car unplugged and replugged.
+        # Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the entire point
+        # (issue #974).
         self._active_cooldown: ActiveCooldown | None = None
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
@@ -239,6 +240,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._net_window: tuple[float, ...] = ()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
+        # ADR-0007/issue #1311: `_safe_write_zero`'s own once-per-outage dedup for the 0 A
+        # write itself failing -- a distinct outage from `_was_faulted` above (the write can
+        # keep failing for many cycles after the read-side fault that first forced it
+        # recovers). See `_safe_write_zero`'s own docstring.
+        self._write_zero_failing = False
         # M1's OWN 15-minute window (E5), distinct from R10's `_net_window` above --
         # a MonthlyPeakSensor restore may seed `_peak_demand.tracked_kw`/`.tracked_month` before
         # the first cycle; the window itself is deliberately never persisted (R21), so it
@@ -279,7 +285,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         try:
             return await self._run_cycle()
         except Exception as err:  # noqa: BLE001 - every failure funnels to the fault path (ADR-0007)
-            self._log_fault(f"cycle exception: {err}")
+            self._enter_fault(f"cycle exception: {err}")
             await self._safe_write_zero()
             self._clear_baseline_deferral()
             return CycleResult(
@@ -447,7 +453,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         now_dt = dt_util.now()
         inputs = await self._read_cycle_inputs()
         if inputs is None:
-            self._log_fault("required adapter returned None")
+            self._enter_fault("required adapter returned None")
             await self._write(0.0)
             self._clear_baseline_deferral()
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
@@ -539,7 +545,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and status in CHARGEABLE_STATES
             and ev_soc is None
         ):
-            self._log_fault("ev_soc required while a solar mode is active but missing/None")
+            self._enter_fault("ev_soc required while a solar mode is active but missing/None")
             await self._write(0.0)
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
             # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
@@ -983,6 +989,51 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         `set_home_day_flag`."""
         self.departure_home_day_override = value
 
+    def _start_cooldown(self, mode: str, now: float) -> None:
+        """Start the coordinator-scoped R11 cooldown for `mode`, fixing its duration at
+        `handler.cooldown_minutes` (not re-read later, R11: "not shortened by a change in
+        conditions"), and, for a SOC-gated mode, force its own per-mode state to
+        `Phase.COOLDOWN` too -- the shared shape of a coordinator-forced stop, used wherever a
+        mode's own `step()` does not itself produce the transition this cycle: `_apply_peak_clamp`'s
+        Captar force-stop and `_start_fault_stop_cooldown` below both call this rather than
+        each repeating the pair. `_dispatch_mode`'s own generic fresh-`Phase.COOLDOWN`-transition
+        detection does not use this -- there the per-mode state already came from the handler's
+        own `step()`, only `_active_cooldown` itself needs starting."""
+        handler = self._mode_handlers[mode]
+        self._active_cooldown = ActiveCooldown(now, handler.cooldown_minutes * 60)
+        if handler.is_soc_gated:
+            state_cls = type(self._mode_state[mode])
+            self._mode_state[mode] = state_cls(Phase.COOLDOWN, now)
+
+    def _start_fault_stop_cooldown(self) -> None:
+        """C5/R11 (issue #1311): a fault that cuts a charging current is a fault stop, and
+        starts the active mode's own cooldown -- exactly as that mode's own stop condition
+        would, `Power` included, whatever its `power_respect_peak` option and the CapTar
+        capability (R11 AC3 as amended). A fault while the current in force is already 0 A
+        starts none, which is why the gate below is on `_last_commanded_a` -- the value the
+        coordinator itself last actually wrote (`_write`'s own field), never `None`-coalesced
+        to 0 -- rather than on `active_mode` or on the mode's own per-mode phase. `Off`
+        usually reaches the same early return as any other mode already at 0 A, since its own
+        dispatch always commands 0 A -- but not always: `None` (no write has ever happened yet
+        this coordinator instance, e.g. immediately after a restart) is deliberately NOT
+        treated as "already 0 A", so a fault on the very first cycle after a restart while
+        `Off` is active (or the cycle that switches into `Off`) DOES reach `_start_cooldown`
+        and read `Off`'s own `cooldown_minutes` (0.0) -- harmlessly, since an
+        already-elapsed, zero-length `ActiveCooldown` blocks nothing. The `None` case itself:
+        a restart's own timers reset regardless (NF14), so a cooldown started here for a
+        charger that may still be delivering current from before the restart is the
+        conservative direction, not a C5 violation (C5 excuses only a current genuinely
+        already at 0 A).
+
+        Called from all three of `_async_update_data`/`_run_cycle`'s fault paths (ADR-0007's
+        single fault-handling code path), before the forced 0 A write -- so `_last_commanded_a`
+        still holds the pre-fault value -- and using `self.hass.loop.time()` directly, since
+        none of the three call sites has a `CycleContext`/monotonic `now` of its own by the
+        point it detects the fault."""
+        if self._last_commanded_a == 0.0:
+            return
+        self._start_cooldown(self.active_mode, self.hass.loop.time())
+
     def _cooldown_blocks(self, proposed_phase: Phase, now: float) -> bool:
         """R11/issue #974: True when a still-running coordinator-scoped cooldown must block a
         transition into `proposed_phase`. Only Charging is ever gated -- Cooldown/Hold/Idle/
@@ -1138,17 +1189,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         if force_stop and self.active_mode == MODE_CAPTAR:
             desired = 0.0
-            self._mode_state[MODE_CAPTAR] = captar.CaptarState(Phase.COOLDOWN, ctx.now)
             # R11/issue #974: Captar's only own stop condition (a sustained R3 breach) is
             # forced here rather than decided by captar.step() itself (that module's own
             # docstring) -- so this is the one cooldown-start site `_dispatch_mode`'s generic
-            # "fresh Phase.COOLDOWN transition" detection can never see. Started directly with
-            # the same coordinator-scoped `_active_cooldown` every other cooldown start uses,
-            # fixing its duration at this instant (R11: "not shortened by a change in
-            # conditions") via Captar's own `cooldown_minutes`.
-            self._active_cooldown = ActiveCooldown(
-                ctx.now, self._mode_handlers[MODE_CAPTAR].cooldown_minutes * 60
-            )
+            # "fresh Phase.COOLDOWN transition" detection can never see. `_start_cooldown`
+            # (issue #1311) fixes the duration at this instant (R11: "not shortened by a
+            # change in conditions") via Captar's own `cooldown_minutes`, and forces Captar's
+            # own per-mode state to `Phase.COOLDOWN` in the same call.
+            self._start_cooldown(MODE_CAPTAR, ctx.now)
         return desired
 
     def _apply_grid_ceiling_clamp(self, ctx: CycleContext, desired: float) -> float:
@@ -1450,21 +1498,50 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         """The single write site (ADR-0039's `_command_stepped`/`_last_commanded_a` are
         maintained here for exactly that reason). The step flag is recorded only after the
         adapter write actually returns: a write that raises never reached the charger, so the
-        current did not change and the next cycle's `charger_w` is not stale on its account."""
+        current did not change and the next cycle's `charger_w` is not stale on its account.
+
+        Also `_write_zero_failing`'s (issue #1311) one clearing site: ANY write that reaches
+        here succeeding -- not only a `_safe_write_zero` retry -- proves the charger-current
+        adapter is working again, so a write outage that ends through an ordinary clean cycle
+        (rather than through another faulted `_safe_write_zero` call) still logs its recovery
+        and un-suppresses a later, genuinely new outage's own WARNING."""
         self._command_stepped = False
         await self._adapters[ROLE_CHARGER_CURRENT].write(value)
         self._command_stepped = (
             self._last_commanded_a is not None and value != self._last_commanded_a
         )
         self._last_commanded_a = value
+        if self._write_zero_failing:
+            _LOGGER.info("smart_charging recovered: charger-current write succeeded again")
+            self._write_zero_failing = False
 
     async def _safe_write_zero(self) -> None:
+        """Best-effort stop: called only from the fault path, where the charger current
+        write itself may keep failing cycle after cycle (issue #1311/C5's last sentence).
+        Mirrors `_log_fault`'s own once-per-outage discipline (`_was_faulted`) rather than
+        ADR-0007's prior per-cycle `_LOGGER.exception` (an ERROR with a traceback on every
+        cycle the write keeps failing) -- `_write_zero_failing` is a separate outage from
+        `_was_faulted`: the write can keep failing for many cycles after the read-side fault
+        that first triggered it recovers, or can itself be the only fault (the exception path
+        funnels a write-only failure here too). The recovery half lives in `_write` itself,
+        the one site every successful write (fault-path or not) passes through."""
         try:
             await self._write(0.0)
-        except Exception:  # noqa: BLE001 - best-effort stop
-            _LOGGER.exception("smart_charging failed to write 0 A during fault")
+        except Exception as err:  # noqa: BLE001 - best-effort stop
+            if not self._write_zero_failing:
+                _LOGGER.warning("smart_charging failed to write 0 A during fault: %s", err)
+                self._write_zero_failing = True
 
     def _log_fault(self, reason: str) -> None:
         if not self._was_faulted:
             _LOGGER.warning("smart_charging fault: %s", reason)
             self._was_faulted = True
+
+    def _enter_fault(self, reason: str) -> None:
+        """ADR-0007/C5's single fault-handling code path, one call: logs the fault
+        (`_log_fault`'s own once-per-outage discipline) and starts the fault stop's cooldown
+        (`_start_fault_stop_cooldown`, C5/R11, issue #1311) together, so each of the three
+        fault sites is one statement in its caller's body -- ADR-0046's body rule for
+        `_run_cycle` (a call to a named step, one statement each) rather than two."""
+        self._log_fault(reason)
+        self._start_fault_stop_cooldown()
