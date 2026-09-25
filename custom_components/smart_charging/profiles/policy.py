@@ -19,8 +19,7 @@ class ModeSelectionPolicy(Protocol):
     def select(self, **kwargs: Any) -> str:
         """Return the active mode. Each implementation reads only the kwargs it needs; a
         caller must pass exactly the selected policy's own kwargs, not a union of both
-        registered policies' parameter sets (Auto's select_mode() rejects unknown kwargs --
-        design doc §3's Protocol docstring)."""
+        registered policies' parameter sets (Auto's select_mode() rejects unknown kwargs)."""
         ...
 
 

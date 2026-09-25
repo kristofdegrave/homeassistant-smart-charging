@@ -16,13 +16,12 @@ class LowTariffReadAdapter(_ReadOnlyAdapter):
     never an ambiguity in practice since a native on/off entity has no other raw
     state to list. Otherwise `low_states` -- the user-supplied set of raw states
     that count as low tariff, parsed from the config-entry's raw comma-separated
-    string (design doc §2 -- kept as a string end-to-end so reconfigure prefill
-    round-trips correctly) -- decides membership; any other raw state resolves to
+    string (kept as a string end-to-end so reconfigure prefill round-trips correctly) --
+    decides membership; any other raw state resolves to
     `False`. This is a deliberate, *restrictive* default for a present-but-unmatched
     state -- distinct from the glossary's *permissive* "always active" default for a
-    genuinely unmapped or unavailable signal (entity-catalog.md; §7's own deferred-
-    asymmetry note). Returns `None` only when the entity itself is
-    missing/unavailable/unknown -- the ADR-0007 fault signal proper.
+    genuinely unmapped or unavailable signal (entity-catalog.md). Returns `None` only
+    when the entity itself is missing/unavailable/unknown -- the ADR-0007 fault signal proper.
     """
 
     def __init__(self, hass: HomeAssistant, entity_id: str, low_states: str) -> None:

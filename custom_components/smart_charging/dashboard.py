@@ -8,6 +8,7 @@ regenerated and re-registered on every `async_setup_entry` per ADR-0022.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from pathlib import Path
 
 import yaml
@@ -33,6 +34,11 @@ from .const import (
     DASHBOARD_ICON,
     DASHBOARD_URL_PATH,
     DEFAULT_SOLAR_AVAILABLE,
+    KEY_DASHBOARD_SECTION_CHARGING_STATUS,
+    KEY_DASHBOARD_SECTION_DEPARTURE_TIMES,
+    KEY_DASHBOARD_SECTION_POWER_FLOW,
+    KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS,
+    KEY_DASHBOARD_VIEW_DEADLINE,
     LABEL_SC_RUNTIME,
     OWNED_SUFFIX_ACTIVE_SOC_LIMIT,
     OWNED_SUFFIX_CHARGER_STATUS,
@@ -41,10 +47,28 @@ from .const import (
     OWNED_SUFFIX_PROFILE,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     OWNED_SUFFIX_TIME_TO_FULL,
+    PRODUCT_NAME,
     PROFILE_MANUAL,
 )
+from .system_text import async_get_system_text
 
-_TITLE = "Smart Charging"
+# The product name -- deliberately never translated (NF8 AC1): it is a brand name, not
+# system-composed text, the same carve-out notification_manager.py's own `_PROMPT_TITLE`
+# takes. `const.PRODUCT_NAME` is the one literal both modules read, not two independent ones.
+_TITLE = PRODUCT_NAME
+
+# NF8's English fallback for the headings below -- also `build_dashboard_config`'s default
+# when no `headings` is given, matching NF8 AC2's "English otherwise" for a caller that has
+# no `hass` to fetch a system language from (every existing unit test here). Kept as its own
+# dict rather than duplicating strings.json's English copy inline at each use below, so this
+# fallback and the translated path share one source of the 5 keys.
+EN_HEADINGS: Mapping[str, str] = {
+    KEY_DASHBOARD_SECTION_CHARGING_STATUS: "Charging status",
+    KEY_DASHBOARD_SECTION_POWER_FLOW: "Power flow",
+    KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS: "Runtime settings",
+    KEY_DASHBOARD_VIEW_DEADLINE: "Deadline",
+    KEY_DASHBOARD_SECTION_DEPARTURE_TIMES: "Departure times",
+}
 
 # Issue #1009. Owned entities use `has_entity_name` against a device called "Smart Charging"
 # (entity.py), so every friendly name is "Smart Charging " + the entity name -- 15 characters of
@@ -146,8 +170,8 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
     return cards
 
 
-def _runtime_settings_cards() -> list[dict]:
-    # T8 (2026-08-13 addendum): select.smart_charging_mode only has an effect under the
+def _runtime_settings_cards(headings: Mapping[str, str]) -> list[dict]:
+    # select.smart_charging_mode only has an effect under the
     # Manual profile (system-overview.md's glossary already scopes it that way; Auto's own E2
     # drives dispatch instead) -- gated via the entities card's own `visibility` key rather than
     # a wrapping `type: conditional` card, HA's more native idiom for a single gated card in a
@@ -165,14 +189,17 @@ def _runtime_settings_cards() -> list[dict]:
         mode_gate_card,
         {
             "type": "custom:auto-entities",
-            "card": {"type": "entities", "title": "Runtime settings"},
+            "card": {
+                "type": "entities",
+                "title": headings[KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS],
+            },
             "grid_options": _full_width(),
-            # Deliberately no `exclude: label: sc_install` clause here (present in the
-            # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
-            # reasoning, no entity is ever labelled sc_install, so that clause can never match
-            # anything. The two excludes below are different, legitimate ones: mode is rendered
-            # by the gated card above instead (T8), and the nine departure-time entities move
-            # to the deadline tab instead (T9) -- neither should duplicate here.
+            # Deliberately no `exclude: label: sc_install` clause here: LABEL_SC_RUNTIME is
+            # the only label this integration applies to an owned entity, so no entity is ever
+            # labelled sc_install and such a clause could never match anything. The two
+            # excludes below are different, legitimate ones: mode is rendered by the gated card
+            # above instead, and the nine departure-time entities move to the deadline tab
+            # instead -- neither should duplicate here.
             "filter": {
                 "include": [{"label": LABEL_SC_RUNTIME}],
                 "exclude": [{"entity_id": _MODE_ENTITY}, {"domain": _TIME_DOMAIN}],
@@ -183,8 +210,8 @@ def _runtime_settings_cards() -> list[dict]:
 
 
 def _deadline_cards() -> list[dict]:
-    # T9 (2026-08-13 addendum): still label-driven, not a hardcoded list (Decision 1's
-    # extensibility property) -- narrowed to the time domain via the same include filter
+    # Still label-driven, not a hardcoded list, so a newly added runtime entity appears
+    # here without editing this file -- narrowed to the time domain via the same include filter
     # object (auto-entities ANDs the keys within one include entry). `show_empty: False` keeps
     # the tab from rendering a visibly-empty card now that the departure-time entities'
     # `sc_runtime` label is conditionally absent when the deadline capability is off (#674).
@@ -200,12 +227,19 @@ def _deadline_cards() -> list[dict]:
     ]
 
 
-def build_dashboard_config(entry: ConfigEntry) -> dict:
+def build_dashboard_config(entry: ConfigEntry, headings: Mapping[str, str] | None = None) -> dict:
     """Return the full Lovelace `views` config for the runtime dashboard (ADR-0022).
 
-    Two views (T9, 2026-08-13 addendum) -- HA renders `views` of length >1 as tabs natively,
-    so no new registration mechanism is needed beyond ADR-0022's Option C.
+    Two views -- HA renders `views` of length >1 as tabs natively, so no new registration
+    mechanism is needed beyond ADR-0022's Option C.
+
+    `headings` (NF8): the view/card/section titles, keyed by the `KEY_DASHBOARD_*` constants
+    -- `async_register_dashboard` passes HA's system-language translations; a caller with no
+    `hass` to fetch them from (every test in this module) gets `EN_HEADINGS`, NF8 AC2's
+    "English otherwise" default. The product name (`_TITLE`) is never in this dict -- it is
+    never translated (NF8 AC1).
     """
+    headings = headings if headings is not None else EN_HEADINGS
     return {
         "title": _TITLE,
         "views": [
@@ -217,30 +251,30 @@ def build_dashboard_config(entry: ConfigEntry) -> dict:
                 "sections": [
                     {
                         "type": "grid",
-                        "title": "Charging status",
+                        "title": headings[KEY_DASHBOARD_SECTION_CHARGING_STATUS],
                         "cards": _charging_status_cards(entry),
                     },
                     {
                         "type": "grid",
-                        "title": "Power flow",
+                        "title": headings[KEY_DASHBOARD_SECTION_POWER_FLOW],
                         "cards": _power_flow_cards(entry),
                     },
                     {
                         "type": "grid",
-                        "title": "Runtime settings",
-                        "cards": _runtime_settings_cards(),
+                        "title": headings[KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS],
+                        "cards": _runtime_settings_cards(headings),
                     },
                 ],
             },
             {
-                "title": "Deadline",
+                "title": headings[KEY_DASHBOARD_VIEW_DEADLINE],
                 "path": "deadline",
                 "type": "sections",
                 "max_columns": _MAX_VIEW_COLUMNS,
                 "sections": [
                     {
                         "type": "grid",
-                        "title": "Departure times",
+                        "title": headings[KEY_DASHBOARD_SECTION_DEPARTURE_TIMES],
                         "cards": _deadline_cards(),
                     },
                 ],
@@ -255,7 +289,8 @@ def _package_dir() -> Path:
 
 async def async_register_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Write the generated YAML and register/update the locked dashboard panel (ADR-0022)."""
-    config = build_dashboard_config(entry)
+    headings = await async_get_system_text(hass)
+    config = build_dashboard_config(entry, headings)
     yaml_path = _package_dir() / DASHBOARD_FILENAME
 
     def _write() -> None:

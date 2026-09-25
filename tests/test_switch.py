@@ -63,10 +63,9 @@ async def test_home_day_switch_carries_runtime_label_after_setup(hass):
     async_setup_entry, replacing the async_added_to_hass hook -- a pure mechanism move, no
     capability gating (this entity is never conditional). This currently passes via the
     still-active hook alone (T3.1 doesn't delete it -- that's T3.4's job), so it isn't a
-    red-then-green test in the usual TDD sense; it's the regression guard the plan's own
-    build-order note calls for, proving the label still ends up correct once the setup-time
-    call site exists, so T3.4 can safely delete the hook later without this test needing to
-    change at all."""
+    red-then-green test in the usual TDD sense; it is a regression guard, proving the label
+    still ends up correct once the setup-time call site exists, so T3.4 can safely delete the
+    hook later without this test needing to change at all."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
