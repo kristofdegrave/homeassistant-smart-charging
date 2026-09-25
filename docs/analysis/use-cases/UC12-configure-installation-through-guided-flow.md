@@ -179,8 +179,8 @@ capability declarations; `grid`'s net-power, grid-voltage, and low-tariff mappin
 charger-current, charger-status, and charger-power mappings; `vehicle`'s EV state-of-charge,
 EV-battery-capacity-sensor, vehicle-charge-limit, and car-at-home mappings — unconditionally, since
 the `vehicle` step is ungated; `captar`'s optional external monthly-peak mapping when CapTar is
-declared present (6a); `solar`'s solar-production and solar-forecast mappings when solar is
-declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
+declared present (6a); `solar`'s solar-production mapping and next-day and same-day
+solar-forecast mappings when solar is declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
 managed; and `notifications`' notification-target mapping when notifications are wanted. Only the
 `core`, `grid`, `ev_charger`, and `vehicle` mapping halves are shown unconditionally; `captar`,
 `solar`, `deadline`, and `notifications` each appear only while their own capability is declared
@@ -381,7 +381,8 @@ it was before the flow started.
   required when solar is declared; the car-at-home presence mapping required when a vehicle
   charge-limit is mapped or deadlines are managed) is, after this use-case, a plain required field
   local to the one step that needs it — the first two unconditionally required on their own step,
-  the third by the field-level rule 4a.
+  the third by the field-level rule 4a. The same-day solar-forecast mapping R9 adds is required
+  on the `solar` step in the same way as the next-day one.
 - Two gaps the previous step model named as out of scope are closed by **this** step model: the
   solar-production mapping is now presented on the `solar` step, and the `Power`-mode cooldown on
   the `power` step, so every catalogued adapter role and `config-options` key the flow is

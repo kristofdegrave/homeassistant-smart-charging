@@ -146,8 +146,7 @@ what this lookahead serves.
   activates, and stays active, while this evaluation resolves to "no deadline" for that day — one of
   the cap's two deadline preconditions, the other being that no missed-deadline hold is in effect
   (below), which this table does not resolve. That
-  precondition is deliberately fixed on the reserved day — tomorrow's date until midnight, and the
-  date that has just begun from midnight until the sun comes up. It asks about the day whose solar
+  precondition is deliberately fixed on the reserved day. It asks about the day whose solar
   yield is being reserved for, so it reads the same date as the cap's home-day flag and forecast and
   does not move on at midnight. It is therefore independent of which date the *Next occurrence* rule
   selects for the deadline in force.
