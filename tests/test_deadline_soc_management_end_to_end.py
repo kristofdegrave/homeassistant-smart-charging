@@ -58,6 +58,7 @@ from custom_components.smart_charging.const import (
     PROFILE_AUTO,
     PROFILE_MANUAL,
     STATE_CHARGING,
+    STATE_DISCONNECTED,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from tests.helpers import (
@@ -393,6 +394,51 @@ async def test_should_keep_power_stopped_when_the_soc_reading_becomes_unavailabl
     assert calls[-1]["value"] == 0.0  # still stopped -- the latch, not the missing reading, held
     assert coordinator.data.fault is False  # C5: a missing reading is a non-fault in Power
     assert coordinator.active_mode == MODE_POWER
+
+
+async def test_should_clear_the_stop_when_the_car_is_unplugged_and_replugged(hass, freezer):
+    """Should resume commanding Power's target current, even with no ev_soc reading, once the
+    car has been disconnected and reconnected after Power stopped at the active SOC limit --
+    UC04/R7 AC5's resume condition 2. Proven the same way the missing-reading test above proves
+    the *opposite* case: reconnecting with the reading still unavailable would still read 0 A if
+    the disconnect had left the stop's own latch untouched, so a resumed 10 A here can only come
+    from the disconnect actually having cleared it, per `_dispatch_mode`'s own early branch."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: same stopped starting condition as the two tests above, plus a translation entry
+    # for a disconnected charger status (this suite's own `_entry_data` otherwise maps only
+    # "Charging", per its docstring).
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=85.0)
+    coordinator = await _setup(
+        hass,
+        data_overrides={
+            CONF_CAPTAR_AVAILABLE: False,
+            CONF_SOLAR_AVAILABLE: False,
+            CONF_STATUS_TRANSLATION: {
+                "Charging": STATE_CHARGING,
+                "Disconnected": STATE_DISCONNECTED,
+            },
+        },
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Act: unplug (a disconnected charger status) and replug (back to Charging), with the
+    # ev_soc reading gone by the time it reconnects.
+    hass.states.async_set("sensor.evse", "Disconnected")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.evse", "Charging")
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- the stop did not survive
+    assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
 
 # --- UC06: Baseline -> SteppedUp -> Baseline, across a Solar/SolarOnly switch ---
