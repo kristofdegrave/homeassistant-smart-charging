@@ -202,7 +202,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 **`solar-reserve cap`** — A configurable lower overnight active SOC limit (default 60 %) that the `Auto` profile applies while the sun is down when the home-day flag is set for the [reserved day](#ubiquitous-language) and the next-day solar forecast exceeds a configurable threshold (default 12 kWh), reserving battery room for the following day's solar. This is `Auto`'s own coordination decision (R9, R16): it lowers the active SOC limit and, separately, declines to select a mode for opportunistic overnight grid top-up. It applies only while `Auto` is the active profile — under `Manual` the cap never engages — and the mode `Auto` selects does not itself evaluate the home-day flag or forecast; it simply charges to whichever active SOC limit is currently resolved.
 
-**`reserved day`** — The date whose solar the [solar-reserve cap](#ubiquitous-language) reserves for: the date the night leads into. That is tomorrow's until midnight, and from midnight until the sun comes up the date that has just begun, whose [home-day flag](#ubiquitous-language) still applies to it (R13). See R9.
+**`reserved day`** — The date the [solar-reserve cap](#ubiquitous-language) reserves battery room for: the date the night leads into. That is tomorrow's date until midnight, and from midnight until the sun comes up the date that has just begun, whose [home-day flag](#ubiquitous-language) still applies to it (R13). See R9.
 
 **`minimum charging current`** — The lowest current the charger may be set to other than 0 A (configurable, default 6 A — the IEC 61851 floor; reference setup: 6 A); enforced by C1.
 
