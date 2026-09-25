@@ -6,7 +6,6 @@ from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE, STATE_UN
 from custom_components.smart_charging.adapters.tariff import LowTariffReadAdapter
 
 LOW_STATES = "low, off-peak"  # raw comma-separated string, matching config-entry storage
-# (design doc §2)
 
 
 async def test_native_on_returns_true(hass):
@@ -38,9 +37,9 @@ async def test_listed_raw_state_after_second_comma_element_is_stripped(hass):
 
 async def test_unlisted_raw_state_returns_false(hass):
     # Not a fault (unlike StatusReadAdapter's unmapped-state case) -- a deliberate
-    # restrictive default for a present-but-unmatched state (entity-catalog.md;
-    # design doc §1), distinct from the glossary's permissive "always active"
-    # default for a genuinely unmapped/unavailable signal (design doc §7).
+    # restrictive default for a present-but-unmatched state (entity-catalog.md),
+    # distinct from the glossary's permissive "always active"
+    # default for a genuinely unmapped/unavailable signal.
     hass.states.async_set("sensor.tariff", "high")
     adapter = LowTariffReadAdapter(hass, "sensor.tariff", LOW_STATES)
     assert await adapter.read() is False

@@ -10,7 +10,7 @@ from ._read_only import _ReadOnlyAdapter
 class TimeReadAdapter(_ReadOnlyAdapter):
     """Reads a time-of-day entity's native value.
 
-    Added for the `departure_external` role (design doc §4 note): its mapped entity's
+    Added for the `departure_external` role: its mapped entity's
     native value is a `datetime.time`, not a float (`NumericReadAdapter`) or a
     user-translated canonical string (`StatusReadAdapter`). Neither existing class fits
     without being reshaped, so this is a new, minimal adapter class of the same shape
@@ -20,7 +20,7 @@ class TimeReadAdapter(_ReadOnlyAdapter):
     Returns None when the entity is missing/unavailable/unknown OR its native state can't
     be parsed as a time (e.g. a source sensor currently reporting a non-time value like
     "no deadline") -- the ADR-0007 fault signal, same as every other read adapter, and
-    also R14's own "external sensor currently reports no deadline" case.
+    also R14's case of a mapped external sensor that currently resolves to no deadline.
     """
 
     async def read(self) -> time | None:

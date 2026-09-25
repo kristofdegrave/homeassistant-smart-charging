@@ -131,7 +131,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._interval_s = interval_s
         # ADR-0012: one thin adapter per mode, looked up by active_mode instead of the old
         # if/elif dispatch chain. MODE_POWER is registered too (for the discard-state branch
-        # below, kept as its own elif per design doc Sec 3.4) even though it never goes through
+        # below) even though it never goes through
         # the registry's shared state-write path. `self.active_mode` is always one of these
         # five keys in practice (profiles/auto.select_mode only returns a registered mode; a
         # Manual selection is validated against the select entity's own options before it ever
@@ -187,9 +187,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # `_dispatch_mode` the instant a mode's own step() transitions into `Phase.COOLDOWN`
         # (and in `_apply_peak_clamp`, for Captar's own coordinator-forced cooldown entry, R3);
         # cleared to `None` only on disconnect (`_dispatch_mode`'s own early branch) -- same
-        # reset trigger as `_mode_state`/`_has_charged` there, per R7's "unplug/replug" resume
-        # condition. Deliberately NOT reset by `_reset_mode_state_if_changed` -- that is the
-        # entire point (issue #974).
+        # reset trigger as `_mode_state`/`_has_charged` there, per R7's resume condition for a
+        # car unplugged and replugged. Deliberately NOT reset by
+        # `_reset_mode_state_if_changed` -- that is the entire point (issue #974).
         self._active_cooldown: ActiveCooldown | None = None
         # ADR-0011: resolves the active SOC limit and detects a change from the prior cycle for
         # ActiveSocLimitChanged (ADR-0012's SocGateResolver). The first resolution reached (an
@@ -241,8 +241,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._was_faulted = False
         # M1's OWN 15-minute window (E5), distinct from R10's `_net_window` above --
         # a MonthlyPeakSensor restore may seed `_peak_demand.tracked_kw`/`.tracked_month` before
-        # the first cycle; the window itself is deliberately never persisted (design
-        # doc Sec 6.4), so it always starts empty here. Owned by PeakDemandState (ADR-0012).
+        # the first cycle; the window itself is deliberately never persisted (R21), so it
+        # always starts empty here. Owned by PeakDemandState (ADR-0012).
         self._peak_demand = PeakDemandState()
         self._peak_tracker = PeakBreachTracker()
         # Issue #990: debounces peak_headroom_a/solar_surplus_w/apply_peak_clamp's own
@@ -341,7 +341,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # Solar power: read every cycle, same as grid voltage, but not yet a control-path
         # operand -- issue #911 wires this role for reading (adapter_readings mirror) only.
-        # R10 AC1's sampling/averaging and #587's real-consumer decision stay deferred.
+        # R10 AC2 reads it raw and never smooths it; #587's real-consumer decision is what
+        # stays deferred.
         await self._read_role(ROLE_SOLAR_POWER)
 
         # Any required role missing -> fault (ADR-0007).
@@ -426,12 +427,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     ) -> tuple[time_of_day | None, float]:
         """The R5/R14/R15 deadline-urgency call site's own adapter reads (today's deadline, the
         sensed battery capacity) -- must stay coordinator-side even though resolve_deadline_urgency
-        itself is already a pure coordinator_cycle.py function. Deliberately deviates from
-        design doc Sec 3.3's snippet, which gates the sensed-capacity read behind
-        `deadline_resolvable` too: that read already feeds the `_role_readings`
-        diagnostic mirror (ADR-0021) unconditionally, every cycle, so it must not be gated here --
-        doing so would regress that diagnostic to a stale value whenever the deadline isn't
-        resolvable (e.g. disconnected). Only `deadline_today` itself stays gated. Returns
+        itself is already a pure coordinator_cycle.py function. Only `deadline_today` is gated
+        behind `deadline_resolvable`, never the sensed-capacity read: that read already feeds the
+        `_role_readings` diagnostic mirror (ADR-0021) unconditionally, every cycle, so gating it
+        would regress that diagnostic to a stale value whenever the deadline isn't resolvable
+        (e.g. disconnected). Returns
         (deadline_today, effective_battery_capacity_kwh); deadline_today is None when
         deadline_resolvable is False, exactly as today (resolve_deadline_urgency short-circuits
         before reading it)."""
@@ -451,7 +451,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             await self._write(0.0)
             self._clear_baseline_deferral()
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
-            # ADR-0021/entity-catalog.md:154 define the entity's own state as the timestamp of
+            # ADR-0021 and entity-catalog.md's `sensor.smart_charging_adapter_readings` row
+            # define the entity's own state as the timestamp of
             # the LAST SUCCESSFUL cycle, and a required-role fault means this cycle wasn't one;
             # the cache keeps whichever timestamp a prior successful cycle set, even though the
             # per-role values `_read_cycle_inputs` just cached are this cycle's own (possibly
@@ -481,7 +482,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             command_changed=self._command_stepped,
         )
 
-        # entity-catalog.md:151/glossary -- raw net_w, deliberately distinct from `surplus_w`
+        # entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary -- raw
+        # net_w, deliberately distinct from `surplus_w`
         # below (R10's smoothed control-path value). Floored at 0: a negative reading here
         # would mean the household is drawing more than the charger, never actual solar
         # surplus (glossary) -- max(), not the debounce above, is the boundary for that (issue
@@ -497,11 +499,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
         # ADR-0030/ADR-0032: an optional external monthly-peak reading (DSO/smart-meter),
         # merged with the internally-tracked value into the clamp's operand. Never gated on
-        # captar_available -- R21 AC (tracking runs every cycle regardless of which capabilities
-        # are declared) requires the value to still be tracked and surfaced for observability
-        # even when the CapTar capability is absent, though `_peak_clamp_would_run`'s own gate
+        # captar_available -- R21 AC7 (tracking runs every cycle regardless of which
+        # capabilities are declared) requires the value to still be tracked and surfaced for
+        # observability even when the CapTar capability is absent, though
+        # `_peak_clamp_would_run`'s own gate
         # (R3 AC1, issue #1018) means no charging decision ends up consulting it in that case.
-        # monthly_peak_kw itself keeps meaning only the internally-tracked peak (D-6): it is
+        # monthly_peak_kw itself keeps meaning only the internally-tracked peak: it is
         # never overwritten with the merged value, so a live spike this integration observes
         # between external-sensor refreshes is not discarded.
         external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)
@@ -525,8 +528,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ev_soc is read whenever the car is connected and the role is configured -- the
         # deadline-urgency comparison needs it regardless of mode (R5 is cross-cutting), not
         # only while a solar mode or Captar is selected. Its absence is only ever a FAULT while
-        # a solar mode or Captar is selected AND the car is connected (success-criterion 6 / S2:
-        # Power/Off must not regress to needing an SOC sensor; a disconnected car is a clean idle
+        # a solar mode or Captar is selected AND the car is connected (Power/Off must not
+        # regress to needing an SOC sensor; a disconnected car is a clean idle
         # stop, not a fault, even if its SOC sensor also goes unavailable on unplug, per UC01/R7);
         # outside that gate a missing reading just means deadline urgency can't be computed this
         # cycle (below), not a fault.
@@ -539,7 +542,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             self._log_fault("ev_soc required while a solar mode is active but missing/None")
             await self._write(0.0)
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
-            # ADR-0021/entity-catalog.md:154 "last successful cycle" reasoning as the
+            # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
+            # cycle" reasoning as the
             # required-role fault path above (#648): an ev_soc fault means this cycle wasn't
             # a successful one, even though the three required-adapter reads that fed
             # `solar_surplus_w`/`monthly_peak_kw` above did succeed. (The assignment itself
@@ -596,7 +600,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
         # already this cycle's final value (set externally before the cycle runs); under Auto,
         # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
-        # later, below) -- one cycle of lag, matching R8's own "next control cycle" framing.
+        # later, below) -- one cycle of lag, which is what R16 allows an Auto-driven mode
+        # change ("takes effect within the next control cycle").
         # ADR-0023: SolarStepUpGate computes is_solar_mode_charging internally from these same
         # inputs and mutates its own `.state` in place; callers read `.state` afterward.
         self._step_up_gate.resolve(
@@ -657,7 +662,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # re-derived from status/ev_soc on the other side of the module boundary -- a second,
         # separately written copy of the same predicate is exactly the lockstep-editing hazard
         # this design exists to remove. Stays inline in `_run_cycle` rather than moving into
-        # `_read_deadline_urgency_inputs` (ADR-0023, design doc Sec 3.3).
+        # `_read_deadline_urgency_inputs` (ADR-0023).
         deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
         deadline_today, effective_battery_capacity_kwh = await self._read_deadline_urgency_inputs(
             deadline_resolvable=deadline_resolvable,
@@ -754,7 +759,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # kwarg (issue #719) -- there is no second copy for the two to drift out of lockstep.
         ctx.effective_peak_limit_kw = effective_peak_limit_kw
 
-        # entity-catalog.md:153/control-cycle.md step 5 -- the same target and (issue #990:
+        # entity-catalog.md's `sensor.smart_charging_peak_headroom_a` row / control-cycle.md
+        # step 5 -- the same target and (issue #990:
         # debounced) baseline the R3 clamp itself holds. Since issue #1078 this shares
         # `apply_peak_clamp`'s own arithmetic through `peak_headroom_a` rather than restating
         # it, so the readout cannot drift from the clamp it reports on while the clamp runs at
@@ -798,12 +804,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             desired, min_a=self._config.min_current, max_a=self._config.max_current
         )
 
-        # entity-catalog.md:152/glossary -- "the charger's current applied rate"/`charger_current`
+        # entity-catalog.md's `sensor.smart_charging_time_to_full` row / glossary -- "the
+        # charger's current applied rate"/`charger_current`
         # is the value actually written, i.e. `desired` AFTER every clamp/floor/cap, not the
         # mode's pre-clamp request -- a clamped or floored-to-0 cycle must not report an ETA
         # that assumes a rate the charger was never actually set to. `ev_soc >= active_soc_limit`
         # is checked before the 0 A case so a SOC-gated-stop cycle (which also sets desired=0.0)
-        # still reports 0, not unknown, per entity-catalog.md:152.
+        # still reports 0, not unknown, per that same catalog row.
         if ev_soc is None:
             time_to_full_min = None
         elif ev_soc >= active_soc_limit:
@@ -815,7 +822,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
 
         await self._write(desired)
-        # ADR-0021/entity-catalog.md:154 "last successful cycle" -- deliberately the LAST
+        # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
+        # cycle" -- deliberately the LAST
         # statement before the success return, not right after `_read_cycle_inputs` (#648):
         # any exception between the required-adapter read and this point (including the
         # ev_soc-fault gate above, and any raise from the write itself) funnels to
@@ -850,7 +858,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
     def set_active_mode(self, mode: str) -> None:
         """Coordinator's own boundary for `active_mode` (ADR-0014) -- the field itself stays a
-        plain writable attribute (ADR-0014's design doc §2, criterion 1) but this is its only
+        plain writable attribute but this is its only
         mutation point. Since ADR-0018, `select.py` never calls this directly: the coordinator
         reads the stored option through the Store each cycle (`_read_owned_entities`) and calls
         this itself. The other production caller is `_run_cycle`'s own Auto-mode resolution
@@ -1018,7 +1026,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if self.active_mode == MODE_POWER:
             # ADR-0012: routed through the registry too, for observability/consistency with the
             # other modes, but MODE_POWER has no entry in _fresh_mode_state() and must not gain
-            # one -- i.e. _PowerModeHandler.is_soc_gated must stay False (design doc Sec 3.4).
+            # one -- i.e. _PowerModeHandler.is_soc_gated must stay False.
             # Its returned state is discarded, never written to _mode_state. Unchanged
             # behavior: no SOC gate.
             # R11/issue #974: Power has no Phase of its own -- being active and commanding
@@ -1102,7 +1110,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     def _apply_peak_clamp(self, ctx: CycleContext, desired: float) -> float:
         """R3 peak clamp (E5) -- never engages at all with the CapTar capability absent (R3
         AC1, R18), and, while the capability is present, skippable only for Power via its own
-        R17 opt-out (design doc Sec 7); both are `_peak_clamp_would_run`'s job. `desired` here
+        R17 opt-out; both are `_peak_clamp_would_run`'s job. `desired` here
         is the already-computed mode request from `_dispatch_mode` --
         apply_peak_clamp's breach timer only starts/continues when `desired >= min_a`, so the
         disconnect/Off/SOC-gated branches (all `desired = 0.0`) can never trip force_stop this
@@ -1292,8 +1300,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         running cooldown internally, but the coordinator-scoped `_active_cooldown` survives
         this rebuild by construction (it isn't part of `_mode_state`) and keeps blocking a
         restart in the newly-active mode for the remainder of its fixed duration -- the whole
-        point of hoisting it out here, per R11's "a running cooldown survives a switch of the
-        active mode" acceptance criterion. See `_active_cooldown`'s own field docstring."""
+        point of hoisting it out here, per R11's acceptance criterion that a cooldown "is not
+        shortened by a change in conditions -- including a switch of the active mode". See
+        `_active_cooldown`'s own field docstring."""
         if self.active_mode != self._last_active_mode:
             self._mode_state = self._fresh_mode_state()
             self._last_active_mode = self.active_mode
@@ -1325,7 +1334,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
     def set_active_profile(self, profile: str) -> None:
         """Coordinator's own boundary for `active_profile` (ADR-0014) -- the field itself stays
-        a plain writable attribute (design doc §2, criterion 1). Since ADR-0018, `select.py`
+        a plain writable attribute. Since ADR-0018, `select.py`
         never calls this directly: the coordinator reads the stored option through the Store
         each cycle (`_read_owned_entities`) and calls this itself; the only other caller is
         tests.

@@ -10,8 +10,8 @@ class Adapter(Protocol):
 
     Widened to also cover RA2's `bool`-typed `home_day_external` role
     (`BooleanReadAdapter`) and the `time`-typed `departure_external` role
-    (`TimeReadAdapter`) -- neither fits `NumericReadAdapter`/`StatusReadAdapter` cleanly
-    (design doc §4 note), so this Protocol's value union grows rather than either of
+    (`TimeReadAdapter`) -- neither fits `NumericReadAdapter`/`StatusReadAdapter` cleanly,
+    so this Protocol's value union grows rather than either of
     those two classes being reshaped to fit a value they don't natively hold.
     """
 
