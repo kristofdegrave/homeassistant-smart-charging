@@ -199,9 +199,9 @@ class ModeHandler(Protocol):
     active limit via the coordinator's shared SOC-gated-stop guard. False for Off/Power --
     Power still stops at the active limit when a reading is present (#1335), but through its
     own coordinator-side latch (`_power_soc_limit_reached`, refreshed by
-    `_refresh_power_soc_limit_reached`) rather
-    than through this flag or `_mode_state`, since Power must never be made to *need* a
-    reading (ADR-0042: a missing reading stays a non-fault in Power)."""
+    `_refresh_power_soc_limit_reached`) rather than through this flag or `_mode_state`, since
+    Power must never be made to *need* a reading (ADR-0042: a missing reading stays a non-
+    fault in Power)."""
 
     is_solar_mode: bool
     """R8/R9: whether this mode counts as "charging on solar" for the step-up/reserve-cap

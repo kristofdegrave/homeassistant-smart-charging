@@ -480,18 +480,22 @@ async def test_should_resume_power_charging_when_the_limit_changes_while_unavail
     assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
 
-async def test_should_refresh_the_stop_while_a_different_mode_is_active(hass, freezer):
-    """Should reflect a reading taken while a *different* mode was active the next time Power
-    dispatches, rather than acting on a stale comparison from Power's own last cycle -- the
-    active SOC limit and ev_soc are cycle-wide facts, resolved once per cycle regardless of
-    which mode consumes them (#1335), so a limit raised while Solar was active and charging
-    (with its own reading) has to be visible to Power immediately on switching back, not only
-    once Power itself next sees a reading."""
+async def test_should_resume_power_without_a_reading_when_the_limit_rose_under_another_mode(
+    hass, freezer
+):
+    """Should resume commanding Power's target current on switching back to it, with no ev_soc
+    reading of its own yet, when the active SOC limit rose while a *different* mode was active
+    -- the active SOC limit and ev_soc are cycle-wide facts, resolved once per cycle regardless
+    of which mode consumes them (#1335), so the limit rising while Solar was active (with its
+    own reading) has to be visible to Power immediately on switching back. The reading is
+    deliberately unavailable on the switch-back cycle itself: with a reading present there,
+    Power's own comparison would resume it anyway, proving nothing about the cross-mode
+    refresh this test targets."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
     # Arrange: Power stopped at the default 80% limit by an 85% reading, then switched to
     # Solar with the same reading still at 85% (Solar is itself SOC-gated, so it stays stopped
-    # too -- this step only proves the starting condition, not the behaviour under test).
+    # too -- proven below, not just assumed).
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=85.0, net_w=100.0, charger_w=500.0)
     hass.states.async_set("sun.sun", SUN_STATE_ABOVE_HORIZON)
@@ -505,19 +509,60 @@ async def test_should_refresh_the_stop_while_a_different_mode_is_active(hass, fr
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    assert calls[-2]["value"] == 0.0  # Power stopped (the first Arrange refresh)
+    assert calls[-1]["value"] == 0.0  # Solar gated too (the second Arrange refresh)
 
     # Act: the limit override rises above the still-85% reading while Solar (not Power) is
-    # active, then Manual switches straight back to Power.
+    # active, then Manual switches back to Power on a cycle where the reading has since gone
+    # unavailable -- so only the earlier, cross-mode refresh can be what resumes it.
     seed_owned_entity(hass, "number.smart_charging_soc_limit_override", "90.0")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
     # Assert
     assert coordinator.data.active_soc_limit == 90.0
-    assert calls[-1]["value"] == 10.0  # resumes immediately -- the refresh wasn't Power's own
+    assert calls[-1]["value"] == 10.0  # resumes with no reading of its own -- Solar's refreshed it
+    assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
+
+
+async def test_should_start_power_charging_without_a_reading_when_it_never_actually_stopped(
+    hass, freezer
+):
+    """Should command Power's target current on a cycle with no ev_soc reading, when Power has
+    never actually been charging at the active SOC limit before -- UC04's own State model draws
+    this distinction explicitly: "Only a stop made at the limit is held this way -- a car
+    resting in Idle or Cooldown at or above the limit has no such stop behind it". A reading at
+    or above the limit taken while `Off` (not `Power`) was active never makes a stop, so it must
+    not be read back as one once Power is selected with the reading now gone."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: Off active with an 85% reading against the default 80% limit -- Off always
+    # commands 0 A on its own, so this proves nothing about Power's own stop.
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=85.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-1]["value"] == 0.0  # Off's own 0 A, not a Power stop
+
+    # Act: switch to Power on a cycle where the reading has since gone unavailable -- if the
+    # 85%-while-Off reading had wrongly latched a Power stop, this cycle would still read 0 A.
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- never actually stopped
+    assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
 
 # --- UC06: Baseline -> SteppedUp -> Baseline, across a Solar/SolarOnly switch ---
