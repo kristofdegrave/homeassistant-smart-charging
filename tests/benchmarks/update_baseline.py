@@ -1,8 +1,8 @@
 """Human-run baseline update for the coordinator perf suite (issue #708, ADR-0026).
 
 Never invoked by CI -- a human runs this deliberately after judging a fresh perf-test
-result an acceptable new normal, then commits the updated baseline.json in its own PR
-(design doc S4), the same manual-approval discipline as every other change in this
+result an acceptable new normal, then commits the updated baseline.json in its own PR,
+the same manual-approval discipline as every other change in this
 project.
 """
 

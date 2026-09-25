@@ -2,7 +2,7 @@
 the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
 resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge (ADR-0024).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
-even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
+even though these aren't engines themselves (system-design.md §4 rule 4: an engine may not call
 another engine; these call engines).
 The five _*ModeHandler classes stay private -- build_mode_handlers() is the only construction
 site coordinator.py may reach across the module boundary for."""
@@ -119,8 +119,9 @@ class PeakDemandState:
     def update(self, net_w: float, now_dt: datetime, *, window_size: int) -> float:
         """Fold `net_w` into the smoothing window and return the running monthly-peak kW.
 
-        A month rollover resets the smoothing window too, not just tracked_kw (design doc
-        Sec 6.4) -- else this cycle's "smoothed" reading would partly reflect last month.
+        A month rollover resets the smoothing window too, not just tracked_kw
+        (control-cycle.md's Monthly peak demand tracking, R21) -- else this cycle's "smoothed"
+        reading would partly reflect last month.
         """
         current_month = (now_dt.year, now_dt.month)
         if current_month != self.tracked_month:
@@ -138,8 +139,10 @@ class PeakDemandState:
         A faithful restore: no clamp, since `update()` itself can legitimately produce a
         negative `tracked_kw` on a net-export month (peak_demand_tracker.py's own contract).
         `month` is left unchanged when the restored state carries no `period_month` (an older
-        stored value) -- the 15-minute `window` is deliberately never seeded (design doc
-        Sec 6.4), matching `update()`'s own reset-on-rollover behavior."""
+        stored value) -- the 15-minute `window` is deliberately never seeded (R21: the window
+        itself is "not preserved and rebuilds from the readings that follow", unlike the
+        tracked value, which R21/NF14 do require to survive), matching `update()`'s own
+        reset-on-rollover behavior."""
         self.tracked_kw = kw
         if month is not None:
             self.tracked_month = month
@@ -228,12 +231,11 @@ class ModeHandler(Protocol):
 class _OffModeHandler:
     """Off mode has no modes/*.py module of its own to wrap -- commands 0 A unconditionally
     and passes state through unchanged, mirroring today's MODE_OFF branch, which never
-    touches per-mode state (design doc Sec 3.4)."""
+    touches per-mode state."""
 
     is_soc_gated = False
     is_solar_mode = False
-    cooldown_minutes = 0.0  # never read -- Off is never stored in `_mode_state` (design doc
-    # Sec 3.4)
+    cooldown_minutes = 0.0  # never read -- Off is never stored in `_mode_state`
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return 0.0, state
@@ -249,7 +251,7 @@ class _PowerModeHandler:
     """Wraps modes/power.py::desired_current unchanged. power.desired_current reads the
     coordinator's own mutable target_current (set externally by the number entity), not
     anything on CycleContext -- so this handler takes a zero-arg getter bound at construction
-    (design doc Sec 3.4) rather than duplicating that value onto CycleContext each cycle."""
+    rather than duplicating that value onto CycleContext each cycle."""
 
     is_soc_gated = False
     is_solar_mode = False
@@ -381,14 +383,14 @@ def build_mode_handlers(
 ) -> dict[str, ModeHandler]:
     """The ModeHandler registry's only construction site -- coordinator.py calls
     this instead of importing the five _*ModeHandler classes directly, keeping them private to
-    this module. `target_current_getter` is threaded straight through to _PowerModeHandler
-    (design doc Sec 3.4's own zero-arg getter, bound live rather than snapshotted); `config` to
+    this module. `target_current_getter` is threaded straight through to _PowerModeHandler's
+    own zero-arg getter, bound live rather than snapshotted; `config` to
     every handler that reads config values (all but Off/Power).
 
-    Deliberately deviates from design doc Sec 3.4's own snippet, which shows coordinator.py
-    building this same dict inline in `__init__` -- moved here instead so
-    coordinator.py no longer needs to import the five private classes to do it; the wiring
-    itself (which handler gets `config` vs. the getter) is unchanged from that snippet."""
+    Builds the dict here rather than inline in coordinator.py's `__init__` (an earlier
+    iteration of this split did) so coordinator.py no longer needs to import the five
+    private classes to do it; the wiring itself (which handler gets `config` vs. the
+    getter) is unchanged."""
     return {
         MODE_OFF: _OffModeHandler(),
         MODE_POWER: _PowerModeHandler(target_current_getter),
