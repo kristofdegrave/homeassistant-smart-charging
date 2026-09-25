@@ -137,13 +137,17 @@ def test_the_mode_entity_is_rendered_by_exactly_the_gated_card_not_the_auto_enti
     assert {"entity_id": "select.smart_charging_mode"} in auto_entities_card["filter"]["exclude"]
 
 
-def test_charging_status_section_has_the_seven_documented_tiles():
-    """The first tile binds the owned sensor.smart_charging_charger_status diagnostic sensor,
-    not the raw mapped charger entity (ADR-0034) -- must never regress to sensor.evse."""
+def test_charging_status_section_has_the_eight_documented_tiles():
+    """The first tile binds sensor.smart_charging_status (R19 AC1, UC11, #1349): the
+    System's own OK/Fault health readout, so a household sees *why* charging stopped, not
+    only a 0 A current and an unavailable reading. The second binds the owned
+    sensor.smart_charging_charger_status diagnostic sensor, not the raw mapped charger
+    entity (ADR-0034) -- must never regress to sensor.evse."""
     entry = _entry(**{CONF_EV_SOC_ENTITY: "sensor.ev_soc"})
     cards = _cards(build_dashboard_config(entry), "Charging status")
 
     assert [c["entity"] for c in cards] == [
+        "sensor.smart_charging_status",
         "sensor.smart_charging_charger_status",
         "sensor.ev_soc",
         "select.smart_charging_profile",
@@ -155,12 +159,22 @@ def test_charging_status_section_has_the_seven_documented_tiles():
     assert all(c["type"] == "tile" for c in cards)
 
 
+def test_charging_status_section_shows_the_status_tile_on_every_installation():
+    """R19 AC1/UC11 (#1349): the status tile is present whatever the capabilities -- it
+    does not depend on CONF_EV_SOC_ENTITY or any other optional role, unlike the battery
+    tile the two tests below cover."""
+    entry = _entry()
+    cards = _cards(build_dashboard_config(entry), "Charging status")
+
+    assert cards[0]["entity"] == "sensor.smart_charging_status"
+
+
 def test_charging_status_section_omits_the_battery_tile_when_ev_soc_is_unset():
     entry = _entry()
     assert CONF_EV_SOC_ENTITY not in entry.data
     cards = _cards(build_dashboard_config(entry), "Charging status")
 
-    assert len(cards) == 6
+    assert len(cards) == 7
     assert all(c["entity"] is not None for c in cards)
 
 
@@ -170,7 +184,7 @@ def test_charging_status_section_omits_the_battery_tile_when_ev_soc_is_the_empty
     entry = _entry(**{CONF_EV_SOC_ENTITY: ""})
     cards = _cards(build_dashboard_config(entry), "Charging status")
 
-    assert len(cards) == 6
+    assert len(cards) == 7
 
 
 def test_power_flow_section_has_four_tiles_plus_markdown_card_when_solar_is_available():

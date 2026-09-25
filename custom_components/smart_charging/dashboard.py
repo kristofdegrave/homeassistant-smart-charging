@@ -112,8 +112,9 @@ def _full_width() -> dict:
 # auto-entities' filter schema expects anyway.
 _TIME_DOMAIN = "time"
 
-# "active_mode"/"effective_peak_limit" have no OWNED_SUFFIX_* constant (sensor.py itself pins
-# them as bare literals) -- consistent with that existing precedent, not a new deviation.
+# "active_mode"/"effective_peak_limit"/"status" have no OWNED_SUFFIX_* constant (sensor.py
+# itself pins them as bare literals) -- consistent with that existing precedent, not a new
+# deviation.
 _ACTIVE_SOC_LIMIT_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_ACTIVE_SOC_LIMIT}"
 _ACTIVE_MODE_ENTITY = "sensor.smart_charging_active_mode"
 _CHARGER_STATUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_CHARGER_STATUS}"
@@ -122,6 +123,7 @@ _MODE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_MODE}"
 _PEAK_HEADROOM_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_PEAK_HEADROOM_A}"
 _PROFILE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_PROFILE}"
 _SOLAR_SURPLUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+_STATUS_ENTITY = "sensor.smart_charging_status"
 _TIME_TO_FULL_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_TIME_TO_FULL}"
 
 
@@ -130,7 +132,12 @@ def _tile(entity_id: str) -> dict:
 
 
 def _charging_status_cards(entry: ConfigEntry) -> list[dict]:
-    cards = [_tile(_CHARGER_STATUS_ENTITY)]
+    # sensor.smart_charging_status (ADR-0007's Fault/OK health readout, R19 AC1/UC11,
+    # #1349) leads the section, on every installation whatever the capabilities: a fault
+    # gates the charger to 0 A and can make a required reading unavailable, and this tile
+    # is what tells the household *why*, rather than leaving them only the 0 A current and
+    # the unavailable reading to interpret.
+    cards = [_tile(_STATUS_ENTITY), _tile(_CHARGER_STATUS_ENTITY)]
     ev_soc_entity = entry.data.get(CONF_EV_SOC_ENTITY)
     if ev_soc_entity:
         cards.append(_tile(ev_soc_entity))
