@@ -195,7 +195,8 @@ reload uses the saved values (NF11 AC3).
 The reload ends every post-surplus hold, peak-breach grace period, cooldown and restart debounce
 running at the moment of the save (R11's restart and reload criterion). It also empties the
 smoothing window, which refills, while every [runtime
-configuration](../system-overview.md#ubiquitous-language) value keeps what the household last set. NF14 states the whole of what a reload clears and what it keeps.
+configuration](../system-overview.md#ubiquitous-language) value holds the value last set, or its
+default where none was. NF14 states the whole of what a reload clears and what it keeps.
 A household that saves mid-cooldown therefore loses the rest of that cooldown's protection, a
 trade-off ADR-0008 accepts.
 
@@ -221,8 +222,8 @@ notifications are wanted.
 Submitting updates only the options bucket.
 When the user submits the last step the options flow showed them
 Then the System reloads, exactly as a reconfigure save does (1a): the first control cycle after the
-reload uses the saved values, the control interval included (NF11 AC3), and the reload ends and
-keeps exactly what 1a states.
+reload uses the saved values, the control interval included (NF11 AC3), and the reload ends,
+clears and keeps exactly what 1a states.
 
 **4a — When the car-at-home mapping is required** — branches from step 4.
 Given the user is on the `vehicle` step
@@ -541,7 +542,8 @@ Referenced, not restated: the data/options split
 use-case presents is ultimately stored; [NF3](../requirements.md#nf3--all-device-io-via-adapter-roles)
 governs why every mapping field exists at all (adapter roles). What a save through 1a or 1b
 ends and keeps is owned by R11's restart and reload criterion and by NF14, and when the saved
-values take effect by NF11 AC3; 1a cites them rather than restating them.
+values take effect by NF11 AC3; 1a names what a save does to the running system and leaves the
+full statement to them.
 
 ## Relationships
 
