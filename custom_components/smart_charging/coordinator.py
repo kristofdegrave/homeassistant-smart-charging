@@ -6,7 +6,7 @@ import logging
 import math
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from datetime import time as time_of_day
 from typing import Any
 
@@ -216,7 +216,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
         # These constructor defaults (no home day, no configured deadline anywhere) only
         # matter before the first read.
-        self.home_day_flag: bool = False
+        # NF14: the set of calendar dates the home-day flag currently applies to -- at most
+        # today's and tomorrow's at once (switch.py's own module docstring explains why a
+        # single date/bool can't represent both). R14's resolve_deadline_for and R9's
+        # resolve_solar_reserve_gate each query membership in this set for the concrete date
+        # being resolved, so the flag for one date can never leak into another's resolution.
+        self.home_day_dates: set[date] = set()
         self.departure_dow_defaults: dict[int, time_of_day | None] = dict.fromkeys(range(7))
         self.departure_holiday_override: time_of_day | None = None
         self.departure_home_day_override: time_of_day | None = None
@@ -358,8 +363,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
     async def _resolve_deadline_and_reserve(
         self, ctx: CycleContext, now_dt: datetime
-    ) -> tuple[time_of_day | None, Callable[[int], time_of_day | None]]:
-        """R14's departure-external/sun/low-tariff reads and the weekday-parameterised deadline
+    ) -> tuple[time_of_day | None, Callable[[date], time_of_day | None]]:
+        """R14's departure-external/sun/low-tariff reads and the date-parameterised deadline
         table, plus R9's solar-reserve-cap gating (resolve_solar_reserve_gate,
         coordinator_cycle.py) -- the two are resolved together because R9's gate needs
         tomorrow's deadline, this same block's own result. Mutates ctx.sun_is_up/
@@ -378,7 +383,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
         read -- so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/ROLE_SOLAR_FORECAST keep
         reporting their real reads in `sensor.smart_charging_adapter_readings` instead of a
-        stale/None value forever."""
+        stale/None value forever.
+
+        NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
+        bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
+        flag currently applies to (at most today's and tomorrow's at once). Resolving today's
+        and tomorrow's deadline are two separate calls to the same closure with two different
+        dates, so each reads the home-day flag for its own date and neither can leak into the
+        other, which is what fixes the flag set in the evening for tomorrow also overriding
+        today's resolution."""
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
@@ -396,27 +409,29 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if low_tariff_reading is not None:
             ctx.low_tariff_active = low_tariff_reading
 
-        # R14's four-row table, evaluated for a given weekday -- shared by both today's
+        # R14's four-row table, evaluated for a given calendar date -- shared by both today's
         # deadline (urgency, below) and tomorrow's (R9's one-day-ahead precondition, UC07),
-        # so the other six args can never drift apart between the two call sites.
-        def resolve_deadline_for(weekday: int) -> time_of_day | None:
+        # so the other six args can never drift apart between the two call sites. NF14: the
+        # home-day row is looked up for THIS date alone, never for "whichever the flag was
+        # last read for".
+        def resolve_deadline_for(target_date: date) -> time_of_day | None:
             return resolve_departure_deadline(
                 external_configured,
                 external,
                 is_holiday=False,
                 holiday_override=self.departure_holiday_override,
-                home_day_flag=self.home_day_flag,
+                home_day_flag=target_date in self.home_day_dates,
                 home_day_override=self.departure_home_day_override,
-                day_of_week_default=self.departure_dow_defaults.get(weekday),
+                day_of_week_default=self.departure_dow_defaults.get(target_date.weekday()),
             )
 
         # R9's precondition (UC07): the same R14 table evaluated one day ahead.
-        tomorrow_weekday = (now_dt.weekday() + 1) % 7
-        deadline_tomorrow = resolve_deadline_for(tomorrow_weekday)
+        tomorrow_date = now_dt.date() + timedelta(days=1)
+        deadline_tomorrow = resolve_deadline_for(tomorrow_date)
         forecast_kwh = await self._read_role(ROLE_SOLAR_FORECAST)
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
-            home_day_flag=self.home_day_flag,
+            home_day_flag=tomorrow_date in self.home_day_dates,
             sun_is_down=ctx.sun_is_down,
             forecast_kwh=forecast_kwh,
             forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
@@ -428,8 +443,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self,
         *,
         deadline_resolvable: bool,
-        today_weekday: int,
-        resolve_deadline_for: Callable[[int], time_of_day | None],
+        today_date: date,
+        resolve_deadline_for: Callable[[date], time_of_day | None],
     ) -> tuple[time_of_day | None, float]:
         """The R5/R14/R15 deadline-urgency call site's own adapter reads (today's deadline, the
         sensed battery capacity) -- must stay coordinator-side even though resolve_deadline_urgency
@@ -445,7 +460,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         effective_battery_capacity_kwh = sensed_capacity_kwh
         if effective_battery_capacity_kwh is None:
             effective_battery_capacity_kwh = self._config.ev_battery_capacity_kwh
-        deadline_today = resolve_deadline_for(today_weekday) if deadline_resolvable else None
+        deadline_today = resolve_deadline_for(today_date) if deadline_resolvable else None
         return deadline_today, effective_battery_capacity_kwh
 
     async def _run_cycle(self) -> CycleResult:
@@ -621,10 +636,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             max_solar_soc=self._config.max_solar_soc,
         )
 
-        # R5/R14/R15: `today_weekday` stays inline -- _read_deadline_urgency_inputs (below)
-        # needs it as a parameter; only `tomorrow_weekday` moved into
+        # R5/R14/R15: `today_date` stays inline -- _read_deadline_urgency_inputs (below)
+        # needs it as a parameter; only `tomorrow_date` moved into
         # _resolve_deadline_and_reserve (ADR-0023).
-        today_weekday = now_dt.weekday()
+        today_date = now_dt.date()
         deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(
             ctx, now_dt
         )
@@ -672,7 +687,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
         deadline_today, effective_battery_capacity_kwh = await self._read_deadline_urgency_inputs(
             deadline_resolvable=deadline_resolvable,
-            today_weekday=today_weekday,
+            today_date=today_date,
             resolve_deadline_for=resolve_deadline_for,
         )
         deadline_urgency = resolve_deadline_urgency(
@@ -946,7 +961,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 float,
                 self.set_soc_limit_override,
             ),
-            (Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, bool, self.set_home_day_flag),
             (
                 Platform.TIME,
                 OWNED_SUFFIX_DEPARTURE_HOLIDAY,
@@ -965,28 +979,40 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             if value is not None:
                 setter(value)
 
+        # NF14: HomeDaySwitch (switch.py) exposes the date(s) it applies to as its own
+        # ATTR_APPLIES_TO attribute rather than as a plain on/off value -- read_home_day_dates
+        # is the one Store read that isn't in `simple_reads` above because of that (its own
+        # docstring explains why). Same "None means unresolvable, keep current" convention as
+        # every `simple_reads` row: an unregistered/unavailable switch leaves `home_day_dates`
+        # untouched; a registered, available switch with nothing set resolves to an empty set,
+        # which set_home_day_dates DOES apply -- that is what "an unset flag stays unset
+        # (default off)" looks like.
+        home_day_dates = await self._store.read_home_day_dates(OWNED_SUFFIX_HOME_DAY)
+        if home_day_dates is not None:
+            self.set_home_day_dates(home_day_dates)
+
         for weekday, suffix in enumerate(OWNED_SUFFIX_DEPARTURE_DOW):  # Monday=0 .. Sunday=6
             value = await self._store.read(Platform.TIME, suffix, time_of_day)
             if value is not None:
                 self.departure_dow_defaults[weekday] = value
 
-    def set_home_day_flag(self, value: bool) -> None:
-        """Coordinator's own boundary for `home_day_flag` (ADR-0014's "any future field added
+    def set_home_day_dates(self, dates: set[date]) -> None:
+        """Coordinator's own boundary for `home_day_dates` (ADR-0014's "any future field added
         to the coordinator's externally-writable surface follows this same rule" clause) -- no
         range to clamp, unlike `set_target_current`/`set_soc_limit_override`. Since ADR-0018,
         `switch.py` never calls this directly: the coordinator reads the stored value through
-        the Store each cycle (`_read_owned_entities`, via its `simple_reads` table, #652) and
+        the Store each cycle (`_read_owned_entities`, via `read_home_day_dates`, #652) and
         calls this itself."""
-        self.home_day_flag = value
+        self.home_day_dates = dates
 
     def set_departure_holiday_override(self, value: time_of_day) -> None:
         """Coordinator's own boundary for `departure_holiday_override` (ADR-0014) -- see
-        `set_home_day_flag`."""
+        `set_home_day_dates`."""
         self.departure_holiday_override = value
 
     def set_departure_home_day_override(self, value: time_of_day) -> None:
         """Coordinator's own boundary for `departure_home_day_override` (ADR-0014) -- see
-        `set_home_day_flag`."""
+        `set_home_day_dates`."""
         self.departure_home_day_override = value
 
     def _start_cooldown(self, mode: str, now: float) -> None:
