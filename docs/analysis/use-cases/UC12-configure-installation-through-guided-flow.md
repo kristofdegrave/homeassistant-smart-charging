@@ -131,7 +131,8 @@ variants.
    at all while this capability is absent (R3 AC1) — 6a gives the mapping's own rationale for why
    it is left unmapped by default.
 7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
-   presents the solar-production and solar-forecast mappings and solar's own thresholds: the
+   presents the solar-production mapping, the next-day and same-day solar-forecast mappings (R9),
+   and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
    `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown duration, the
    restart debounce duration, the solar step-up size, trigger gap, and ceiling, and the

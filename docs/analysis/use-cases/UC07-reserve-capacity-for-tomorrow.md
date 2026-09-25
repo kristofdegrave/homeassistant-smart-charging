@@ -96,8 +96,9 @@ same way as any other precondition lapsing (Postconditions).
   active profile no longer provides SOC-limit coordination; the home-day flag is no longer set for
   the reserved day; the solar forecast for the reserved day no longer exceeds its threshold; a
   departure deadline becomes resolved for the reserved day; or a missed-deadline hold begins.
-  Midnight is not among them, since the reserved day does not change at midnight (R9). The active-SOC-limit rule then falls through to
-  *Solar step-up* or *Default limit*, and Auto mode-selection is no longer withheld by the
+  The date rolling over at midnight is not among them, since the reserved day does not change then
+  (R9); a change in the forecast reading across midnight is a forecast change like any other. The
+  active-SOC-limit rule then falls through to *Solar step-up* or *Default limit*, and Auto mode-selection is no longer withheld by the
   *Overnight top-up* row's reserve condition — the reserved headroom is then available for a solar mode to fill (step 4).
 
 ## State model
@@ -177,8 +178,8 @@ stateDiagram-v2
 
 - **R9** — Solar-reserve overnight cap (the cap's activation conditions, including its two deadline
   preconditions — no departure deadline resolved for the reserved day, and no missed-deadline hold in
-  effect; all three date-bearing conditions reading the reserved day; resolving the active SOC limit to the solar-reserve cap while the sun is down; withholding
-  Auto mode-selection's own opportunistic overnight grid top-up; inapplicability under `Manual`; the
+  effect; all three date-bearing conditions reading the reserved day; resolving the active SOC limit
+  to the solar-reserve cap while the sun is down; withholding Auto mode-selection's own opportunistic overnight grid top-up; inapplicability under `Manual`; the
   mutual exclusivity with deadline urgency; and the reset when the sun rises, the active profile no
   longer provides SOC-limit coordination, the reserved day's home-day flag or forecast condition
   stops holding, such a deadline appears, or such a hold begins).

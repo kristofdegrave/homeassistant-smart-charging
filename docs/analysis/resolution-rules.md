@@ -67,8 +67,8 @@ charges to this resolved value — it has no opinion on *why* the limit is where
     never matches while one is resolved for that day, which is what the cap exists to protect: the
     cap's purpose is to leave room overnight for the reserved day.
   - *A missed-deadline hold in effect* (R5, below) — that first precondition is about the reserved day
-    only, so this second one is what keeps the cap out of the way of a deadline resolved for *today*
-    and since missed. Without it, the cap could lower the active SOC limit below the SOC of a session
+    only, so this second one is what keeps the cap out of the way of a deadline that has already
+    elapsed. Without it, the cap could lower the active SOC limit below the SOC of a session
     the driver is actively waiting on.
 
   A deadline **still ahead of now** for any date other than the reserved day is the one case neither
