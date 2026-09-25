@@ -287,6 +287,67 @@ async def test_uc05_manual_profile_never_changes_mode_but_still_flags_urgency(ha
     assert coordinator.data.effective_peak_limit_kw == 10.0  # the one lever Manual does get
 
 
+# --- #1335 (R17 AC4/R6): Power still stops at the active SOC limit itself ---
+
+
+async def test_power_mode_should_stop_when_soc_reading_at_or_above_active_limit(hass, freezer):
+    """Should stop commanding current when Manual+Power has an ev_soc reading at or above the
+    active SOC limit and no settable vehicle charge-limit entity -- #1335's confirmed
+    reproduction (85% SOC against the default 80% limit kept commanding the 10 A default
+    target current instead of dropping to 0 A)."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: Manual + Power, an ev_soc reading already at/above the default 80% limit, and no
+    # vehicle charge-limit role mapped (this suite's `_entry_data` never maps one).
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=85.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+
+    # Act
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert coordinator.active_mode == MODE_POWER
+    assert coordinator.data.active_soc_limit == 80.0
+    assert calls[-1]["value"] == 0.0
+
+
+async def test_power_mode_should_resume_when_active_limit_rises_above_the_reading(hass, freezer):
+    """Should resume commanding Power's target current once the active SOC limit is raised back
+    above an already-at-limit ev_soc reading -- the stop from #1335's fix is not a latch, unlike
+    the SOC-gated modes' held resume state (Power keeps no ModeState of its own)."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: same starting condition as the stop case above.
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=85.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-1]["value"] == 0.0  # stopped, as above
+
+    # Act: raise the active SOC limit override above the still-unchanged 85% reading. Seeded
+    # through the real owned entity (ADR-0018), not a direct field assignment -- `_setup`'s own
+    # docstring warns a direct `coordinator.soc_limit_override = ...` write is silently
+    # overwritten by the next refresh's Store read.
+    seed_owned_entity(hass, "number.smart_charging_soc_limit_override", "90.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert coordinator.data.active_soc_limit == 90.0
+    assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- Power resumes
+
+
 # --- UC06: Baseline -> SteppedUp -> Baseline, across a Solar/SolarOnly switch ---
 
 

@@ -990,6 +990,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and not self._active_cooldown.elapsed(now)
         )
 
+    def _power_reached_soc_limit(self, ctx: CycleContext) -> bool:
+        """R17 AC4/R6 (#1335): Power's own stop at the active SOC limit (R7), kept separate
+        from `_PowerModeHandler.is_soc_gated` -- ADR-0042 keeps that flag `False` so Power
+        never *needs* a state-of-charge reading, and a missing reading stays a non-fault in
+        Power (C5). This only fires when a reading is actually present; a missing one (`None`)
+        must never be treated as "at the limit". Not a latch (unlike the SOC-gated modes'
+        `resume_state()`/`_mode_state` machinery, which Power carries none of): re-evaluated
+        fresh every cycle straight off `ctx`, so Power resumes the moment the active limit
+        rises back above the reading (resume condition 1), with no held state to reset."""
+        return ctx.ev_soc is not None and ctx.ev_soc >= ctx.active_soc_limit
+
     def _dispatch_mode(self, ctx: CycleContext) -> float:
         """The disconnect/Off/Power/SOC-gated-stop guards around the ModeHandler registry lookup
         (ADR-0012's lookup itself is untouched -- this method only names the surrounding branches
@@ -1019,8 +1030,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # ADR-0012: routed through the registry too, for observability/consistency with the
             # other modes, but MODE_POWER has no entry in _fresh_mode_state() and must not gain
             # one -- i.e. _PowerModeHandler.is_soc_gated must stay False (design doc Sec 3.4).
-            # Its returned state is discarded, never written to _mode_state. Unchanged
-            # behavior: no SOC gate.
+            # Its returned state is discarded, never written to _mode_state.
             # R11/issue #974: Power has no Phase of its own -- being active and commanding
             # `target_current` is its only "charging" state, so a running coordinator-scoped
             # cooldown must block it the same way it blocks any other mode's Idle -> Charging
@@ -1029,6 +1039,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # to Power when CapTar is unavailable, R5/R18) would be exactly the mode-switch
             # escape R11 forbids.
             if self._cooldown_blocks(Phase.CHARGING, ctx.now):
+                return 0.0
+            if self._power_reached_soc_limit(ctx):
                 return 0.0
             desired, _ = self._mode_handlers[MODE_POWER].desired_current(ctx, None)
             return desired
