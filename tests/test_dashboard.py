@@ -159,13 +159,17 @@ def test_charging_status_section_has_the_eight_documented_tiles():
     assert all(c["type"] == "tile" for c in cards)
 
 
-def test_charging_status_section_shows_the_status_tile_on_every_installation():
-    """R19 AC1/UC11 (#1349): the status tile is present whatever the capabilities -- it
-    does not depend on CONF_EV_SOC_ENTITY or any other optional role, unlike the battery
-    tile the two tests below cover."""
+def test_should_lead_charging_status_with_the_system_status_tile_when_no_role_is_mapped():
+    """R19 AC1/UC11 (#1349): the status tile leads the section on a default entry -- it does
+    not depend on CONF_EV_SOC_ENTITY the way the battery tile does (the two tests below cover
+    that dependency for the battery tile itself)."""
+    # Arrange
     entry = _entry()
+
+    # Act
     cards = _cards(build_dashboard_config(entry), "Charging status")
 
+    # Assert
     assert cards[0]["entity"] == "sensor.smart_charging_status"
 
 

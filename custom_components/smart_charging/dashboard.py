@@ -46,6 +46,7 @@ from .const import (
     OWNED_SUFFIX_PEAK_HEADROOM_A,
     OWNED_SUFFIX_PROFILE,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
+    OWNED_SUFFIX_STATUS,
     OWNED_SUFFIX_TIME_TO_FULL,
     PRODUCT_NAME,
     PROFILE_MANUAL,
@@ -112,9 +113,8 @@ def _full_width() -> dict:
 # auto-entities' filter schema expects anyway.
 _TIME_DOMAIN = "time"
 
-# "active_mode"/"effective_peak_limit"/"status" have no OWNED_SUFFIX_* constant (sensor.py
-# itself pins them as bare literals) -- consistent with that existing precedent, not a new
-# deviation.
+# "active_mode"/"effective_peak_limit" have no OWNED_SUFFIX_* constant (sensor.py itself pins
+# them as bare literals) -- consistent with that existing precedent, not a new deviation.
 _ACTIVE_SOC_LIMIT_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_ACTIVE_SOC_LIMIT}"
 _ACTIVE_MODE_ENTITY = "sensor.smart_charging_active_mode"
 _CHARGER_STATUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_CHARGER_STATUS}"
@@ -123,7 +123,7 @@ _MODE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_MODE}"
 _PEAK_HEADROOM_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_PEAK_HEADROOM_A}"
 _PROFILE_ENTITY = f"select.smart_charging_{OWNED_SUFFIX_PROFILE}"
 _SOLAR_SURPLUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
-_STATUS_ENTITY = "sensor.smart_charging_status"
+_STATUS_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_STATUS}"
 _TIME_TO_FULL_ENTITY = f"sensor.smart_charging_{OWNED_SUFFIX_TIME_TO_FULL}"
 
 
