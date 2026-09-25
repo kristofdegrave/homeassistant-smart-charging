@@ -104,7 +104,8 @@ Post exactly **one** PR comment via `gh pr comment <pr> --body "<markdown>"`:
   (what changed, with file references), **Skipped** (and why you disagree), or **Partially
   fixed**. Keep it short.
 - The run's **net lines added**, from `git diff --shortstat` against the head the run started
-  from. If positive: which findings grew it, and why rewording or deleting could not fix them.
+  from; a file the run created counts in full, named. If positive: which findings grew it, and
+  why rewording or deleting could not fix them.
 - **CRITICAL: the comment must NOT contain the text "ai-review-verdict" anywhere — not even
   quoted.** The workflows route and count fix cycles by searching comment bodies for that
   marker; a summary containing it would be miscounted as a review and break the cycle limit.
