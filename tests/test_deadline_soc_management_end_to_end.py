@@ -367,17 +367,24 @@ async def test_should_resume_power_charging_when_active_limit_rises_above_the_re
 
 async def test_should_keep_power_stopped_when_the_soc_reading_becomes_unavailable(hass, freezer):
     """Should stay at 0 A, not resume, on a cycle where the ev_soc reading goes missing after
-    Power has already stopped at the active SOC limit -- UC04's *State of charge unavailable*
+    Power has genuinely stopped at the active SOC limit -- UC04's *State of charge unavailable*
     exception flow (A5a/#1300), folded into #1335's I0f entry: the stop is a latch against a
     *missing* reading (unlike the rising-limit case above, which does clear it) precisely
     because a missing reading must never be read as "below the limit" -- that would silently
     resume charging on the one signal (C5's own non-fault) that carries no SOC information at
-    all. Also proves the missing reading itself still doesn't fault Power (ADR-0042/C5)."""
+    all. Also proves the missing reading itself still doesn't fault Power (ADR-0042/C5).
+
+    Arranged as a genuine Charging -> SocReached transition (75%, below the limit, actually
+    drawing current, then 85%, crossing it) rather than starting directly at 85% -- UC04's own
+    State model distinguishes a real stop from a car merely resting in Idle at or above the
+    limit, and only the former survives a missing reading (see the sibling test proving the
+    Idle case's own, opposite behaviour)."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
-    # Arrange: same stopped starting condition as the resume test above.
+    # Arrange: charge below the limit first, so the stop that follows is a genuine
+    # Charging -> SocReached transition, not Idle merely resting at/above the limit.
     calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging", ev_soc=85.0)
+    _seed_states(hass, status="Charging", ev_soc=75.0)
     coordinator = await _setup(
         hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
     )
@@ -385,6 +392,11 @@ async def test_should_keep_power_stopped_when_the_soc_reading_becomes_unavailabl
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", "85.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-2]["value"] == 10.0  # was genuinely charging, below the limit
+    assert calls[-1]["value"] == 0.0  # crossed it -- a real stop, not Idle
 
     # Act: the ev_soc sensor goes unavailable while still connected and Charging -- the reading
     # is gone, not the car.
@@ -393,7 +405,6 @@ async def test_should_keep_power_stopped_when_the_soc_reading_becomes_unavailabl
     await hass.async_block_till_done()
 
     # Assert
-    assert calls[-2]["value"] == 0.0  # stopped, before the reading went missing
     assert calls[-1]["value"] == 0.0  # still stopped -- the latch, not the missing reading, held
     assert coordinator.data.fault is False  # C5: a missing reading is a non-fault in Power
     assert coordinator.active_mode == MODE_POWER
@@ -410,11 +421,12 @@ async def test_should_resume_power_charging_without_a_soc_reading_when_unplugged
     from the disconnect actually having cleared it, per `_dispatch_mode`'s own early branch."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
-    # Arrange: same stopped starting condition as the two tests above, plus a translation entry
-    # for a disconnected charger status (this suite's own `_entry_data` otherwise maps only
-    # "Charging", per its docstring).
+    # Arrange: charge below the limit first, then cross it, so the stop that follows is a
+    # genuine Charging -> SocReached transition -- plus a translation entry for a disconnected
+    # charger status (this suite's own `_entry_data` otherwise maps only "Charging", per its
+    # docstring).
     calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging", ev_soc=85.0)
+    _seed_states(hass, status="Charging", ev_soc=75.0)
     coordinator = await _setup(
         hass,
         data_overrides={
@@ -430,6 +442,11 @@ async def test_should_resume_power_charging_without_a_soc_reading_when_unplugged
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", "85.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-2]["value"] == 10.0  # was genuinely charging, below the limit
+    assert calls[-1]["value"] == 0.0  # crossed it -- a real stop, not Idle
 
     # Act: unplug (a disconnected charger status) and replug (back to Charging), with the
     # ev_soc reading gone by the time it reconnects.
@@ -442,7 +459,6 @@ async def test_should_resume_power_charging_without_a_soc_reading_when_unplugged
     await hass.async_block_till_done()
 
     # Assert
-    assert calls[-3]["value"] == 0.0  # stopped, before the disconnect (the Arrange refresh)
     assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- the stop did not survive
     assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
@@ -453,12 +469,17 @@ async def test_should_resume_power_charging_when_the_limit_changes_while_unavail
     active SOC limit changing as a clearing condition on its own, "not a reading": unlike the
     missing-reading test above (where nothing else changed), the limit override rising here is
     the coordinator's own edge-detected `soc_limit_changed` signal, which the stop's fix reads
-    even with no reading to confirm SOC against the new limit."""
+    even with no reading to confirm SOC against the new limit. Arranged as a genuine Charging
+    -> SocReached transition (see the missing-reading test's own docstring for why): with a
+    latch that was never set in the first place -- the Idle case -- a missing reading alone
+    already resumes charging regardless of `limit_changed`, which would prove nothing about
+    this specific clearing path."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
-    # Arrange: same stopped starting condition as the missing-reading test above.
+    # Arrange: charge below the limit first, then cross it, so the stop that follows is a
+    # genuine Charging -> SocReached transition.
     calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging", ev_soc=85.0)
+    _seed_states(hass, status="Charging", ev_soc=75.0)
     coordinator = await _setup(
         hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
     )
@@ -466,6 +487,11 @@ async def test_should_resume_power_charging_when_the_limit_changes_while_unavail
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", "85.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-2]["value"] == 10.0  # was genuinely charging, below the limit
+    assert calls[-1]["value"] == 0.0  # crossed it -- a real stop, not Idle
 
     # Act: the reading goes unavailable AND the limit override rises, on the same cycle.
     hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
@@ -475,7 +501,6 @@ async def test_should_resume_power_charging_when_the_limit_changes_while_unavail
 
     # Assert
     assert coordinator.data.active_soc_limit == 90.0
-    assert calls[-2]["value"] == 0.0  # stopped, before the limit changed (the Arrange refresh)
     assert calls[-1]["value"] == 10.0  # resumed -- the limit change alone was enough
     assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
@@ -490,14 +515,17 @@ async def test_should_resume_power_without_a_reading_when_the_limit_rose_under_a
     own reading) has to be visible to Power immediately on switching back. The reading is
     deliberately unavailable on the switch-back cycle itself: with a reading present there,
     Power's own comparison would resume it anyway, proving nothing about the cross-mode
-    refresh this test targets."""
+    refresh this test targets. Arranged as a genuine Charging -> SocReached transition (see
+    the missing-reading test's own docstring for why) -- with a latch that was never set in
+    the first place, a missing reading on the switch-back cycle already resumes charging on
+    its own, proving nothing about the cross-mode refresh either."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
-    # Arrange: Power stopped at the default 80% limit by an 85% reading, then switched to
-    # Solar with the same reading still at 85% (Solar is itself SOC-gated, so it stays stopped
-    # too -- proven below, not just assumed).
+    # Arrange: Power charges below the default 80% limit, then genuinely stops there once the
+    # reading crosses it, then switches to Solar with the reading still at 85% (Solar is
+    # itself SOC-gated, so it stays stopped too -- proven below, not just assumed).
     calls = _capture_charger_current_writes(hass)
-    _seed_states(hass, status="Charging", ev_soc=85.0, net_w=100.0, charger_w=500.0)
+    _seed_states(hass, status="Charging", ev_soc=75.0, net_w=100.0, charger_w=500.0)
     hass.states.async_set("sun.sun", SUN_STATE_ABOVE_HORIZON)
     coordinator = await _setup(
         hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: True}
@@ -506,11 +534,15 @@ async def test_should_resume_power_without_a_reading_when_the_limit_rose_under_a
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", "85.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-2]["value"] == 10.0  # was genuinely charging, below the limit
+    assert calls[-1]["value"] == 0.0  # crossed it -- a real stop, not Idle
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    assert calls[-2]["value"] == 0.0  # Power stopped (the first Arrange refresh)
-    assert calls[-1]["value"] == 0.0  # Solar gated too (the second Arrange refresh)
+    assert calls[-1]["value"] == 0.0  # Solar gated too (still 85% against the 80% limit)
 
     # Act: the limit override rises above the still-85% reading while Solar (not Power) is
     # active, then Manual switches back to Power on a cycle where the reading has since gone
