@@ -494,10 +494,14 @@ async def async_setup_entry(
             "captar_cooldown_min", UnitOfTime.MINUTES, None, config.captar_cooldown_min
         ),
         _ConfigMirrorSpec("power_respect_peak", None, None, config.power_respect_peak),
-        # T4 slice (#894): power_cooldown_min/reminder_lead_h/deadline_notice_enabled/
-        # plug_in_reminder_enabled are NOT SmartChargingConfig fields (unlike their siblings
-        # captar_cooldown_min/solar_cooldown_min etc.) -- read entry.options directly, same as
-        # the two entry.data-sourced capabilities above. evening_prompt_enabled/_time ARE
+        # T4 slice (#894): reminder_lead_h/deadline_notice_enabled/plug_in_reminder_enabled are
+        # NOT SmartChargingConfig fields -- read entry.options directly, same as the two
+        # entry.data-sourced capabilities above. power_cooldown_min itself became a
+        # SmartChargingConfig field under issue #1311 (the coordinator's fault-stop cooldown
+        # needs it, R11 AC3) but is deliberately left reading entry.options here too, unlike
+        # its siblings captar_cooldown_min/solar_cooldown_min -- #1311's own diff stays scoped
+        # to the coordinator's fault path; folding this one mirror onto `config` is a follow-up,
+        # not a behavior change either reading makes today. evening_prompt_enabled/_time ARE
         # SmartChargingConfig fields and read from `config` as usual.
         _ConfigMirrorSpec(
             "power_cooldown_min",

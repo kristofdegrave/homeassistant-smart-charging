@@ -205,7 +205,7 @@ def test_mode_handler_protocol_is_satisfied_by_each_adapter():
     right callables/attributes, not by isinstance()."""
     handlers: list[ModeHandler] = [
         _OffModeHandler(),
-        _PowerModeHandler(lambda: 10.0),
+        _PowerModeHandler(_config(), lambda: 10.0),
         _SolarModeHandler(_config()),
         _SolarOnlyModeHandler(_config()),
         _CaptarModeHandler(_config()),
@@ -226,8 +226,8 @@ def test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode():
     resolution-rules.md)."""
     assert _OffModeHandler().is_soc_gated is False
     assert _OffModeHandler().is_solar_mode is False
-    assert _PowerModeHandler(lambda: 10.0).is_soc_gated is False
-    assert _PowerModeHandler(lambda: 10.0).is_solar_mode is False
+    assert _PowerModeHandler(_config(), lambda: 10.0).is_soc_gated is False
+    assert _PowerModeHandler(_config(), lambda: 10.0).is_solar_mode is False
     assert _SolarModeHandler(_config()).is_soc_gated is True
     assert _SolarModeHandler(_config()).is_solar_mode is True
     assert _SolarOnlyModeHandler(_config()).is_soc_gated is True
@@ -242,7 +242,7 @@ def test_mode_handler_idle_state_per_mode():
     stored in the coordinator's _mode_state, so their idle_state() is
     never actually read; it exists only to satisfy the Protocol uniformly."""
     assert _OffModeHandler().idle_state() is None
-    assert _PowerModeHandler(lambda: 10.0).idle_state() is None
+    assert _PowerModeHandler(_config(), lambda: 10.0).idle_state() is None
     assert _SolarModeHandler(_config()).idle_state() == solar.SolarState.idle()
     assert _SolarOnlyModeHandler(_config()).idle_state() == solar_only.SolarOnlyState.idle()
     assert _CaptarModeHandler(_config()).idle_state() == captar.CaptarState.idle()
@@ -256,7 +256,7 @@ def test_mode_handler_resume_state_per_mode():
     modes/_mode_state.py::ModeState.resumed()'s docstring). Captar has no such concept, so its
     resume_state() stays equal to idle_state(); Off/Power return None either way."""
     assert _OffModeHandler().resume_state() is None
-    assert _PowerModeHandler(lambda: 10.0).resume_state() is None
+    assert _PowerModeHandler(_config(), lambda: 10.0).resume_state() is None
     assert _SolarModeHandler(_config()).resume_state() == solar.SolarState.resumed()
     assert _SolarModeHandler(_config()).resume_state() != solar.SolarState.idle()
     assert _SolarOnlyModeHandler(_config()).resume_state() == solar_only.SolarOnlyState.resumed()
@@ -379,7 +379,7 @@ def test_power_mode_handler_delegates_to_modes_power_desired_current():
     the coordinator's mutable target_current through a zero-arg getter bound at construction
     rather than duplicating it onto CycleContext. Anchor: tests/modes/
     test_power.py's own STATE_CHARGING/target_current=10.0 -> 10.0 A expectation."""
-    handler = _PowerModeHandler(lambda: 10.0)
+    handler = _PowerModeHandler(_config(), lambda: 10.0)
     ctx = CycleContext(
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, baseline_w=0.0
     )
@@ -391,7 +391,7 @@ def test_power_mode_handler_delegates_to_modes_power_desired_current():
 def test_power_mode_handler_commands_zero_when_disconnected():
     """Confirms the handler re-reads status from ctx each call (not cached at construction) --
     anchored to tests/modes/test_power.py's disconnected -> 0.0 A expectation."""
-    handler = _PowerModeHandler(lambda: 10.0)
+    handler = _PowerModeHandler(_config(), lambda: 10.0)
     ctx = CycleContext(
         status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, baseline_w=0.0
     )
@@ -404,7 +404,7 @@ def test_power_mode_handler_reads_target_current_fresh_each_call():
     not part of "this cycle's readings" -- the getter must be re-invoked each call, not
     memoized at construction."""
     current_target = [10.0]
-    handler = _PowerModeHandler(lambda: current_target[0])
+    handler = _PowerModeHandler(_config(), lambda: current_target[0])
     ctx = CycleContext(
         status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, baseline_w=0.0
     )
@@ -413,6 +413,19 @@ def test_power_mode_handler_reads_target_current_fresh_each_call():
     second, _ = handler.desired_current(ctx, None)
     assert first == 10.0
     assert second == 16.0
+
+
+def test_should_read_power_cooldown_min_off_config_when_cooldown_minutes_is_read():
+    """R11 AC3/C5 (issue #1311): unlike Off (always 0.0, never read), Power's own
+    `cooldown_minutes` now reads `power_cooldown_min` off config -- the coordinator's
+    fault-stop cooldown start is its only reader (Power is never stored in `_mode_state` or
+    reached by `_dispatch_mode`'s own generic cooldown-start detection)."""
+    # Arrange
+    config = _config(power_cooldown_min=9.0)
+    handler = _PowerModeHandler(config, lambda: 10.0)
+
+    # Act / Assert
+    assert handler.cooldown_minutes == 9.0
 
 
 def test_solar_mode_handler_delegates_to_modes_solar_step():
