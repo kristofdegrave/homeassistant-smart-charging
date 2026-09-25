@@ -16,6 +16,11 @@ from custom_components.smart_charging.const import (
     DASHBOARD_FILENAME,
     DASHBOARD_URL_PATH,
     DOMAIN,
+    KEY_DASHBOARD_SECTION_CHARGING_STATUS,
+    KEY_DASHBOARD_SECTION_DEPARTURE_TIMES,
+    KEY_DASHBOARD_SECTION_POWER_FLOW,
+    KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS,
+    KEY_DASHBOARD_VIEW_DEADLINE,
     LABEL_SC_RUNTIME,
 )
 from custom_components.smart_charging.dashboard import (
@@ -24,6 +29,14 @@ from custom_components.smart_charging.dashboard import (
     build_dashboard_config,
 )
 from tests.helpers import entry_data_base
+
+_NL_HEADINGS = {
+    KEY_DASHBOARD_SECTION_CHARGING_STATUS: "Laadstatus",
+    KEY_DASHBOARD_SECTION_POWER_FLOW: "Vermogensstroom",
+    KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS: "Actuele instellingen",
+    KEY_DASHBOARD_VIEW_DEADLINE: "Vertrekdeadline",
+    KEY_DASHBOARD_SECTION_DEPARTURE_TIMES: "Vertrektijden",
+}
 
 
 def _entry(**data_overrides):
@@ -45,8 +58,8 @@ def _cards(config, section_title, view_path="overview"):
 
 
 def test_dashboard_has_two_views_overview_and_deadline():
-    """T9 (2026-08-13 addendum): HA renders >1 views in a YAML dashboard as tabs natively --
-    no new registration mechanism needed beyond ADR-0022's Option C."""
+    """HA renders >1 views in a YAML dashboard as tabs natively -- no new registration
+    mechanism needed beyond ADR-0022's Option C."""
     config = build_dashboard_config(_entry())
 
     assert [v["path"] for v in config["views"]] == ["overview", "deadline"]
@@ -76,6 +89,41 @@ def test_the_deadline_view_is_titled_deadline_with_one_departure_times_section()
 
     assert view["title"] == "Deadline"
     assert [s["title"] for s in view["sections"]] == ["Departure times"]
+
+
+def test_should_use_the_given_translations_for_every_heading_when_headings_are_given():
+    """NF8: every view/card/section heading follows the given translations dict."""
+    # Arrange -- nothing beyond the module-level `_NL_HEADINGS` fixture and a plain entry.
+
+    # Act
+    config = build_dashboard_config(_entry(), _NL_HEADINGS)
+
+    # Assert
+    overview = _view(config, "overview")
+    assert [s["title"] for s in overview["sections"]] == [
+        "Laadstatus",
+        "Vermogensstroom",
+        "Actuele instellingen",
+    ]
+    deadline = _view(config, "deadline")
+    assert deadline["title"] == "Vertrekdeadline"
+    assert deadline["sections"][0]["title"] == "Vertrektijden"
+    # The auto-entities "Runtime settings" card's own inner title tracks the same key.
+    runtime_cards = _cards(config, "Actuele instellingen")
+    assert runtime_cards[1]["card"]["title"] == "Actuele instellingen"
+
+
+def test_should_keep_the_product_name_untranslated_when_headings_are_given():
+    """The product name (dashboard/overview-view title "Smart Charging") is never
+    translated (NF8 AC1), even though every heading around it follows `_NL_HEADINGS`."""
+    # Arrange -- nothing beyond the module-level `_NL_HEADINGS` fixture and a plain entry.
+
+    # Act
+    config = build_dashboard_config(_entry(), _NL_HEADINGS)
+
+    # Assert
+    assert config["title"] == "Smart Charging"
+    assert _view(config, "overview")["title"] == "Smart Charging"
 
 
 def test_the_mode_entity_is_rendered_by_exactly_the_gated_card_not_the_auto_entities_list():
@@ -194,7 +242,7 @@ def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card()
     assert len(cards) == 2
     mode_gate_card, auto_entities_card = cards
 
-    # T8 (2026-08-13 addendum): the mode selector only makes sense under the Manual profile
+    # The mode selector only makes sense under the Manual profile
     # (system-overview.md's glossary already scopes it that way) -- gated via the entities
     # card's own `visibility` key, HA's native idiom in a `sections` view. The condition schema
     # keys the entity as `entity`, NOT `entity_id` (that's the automation/script condition
@@ -210,11 +258,11 @@ def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card()
 
     assert auto_entities_card["type"] == "custom:auto-entities"
     assert auto_entities_card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME}]
-    # Regression guard for the deliberate deviation from the 2026-07-08 design doc's sketch
-    # (Decision 1's own reasoning: no entity is ever labelled sc_install, so that clause can
-    # never match anything). The two excludes here are different, legitimate ones: mode is
-    # rendered by the conditional card above instead (T8), and the nine departure-time
-    # entities move to the deadline tab instead (T9) -- neither should duplicate here.
+    # Regression guard for a deliberate deviation from the original sketch: no entity is ever
+    # labelled sc_install, so that clause can never match anything. The two excludes here are
+    # different, legitimate ones: mode is rendered by the conditional card above instead, and
+    # the nine departure-time entities move to the deadline tab instead -- neither should
+    # duplicate here.
     assert auto_entities_card["filter"]["exclude"] == [
         {"entity_id": "select.smart_charging_mode"},
         {"domain": "time"},
@@ -257,6 +305,58 @@ async def test_register_dashboard_writes_the_yaml_file_and_the_panel(hass, tmp_p
     panel = hass.data[frontend.DATA_PANELS][DASHBOARD_URL_PATH]
     assert panel.config["mode"] == "yaml"
     assert panel.sidebar_title == "Smart Charging"
+
+
+async def test_should_write_dutch_headings_to_the_dashboard_yaml_when_the_system_language_is_dutch(
+    hass, tmp_path
+):
+    """NF8 AC2: the dashboard's headings follow Home Assistant's system language, not a
+    viewing user's -- through the real translation loader and the real written YAML file,
+    not a hand-fed dict. Checks all five headings (not only the first section's), so a
+    heading left English in `translations/nl.json` alone would fail this test even though
+    the generic key-parity guard in test_translations.py would not catch it."""
+    # Arrange
+    hass.config.language = "nl"
+    assert await async_setup_component(hass, "lovelace", {})
+    entry = _entry()
+
+    # Act
+    await async_register_dashboard(hass, entry)
+
+    # Assert
+    written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
+    config = yaml.safe_load(written)
+    overview = _view(config, "overview")
+    assert [s["title"] for s in overview["sections"]] == [
+        "Laadstatus",
+        "Vermogensstroom",
+        "Actuele instellingen",
+    ]
+    deadline = _view(config, "deadline")
+    assert deadline["title"] == "Vertrekdeadline"
+    assert deadline["sections"][0]["title"] == "Vertrektijden"
+
+
+async def test_should_keep_the_dashboard_yaml_product_name_untranslated_when_the_language_is_dutch(
+    hass, tmp_path
+):
+    """NF8 AC1: the product name stays untranslated even in a Dutch-language install --
+    through the real registration path and the real written YAML file, not the pure builder
+    `test_should_keep_the_product_name_untranslated_when_headings_are_given` already covers."""
+    # Arrange
+    hass.config.language = "nl"
+    assert await async_setup_component(hass, "lovelace", {})
+    entry = _entry()
+
+    # Act
+    await async_register_dashboard(hass, entry)
+
+    # Assert
+    written = (tmp_path / DASHBOARD_FILENAME).read_text(encoding="utf-8")
+    config = yaml.safe_load(written)
+    overview = _view(config, "overview")
+    assert config["title"] == "Smart Charging"
+    assert overview["title"] == "Smart Charging"
 
 
 async def test_register_dashboard_twice_does_not_raise_or_duplicate(hass):

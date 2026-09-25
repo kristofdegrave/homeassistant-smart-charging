@@ -275,7 +275,7 @@ async def test_departure_time_enabled_when_deadline_available(hass):
 
 
 async def test_departure_time_label_and_disabled_by_both_reflect_capability(hass):
-    """ADR-0028 design doc §5: the one entity exercising both mechanisms together. Starts
+    """ADR-0028: the one entity exercising both mechanisms together. Starts
     deadline_available=True (label present, entity live), then reloads with it False -- the
     entity is registry-disabled and never added to hass this reload, yet BOTH disabled_by
     becomes INTEGRATION AND the sc_runtime label is removed. Starting from a fresh install
@@ -312,9 +312,8 @@ async def test_departure_time_label_and_disabled_by_both_reflect_capability(hass
 async def test_departure_time_user_disable_survives_capability_toggle(hass):
     """ADR-0028: a user's own disabled_by=USER on one departure-time entity must survive a
     deadline_available toggle in either direction, while its label keeps tracking the
-    capability correctly regardless -- the two mechanisms are independent (design doc's
-    Decision), since the entity being force-enabled by the user doesn't mean the capability is
-    present."""
+    capability correctly regardless -- the two mechanisms are independent, since the entity
+    being force-enabled by the user doesn't mean the capability is present."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_DEADLINE_AVAILABLE] = True

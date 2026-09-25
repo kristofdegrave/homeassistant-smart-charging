@@ -55,7 +55,7 @@ def resolve_departure_deadline(
     """R14's four-row table: external sensor -> holiday -> home-day -> day-of-week
     default. Any row, including the terminal default, may resolve to None ("no
     deadline"). Public-holiday wins over home-day when both apply (requirements.md
-    R14, second bullet).
+    R14, third bullet).
 
     `external_configured` is distinct from `external` being None: the
     `departure_external` adapter role is optional (NF3) -- when it is not mapped
@@ -63,7 +63,7 @@ def resolve_departure_deadline(
     other optional role in this system. When it IS mapped, its current reading
     (including None, "sensor currently reports no deadline") wins outright, per
     R14's "external sensor ... takes precedence over all configured values." The
-    coordinator (not this function) knows whether the role was configured (§10).
+    coordinator (not this function) knows whether the role was configured.
     """
     if external_configured:
         return external

@@ -146,7 +146,8 @@ def test_peak_demand_state_threads_window_size_and_averages_within_the_month():
 
 
 def test_peak_demand_state_resets_window_and_tracked_kw_on_month_rollover():
-    """A month rollover resets both the smoothing window and tracked_kw (design doc Sec 6.4) --
+    """A month rollover resets both the smoothing window and tracked_kw
+    (control-cycle.md's Monthly peak demand tracking, R21) --
     window_size=2 so the pre-rollover window would carry 2 samples if NOT cleared, proving the
     reset actually happens (window_size=1 would always show a 1-element window regardless, since
     smooth_net_power always appends the new sample before returning)."""
@@ -196,11 +197,11 @@ def test_peak_demand_state_period_month_is_none_when_untracked():
 
 
 def test_mode_handler_protocol_is_satisfied_by_each_adapter():
-    """Every _*ModeHandler (ADR-0012 Sec 3.4) satisfies the ModeHandler Protocol's
+    """Every _*ModeHandler (ADR-0012) satisfies the ModeHandler Protocol's
     desired_current(ctx, state) -> (current, new_state) / idle_state() / is_soc_gated /
     is_solar_mode shape -- a structural check that all five adapters share one call surface,
-    not a behavior test. ModeHandler is a plain (not @runtime_checkable) Protocol per the
-    design doc, so conformance is checked by static typing and by each adapter exposing the
+    not a behavior test. ModeHandler is a plain (not @runtime_checkable) Protocol,
+    so conformance is checked by static typing and by each adapter exposing the
     right callables/attributes, not by isinstance()."""
     handlers: list[ModeHandler] = [
         _OffModeHandler(),
@@ -238,7 +239,7 @@ def test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode():
 def test_mode_handler_idle_state_per_mode():
     """Issue #561: idle_state() replaces the coordinator's old Captar-vs-solar ternary that
     picked each SOC-gated mode's idle state by name. Off/Power return None -- neither is ever
-    stored in the coordinator's _mode_state (design doc Sec 3.4), so their idle_state() is
+    stored in the coordinator's _mode_state, so their idle_state() is
     never actually read; it exists only to satisfy the Protocol uniformly."""
     assert _OffModeHandler().idle_state() is None
     assert _PowerModeHandler(_config(), lambda: 10.0).idle_state() is None
@@ -376,7 +377,7 @@ def test_off_mode_handler_always_commands_zero_and_passes_state_through():
 def test_power_mode_handler_delegates_to_modes_power_desired_current():
     """_PowerModeHandler (ADR-0012) wraps modes/power.py::desired_current unchanged, reading
     the coordinator's mutable target_current through a zero-arg getter bound at construction
-    (design doc Sec 3.4) rather than duplicating it onto CycleContext. Anchor: tests/modes/
+    rather than duplicating it onto CycleContext. Anchor: tests/modes/
     test_power.py's own STATE_CHARGING/target_current=10.0 -> 10.0 A expectation."""
     handler = _PowerModeHandler(_config(), lambda: 10.0)
     ctx = CycleContext(
@@ -401,7 +402,7 @@ def test_power_mode_handler_commands_zero_when_disconnected():
 def test_power_mode_handler_reads_target_current_fresh_each_call():
     """target_current is coordinator-owned mutable state (set externally by the number entity),
     not part of "this cycle's readings" -- the getter must be re-invoked each call, not
-    memoized at construction (design doc Sec 3.4's stated rationale for the getter shape)."""
+    memoized at construction."""
     current_target = [10.0]
     handler = _PowerModeHandler(_config(), lambda: current_target[0])
     ctx = CycleContext(
@@ -417,8 +418,8 @@ def test_power_mode_handler_reads_target_current_fresh_each_call():
 def test_should_read_power_cooldown_min_off_config_when_cooldown_minutes_is_read():
     """R11 AC3/C5 (issue #1311): unlike Off (always 0.0, never read), Power's own
     `cooldown_minutes` now reads `power_cooldown_min` off config -- the coordinator's
-    fault-stop cooldown start is its only reader (design doc Sec 3.4; Power is never stored in
-    `_mode_state` or reached by `_dispatch_mode`'s own generic cooldown-start detection)."""
+    fault-stop cooldown start is its only reader (Power is never stored in `_mode_state` or
+    reached by `_dispatch_mode`'s own generic cooldown-start detection)."""
     # Arrange
     config = _config(power_cooldown_min=9.0)
     handler = _PowerModeHandler(config, lambda: 10.0)

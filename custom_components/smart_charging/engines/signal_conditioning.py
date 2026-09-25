@@ -2,7 +2,7 @@
 
 NF4 supply-voltage resolution, plus R10 net-import smoothing. `smooth_net_power`
 smooths `net_w` only; `solar_power` smoothing is deferred to whichever later slice
-first consumes that role (see design doc §6).
+first consumes that role.
 """
 
 
