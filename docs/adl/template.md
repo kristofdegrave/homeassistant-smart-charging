@@ -57,7 +57,7 @@ audit:
 It is complete when every hit is a row, in the count or in an out-of-scope group — not when the
 codebase has been audited. A search that genuinely returns no hits means the decision governs
 no existing site; say so, and give the search. A process decision is not automatically that
-case: it usually governs a tree of its own.
+case: it usually governs a tree of its own. The shape, with invented sites:
 
 ```markdown
 **Blast radius.** `rg -n 'unit_of_measurement' custom_components/ tests/` — 12 hits, wide
