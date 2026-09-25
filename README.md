@@ -202,7 +202,7 @@ A few terms recur throughout the documentation (all defined authoritatively in t
 
 | Document                                                         | Purpose                                                                                                                       |
 |------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------|
-| [Methodology](docs/plans/2026-06-24-analysis-approach-design.md) | The analysis-first, spec-driven approach this project follows.                                                                |
+| [Methodology](docs/reference/method/idea-to-product.md)          | The analysis-first, spec-driven approach this project follows.                                                                |
 | [System overview](docs/analysis/system-overview.md)              | Stakeholders, problem, goals, hardware context, and the authoritative Ubiquitous Language glossary.                           |
 | [Requirements](docs/analysis/requirements.md)                    | Functional (R1–R17), non-functional (NF1–NF4), and constraints (C1–C3), with MoSCoW priorities and SMART acceptance criteria. |
 | [Flows](docs/analysis/flows/)                                    | Per-behaviour flow documents (control cycle, each mode, SOC management, deadline override, etc.) — *in progress*.             |
