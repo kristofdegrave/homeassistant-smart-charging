@@ -198,7 +198,8 @@ class ModeHandler(Protocol):
     """R7: whether this mode requires an SOC reading and holds a `resume_state()` at the
     active limit via the coordinator's shared SOC-gated-stop guard. False for Off/Power --
     Power still stops at the active limit when a reading is present (#1335), but through its
-    own coordinator-side latch (`_power_reached_soc_limit`/`_power_soc_limit_reached`) rather
+    own coordinator-side latch (`_power_soc_limit_reached`, refreshed by
+    `_refresh_power_soc_limit_reached`) rather
     than through this flag or `_mode_state`, since Power must never be made to *need* a
     reading (ADR-0042: a missing reading stays a non-fault in Power)."""
 
