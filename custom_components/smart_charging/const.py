@@ -43,6 +43,12 @@ ATTR_LIMIT = "limit"  # M2 event payload key -- the SOC-limit value carried by t
 # restore round-trip (`_MonthlyPeakExtraStoredData`) and the live attribute stay in lockstep.
 ATTR_PERIOD_MONTH = "period_month"
 
+# `HomeDaySwitch`'s (switch.py) extra-restore-data / extra-state-attribute key for the set of
+# calendar dates ("YYYY-MM-DD", NF14) the home-day flag currently applies to. Named once here
+# so the restore round-trip (`_HomeDayExtraStoredData`) and `Store.read_home_day_dates`
+# (adapters/store.py) -- the coordinator's per-cycle read of it -- stay in lockstep.
+ATTR_APPLIES_TO = "applies_to"
+
 # Canonical charger states (ADR-0003 / glossary). Never add a fourth without a glossary change.
 STATE_DISCONNECTED = "disconnected"
 STATE_CONNECTED = "connected"

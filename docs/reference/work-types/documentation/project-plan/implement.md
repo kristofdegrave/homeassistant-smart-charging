@@ -2,8 +2,7 @@
 
 Author `docs/design/project-plan.md`: the implementation task breakdown, build order, and
 per-service ADR flags, derived **mechanically** from an approved `docs/design/system-design.md`,
-per Löwy's "project design" step. Rationale:
-`docs/plans/2026-07-07-lowy-system-design-method.md`.
+per Löwy's "project design" step.
 
 This file is the `documentation` work type's work file for a change touching
 `docs/design/project-plan.md`, reached from the label's own `implement.md` one level up, which is

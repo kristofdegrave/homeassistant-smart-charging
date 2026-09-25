@@ -23,7 +23,7 @@ In `docs/adl/`:
 
 Then [`done.md`](done.md), before you start scoring.
 
-Also read what the ADR cites (`R7`, `UC03`, `docs/plans/*.md`) when it exists on this branch.
+Also read what the ADR cites (`R7`, `UC03`, a design document) when it exists on this branch.
 A backfill ADR may cite a doc that exists only on another open branch: expected, not a broken
 reference — judge the ADR on internal merit.
 
