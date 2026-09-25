@@ -319,15 +319,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
           must tell a genuine Charging -> SocReached transition apart from a reading merely
           arriving at or above the limit while Power was never the one charging (Off active,
           a running cooldown, or Power's own first-ever cycle). Maintained only by
-          `_dispatch_mode`'s own Power branch -- `True` the instant it returns a nonzero
-          desired current, `False` the instant it returns 0.0 for any reason (cooldown-
-          blocked or the SOC-limit stop itself); read by `_resolve_active_soc_limit`, before
-          `_dispatch_mode` runs, as this cycle's *prior* value (last cycle's outcome), which is
-          exactly the FSM's incoming state. Cleared on a disconnect alongside
-          `_power_soc_limit_reached` (same trigger, same field docstring); deliberately NOT
-          reset by `_reset_mode_state_if_changed` on a mode switch, for the same reason
-          `_power_soc_limit_reached` is not -- a fact about Power's own last dispatch has
-          nothing to do with which mode is active now."""
+          `_dispatch_power` -- `True` the instant it returns a nonzero desired current, `False`
+          the instant it returns 0.0 for any reason (cooldown-blocked or either of its two
+          stop conditions); read by `_resolve_active_soc_limit`, before `_dispatch_mode` runs,
+          as this cycle's *prior* value (last cycle's outcome), which is exactly the FSM's
+          incoming state. Cleared on a disconnect alongside `_power_soc_limit_reached` (same
+          trigger, same field docstring) -- **and**, unlike that field, also reset by
+          `_reset_mode_state_if_changed` on every mode switch (its own docstring says why): a
+          live claim that Power *is currently* delivering current stops being true the moment
+          a different mode is dispatched instead, so it must not survive to be read back as
+          still true once Power is selected again."""
         self._step_up_gate = SolarStepUpGate()
         self._has_charged: bool = False
         self._active_cooldown: ActiveCooldown | None = None
@@ -1567,9 +1568,22 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         *is* the only memory of a stop made while a reading was present, kept for exactly the
         cycles that follow with no reading at all -- clearing it here would let a mode switched
         away and back, with the reading still missing when it returns, silently resume
-        charging past a limit nothing has actually changed to clear."""
+        charging past a limit nothing has actually changed to clear.
+
+        DOES reset `self._power_charging` to `False` (#1335) -- unlike `_power_soc_limit_reached`
+        right above, this field is not a record of a completed transition, it is a live claim
+        that Power *is currently* the one delivering current. That claim is simply false the
+        instant a different mode is dispatched instead (Power delivers nothing while it is not
+        the active mode), so leaving it `True` across a switch away would let a later switch
+        back read a stale "was genuinely charging" fact that this cycle's dispatch never
+        earned -- exactly the false-latch shape `_power_soc_limit_reached`'s own SET gate
+        (`_resolve_active_soc_limit`'s `power_in_charging`) exists to rule out. `_dispatch_power`
+        itself, the only other writer, sets it fresh on every Power cycle regardless, so this
+        reset only matters for the cycles Power is *not* dispatched -- exactly where it would
+        otherwise go stale."""
         if self.active_mode != self._last_active_mode:
             self._mode_state = self._fresh_mode_state()
+            self._power_charging = False
             self._last_active_mode = self.active_mode
 
     def set_target_current(self, value: float) -> None:

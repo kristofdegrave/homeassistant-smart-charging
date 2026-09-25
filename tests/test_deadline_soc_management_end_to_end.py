@@ -334,13 +334,14 @@ async def test_should_resume_power_charging_when_active_limit_rises_above_the_re
     hass, freezer
 ):
     """Should resume commanding Power's target current once the active SOC limit is raised back
-    above an already-at-limit ev_soc reading -- the stop from #1335's fix is not a latch against
-    a *rising limit* (only against a *missing reading*, see the next test), unlike the SOC-gated
-    modes' held resume state (Power keeps no ModeState of its own)."""
+    above an already-at-limit ev_soc reading -- UC04's Idle row, re-evaluated fresh every cycle
+    off a present reading, exactly like the other SOC-gated modes' own guard: this is Idle
+    blocking Charging, then no longer blocking it, not a genuine SocReached stop being left
+    (see the missing-reading test below for that latch, which this one does not set at all)."""
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
 
-    # Arrange: Manual + Power stopped at the default 80% limit by an 85% reading, same starting
-    # condition as the stop case above -- one refresh to actually reach that stopped state.
+    # Arrange: Manual + Power, an ev_soc reading already at the default 80% limit blocks
+    # Charging (UC04's Idle row) -- one refresh to actually reach that 0 A state.
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=85.0)
     coordinator = await _setup(
@@ -594,6 +595,50 @@ async def test_should_start_power_charging_without_a_reading_when_it_never_actua
 
     # Assert
     assert calls[-1]["value"] == 10.0  # CONF_DEFAULT_TARGET_CURRENT -- never actually stopped
+    assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
+
+
+async def test_should_start_power_charging_without_a_reading_after_a_mode_switch_mid_charge(
+    hass, freezer
+):
+    """Should command Power's target current on a cycle with no ev_soc reading, when Power was
+    genuinely charging before the user switched away from it -- not the case a genuine
+    Charging -> SocReached stop protects. Power's own "is it currently charging" fact must not
+    survive a mode switch: without that reset, a reading taken at or above the limit while a
+    *different* mode was active would be misread, on switching back, as evidence Power itself
+    had just made a stop there, even though this session's Power dispatch never saw a reading
+    above the limit at all."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: Power charges below the limit, then the user switches to Off before the reading
+    # ever reaches the limit.
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=75.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-1]["value"] == 10.0  # genuinely charging, below the limit
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_OFF)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-1]["value"] == 0.0  # Off's own 0 A
+
+    # Act: the reading reaches the limit while Off (not Power) is active, then Power is
+    # selected again on a cycle where the reading has since gone unavailable.
+    hass.states.async_set("sensor.ev_soc", "85.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert calls[-1]["value"] == 10.0  # never actually stopped in this Power session
     assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
 
