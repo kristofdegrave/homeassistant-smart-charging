@@ -171,7 +171,7 @@ def _power_flow_cards(entry: ConfigEntry) -> list[dict]:
 
 
 def _runtime_settings_cards(headings: Mapping[str, str]) -> list[dict]:
-    # T8 (2026-08-13 addendum): select.smart_charging_mode only has an effect under the
+    # select.smart_charging_mode only has an effect under the
     # Manual profile (system-overview.md's glossary already scopes it that way; Auto's own E2
     # drives dispatch instead) -- gated via the entities card's own `visibility` key rather than
     # a wrapping `type: conditional` card, HA's more native idiom for a single gated card in a
@@ -194,12 +194,12 @@ def _runtime_settings_cards(headings: Mapping[str, str]) -> list[dict]:
                 "title": headings[KEY_DASHBOARD_SECTION_RUNTIME_SETTINGS],
             },
             "grid_options": _full_width(),
-            # Deliberately no `exclude: label: sc_install` clause here (present in the
-            # 2026-07-08-runtime-dashboard-design.md sketch) -- per that doc's own Decision 1
-            # reasoning, no entity is ever labelled sc_install, so that clause can never match
-            # anything. The two excludes below are different, legitimate ones: mode is rendered
-            # by the gated card above instead (T8), and the nine departure-time entities move
-            # to the deadline tab instead (T9) -- neither should duplicate here.
+            # Deliberately no `exclude: label: sc_install` clause here: LABEL_SC_RUNTIME is
+            # the only label this integration applies to an owned entity, so no entity is ever
+            # labelled sc_install and such a clause could never match anything. The two
+            # excludes below are different, legitimate ones: mode is rendered by the gated card
+            # above instead, and the nine departure-time entities move to the deadline tab
+            # instead -- neither should duplicate here.
             "filter": {
                 "include": [{"label": LABEL_SC_RUNTIME}],
                 "exclude": [{"entity_id": _MODE_ENTITY}, {"domain": _TIME_DOMAIN}],
@@ -210,8 +210,8 @@ def _runtime_settings_cards(headings: Mapping[str, str]) -> list[dict]:
 
 
 def _deadline_cards() -> list[dict]:
-    # T9 (2026-08-13 addendum): still label-driven, not a hardcoded list (Decision 1's
-    # extensibility property) -- narrowed to the time domain via the same include filter
+    # Still label-driven, not a hardcoded list, so a newly added runtime entity appears
+    # here without editing this file -- narrowed to the time domain via the same include filter
     # object (auto-entities ANDs the keys within one include entry). `show_empty: False` keeps
     # the tab from rendering a visibly-empty card now that the departure-time entities'
     # `sc_runtime` label is conditionally absent when the deadline capability is off (#674).
@@ -230,8 +230,8 @@ def _deadline_cards() -> list[dict]:
 def build_dashboard_config(entry: ConfigEntry, headings: Mapping[str, str] | None = None) -> dict:
     """Return the full Lovelace `views` config for the runtime dashboard (ADR-0022).
 
-    Two views (T9, 2026-08-13 addendum) -- HA renders `views` of length >1 as tabs natively,
-    so no new registration mechanism is needed beyond ADR-0022's Option C.
+    Two views -- HA renders `views` of length >1 as tabs natively, so no new registration
+    mechanism is needed beyond ADR-0022's Option C.
 
     `headings` (NF8): the view/card/section titles, keyed by the `KEY_DASHBOARD_*` constants
     -- `async_register_dashboard` passes HA's system-language translations; a caller with no

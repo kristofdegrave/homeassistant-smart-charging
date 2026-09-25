@@ -828,9 +828,9 @@ async def test_dispatches_to_captar_when_selected(hass):
 
 
 async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass):
-    """R3's bookkeeping is not Captar-specific -- Off/Power update it too. Bypasses the
-    ample-headroom test helpers deliberately, to observe the tracker's own cold-start
-    behavior (design doc Sec 6.4)."""
+    """R21: tracking runs on every control cycle regardless of the active mode -- Off/Power
+    update it too, not just Captar. Bypasses the ample-headroom test helpers deliberately, to
+    observe the tracker's own cold-start behavior."""
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=3400.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
@@ -843,7 +843,8 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
 
 
 async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
-    """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
+    """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary --
+    `charger_power - net_power`, raw, distinct from R10's
     smoothed control-path `surplus_w` (#602 T1). Cycle 2's baseline (net_w - charger_w =
     2000 - 3000 = -1000) happens to sit ABOVE cycle 1's (1000 - 3000 = -2000), so issue #990's
     debounce (which only delays a LOWER baseline) never engages here -- if a future edit
@@ -1107,7 +1108,7 @@ async def test_mapped_but_unavailable_external_monthly_peak_is_not_a_fault(hass)
 
 
 async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_higher_external(hass):
-    # D-6: CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
+    # CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
     # the merged operand -- checked across TWO cycles, since monthly_peak_kw is produced by
     # self._peak_demand.update(...) before the merge; a refactor that wrote the merged value
     # back into the tracker would pass a one-cycle check and only surface on the next cycle.
@@ -1135,7 +1136,7 @@ async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_highe
 
 
 async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
-    # D-4: the mapped role's own raw reading surfaces via _read_role's cache write, same as
+    # The mapped role's own raw reading surfaces via _read_role's cache write, same as
     # any other wired read role.
     adapters = _adapters(
         status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=4.09
@@ -1152,7 +1153,7 @@ async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
 
 
 async def test_external_monthly_peak_merge_ignores_captar_available(hass):
-    # D-5: the merge is not gated on captar_available -- it runs, and moves
+    # The merge is not gated on captar_available -- it runs, and moves
     # effective_peak_limit_kw, even with the capability off. R21's own AC requires the
     # tracked/merged value to still be tracked and surfaced for observability regardless of
     # capability (issue #1018's fix means `_apply_peak_clamp` itself no longer consults it in
@@ -1177,7 +1178,7 @@ async def test_external_monthly_peak_merge_ignores_captar_available(hass):
 
 
 async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak(hass):
-    # D-3: the PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
+    # The PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
     # ev_soc-missing early-fault return) must also reflect the merged operand -- updating only
     # the final call site would leave this one on the unmerged value undetected.
     config = _config()
@@ -1198,7 +1199,8 @@ async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak
 
 
 async def test_adapter_readings_contains_every_currently_wired_role(hass):
-    """entity-catalog.md:154/ADR-0021 -- one key per currently-wired *read* role, excluding
+    """entity-catalog.md's `sensor.smart_charging_adapter_readings` row / ADR-0021 -- one key
+    per currently-wired *read* role, excluding
     ROLES_ADAPTER_READINGS_EXCLUDED (#602 T4)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0, ev_soc=50.0)
     adapters[ROLE_NOTIFICATION_TARGET] = _FakeNumeric("notify.mobile_app")  # write-only role
@@ -1340,7 +1342,7 @@ async def test_ev_soc_fault_does_not_advance_adapter_readings_at(hass, freezer):
     """Issue #648: the ev_soc-fault early return must NOT advance `_role_readings_at` to this
     cycle's own timestamp, exactly like the required-role fault path a few lines above it
     (coordinator.py's own comment: "the cache keeps whichever timestamp a prior successful
-    cycle set"). ADR-0021/entity-catalog.md:154 define
+    cycle set"). ADR-0021 and entity-catalog.md's own row define
     `sensor.smart_charging_adapter_readings`'s state as the timestamp of the LAST SUCCESSFUL
     cycle -- an ev_soc fault means this cycle wasn't one, so the timestamp must stay at
     cycle 1's value, not jump to cycle 2's, even though cycle 2's required-adapter read (status/
@@ -1392,8 +1394,9 @@ async def test_adapter_readings_at_advances_on_a_second_successful_cycle(hass, f
 
 
 async def test_time_to_full_min_matches_the_glossary_formula(hass):
-    """system-overview.md glossary/entity-catalog.md:152 -- capacity * (limit - soc) / 100,
-    projected at this cycle's own commanded (pre-clamp) current (#602 T3)."""
+    """system-overview.md glossary / entity-catalog.md's `sensor.smart_charging_time_to_full`
+    row -- capacity * (limit - soc) / 100, projected at the current `charger_current`
+    set-point (#602 T3)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord, result = await _run(hass, adapters, _config(), target=8.0)
     assert coord.active_mode == MODE_POWER
@@ -1458,8 +1461,10 @@ async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_
 
 
 async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
-    """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
-    clamp itself computes (#602 T2)."""
+    """entity-catalog.md's `sensor.smart_charging_peak_headroom_a` row / control-cycle.md
+    step 5 -- the same target and the same accepted household baseline the R3 clamp itself
+    holds (#602 T2). R3's deferral cases are pinned separately, by
+    test_peak_headroom_a_does_not_spike_from_a_transient_stale_charger_power_reading."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     config = dataclasses.replace(config, safety_margin_w=250.0)
@@ -1592,11 +1597,12 @@ async def test_peak_clamp_never_engages_for_a_selectable_mode_when_captar_absent
 
 
 async def test_power_never_stops_on_its_own_when_captar_capability_absent(hass):
-    """R17's own AC (requirements.md): with the CapTar capability absent, Power never stops
-    on its own and never enters a cooldown -- the force-stop branch this PR's gate now
-    prevents from running at all is Captar's own R3-breach stop (coordinator.py's
-    `_apply_peak_clamp`), so a sustained breach that would otherwise force a Captar-mode
-    cooldown must instead leave a Power-mode session commanding current, uninterrupted."""
+    """R11's AC (requirements.md): with the CapTar capability absent or R17's peak-protection
+    option off, Power never stops on its own and never enters a cooldown -- the force-stop
+    branch the capability gate prevents from running at all is Captar's own R3-breach stop
+    (coordinator.py's `_apply_peak_clamp`), so a sustained breach that would otherwise force a
+    Captar-mode cooldown must instead leave a Power-mode session commanding current,
+    uninterrupted."""
     config = _config()
     config = dataclasses.replace(
         config, max_peak_kw=1.0, peak_grace_min=0.0, captar_available=False
@@ -1940,7 +1946,7 @@ async def test_disconnect_clears_active_cooldown(hass):
 async def test_power_respects_peak_by_default(hass):
     """Power's own target(16A) would normally be commanded outright (existing MVP
     behavior); with power_respect_peak left at its default (True), R17 now ALSO
-    bounds it by the R3 clamp -- a deliberate behavior change (design doc Sec 7)."""
+    bounds it by the R3 clamp -- a deliberate behavior change."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     # Same headroom math as test_peak_clamp_reduces_captar_below_headroom: 10A available.
@@ -3099,8 +3105,9 @@ async def test_solar_cooldown_delays_deadline_urgency_escalation_into_captar(has
     Idle by the mode switch (as before), but the coordinator-scoped `_active_cooldown` (fixed
     at Solar's own duration when it stopped) still blocks Captar's Idle -> Charging
     transition. This is control-cycle.md's own accepted trade-off: "an urgency escalation
-    (R5) may have to wait out the remainder of a running cooldown ... rather than this
-    Must-priority hardware protection being defeated"."""
+    can be held off for the remainder of a running cooldown (at most `Captar`'s 10
+    minutes), a bounded delay to R5's best-effort guarantee rather than a breach of R11's
+    Must-priority hardware protection"."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
@@ -3413,7 +3420,7 @@ async def test_seed_monthly_peak_passes_a_negative_kw_through_unchanged(hass):
 
 
 # --- Task 4.1 (ADR-0012 coordinator decomposition): explicit ADR-0006 clamp-integrity check,
-# made permanent regression tests rather than a one-time manual read (plan Step 4). ---
+# made permanent regression tests rather than a one-time manual read. ---
 
 
 async def test_power_opt_out_of_r3_does_not_disable_c4_ceiling(hass):
@@ -3536,7 +3543,7 @@ async def test_set_active_profile_falls_back_to_manual_on_unrecognized_stored_pr
 
 
 async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_none(hass):
-    """Success criterion 4: a missing/unresolvable read is not a fault -- keep the current value."""
+    """A missing/unresolvable read is not a fault -- keep the current value."""
     store = _FakeStore({})  # every read() call returns None
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30

@@ -1,4 +1,4 @@
-"""HA-harness tests for the Notification Manager (M3 -- UC08/ADR-0011/notifications design).
+"""HA-harness tests for the Notification Manager (M3 -- UC08, ADR-0011).
 
 Drives M3 through its public `async_evaluate` tick directly (not HA listener/timer plumbing --
 that is Task 5.2's job), against fake RA1/RA2 read adapters + a fake Store (mirroring
@@ -344,8 +344,8 @@ async def test_stale_prompt_response_is_not_misread(hass):
 
 
 async def test_missing_notification_target_adapter_stays_inert(hass):
-    """No ROLE_NOTIFICATION_TARGET mapped -- M3 stays inert (mirrors M2's design
-    success-criterion 6 analog for a missing required adapter)."""
+    """No ROLE_NOTIFICATION_TARGET mapped -- M3 stays inert, mirroring M2, which stays inert
+    when its own required adapter role is unmapped."""
     manager = NotificationManager(
         hass,
         adapters={
@@ -498,7 +498,8 @@ async def test_unavailable_home_day_external_reading_sends_normally(hass):
     """Fail-OPEN default (deliberate, unlike the other two roles' fail-closed reads):
     home_day_external is mapped but read() returns None (ADR-0003 fault signal) -> folds
     to False, same as unmapped, so the prompt still sends -- a transient misread must not
-    silently skip a genuine evening (design: the driver can always answer "no")."""
+    silently skip a genuine evening -- the driver can always answer "no"
+    (UC08 alternate flow 3a), which leaves the flag unset just as a fold to False would."""
     calls = _register_notify_capture(hass)
     manager = _manager(hass, home_day_external=None)
 

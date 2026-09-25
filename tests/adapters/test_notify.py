@@ -1,6 +1,6 @@
 """HA-harness tests for the notify adapter (RA4 -- ADR-0003 role extension, ADR-0009).
 
-Anchors: notifications design doc §6 (adapter mechanics), success criteria 1-2.
+Anchors: docs/design/system-design.md (Notification Resource Access, V11).
 """
 
 from custom_components.smart_charging.adapters.notify import (

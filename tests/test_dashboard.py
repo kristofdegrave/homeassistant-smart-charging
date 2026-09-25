@@ -58,8 +58,8 @@ def _cards(config, section_title, view_path="overview"):
 
 
 def test_dashboard_has_two_views_overview_and_deadline():
-    """T9 (2026-08-13 addendum): HA renders >1 views in a YAML dashboard as tabs natively --
-    no new registration mechanism needed beyond ADR-0022's Option C."""
+    """HA renders >1 views in a YAML dashboard as tabs natively -- no new registration
+    mechanism needed beyond ADR-0022's Option C."""
     config = build_dashboard_config(_entry())
 
     assert [v["path"] for v in config["views"]] == ["overview", "deadline"]
@@ -242,7 +242,7 @@ def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card()
     assert len(cards) == 2
     mode_gate_card, auto_entities_card = cards
 
-    # T8 (2026-08-13 addendum): the mode selector only makes sense under the Manual profile
+    # The mode selector only makes sense under the Manual profile
     # (system-overview.md's glossary already scopes it that way) -- gated via the entities
     # card's own `visibility` key, HA's native idiom in a `sections` view. The condition schema
     # keys the entity as `entity`, NOT `entity_id` (that's the automation/script condition
@@ -258,11 +258,11 @@ def test_runtime_settings_section_has_the_mode_gate_and_the_auto_entities_card()
 
     assert auto_entities_card["type"] == "custom:auto-entities"
     assert auto_entities_card["filter"]["include"] == [{"label": LABEL_SC_RUNTIME}]
-    # Regression guard for the deliberate deviation from the 2026-07-08 design doc's sketch
-    # (Decision 1's own reasoning: no entity is ever labelled sc_install, so that clause can
-    # never match anything). The two excludes here are different, legitimate ones: mode is
-    # rendered by the conditional card above instead (T8), and the nine departure-time
-    # entities move to the deadline tab instead (T9) -- neither should duplicate here.
+    # Regression guard for a deliberate deviation from the original sketch: no entity is ever
+    # labelled sc_install, so that clause can never match anything. The two excludes here are
+    # different, legitimate ones: mode is rendered by the conditional card above instead, and
+    # the nine departure-time entities move to the deadline tab instead -- neither should
+    # duplicate here.
     assert auto_entities_card["filter"]["exclude"] == [
         {"entity_id": "select.smart_charging_mode"},
         {"domain": "time"},

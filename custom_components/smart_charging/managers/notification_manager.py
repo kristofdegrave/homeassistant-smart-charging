@@ -1,15 +1,15 @@
 """Notification Manager (M3, V11) -- UC08 evening home-day prompt orchestration, plus R5
 deadline-unreachable notice delivery.
 
-A Manager (system-design Sec4 rule 5 / ADR-0011): reads RA1/RA2 adapter roles, sends and
+A Manager (system-design.md §4 rule 2 / ADR-0011): reads RA1/RA2 adapter roles, sends and
 reads back the actionable prompt through RA4 (adapters/notify.py), and writes the
 resolved answer through the RA3 Store (ADR-0018) onto switch.smart_charging_home_day.
 Decides nothing itself -- notification_state.evaluate_prompt (M3's pure logic, plain
 pytest per ADR-0009) is the single source of the UC08 lifecycle
 (docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md "State model"); this module only
 observes the preconditions/trigger and carries out the send/write effects that function
-only signals. This module NEVER calls or is called by the Coordinator (M1) -- system-design
-Sec4 rule 5 -- and imports nothing from coordinator.py.
+only signals. This module NEVER calls or is called by the Coordinator (M1) -- system-design.md
+§4 rule 5 -- and imports nothing from coordinator.py.
 
 Midnight is a per-evaluation wall-clock comparison (`dt_util.now()` date rollover), driven
 by the caller's own tick -- no new HA timer/scheduler primitive. `async_evaluate`'s `now`
@@ -93,7 +93,8 @@ class NotificationManager:
     Known gap:
     - `_state`/`_date` are in-memory only and reset to Not-sent on every HA restart, so a
       restart between a prompt being sent and midnight can cause a second prompt the same
-      evening (UC08's "at most once per evening" is only guaranteed within one HA session).
+      evening (UC08's terminal-for-the-evening state model is only guaranteed within one HA
+      session).
     Restart persistence is not required by UC08 and is left for a
     follow-up if it proves to matter in practice.
     """
@@ -220,7 +221,8 @@ class NotificationManager:
             # result can signal failure. Logged at warning, not silently accepted: the
             # driver's "yes" answer has already been consumed by RA4's read() above and
             # cannot be re-observed on a later tick, so a failed write here is otherwise an
-            # unrecoverable, invisible loss of UC08's postcondition ("flag set on yes").
+            # unrecoverable, invisible loss of UC08's postcondition -- the home-day flag for
+            # tomorrow being set when "yes" was given before midnight.
             if not await self._store.write(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY, True):
                 _LOGGER.warning(
                     "Failed to write home-day flag after a 'yes' answer -- flag left unset"

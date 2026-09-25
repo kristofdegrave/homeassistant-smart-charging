@@ -1,6 +1,6 @@
 """Notify adapter: send + tag-keyed response capture (RA4, V11, ADR-0003 role extension).
 
-No new ADR (design doc §6) -- the same shape RA2/RA3 already extend: one class per role,
+No new ADR -- the same shape RA2/RA3 already extend: one class per role,
 config-flow entity mapping, `ROLE_*` constant, factory wiring.
 """
 
@@ -18,8 +18,8 @@ from homeassistant.components.notify import (
 from homeassistant.const import ATTR_ENTITY_ID, Platform
 from homeassistant.core import Event, HomeAssistant, callback
 
-# HA's standard mobile-app action event (human-partner decision 2, design doc §6) -- fired
-# when the user taps an action button on an actionable notification.
+# HA's standard mobile-app action event -- fired when the user taps an action button on an
+# actionable notification.
 EVENT_MOBILE_APP_NOTIFICATION_ACTION = "mobile_app_notification_action"
 
 # Shared "tag"/"action" key names: HA uses the same field names in both the
@@ -38,7 +38,7 @@ _ACTION_BUTTON_LABEL_KEY = "title"
 
 @dataclass
 class NotificationRequest:
-    """RA4 write payload (design doc §6).
+    """RA4 write payload.
 
     `message`/`title` reach `notify.send_message` unchanged. `actions`, when given, are the
     action ids (e.g. `ACTION_HOMEDAY_YES`/`ACTION_HOMEDAY_NO`) HA renders as tappable
@@ -59,7 +59,7 @@ class NotificationRequest:
 class NotifyAdapter:
     """RA4 (V11): sends notify messages and captures the tag-keyed action response.
 
-    Reuses the ADR-0003 `Adapter` protocol as a role extension (design doc §6): the
+    Reuses the ADR-0003 `Adapter` protocol as a role extension: the
     shared `Adapter.write` value is typed `float | str | bool | time` today; this role's
     payload is the small structured `NotificationRequest` instead, so in practice the
     contract this adapter satisfies is `float | str | bool | time | NotificationRequest`
@@ -89,7 +89,7 @@ class NotifyAdapter:
         foreign action (from some other actionable notification) can fire after the
         user's real answer. Filtering here, not just in read(), stops a later foreign
         event from ever overwriting a genuine answer already captured for the current
-        tag (the stale-response guard, design doc §6 / success criterion 2).
+        tag (the stale-response guard).
         """
         tag = event.data.get(_DATA_KEY_TAG)
         action = event.data.get(_DATA_KEY_ACTION)
@@ -127,15 +127,14 @@ class NotifyAdapter:
     async def read(self) -> str | None:
         """Return the action captured for the current actionable tag, else None.
 
-        The stale-response guard (design doc §6 / success criterion 2): a response
+        The stale-response guard: a response
         tagged to a superseded notification -- filtered out in _handle_action, so it
         never reaches here -- or no response yet, returns None, never a stale value.
 
         The returned answer is consumed: once read, it is cleared so it
         is valid for exactly one read() of its own tag/prompt cycle, not replayed on
-        every subsequent call. This narrows design doc §4/§6's "returns the last captured
-        actionable response" to "returns it once" -- a deliberate deviation from the
-        design doc, not yet reflected back into it; `managers/notification_manager.py`
+        every subsequent call. This deliberately narrows a plain "returns the last captured
+        actionable response" contract to "returns it once"; `managers/notification_manager.py`
         calls `read()` exactly once per resolved prompt-state transition, not polling it
         speculatively.
         """

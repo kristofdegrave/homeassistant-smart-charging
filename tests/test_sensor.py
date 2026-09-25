@@ -226,8 +226,8 @@ class _StubPeakCoordinator:
 
 async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass):
     """A restored kW value + `period_month` attribute seeds the coordinator's Peak-Demand
-    Tracker's (tracked_kw, tracked_month) across a restart (design doc Sec 6.4) -- the
-    15-minute smoothing window is deliberately NOT seeded (Sec 6.4: rebuilds from scratch)."""
+    Tracker's (tracked_kw, tracked_month) across a restart (R21) -- the 15-minute smoothing
+    window is deliberately NOT seeded (R21: rebuilds from scratch)."""
     entity_id = "sensor.smart_charging_monthly_peak_kw"
     mock_restore_cache_with_extra_data(
         hass,
@@ -571,7 +571,7 @@ async def test_solar_surplus_sensor_enabled_when_solar_available(hass):
 async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(hass):
     """ADR-0028: a reload (ADR-0008) with solar_available flipped to True clears disabled_by
     on the entity that already exists in the registry from the prior (disabled) setup, and the
-    entity is live again (design doc §5: not just a registry-field flip)."""
+    entity is live again -- not just a registry-field flip."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
@@ -597,7 +597,7 @@ async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(
 
 async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(hass):
     """ADR-0028: reverse of the above -- a reload with solar_available flipped to False
-    disables the previously-enabled entity and removes it from hass (design doc §5)."""
+    disables the previously-enabled entity and removes it from hass."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_SOLAR_AVAILABLE] = True
@@ -628,7 +628,7 @@ async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(h
 
 
 async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
-    """Regression guard (design doc §3.1): async_setup_entry must resolve solar_available via
+    """Regression guard: async_setup_entry must resolve solar_available via
     entry.data.get(CONF_SOLAR_AVAILABLE, ...) -- the same pattern select.py/time.py already use
     -- and NOT via entry.runtime_data.coordinator._config, a private Client->Manager access
     path no platform file uses today. Rigs entry.data and a stubbed private attribute to
@@ -770,7 +770,7 @@ def test_config_mirror_sensor_reads_from_its_spec():
     be false for a bool spec."""
     # Fictional suffix/unit/device_class pairing, deliberately -- a real catalog object_id here
     # (e.g. "grid_supply_ceiling_a") would pair it with the WRONG unit/device_class for that row
-    # (that one is amperes/CURRENT per the design doc's mapping table), a copy-paste hazard for
+    # (that one is amperes/CURRENT per entity-catalog.md's row for it), a copy-paste hazard for
     # whoever writes T2's real fixtures.
     spec = _ConfigMirrorSpec(
         object_id_suffix="example_config_value",
@@ -800,8 +800,8 @@ def test_config_mirror_sensor_formats_a_bool_spec_value():
 async def test_async_setup_entry_registers_capability_config_mirror_sensors(hass):
     """Proves both non-options source buckets in one setup call: solar_available/
     captar_available come off entry.runtime_data.config (they ARE SmartChargingConfig fields);
-    deadline_available/notifications_available come off entry.data directly (they are NOT --
-    entity-catalog.md/#888's design doc)."""
+    deadline_available/notifications_available come off entry.data directly (they are NOT
+    SmartChargingConfig fields, #888)."""
     captured_entities = []
 
     def _capture(entities):
@@ -918,7 +918,7 @@ async def test_async_setup_entry_registers_power_and_notification_config_mirror_
 
     assert mirrors["power_cooldown_min"].native_unit_of_measurement == UnitOfTime.MINUTES
     assert mirrors["reminder_lead_h"].native_unit_of_measurement == UnitOfTime.HOURS
-    # The other four have no unit/device_class per the design doc's mapping table --
+    # The other four have no unit/device_class per entity-catalog.md --
     # evening_prompt_time deliberately: its value is a plain "HH:MM" string, not a datetime, so
     # no SensorDeviceClass.TIMESTAMP applies despite entity-catalog.md's "time" column.
     for suffix in (
@@ -979,8 +979,8 @@ async def test_async_setup_entry_power_and_notification_mirrors_fall_back_to_the
 # --- Installation/Charger/Peak protection config-mirror sensors (T2, ADR-0031, #888) -------
 
 # (object_id_suffix, SmartChargingConfig field, unit, device_class) -- object_id_suffix is the
-# catalog's documented id; the field name diverges from it for four of these twelve (design
-# doc's naming-drift table), which is exactly what this test pins.
+# catalog's documented id (entity-catalog.md); the SmartChargingConfig field name diverges from
+# that id for four of these twelve, which is exactly what this test pins.
 _T2_MIRROR_CASES = [
     ("smoothing_window", "smoothing_window", "cycles", None),
     (
@@ -1049,9 +1049,9 @@ async def test_async_setup_entry_registers_t2_config_mirror_sensors(hass):
 
 # --- EV/Solar config-mirror sensors (T3, ADR-0031, #888) -----------------------------------
 
-# (object_id_suffix, SmartChargingConfig field it reads, unit, device_class) -- per the design
-# doc's 35-row mapping table. object_id_suffix diverges from the config field name for the two
-# solar_only_rounding_* rows (design doc's naming-drift section).
+# (object_id_suffix, SmartChargingConfig field it reads, unit, device_class) -- per
+# entity-catalog.md's disabled-by-default rows. object_id_suffix diverges from the config field
+# name for the two solar_only_rounding_* rows.
 _T3_MIRROR_ROWS = [
     ("ev_battery_capacity_kwh", "ev_battery_capacity_kwh", UnitOfEnergy.KILO_WATT_HOUR, None),
     (
