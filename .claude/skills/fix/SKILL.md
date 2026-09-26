@@ -89,11 +89,13 @@ Fixing is re-authoring — work with the same context the original author had:
 1. Apply §3, re-authoring per §4 rather than patching around the work file.
 2. Reply in its thread via `resolve-review-thread` §1: what changed (with file references),
    which issue was filed, or why not — one or two sentences. The body starts with
-   `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. A thread reply
-   or PR comment the session posts in any step, and that no other marker of the session's
-   fits, starts with `<!-- ai-fix-note -->`, which marks nothing handled. Which posts carry a
-   marker is the contribution workflow's **Rounds and the cap** rule. A review body has no
-   thread — account for it in the summary instead, mentioning the reviewer by `@login`.
+   `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. A review body
+   has no thread — account for it in the summary instead, mentioning the reviewer by `@login`.
+
+Any other thread reply or PR comment the session posts, in any step, that no other marker of
+the session's fits starts with `<!-- ai-fix-note -->`, which marks nothing handled. Which posts
+carry a marker is the **Rounds and the cap** rule (routed from `CLAUDE.md`'s **Contribution
+workflow** section).
 
 ## 6. Then once, for the run
 

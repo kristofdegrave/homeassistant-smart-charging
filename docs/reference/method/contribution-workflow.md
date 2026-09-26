@@ -120,12 +120,13 @@ never as a loose question in a status report.
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
-  own markers (the local round marker, an `ai-fix-` marker, the escalation marker, the
-  self-grant marker — every such item the session posts carries one, `fix`'s note marker
-  where no other fits, the hold-reason review aside, **Git identity** below), posted while an
-  exit label was on: after its `labeled` event and before any later `unlabeled` one. Nothing else resets the count, a self-grant
-  comment included; no reset event means counting from the PR's first review. This is the
-  rule's only statement — the `review` skill's *Count the rounds* item is its one procedure.
+  own markers (the local round, `ai-fix-`, escalation and self-grant markers; **Git identity**
+  below), posted while an exit label was on: after its `labeled` event and before any later
+  `unlabeled` one. Every session post carries one — a review's inline comments via its body,
+  else `fix`'s note marker — bar the hold-reason review (**Exit labels** below). Nothing else
+  resets the count, a self-grant comment included; no reset event means counting from the
+  PR's first review. This is the rule's only statement — the `review` skill's *Count the
+  rounds* item is its one procedure.
   A round the human grants, or a human review, therefore never gets refused by a cap it did
   not ask for.
 
