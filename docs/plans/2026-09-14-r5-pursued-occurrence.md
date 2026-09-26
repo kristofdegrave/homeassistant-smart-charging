@@ -248,7 +248,7 @@ path the split changes); **plain pytest** · `tests/test_coordinator_cycle.py` f
 the smoothing window and the debounced raw value disagree — asserts, in one test:
 
 - the escalated rate's **peak** bound is computed from the smoothed baseline;
-- its **C4 ceiling** bound is computed from the smoothed net reading (`requirements.md` R5 `:91`);
+- its **C4 ceiling** bound is computed from the same smoothed baseline (`requirements.md` R5 `:91`);
 - the R3 clamp and the C4 clamp both still compute from raw;
 - `sensor.smart_charging_peak_headroom_a` is still the raw-based readout.
 
@@ -262,16 +262,18 @@ other fixture that bound is never composed, the peak assertion is vacuous, and t
 instruction above has no reachable state to describe. **Add a second, smaller case** on a
 CapTar-absent fixture: the rate is C1/C4 only, and its C4 bound is still smoothed.
 
-**Implementation.** **One** new `CycleContext` field, `smoothed_net_w` — not two.
-`_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so it derives the peak
-operand itself: `peak_headroom_a(baseline_w=ctx.smoothed_net_w - ctx.charger_w)` and
-`ceiling_headroom_a(net_w=ctx.smoothed_net_w)`, with `charger_w` unchanged since R10 smooths net
-grid power alone. Both reads are the helper's and no other caller's. Do not derive either from
-`ctx.surplus_w`, which is the peak operand's exact negation (D-3).
+**Implementation.** *Amended after the forecast's baseline was decided (R5's third
+smoothed-baseline criterion): the bounds read R10's admitted mean in household sign, not a
+net-only mean.* **One** new `CycleContext` field, `smoothed_baseline_w` — the admitted mean in
+household sign `_run_cycle` already folds (`smoothed_household_w`). `_escalated_maximum_permitted_rate_a` takes only `ctx` and
+`peak_operand_kw` and fits both bounds to it: `peak_headroom_a(baseline_w=ctx.smoothed_baseline_w)`
+and `ceiling_headroom_a(net_w=ctx.smoothed_baseline_w, charger_w=0.0)`, the helper reading only
+their difference. A named field rather than `-ctx.surplus_w`: the two are the same value by
+design, and the name keeps the forecast's operand visible at the call site (D-3).
 
 **Both construction sites, and no default.** `CycleContext` is built twice in
-`custom_components/`: `coordinator.py:579` and `:1382`, the baseline dry-run, whose docstring warns
-that a placeholder there is the `#990` hazard. `smoothed_net_w` is added as a **required** field —
+`custom_components/`: `coordinator.py`'s `_run_cycle` ctx and the baseline dry-run ctx, whose
+docstring warns that a placeholder there is the `#990` hazard. `smoothed_baseline_w` is added as a **required** field —
 no default — for the reason that docstring gives: a permissive default lets a forgotten construction
 site fail open silently, and this field decides a forecast. That makes the test constructions in
 `tests/test_coordinator_cycle.py` part of this commit; move them here rather than in a follow-up,
@@ -282,13 +284,28 @@ placeholder is sound there **only** because that ctx never reaches `_apply_peak_
 `_escalated_maximum_permitted_rate_a`. State the guarantee at the site rather than leaving the
 reader to infer it from the neighbour.
 
-**Mutation checks**, two — point the peak bound back at `ctx.baseline_w`, then the C4 bound back at
-`ctx.net_w`, and confirm the test fails each time on its own.
+**A second failing test**, for R5 `:92`'s baseline together with R10's admission rule (its
+first criterion) and ADR-0049: with the household steady, run the
+cycle until the one after the system's second charger-current set since the coordinator started,
+and until the window has turned over past every sample taken before that, then change the charger
+current once through a lever that is neither a steady input nor a bound of the rate — state of
+charge reaching the active SOC limit, which drops the charger to 0 A, not C1's maximum, `Power`'s
+R17 opt-out, the voltage or the peak limit. Assert the rate on the cycle after the step and on
+every cycle through the window's turnover, while the spell lasts: identical to the rate before
+it. Run it three times: with every power reading tracking the draw, with the charger power
+reading lagging one cycle on the step only, and with net import lagging one cycle on the step
+only.
+
+**Mutation checks**, three — point the peak bound back at `ctx.baseline_w`, then the C4 bound back
+at `ctx.net_w`/`ctx.charger_w`, then fold the lagged cycle's sample in, and confirm a test fails
+each time on its own.
 
 **Anchors:** `requirements.md` R5 `:90-92` — the smoothed operand, every reading-dependent bound
 fitted to it, and no R3 deferral on it — and R10; `system-overview.md`'s `escalated maximum
 permitted rate` and `maximum permitted rate` entries. **ADR-0012** governs the `CycleContext`
-field.
+field. The forecast now consumes charger power smoothed, jointly with net import, so this task
+also depends on the ADR narrowing ADR-0006 step 2's raw charger power for this forecast, as
+ADR-0049 did for step 6 — which must be accepted before this task lands.
 
 ## T11 — The two ACs that rot silently
 
@@ -352,15 +369,15 @@ notification acceptance criterion in `requirements.md` for the behaviour; `UC05`
 - **ADR-0006**'s call-order spy test passes **unchanged** — no step added, removed or reordered.
 - `grep` `custom_components/` for `urgency_latched`: none. (E3's `missed_deadline_hold` parameter
   is expected and is not urgency state — success criterion 1 says why.)
-- `grep` `_escalated_maximum_permitted_rate_a`'s body for `ctx.net_w` and `ctx.baseline_w`: neither
-  reaches it any more — the raw readings belong to the clamps and the readout.
+- `grep` `_escalated_maximum_permitted_rate_a`'s body for `ctx.net_w`, `ctx.charger_w` and
+  `ctx.baseline_w`: none reaches it any more — the raw readings belong to the clamps and the readout.
 - **The prose this slice falsifies is updated, not just the code.** `engines/deadline.py:121-123`
   and `:196-223` (the `urgency_latched` explanation, and "a missed-deadline hold clearing (issue
   #1006)"), `deadline.py:140-142` (the result field comments — `required_a`'s "None when no
   deadline is resolved" is false while held, and `urgent`'s "a latch not yet cleared"),
   `coordinator.py:731-738` (the latch comment block, which also states the fault-cycle rule the new
-  field inherits), `coordinator_cycle.py:62` (`net_w`'s "coordinator.py's separate `smoothed_net_w`"
-  — no longer separate), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
+  field inherits), `coordinator_cycle.py:64` (`net_w`'s "coordinator.py's separate, joint `smoothed_household_w`"
+  — now carried on ctx as `smoothed_baseline_w`, so it names that field), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
   a second at T5), and `project-plan.md`'s Phase-2 status row (`:102`) alongside its E4 and M1 status
   lines, all describe a model this slice replaces. A grep for `urgency_latched` catches none of them,
   which is why this bullet is a list and not a grep.
