@@ -169,15 +169,17 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_the_de
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
     assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    # Act -- step solar to 3400 W and run (N + 3) = 7 cycles, N = 4.
-    for _ in range(7):
+    # Act -- step solar to 3400 W and run (N + 3) = 7 settle cycles plus 3 hold cycles,
+    # N = 4, collecting each cycle's commanded value.
+    settled = []
+    for _ in range(10):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+        settled.append(calls[-1]["value"])
 
-    # Assert -- settled at 15 A, and holds rather than resuming the hunt (the original defect).
-    assert calls[-1]["value"] == 15.0
-    for _ in range(3):
-        await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
-        assert calls[-1]["value"] == 15.0
+    # Assert -- reached 15 A by the (N + 3) = 7th cycle, and holds for the 3 that follow,
+    # rather than resuming the hunt (the original defect).
+    assert settled[6] == 15.0
+    assert settled[7:] == [15.0, 15.0, 15.0]
 
 
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagging_charger_reading_at_the_default_window(  # noqa: E501
@@ -193,19 +195,19 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagg
         )
     assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    # Act -- step solar to 3400 W and run (N + 3) = 7 cycles, N = 4.
-    for _ in range(7):
+    # Act -- step solar to 3400 W and run (N + 3) = 7 settle cycles plus 3 hold cycles,
+    # N = 4, collecting each cycle's commanded value.
+    settled = []
+    for _ in range(10):
         prior_charger_w = await _cycle_from_feedback_with_lag(
             hass, coordinator, calls, prior_charger_w, solar_w=3400.0
         )
+        settled.append(calls[-1]["value"])
 
-    # Assert -- settled at 15 A, identically to the no-lag scenario, and holds.
-    assert calls[-1]["value"] == 15.0
-    for _ in range(3):
-        prior_charger_w = await _cycle_from_feedback_with_lag(
-            hass, coordinator, calls, prior_charger_w, solar_w=3400.0
-        )
-        assert calls[-1]["value"] == 15.0
+    # Assert -- settled at 15 A by the (N + 3) = 7th cycle, identically to the no-lag scenario,
+    # and holds for the 3 that follow.
+    assert settled[6] == 15.0
+    assert settled[7:] == [15.0, 15.0, 15.0]
 
 
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_larger_window(hass):
@@ -216,15 +218,17 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_larg
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
     assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    # Act -- step solar to 3400 W and run (N + 3) = 9 cycles, N = 6.
-    for _ in range(9):
+    # Act -- step solar to 3400 W and run (N + 3) = 9 settle cycles plus 3 hold cycles,
+    # N = 6, collecting each cycle's commanded value.
+    settled = []
+    for _ in range(12):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+        settled.append(calls[-1]["value"])
 
-    # Assert -- settled at 15 A, and holds rather than resuming the hunt (the original defect).
-    assert calls[-1]["value"] == 15.0
-    for _ in range(3):
-        await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
-        assert calls[-1]["value"] == 15.0
+    # Assert -- reached 15 A by the (N + 3) = 9th cycle, and holds for the 3 that follow,
+    # rather than resuming the hunt (the original defect).
+    assert settled[8] == 15.0
+    assert settled[9:] == [15.0, 15.0, 15.0]
 
 
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagging_charger_reading_at_a_larger_window(  # noqa: E501
@@ -240,19 +244,19 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagg
         )
     assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    # Act -- step solar to 3400 W and run (N + 3) = 9 cycles, N = 6.
-    for _ in range(9):
+    # Act -- step solar to 3400 W and run (N + 3) = 9 settle cycles plus 3 hold cycles,
+    # N = 6, collecting each cycle's commanded value.
+    settled = []
+    for _ in range(12):
         prior_charger_w = await _cycle_from_feedback_with_lag(
             hass, coordinator, calls, prior_charger_w, solar_w=3400.0
         )
+        settled.append(calls[-1]["value"])
 
-    # Assert -- settled at 15 A, identically to the no-lag scenario, and holds.
-    assert calls[-1]["value"] == 15.0
-    for _ in range(3):
-        prior_charger_w = await _cycle_from_feedback_with_lag(
-            hass, coordinator, calls, prior_charger_w, solar_w=3400.0
-        )
-        assert calls[-1]["value"] == 15.0
+    # Assert -- settled at 15 A by the (N + 3) = 9th cycle, identically to the no-lag scenario,
+    # and holds for the 3 that follow.
+    assert settled[8] == 15.0
+    assert settled[9:] == [15.0, 15.0, 15.0]
 
 
 async def test_uc01_main_success_starts_and_recomputes_each_cycle(hass):

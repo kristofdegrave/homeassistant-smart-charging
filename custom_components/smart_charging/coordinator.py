@@ -609,7 +609,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and status in CHARGEABLE_STATES
             and ev_soc is None
         ):
-            self._enter_fault("ev_soc required while a solar mode is active but missing/None")
+            self._enter_fault(
+                "ev_soc required while a solar mode is active but missing/None",
+                clear_baseline_deferral=False,
+            )
             await self._write(0.0)
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
             # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
@@ -1731,15 +1734,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     def _clear_baseline_deferral(self) -> None:
         """ADR-0039/R3 case (a): `deferred_previous` means "the previous CONTROL CYCLE deferred
         on the command-changed ground", not "the previous call to `debounce_baseline_w` did".
-        A cycle that returns before that call is reached -- every one of `_enter_fault`'s three
-        call sites, its own docstring says which -- deferred nothing, yet still writes 0 A,
-        which is a real step. Leaving the flag set would block case (a) on the RECOVERY cycle,
-        which is precisely the cycle whose `charger_w` is stale from that forced drop to 0 A:
-        the reading then looks far below the accepted baseline, case (a) cannot reject it, and
-        the debounce window commits a contaminated, headroom-inflating value. Cleared here
-        rather than in the engine, since only the coordinator knows a cycle ended without
-        consulting it; called from `_enter_fault` rather than from each site directly, so every
-        fault path gets it for free (ADR-0046's one-statement-per-fault-site body rule)."""
+        A cycle that returns before that call is ever reached this cycle -- the required-adapter
+        fault and the top-level exception handler, `_enter_fault`'s own docstring says which --
+        deferred nothing, yet still writes 0 A, which is a real step. Leaving the flag set would
+        block case (a) on the RECOVERY cycle, which is precisely the cycle whose `charger_w` is
+        stale from that forced drop to 0 A: the reading then looks far below the accepted
+        baseline, case (a) cannot reject it, and the debounce window commits a contaminated,
+        headroom-inflating value. Cleared here rather than in the engine, since only the
+        coordinator knows a cycle ended without consulting it; called from `_enter_fault` at
+        those two sites rather than from each directly (ADR-0046's one-statement-per-fault-site
+        body rule) -- the third (ev_soc) is NOT one of them, since it DOES reach the debounce
+        call this cycle, and `_enter_fault` skips this clear there (`clear_baseline_deferral`)."""
         self._baseline_debouncer = replace(self._baseline_debouncer, deferred_previous=False)
 
     def _clear_household_window_deferral(self) -> None:
@@ -1795,18 +1800,29 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             _LOGGER.warning("smart_charging fault: %s", reason)
             self._was_faulted = True
 
-    def _enter_fault(self, reason: str) -> None:
+    def _enter_fault(self, reason: str, *, clear_baseline_deferral: bool = True) -> None:
         """ADR-0007/C5's single fault-handling code path, one call: logs the fault
         (`_log_fault`'s own once-per-outage discipline), starts the fault stop's cooldown
-        (`_start_fault_stop_cooldown`, C5/R11, issue #1311), and clears both engines' own
-        one-cycle-deferral caps (issue #1329) together, so each of the three fault sites is one
-        statement in its caller's body -- ADR-0046's body rule for `_run_cycle` (a call to a
-        named step, one statement each) rather than several. Every one of the three call sites
-        is exactly one of the early returns `_clear_baseline_deferral`'s and
-        `_clear_household_window_deferral`'s own docstrings describe -- a cycle that forces a
-        command step (the 0 A write that always follows) without ever reaching the engine call
-        whose deferral flag it would otherwise leave stale."""
+        (`_start_fault_stop_cooldown`, C5/R11, issue #1311), and clears the household window's
+        own one-cycle-deferral cap (issue #1329) together, so each of the three fault sites is
+        one statement in its caller's body -- ADR-0046's body rule for `_run_cycle` (a call to a
+        named step, one statement each) rather than several.
+
+        `clear_baseline_deferral` defaults True for two of the three call sites (the
+        required-adapter fault and the top-level exception handler): both return before
+        `debounce_baseline_w` is ever reached this cycle, exactly the case
+        `_clear_baseline_deferral`'s own docstring describes. The THIRD call site -- the ev_soc
+        fault -- passes `clear_baseline_deferral=False`: its return sits AFTER
+        `debounce_baseline_w` already ran this cycle, so a `deferred_previous=True` reaching
+        here was set by that same cycle's own, legitimate call and must survive the fault
+        exactly as it would survive an ordinary cycle (round-2 review finding, #1380) --
+        clearing it here would let a breaching household increase defer for two consecutive
+        cycles, against R10 AC5's one-cycle bound (ADR-0039). `_clear_household_window_deferral`
+        carries no such split: `smooth_household_baseline` runs even later in the cycle than
+        `debounce_baseline_w`, after all three fault sites' own returns, so every one of them
+        needs it cleared."""
         self._log_fault(reason)
         self._start_fault_stop_cooldown()
-        self._clear_baseline_deferral()
+        if clear_baseline_deferral:
+            self._clear_baseline_deferral()
         self._clear_household_window_deferral()

@@ -1,11 +1,12 @@
 """Signal-Conditioning engine (E7). Pure — no HA imports.
 
 NF4 supply-voltage resolution, plus `smooth_net_power` -- a generic rolling-mean primitive with
-two distinct callers/windows, neither smoothing `solar_power` (deferred to whichever later slice
-first consumes that role, ADR-0036): the separately-sized 15-minute peak-demand window R21
-tracks (`engines/peak_demand_tracker.py`), reading raw `net_w` directly; and, internally,
+two distinct callers/windows: the separately-sized 15-minute peak-demand window R21 tracks
+(`coordinator_cycle.py`'s `PeakDemandState`), reading raw `net_w` directly; and, internally,
 `smooth_household_baseline` below, R10's own control-path smoothing for the solar modes' surplus
-(issue #1329) -- see that function's own docstring for what it folds in and why.
+(issue #1329) -- see that function's own docstring for what it folds in and why. `solar_power`
+is read raw each cycle and never smoothed by either (R10 AC2; ADR-0036 settled this outright,
+not merely deferred it to a later slice).
 """
 
 from dataclasses import dataclass

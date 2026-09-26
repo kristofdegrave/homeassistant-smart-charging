@@ -61,6 +61,7 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.coordinator_cycle import ActiveCooldown, CycleContext
+from custom_components.smart_charging.engines.billing_protection import BaselineDebouncer
 from custom_components.smart_charging.engines.signal_conditioning import HouseholdWindow
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
@@ -636,10 +637,13 @@ async def test_should_clear_household_window_deferral_when_ev_soc_faults_after_a
     baseline debounce call, which sits before this gate and so isn't affected by it), so a stale
     `deferred_previous=True` left over from an earlier cycle would wrongly freeze the household
     window on the very next (recovery) cycle instead of folding its genuine reading in."""
-    # Arrange
+    # Arrange -- smoothing_window=4 (not this suite's usual 1): the freeze this test's seeded
+    # deferred_previous=True stands for can only ever happen at size > 1
+    # (`smooth_household_baseline`'s own guard), so window=1 could never have produced it.
     adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(), smoothing_window=4)
     coord = SmartChargingCoordinator(
-        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
     coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
     coord.soc_limit_override = 80.0
@@ -654,7 +658,39 @@ async def test_should_clear_household_window_deferral_when_ev_soc_faults_after_a
     assert coord._household_window.deferred_previous is False
 
 
-async def test_should_wire_command_stepped_into_household_window_smoothing(hass, monkeypatch):
+async def test_should_not_clear_baseline_deferral_when_ev_soc_faults_after_a_command_step(hass):
+    """Round-2 review finding: the ev_soc fault return sits AFTER `debounce_baseline_w` already
+    ran this cycle (unlike the required-adapter fault and the top-level exception handler,
+    which both return before it) -- so a genuine deferral `debounce_baseline_w` itself just
+    made THIS cycle must survive the fault, exactly as it already does on an ordinary
+    (non-faulted) cycle. Clearing it here too would let a breaching household increase be
+    deferred for a second consecutive cycle, against R10 AC5's one-cycle bound (ADR-0039)."""
+    # Arrange -- a lower (more headroom) raw baseline than the last accepted one, with the
+    # command already stepped: debounce_baseline_w's own command-changed case (a) defers it and
+    # sets deferred_previous=True on ITS OWN, before the ev_soc gate is ever reached.
+    adapters = _adapters(status=STATE_CHARGING, net_w=500.0, charger_w=0.0, ev_soc=None)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._baseline_debouncer = BaselineDebouncer(accepted_w=1000.0, deferred_previous=False)
+    coord._command_stepped = True
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- deferred_previous stays True: it was legitimately set by THIS cycle's own
+    # debounce_baseline_w call, not left over from an earlier one the fault never consulted.
+    assert result.fault is True
+    assert coord._baseline_debouncer.deferred_previous is True
+    assert coord._baseline_debouncer.accepted_w == 1000.0  # still deferred, not yet committed
+
+
+async def test_should_pass_command_stepped_into_household_window_smoothing_when_the_previous_cycle_stepped_the_command(  # noqa: E501
+    hass, monkeypatch
+):
     """Issue #1329 follow-up: the closed-loop HA-harness tests already pin
     `smooth_household_baseline`'s own freeze behaviour at the engine level (its unit tests do
     too), but neither pins that the coordinator actually passes its *own* `self._command_stepped`
@@ -688,9 +724,10 @@ async def test_should_wire_command_stepped_into_household_window_smoothing(hass,
     )
 
     # Assert -- cycle 2's own write commanded a different current than cycle 1's (surplus drops
-    # to 0 W, below the solar start threshold), so cycle 3's call is the only one of the three
-    # that sees command_changed=True.
-    assert result_2.commanded_current != 12.0  # cycle 2 stepped away from cycle 1's 12 A
+    # to 0 W, below the solar start threshold, so Solar holds at the 6 A minimum rather than
+    # continuing to command 12 A), so cycle 3's call is the only one of the three that sees
+    # command_changed=True.
+    assert result_2.commanded_current == 6.0  # cycle 2 stepped away from cycle 1's 12 A
     assert seen_command_changed == [False, False, True]
 
 
