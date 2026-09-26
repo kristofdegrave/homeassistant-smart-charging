@@ -114,8 +114,8 @@ against a statement that turns out to be premature.
   labels** below) and posts one escalation comment handing the disagreement to the human,
   who has **two decisions**: merge as is, accepting the open findings, or **grant another
   round** — a fresh count, since the escalation comment is itself the reset event. In-session
-  the session asks them through `grilling`. A grant is an instruction given to the session,
-  never inferred from a thread.
+  they are asked through `grilling`. A grant is an instruction given to the session, never
+  inferred from a thread or a default answer.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
@@ -136,8 +136,8 @@ human decides**. `needs-approval` adds that a human may merge the PR **as it sta
 why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both exits have one actor: the **review step**, at the end of the pass it
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision` if one is present. After the last pass the cap allows, with Critical or Major
-still open and no round self-granted, it applies `needs-decision` **alongside** `needs-approval` and posts the one
-escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
+still open and no round self-granted, it applies `needs-decision` **alongside**
+`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
 skill applies either label; the one exception is the session putting a PR on hold (below).
 Neither label replaces manual merge approval (**Merge and issue closing** below).
@@ -212,9 +212,7 @@ the `Closes` reference is the one that names it.
 ## Merge and issue closing
 
 **Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
-**Merge strategy**) — never auto-merged or
-self-approved. Merging
-auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
+**Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
 only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
 fully clean verification-only task — closing is left to that reference, which fires on merge.
 
@@ -329,8 +327,7 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches for
-*this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
+defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
 alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
