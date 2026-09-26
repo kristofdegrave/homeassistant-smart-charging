@@ -82,10 +82,10 @@ labels:
       description: "PR: trigger the AI fix pass to address review remarks"
     - name: needs-approval
       color: b60205
-      description: "PR: no automated review/fix work is pending — a maintainer must decide"
+      description: "PR: no automated work pending — a maintainer may merge it as it stands"
     - name: needs-decision
       color: e4e669
-      description: "PR: review left findings open and no automatic fix follows — a maintainer decides how to proceed"
+      description: "PR: review left findings open, or the PR is on hold — a maintainer decides how to proceed"
   # One per enabled work type — `work_types.enabled` below is this list's names, kept as a
   # separate key because a label is a tracker fact and a work type a method fact. The method
   # check (.github/check-method.py) fails when the two sets differ.
@@ -228,6 +228,23 @@ review:
         - ".claude/profile.yml"
         - "docs/reference/**"
         - "CLAUDE.md"
+
+# A cap in words per class of process file; the first glob a path matches is its class. The
+# rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
+word_budgets:
+  - glob: "CLAUDE.md"
+    cap: 2000
+  - glob: ".claude/skills/*/SKILL.md"
+    cap: 1500
+  - glob: ".claude/agents/*.md"
+    cap: 1000
+  - glob: "docs/reference/method/*.md"
+    cap: 4000
+  - glob: "docs/reference/work-types/**/*.md"
+    cap: 1500
+  - glob: "docs/adl/*.md"
+    cap: 2000
+    added_only: true
 
 # Everything the method or the stack is built on that lives outside this repository, each
 # pinned to the upstream state it was last reconciled with. This is the provenance manifest,
