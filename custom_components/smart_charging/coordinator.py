@@ -512,7 +512,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             sun_is_down=ctx.sun_is_down,
             forecast_kwh=reserved_day_forecast_kwh,
             forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
-            deadline_tomorrow_resolved=deadline_reserved_day is not None,
+            deadline_reserved_day_resolved=deadline_reserved_day is not None,
         )
         return deadline_tomorrow, resolve_deadline_for
 
