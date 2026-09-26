@@ -3,7 +3,7 @@
 **Who reads this.** The reviewer — a fresh, read-only Opus agent, never the session that
 drafted the record — and, for *What the review step supplies and runs*, the review step. It
 holds what only a reviewer can check: what to read first, and the checks about the **change**
-rather than the finished record. What a finished ADR must satisfy is
+rather than the finished record; and what the review step supplies and runs for it. What a finished ADR must satisfy is
 [`done.md`](done.md); how one is written is [`implement.md`](implement.md). Neither is restated
 here.
 
@@ -29,8 +29,8 @@ reference — judge the ADR on internal merit.
 
 ## What the review step supplies and runs
 
-- **Input:** the remote `adr/NNNN` branch list, after `git fetch --prune origin`, for a change
-  touching `docs/adl/**`. The bar's item 2 judges the number against it. None supplied → say
+- **Input:** the remote `adr/NNNN` branch list, as `implement.md`'s *Number* count lists it,
+  for a change touching `docs/adl/**`. The bar's item 2 judges the number against it. None supplied → say
   the number was not checked.
 - **Exit check:** on a change adding an ADR, `implement.md`'s *Merge in number order*, before
   any exit label goes on.

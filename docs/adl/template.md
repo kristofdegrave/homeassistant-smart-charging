@@ -2,8 +2,8 @@
 
 Date: YYYY-MM-DD <!-- the date this ADR was created; never changes, even if Status later does -->
 Status: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN | Abandoned — <why, in one sentence>
-<!-- Abandoned with no draft: only a one-sentence Summary follows, not a Y-statement -->
-<!-- ("Abandoned before a decision was taken: <why>"); a drafted one keeps all its sections. -->
+<!-- Abandoned with no draft: only a one-sentence Summary follows, not a Y-statement
+("Abandoned before a decision was taken: <why>"); a drafted one keeps all its sections. -->
 
 ## Summary
 
