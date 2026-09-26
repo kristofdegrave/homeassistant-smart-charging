@@ -1,6 +1,7 @@
 """Coordinator-internal cycle decomposition: CycleContext, PeakDemandState, SocGateResolver, and
-the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
-resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge (ADR-0024).
+the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_reserved_day,
+resolve_solar_reserve_gate, and resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge
+(ADR-0024).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
 even though these aren't engines themselves (system-design.md §4 rule 4: an engine may not call
 another engine; these call engines).
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol
 
 from .config import SmartChargingConfig
@@ -42,6 +43,7 @@ from .modes import captar, power, solar, solar_only
 from .profiles.policy import PROFILE_POLICIES
 
 _WATTS_PER_KILOWATT = 1000.0
+_RESERVED_DAY_SPLIT = time(12, 0)  # see resolve_reserved_day's docstring for why noon
 
 
 @dataclass  # deliberately not frozen -- steps mutate fields in place as each value resolves
@@ -531,6 +533,27 @@ class SolarStepUpGate:
             step_pp=step_pp,
             max_solar_soc=max_solar_soc,
         )
+
+
+def resolve_reserved_day(now_dt: datetime) -> date:
+    """R9/UC07's reserved day (glossary, `system-overview.md`): calendar tomorrow's date from
+    evening until midnight, and the date that has just begun from midnight until the sun comes
+    up. It is one calendar date throughout that whole span -- it does not itself change at
+    midnight, only whether "now" is still before it or already inside it (#1422, R9 AC2).
+
+    The only distinction this function has to draw is which of those two spans `now_dt` falls
+    in, since the cap's own `sun_is_down` precondition already keeps a wrong value from
+    mattering once the sun is back up and a new evening's own reserved day is what's next in
+    play. The coordinator never reads a rising/setting time -- `_read_role(ROLE_SUN)` returns
+    only above-/below-horizon -- so there is no sun-keyed instant to split on directly; local
+    noon is used instead, splitting the calendar day at the one point every reserved-day
+    night this project resolves has fully crossed by (evening is always its second half,
+    the pre-dawn hours its first). This assumes the sun rises and sets once per calendar day,
+    which does not hold inside the polar circles during polar night/day -- out of scope for
+    this project (no installation target is at that latitude)."""
+    if now_dt.time() < _RESERVED_DAY_SPLIT:
+        return now_dt.date()
+    return now_dt.date() + timedelta(days=1)
 
 
 def resolve_solar_reserve_gate(
