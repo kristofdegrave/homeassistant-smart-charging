@@ -101,9 +101,8 @@ exactly one of these, from the pass's own result and the count above:
   applied.
 - **Critical or Major open, the last pass the cap allows, every self-grant condition of the
   routed doc holds, and raising the cap by one would not take it past the ceiling**: no
-  label. Post the self-grant comment, body
-  via a file per **Tracker mechanics**: why each condition holds, then the self-grant marker
-  as its last line. Report: round self-granted, and the count so far.
+  label. Post the self-grant comment, body via a file per **Tracker mechanics**: why each
+  condition holds, then the self-grant marker as its last line. Report: round self-granted, and the count so far.
 - **Critical or Major open, the last pass the cap allows, no self-grant**: apply both exit
   labels, then post one escalation comment, body via a file per **Tracker mechanics**: the
   open Critical and Major findings by thread, what each round tried, where author and

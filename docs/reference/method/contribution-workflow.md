@@ -47,7 +47,7 @@ routes to.
      `needs-approval`, with the PR confirmed to be based on `main`; Critical or Major still
      open on the last pass the cap allows, no round self-granted → both exit labels and one
      escalation comment handing the disagreement to the human partner; Critical or Major open
-     with passes left → no label, the findings are the fix step's.
+     with passes left, or a round self-granted → no label, the findings are the fix step's.
    - Board **Status** stays *in review*. Merge is the human's, always (**Merge and issue
      closing** below).
 3. **Fix** (`fix`, then `review` again).
@@ -90,25 +90,25 @@ against a statement that turns out to be premature.
 
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
-- **The cap is `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted from the most
-  recent reset event (see below). That key is the **only** statement of the cap's number and
-  this line the only statement of what it counts — everything that needs either routes here
-  instead of repeating it.
+- **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
+  from the most recent reset event. That key is the **only** statement of that number and this
+  line the only statement of what it counts — everything that needs either routes here instead
+  of repeating it.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed,
   so the final round needs no further pass to confirm it.
 - **At the cap** — the last pass the count allows still has a Critical or Major finding open —
-  the session **grants itself one more round** when all three hold:
+  the session **grants itself one more round** only when all three hold:
   - (i) the author agrees with every open Critical or Major finding;
   - (ii) no fix needs a decision that is the human partner's — a product choice, or a
     trade-off the spec does not settle;
   - (iii) each such finding comes from the original work, not from the previous round's own
-    fix — one that does means the loop is not converging.
+    fix.
 
   The review step posts the grant as a PR comment giving why each condition holds, ending in
   the self-grant marker `<!-- local-review-self-granted -->`. Each such comment since the
   reset event raises the cap by one pass, never past `.claude/profile.yml`'s
-  `review.interactive_ceiling` passes — that key the ceiling's only statement.
+  `review.interactive_ceiling` passes — that key is the ceiling's only statement.
 - **Otherwise** — a condition fails, or the ceiling is reached — the loop stops instead of
   fixing again: the review step, at the end of that pass, puts the exit labels on (**Exit
   labels** below) and posts one escalation comment handing the disagreement to the human,
@@ -212,8 +212,8 @@ the `Closes` reference is the one that names it.
 ## Merge and issue closing
 
 **Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
-**Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
-only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
+**Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue
+via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
 fully clean verification-only task — closing is left to that reference, which fires on merge.
 
 **An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
@@ -327,8 +327,8 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
-alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
+defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those
+two spellings are historical, not alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
