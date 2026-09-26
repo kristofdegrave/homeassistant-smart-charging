@@ -147,7 +147,7 @@ here as test anchors rather than re-derived.** `requirements.md` R5:
   the peak bound is a bound at all only where the peak clamp is composed — so not with the CapTar
   capability absent (R18), nor under `Power`'s R17 opt-out.
 - `:92` — that smoothed baseline is R10's admitted joint mean, negated, and carries **no** R3
-  deferral; a single charger-current step leaves the rate unchanged.
+  deferral; under `:92`'s own qualifiers the rate then does not depend on the charger current.
 
 The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
 criteria.

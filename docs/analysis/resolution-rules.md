@@ -181,7 +181,7 @@ urgency comes to be in effect.
   the household baseline and the peak/ceiling bounds alone, **whether or not urgency is actually
   in effect**, so the engage test below does not move the moment it fires. The household baseline
   it reads is the **smoothed** one, the negation of R10's smoothed solar surplus over the samples
-  it admits, not the instantaneous reading, and it carries none of R3's deferrals — those two
+  R10 admits, not the instantaneous reading, and it carries none of R3's deferrals — those two
   cases belong to R3's clamp, not to this forecast. Every bound of the rate that depends on that
   baseline is fitted to that same reading, the C4 ceiling headroom as much as the peak headroom;
   R5 is authoritative for both the smoothing and the absence of deferral. This rate is a forecast
