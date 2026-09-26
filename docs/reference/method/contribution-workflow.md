@@ -9,9 +9,9 @@ replace it. How the
 same lifecycle would split into CI jobs is described, abstractly, in
 [ci-pipeline.md](ci-pipeline.md).
 
-Just outside this lifecycle: the stages either side of it are
-[idea-to-product.md](idea-to-product.md)'s, and the **Definition of Done** an author checks in
-step 1 is [definition-of-done.md](definition-of-done.md)'s — the project-wide floor, with commit
+Beside this lifecycle: the stages either side of it are
+[idea-to-product.md](idea-to-product.md)'s, and the **Definition of Done** an author checks before
+the PR is [definition-of-done.md](definition-of-done.md)'s — the project-wide floor, with commit
 message conventions and the route to a row's per-type *completion bar*.
 
 ## The chain

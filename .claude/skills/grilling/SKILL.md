@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: Use in an interactive session whenever the session needs a decision from the human partner — a design choice, merge or grant at a review cap, a fact only they can supply — and when the user asks to be "grilled", "grill me", or to stress-test a plan, decision or idea. Requires a human respondent — never self-invoke this in a non-interactive context since it blocks on answers nothing will provide.
+description: Use in an interactive session whenever the session needs a decision from the human partner — a design choice, merge or grant at a review cap or hold, a fact only they can supply — and when the user asks to be "grilled", "grill me", or to stress-test a plan, decision or idea. Requires a human respondent — never self-invoke this in a non-interactive context since it blocks on answers nothing will provide.
 ---
 
 # Grilling
@@ -9,9 +9,9 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 tree**: every decision branches into the decisions that hang off it. A single decision is a tree
 of one node, asked the same way.
 
-In an interactive session every decision the session needs from the user comes here — merge or
-grant at a review cap or on a hold, an open design choice, a fact only the user holds — rather
-than as a loose question inside a status report.
+In an interactive session every decision the session needs from the user comes here, per the
+decisions rule under `CLAUDE.md`'s **Contribution workflow**: merge or grant at a review cap or on
+a hold, an open design choice, a fact only the user holds.
 
 The **frontier** is every decision whose prerequisites are already settled: the questions you can
 ask _now_ without guessing at answers you haven't heard yet. Ask **one frontier question per
