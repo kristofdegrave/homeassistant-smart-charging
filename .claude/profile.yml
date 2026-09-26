@@ -181,6 +181,10 @@ review:
   # **Rounds and the cap** defines. That section routes here for the number rather than
   # stating it.
   interactive_cap: 2
+  # The most review passes the rounds a session grants itself at the cap may take the count
+  # to, counted as interactive_cap is. The same section defines the self-grant and routes here
+  # for this number rather than stating it.
+  interactive_ceiling: 5
   # Changed path → the work type whose review checklist judges it. This is the no-label row
   # of CLAUDE.md's Model selection table, and applies to every PR whatever its label. It is
   # the fourth enumeration of that set, and the SOURCE of the other three — that row,

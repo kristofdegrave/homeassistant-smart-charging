@@ -7,11 +7,11 @@ layer: project
 The facts about *this* project that a person has to know to act on the method, each with its
 why. `.claude/profile.yml` is the other half: every value a script or a command reads verbatim
 — repository, board and field ids, the label set, enabled work types, the changed-path map, the
-review cap, dependency pins. Nothing here repeats a value the YAML holds; a section names the
-key instead. Between them the two files own these facts: the repository and tracker, the
-board and its ids, the label set, the enabled work types, the changed-path map, the review cap,
-the dependency pins, the research sources, git identity, merge strategy and flow deviations. A
-method document that spells one of *those* facts is the defect — it states the rule and routes
+review cap and its ceiling, dependency pins. Nothing here repeats a value the YAML holds; a
+section names the key instead. Between them the two files own these facts: the repository and
+tracker, the board and its ids, the label set, the enabled work types, the changed-path map,
+the review cap and its ceiling, the dependency pins, the research sources, git identity, merge
+strategy and flow deviations. A method document that spells one of *those* facts is the defect — it states the rule and routes
 here. Stack-specific content (Home Assistant, Python) is a different axis and is not this
 file's: it lives in the stack skills and in the per-stack overlays of the work-type files
 (`docs/reference/work-types/<label>/overlays/<stack>.md`). What the profile holds about a stack
