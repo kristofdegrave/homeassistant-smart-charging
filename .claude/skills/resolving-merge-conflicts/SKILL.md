@@ -13,7 +13,7 @@ down.
 
 **Always resolve.** Never re-run the merge hoping the conflict disappears, and never `--abort`
 on your own judgement — if the operation itself was the mistake (started against the wrong ref,
-say), put that decision to the human partner through `clarify` rather than deciding it here.
+say), ask the human partner rather than deciding it here.
 
 ## Step 0 — know which commands you have
 
@@ -35,8 +35,7 @@ procedure:
   operation you are in before trusting either — taking the wrong side here is exactly the silent
   revert this skill exists to prevent. Discarding the whole working tree is denied, as are
   force-push and forced branch deletion — no resolution needs any of them, and if yours seems to,
-  you are rewriting published history: stop and put whether to rewrite it to the human partner
-  through `clarify`.
+  you are rewriting published history: stop and ask the human partner.
 
 `--abort` is not blocked by the guard. It is blocked by this skill, absent the human partner's
 say-so.
