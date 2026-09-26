@@ -34,7 +34,7 @@ template.
 | [0025](0025-config-flow-branching-structure.md) | Table-driven linear step sequence for the capability-gated config flow | Superseded by ADR-0027 |
 | [0026](0026-psutil-for-perf-test-cpu-rss-measurement.md) | `psutil` for CPU-time/RSS measurement in perf tests | Superseded by ADR-0029 |
 | [0027](0027-config-flow-topic-step-structure.md) | Table-driven linear step sequence for the nine-step, topic-grouped config flow — point 3's step enumeration narrowed by [ADR-0033](0033-captar-step-gains-a-mapping-half.md) | Accepted |
-| [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities | Accepted |
+| [0028](0028-registry-level-disabling-for-capability-gated-entities.md) | Registry-level disabling for capability-gated entities — its premise that a user re-enables an entity with `disabled_by=USER`, and `sync_disabled_by`'s contract, narrowed by [ADR-0047](0047-user-enable-of-a-capability-gated-entity-lives-in-its-registry-options.md) | Accepted |
 | [0029](0029-process-time-for-perf-test-cpu-measurement.md) | stdlib `time.process_time()` for perf-test CPU measurement, `psutil` retained for RSS | Accepted |
 | [0030](0030-external-monthly-peak-sensor.md) | External monthly-peak sensor — optional adapter role; its deferred unit contract settled by [ADR-0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Accepted |
 | [0031](0031-config-values-as-disabled-by-default-diagnostic-sensors.md) | Config-entry values also exposed as disabled-by-default diagnostic sensors | Accepted |
@@ -53,5 +53,6 @@ template.
 | [0044](0044-implementation-spec-lives-in-the-epic-body.md) | The implementation spec lives in its epic's body, and each task carries the sources it was cut from — retiring `docs/plans/**` and the `specs` work type | Accepted |
 | [0045](0045-every-adr-opens-with-a-summary.md) | Every new ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
 | [0046](0046-cycle-composition-rules-and-complexity-guard.md) | The control cycle's composition rules, held by a complexity guard (supersedes [ADR-0023](0023-decompose-run-cycle-into-named-steps.md)) | Accepted |
+| [0047](0047-user-enable-of-a-capability-gated-entity-lives-in-its-registry-options.md) | A user's own enable of a capability-gated entity is recorded in that entity's registry options (narrows [ADR-0028](0028-registry-level-disabling-for-capability-gated-entities.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
