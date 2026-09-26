@@ -29,7 +29,7 @@ skill owning the step, not by prose in this file.
 
 One row per enabled context label: how the work is done, how it is reviewed, and the model
 each side runs on. Why the table is shaped this way, and the obligations on whoever edits it
-(review model, path-map enumerations, a label rename), are
+(review model, a label rename), are
 [model-selection.md](docs/reference/method/model-selection.md); the routing rule a run applies is
 stated under the table.
 
@@ -55,15 +55,8 @@ stated under the table.
 `.github/hooks/**`, `.claude/hooks/**`, `.claude/settings.json`, `.claude/skills/**`,
 `.claude/agents/**`, `.claude/profile.yml`, `docs/reference/**` and `CLAUDE.md` →
 `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
-file, which the generic `reviewer` agent applies. This list **is** CI's mapping — the review
-worker resolves it from here rather than carrying its own copy. The same set is enumerated in
-`ai-pipeline.yml`'s path filter, `_ai-review.yml`'s diff enumeration and `.claude/profile.yml`'s
-`review.path_map` — which is the **source** of the other three: of the *set*, not of the
-routing, which resolves from this list as the sentence above says. Adding a tree still means
-adding it in all four, but no longer means remembering to: `.github/check-path-map.py` fails the
-PR naming each enumeration still missing it. Why the three are verified rather than generated,
-and how each omission would fail if one ever shipped, are in the document this section routes
-to and the CI document it routes onward to. `docs/postmortems/**` keeps its
+file, which the generic `reviewer` agent applies. This list is the only copy: a review
+resolves it from here. `docs/postmortems/**` keeps its
 own rule from the **Post-mortems** topic: a plain fresh-agent pass weighted to quotation
 accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md`.
 
@@ -121,7 +114,7 @@ artifacts** document.
 | **Decomposition checklist** | [decomposition-checklist.md](docs/reference/method/decomposition-checklist.md) — the criteria a fresh agent applies to an epic body in the one pass the **Idea-to-product flow**'s closing step runs before any child is filed; that step owns when the pass runs and what the body must contain. |
 | **Definition of Done** | [definition-of-done.md](docs/reference/method/definition-of-done.md) — the project-wide floor an author self-checks before opening the PR, and commit message conventions; it routes to a row's per-type completion bar. |
 | **Tracker mechanics** | [tracker-mechanics.md](docs/reference/method/tracker-mechanics.md) — the concrete `gh` commands, with their rate-limit failure modes, REST fallbacks and Windows/Git Bash quirks. Read it before typing one, and again when a call is refused, silently no-ops, or must be trusted without a read-back. Mechanics only: when to file and what a label means are **Contribution workflow** and **Issue conventions**. |
-| **Project profile** | [profile.md](docs/reference/profile.md) and `.claude/profile.yml` — repository, board and ids, labels, enabled work types, path map, review cap, word budgets, dependency pins, git identity, merge strategy, flow deviations. |
+| **Project profile** | [profile.md](docs/reference/profile.md) and `.claude/profile.yml` — repository, board and ids, labels, enabled work types, review cap, word budgets, dependency pins, git identity, merge strategy, flow deviations. |
 | **Research sources** | [profile.md#research-sources](docs/reference/profile.md#research-sources) — this project's primary sources, highest trust first; the `research` skill carries the procedure. |
 | **Document structure** | [idea-to-product.md#document-structure](docs/reference/method/idea-to-product.md#document-structure) — what lives in `docs/analysis/`, `docs/design/`, `docs/adl/` and `docs/postmortems/`, and which document owns what. |
 | **Writing order** | [idea-to-product.md#analysis-first-in-this-order](docs/reference/method/idea-to-product.md#analysis-first-in-this-order) — a rule of the flow's **Analysis** stage; the design documents follow at its **Design** stage. |
