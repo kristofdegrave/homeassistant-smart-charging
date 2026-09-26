@@ -35,7 +35,8 @@ timers, the has-charged flag and restart-debounce timer (R11), the step-up/reser
 hold](system-overview.md#ubiquitous-language) is read from rather than separately tracked), both
 threaded in step 4, and the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
-charger currents that R3's deferral cases key on — each
+charger currents that R3's deferral cases and R10's admission rule key on, and whether R10's
+window left the previous cycle's sample out — each
 homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
