@@ -1,8 +1,8 @@
 """Advisory baseline comparison for the coordinator perf suite (issue #708, ADR-0026;
 zero-baseline handling per issue #739).
 
-Never raises or signals failure on a regression -- this is deliberately advisory-only
-(design doc S5: `perf` stays continue-on-error: true until real trend history exists).
+Never raises or signals failure on a regression -- this is deliberately advisory-only:
+`perf` stays continue-on-error: true until real trend history exists.
 Callers write the returned rows to GITHUB_STEP_SUMMARY or print them; deciding whether a
 regression should ever fail the job is a separate, future decision.
 """
@@ -14,7 +14,7 @@ BASELINE_KEY = "coordinator_cycle"  # not module-private -- update_baseline.py r
 METRICS = ("median_cpu_ms", "median_rss_delta_kb", "median_peak_traced_memory_kb")
 _STATUS_OK = "ok"
 _STATUS_REGRESSED = "REGRESSED"
-# Deliberately loose first-cut threshold (design doc S4) -- no real variance data exists
+# Deliberately loose first-cut threshold -- no real variance data exists
 # yet to calibrate a tighter one.
 _TOLERANCE_PCT = 25.0
 # A percentage delta is undefined against a zero baseline (division by zero) -- median_rss_delta_kb

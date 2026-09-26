@@ -18,8 +18,8 @@ plain pytest too.
 ``EntityPlatform``, or registry (see that module's own docstring), so its tests are plain
 pytest too.
 
-``test_notification_state.py`` is a deliberate root-level exception (notifications design
-doc Sec7, ADR-0009): it tests ``notification_state.py``'s pure UC08 prompt-lifecycle
+``test_notification_state.py`` is a deliberate root-level exception (ADR-0009): it tests
+``notification_state.py``'s pure UC08 prompt-lifecycle
 state machine (prior state, observed inputs, and an injected clock -- no HA imports), so
 its tests are plain pytest too.
 
@@ -48,8 +48,8 @@ import pytest
 _PURE_DIRS = frozenset({"modes", "engines", "profiles"})
 
 # Individual test files that are pure logic despite living outside _PURE_DIRS -- most are
-# root-level (ADR-0012/0013; test_notification_state.py per the notifications design doc
-# Sec7), but test_compare_baseline.py per issue #708/ADR-0026 is not: it lives under
+# root-level (ADR-0012/0013; test_notification_state.py per ADR-0009's pure/HA split), but
+# test_compare_baseline.py per issue #708/ADR-0026 is not: it lives under
 # tests/benchmarks/, which must stay HA-harness-capable for its sibling
 # test_coordinator_perf.py.
 _PURE_FILES = frozenset(

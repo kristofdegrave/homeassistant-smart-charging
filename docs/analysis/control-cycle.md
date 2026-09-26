@@ -14,8 +14,8 @@ Steps → Edge cases → Requirements satisfied**.
 ## Purpose
 
 Run the [coordinator](system-overview.md#ubiquitous-language) once per [control
-interval](system-overview.md#ubiquitous-language): read the sensors, smooth the net grid power
-reading, ask the [active mode](system-overview.md#ubiquitous-language) module for a desired
+interval](system-overview.md#ubiquitous-language): read the sensors, smooth the solar
+surplus, ask the [active mode](system-overview.md#ubiquitous-language) module for a desired
 charger current, clamp that current with peak protection, and set it — while, alongside those
 steps, keeping the [monthly peak demand](system-overview.md#ubiquitous-language) up to date
 (R21). The coordinator executes the
@@ -35,7 +35,8 @@ timers, the has-charged flag and restart-debounce timer (R11), the step-up/reser
 hold](system-overview.md#ubiquitous-language) is read from rather than separately tracked), both
 threaded in step 4, and the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
-charger currents that R3's deferral cases key on — each
+charger currents that R3's deferral cases and R10's admission rule key on, and whether R10's
+window left the previous cycle's sample out — each
 homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
@@ -50,7 +51,9 @@ homed in the rule or use-case that defines its lifecycle.
   `sensor.smart_charging_active_soc_limit` and emits this event when it changes. Consumed by
   [UC09](use-cases/UC09-sync-charge-limit-with-car.md) as the single trigger to sync the vehicle's
   own charge limit; it subsumes the cause-specific step-up / solar-reserve transitions into one
-  consumer contract (ADR-0011).
+  consumer contract (ADR-0011). That names the consumers of the *event* only: the *entity* also
+  has readers that take its value at a point in time without subscribing to its changes, and
+  `entity-catalog.md`'s *Read by* column lists every reader of the entity, event consumers included.
 - `PeakLimitClamped` — the peak-protection step reduced the mode's desired current to keep
   net import at or below the [effective peak limit](system-overview.md#ubiquitous-language)
   minus the [safety margin](system-overview.md#ubiquitous-language); signals that peak
@@ -69,12 +72,12 @@ homed in the rule or use-case that defines its lifecycle.
 ```mermaid
 flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3)"]
-    Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
+    Read --> Smooth["Smooth solar surplus<br/>(charger_w − net_w per sample;<br/>rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
-    Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — NF4)"]
+    Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — R22)"]
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
-    Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule: smoothed net_w,<br/>raw charger_w, supply voltage)"]
+    Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule: smoothed<br/>solar surplus, supply voltage)"]
     Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped entirely when the CapTar<br/>capability is absent, R18;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
     Peak -->|no| Ceiling
@@ -101,16 +104,21 @@ flowchart TD
    readouts that also read it (`solar_surplus_w`, `entity-catalog.md`) are gated on the solar
    capability instead and must still resolve on an installation with no CapTar.
    Produces `SensorsRead`.
-2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
-   into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
-   [smoothed value](system-overview.md#ubiquitous-language). The smoothed value feeds
-   charging-rate decisions; the raw value is retained for peak protection. A spike lasting a
-   single cycle does not move the smoothed value; a change sustained across the full window
-   does, within the following cycle. `solar_w` is deliberately not smoothed: no charging-rate step
-   of this cycle consumes it, since [solar surplus](system-overview.md#ubiquitous-language) is
-   `charger_w − net_w` (R10). Step 1 reads it every cycle solely to surface it as an attribute of
+2. **Smooth the solar surplus (R10).** The coordinator pairs this cycle's raw `net_w` and
+   `charger_w` into one [solar surplus](system-overview.md#ubiquitous-language) sample,
+   `charger_w − net_w`, admits it to a rolling window of the last *N* samples (configurable,
+   default 4) and recomputes the window's
+   [smoothed value](system-overview.md#ubiquitous-language). On a cycle whose sample R10 does not
+   admit, because the charger current was just changed, the window keeps its earlier samples and
+   their smoothed value stands; R10 is authoritative for when that applies and for its
+   one-cycle bound. The smoothed value feeds charging-rate decisions and, negated, R5's
+   escalated-rate forecast (`resolution-rules.md`); the raw readings are
+   retained for peak protection. A spike lasting a single cycle does not change the set-point it
+   feeds; a change sustained across the full window does, within the following cycle. `solar_w` is
+   deliberately not smoothed: no charging-rate step of this cycle consumes it, since solar surplus
+   is formed from net import and charger power alone (R10). Step 1 reads it every cycle solely to surface it as an attribute of
    `sensor.smart_charging_adapter_readings` (ADR-0021), so it stays a raw reading throughout.
-3. **Resolve the supply voltage (NF4).** The coordinator selects the [supply
+3. **Resolve the supply voltage (R22).** The coordinator selects the [supply
    voltage](system-overview.md#ubiquitous-language) used for all amperes↔watts conversions this
    cycle: the measured grid voltage when a healthy reading is available, otherwise the
    configurable nominal voltage (default 230 V). Using the live value keeps current-derived
@@ -144,7 +152,7 @@ flowchart TD
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under
-   `Auto` — calls the matching module, passing the smoothed `net_w` alongside the raw readings and
+   `Auto` — calls the matching module, passing the smoothed solar surplus alongside the raw readings and
    the resolved voltage, and surfaces the resolved value read-only as
    `sensor.smart_charging_active_mode`. The module returns a [desired charger
    current](system-overview.md#ubiquitous-language) using its
@@ -188,11 +196,11 @@ flowchart TD
    capabilities; it emits `SupplyCeilingClamped` when it engages.
 7. **Enforce the invariants.** The final current obeys C1 — it is either 0 A or at least the
    [minimum charging current](system-overview.md#ubiquitous-language), never in between — and
-   the rapid-cycling invariant (R11): once charging has stopped it does not restart until the
-   mode-specific cooldown has fully elapsed, a cooldown in progress always runs to completion —
-   across a switch of the active mode included (edge case below),
-   and, for a mode's own stop condition, current holds at the minimum for a mode-specific period
-   before actually cutting to 0 A (the post-surplus hold, R1/R2; the peak-breach grace period, R3,
+   the rapid-cycling invariant (R11): once charging has stopped it does not start again until the
+   mode-specific cooldown has elapsed or been ended early by a disconnect or a
+   [restart or reload](system-overview.md#ubiquitous-language) (R11); a switch of the active
+   mode does not end it (edge case below). For a mode's own stop condition, current holds at
+   the minimum for a mode-specific period before actually cutting to 0 A (the post-surplus hold, R1/R2; the peak-breach grace period, R3,
    in every mode it can stop — the solar modes at the minimum current during grid fallback/`Hold`,
    `Captar`, and `Power` while it respects the peak — edge case below). A running cooldown survives
    a switch of the active mode; only the hold and restart-debounce timers reset on one (edge case
@@ -234,7 +242,18 @@ limit for step 5.
 ## Edge cases
 
 - **No healthy supply-voltage reading.** Conversions fall back to the configurable nominal
-  voltage (default 230 V) for the cycle (NF4); the cycle still completes.
+  voltage (default 230 V) for the cycle (R22); the cycle still completes.
+- **A required role is unavailable.** When a role C5's table lists as required for the active
+  mode is unavailable, the cycle does not go on to decide a current from the readings it has: it
+  is a [fault](system-overview.md#ubiquitous-language) (C5). Its 0 A write, when it succeeds, is
+  a set charger current like step 8's and emits `ChargerCurrentSet`. An unavailable optional role is not
+  this case: its fallback, like the nominal voltage above, lets the cycle complete. When the
+  status returns to `OK`, and when charging may then resume, are C5's; the cooldown a fault stop
+  starts is R11's.
+- **An unexpected error interrupts the cycle.** Wherever in steps 1–8 it arises — a reading, a
+  mode module, a clamp or the write in step 8 — the cycle is a fault exactly as above (C5): the
+  System always attempts the 0 A write, including when the error is in the write itself. A write
+  that fails sets nothing, so no `ChargerCurrentSet` is emitted for it.
 - **Peak breach persists** (CapTar capability present only). A momentary breach only triggers a clamp, not a stop. The charger
   drops to 0 A only when it is already at the minimum charging current *and* net import has
   exceeded the target continuously for a configurable grace period (default 2 minutes, R3); the
@@ -261,19 +280,11 @@ limit for step 5.
   matches the has-charged flag, the other piece of state a mode switch leaves untouched: it is
   scoped to the connection, not the active mode, so switching between `Solar` and `SolarOnly`
   does not grant a fresh, undebounced first start; only its debounce *timer* resets.
-- **Smoothing window not yet full.** At start-up or after a restart the rolling mean is taken
+- **Smoothing window not yet full.** At start-up or after a restart or reload the rolling mean is taken
   over the samples available so far until the window fills.
-- **Coordinator restart.** Restart-after-power-loss persistence of internal bookkeeping is not
-  catalogued — it is "how", not "what" (`entity-catalog.md`) — but this cycle's own timers,
-  including the has-charged flag and any running hold, cooldown, or restart-debounce timer, are
-  deliberately not required to survive one, consistent with `resolution-rules.md`'s
-  missed-deadline hold making the same choice. A connected car is therefore treated as a fresh
-  first start after a restart, with no restart debounce, even if it had charged before the
-  restart. The [monthly peak demand](system-overview.md#ubiquitous-language) is the one
-  deliberate exception, and a "what" rather than a "how": the peak already recorded for the
-  month in progress must survive a restart, because a value that began again from 0 kW would
-  misstate what CapTar bills for that month (R21). Its own 15-minute window is not preserved and
-  rebuilds after a restart, exactly as the smoothing-window edge case above describes.
+- **Coordinator restart or reload.** What survives either is NF14's. For this cycle it means a
+  connected car is treated as a fresh first start, with no restart debounce and no cooldown
+  still running, even if it had charged before.
 - **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
@@ -289,7 +300,7 @@ limit for step 5.
 - **R11** — Rapid-cycling prevention (the cooldown/min-current/hold-before-stop/restart-debounce invariant in step 7).
 - **R21** — Monthly peak demand tracking (the per-cycle bookkeeping in *Monthly peak demand
   tracking* above; runs whatever the declared capabilities, unlike step 5's clamp).
-- **NF4** — Voltage-aware power conversion (voltage resolution in step 3).
+- **R22** — Voltage-aware power conversion (voltage resolution in step 3).
 
 Partially satisfies [R18](requirements.md#r18--configurable-installation-capabilities) — the
 clamp-skip half of AC5 (step 5 is skipped entirely, not merely widened, while the CapTar
@@ -300,7 +311,9 @@ Upholds but does not home: **NF1** (coordinator executes, never chooses the mode
 `resolution-rules.md`), **NF2** (the coordinator never adjusts what a mode requests; deadline
 urgency's `Manual` lever only widens the peak clamp in step 5 — homed in `requirements.md`), and
 **NF3** (all I/O via adapter roles — bindings in `entity-catalog.md`). **C1**, **C3**, and **C4**
-(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **R7** (active SOC
+(grid supply ceiling clamp, step 6) are enforced as invariants in steps 5–7. **C5** (the fault
+stop) is enforced on any cycle a required role is unavailable or an error interrupts (*Edge
+cases*). **R7** (active SOC
 limit) is homed in `resolution-rules.md` (the resolution table) and applied by
 [UC09](use-cases/UC09-sync-charge-limit-with-car.md); this document only fixes *when* in the cycle
 the resolved value is materialized (`sensor.smart_charging_active_soc_limit`, step 4) and

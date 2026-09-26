@@ -15,9 +15,9 @@ one reviewer covers the whole analysis tree.
 - **Numbering** (before drafting): the next sequential integer after the highest existing
   `UCnn`, zero-padded to 2 digits. This is the document's own number, unrelated to the
   branch/issue numbering the contribution workflow handles.
-- **Step 1 (draft)**: against the template below, then self-check against `done.md` before
+- **The implement step (draft)**: against the template below, then self-check against `done.md` before
   requesting review.
-- **Update `docs/analysis/entity-catalog.md`**, before step 3's review — for every `sc_` entity
+- **Update `docs/analysis/entity-catalog.md`**, before the review step — for every `sc_` entity
   the use-case touches, add this UC to the entity's *Read by* and/or *Written by* column. This
   is the last content step inside the analysis layer, and the bar judges the result.
 - **Propagate past the analysis layer**, same step. The procedure is below; what the finished
@@ -32,9 +32,10 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
 - **What is in scope** is the *Code backing* item of `done.md` — it defines the behavioural
   assertions a use-case makes, which changes assert none, and how *Scope / level* and
   *Relationships* split. Read them off the diff; do not re-derive the list here.
-- **The search, capped.** Per in-scope item, run **one** targeted search of
-  `custom_components/` for the thing it names — the entity id, the adapter role, the domain
-  event name, the threshold, the ordering — and open at most one file, the best match.
+- **The search, capped.** Per in-scope item, run **one** targeted search of the product-code
+  tree for the thing the item names — the entity id, the adapter role, the domain event name,
+  the threshold, the ordering — and open at most one file, the best match. The tree itself is
+  the one the `development` work type's stack overlay names.
   **Stop after five items**; where the diff has more — a brand-new use-case, whose diff is
   the whole document, always will — say the set was sampled and name the five you took. Five
   suits a drafting session's turn budget, and one use-case edit routinely touches more
@@ -47,7 +48,9 @@ question `CLAUDE.md`'s **Contribution workflow** section's `needs-approval` gate
 
 ## Template (section order)
 
-Full template with rationale: `docs/plans/2026-06-25-use-cases-design.md`.
+**Given/When/Then, mapped**: Given = the preconditions · When = the trigger and the actions it
+sets off · Then = the system's responses and the postconditions. The same mapping holds for the
+main, alternate and exception flows alike.
 
 `# UCnn — <goal as active verb phrase>` then:
 Primary actor · Stakeholders & interests · Scope/level · **Preconditions** (testable state, not
@@ -58,10 +61,13 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
 
 ## Rules
 
-- **What, not how.** Describe observable behaviour. No Python, HA services, timer helpers, or
-  persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
+- **What, not how.** Describe observable behaviour. No modules, platform services, timer
+  helpers, or persistence. Entity ids that are ubiquitous language are fine, but prefer domain terms in GWT
   ("the active SOC limit", "charger status") — the `sc_` binding lives in
-  `docs/analysis/entity-catalog.md`.
+  `docs/analysis/entity-catalog.md`. The bar's item 3.1 states it and judges it, carve-out
+  included. What that means while drafting: write the State model without hedging.
 - **Don't duplicate mechanism.** Reference `docs/analysis/control-cycle.md` (read → smooth →
   dispatch → clamp → set; peak clamp R3, grid ceiling clamp C4, rapid-cycling R11) and
   `docs/analysis/resolution-rules.md` (active SOC limit R7, departure deadline R14, effective
@@ -77,6 +83,12 @@ to the basic-step they branch from, e.g. 4a) · **Exception flows** (goal not me
   when the deadline is at risk" and move on, rather than re-deriving urgency escalation.
 - One statement per line; always name the subject (Actor or System); active voice; verifiable
   pre/postconditions.
+
+### Skills
+
+The method skills this work file uses, by step: `research` when a fact a use-case rests on is
+external, cited from the document by linking the issue comment; `receiving-code-review` in the
+review step. This work type names no stack skill.
 
 ## Diagram types
 

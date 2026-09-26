@@ -36,6 +36,7 @@ from custom_components.smart_charging.coordinator_cycle import (
     _SolarOnlyModeHandler,
     build_mode_handlers,
     resolve_deadline_urgency,
+    resolve_reserved_day,
     resolve_solar_reserve_gate,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
@@ -146,7 +147,8 @@ def test_peak_demand_state_threads_window_size_and_averages_within_the_month():
 
 
 def test_peak_demand_state_resets_window_and_tracked_kw_on_month_rollover():
-    """A month rollover resets both the smoothing window and tracked_kw (design doc Sec 6.4) --
+    """A month rollover resets both the smoothing window and tracked_kw
+    (control-cycle.md's Monthly peak demand tracking, R21) --
     window_size=2 so the pre-rollover window would carry 2 samples if NOT cleared, proving the
     reset actually happens (window_size=1 would always show a 1-element window regardless, since
     smooth_net_power always appends the new sample before returning)."""
@@ -196,15 +198,15 @@ def test_peak_demand_state_period_month_is_none_when_untracked():
 
 
 def test_mode_handler_protocol_is_satisfied_by_each_adapter():
-    """Every _*ModeHandler (ADR-0012 Sec 3.4) satisfies the ModeHandler Protocol's
+    """Every _*ModeHandler (ADR-0012) satisfies the ModeHandler Protocol's
     desired_current(ctx, state) -> (current, new_state) / idle_state() / is_soc_gated /
     is_solar_mode shape -- a structural check that all five adapters share one call surface,
-    not a behavior test. ModeHandler is a plain (not @runtime_checkable) Protocol per the
-    design doc, so conformance is checked by static typing and by each adapter exposing the
+    not a behavior test. ModeHandler is a plain (not @runtime_checkable) Protocol,
+    so conformance is checked by static typing and by each adapter exposing the
     right callables/attributes, not by isinstance()."""
     handlers: list[ModeHandler] = [
         _OffModeHandler(),
-        _PowerModeHandler(lambda: 10.0),
+        _PowerModeHandler(_config(), lambda: 10.0),
         _SolarModeHandler(_config()),
         _SolarOnlyModeHandler(_config()),
         _CaptarModeHandler(_config()),
@@ -225,8 +227,8 @@ def test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode():
     resolution-rules.md)."""
     assert _OffModeHandler().is_soc_gated is False
     assert _OffModeHandler().is_solar_mode is False
-    assert _PowerModeHandler(lambda: 10.0).is_soc_gated is False
-    assert _PowerModeHandler(lambda: 10.0).is_solar_mode is False
+    assert _PowerModeHandler(_config(), lambda: 10.0).is_soc_gated is False
+    assert _PowerModeHandler(_config(), lambda: 10.0).is_solar_mode is False
     assert _SolarModeHandler(_config()).is_soc_gated is True
     assert _SolarModeHandler(_config()).is_solar_mode is True
     assert _SolarOnlyModeHandler(_config()).is_soc_gated is True
@@ -238,10 +240,10 @@ def test_mode_handler_is_soc_gated_and_is_solar_mode_per_mode():
 def test_mode_handler_idle_state_per_mode():
     """Issue #561: idle_state() replaces the coordinator's old Captar-vs-solar ternary that
     picked each SOC-gated mode's idle state by name. Off/Power return None -- neither is ever
-    stored in the coordinator's _mode_state (design doc Sec 3.4), so their idle_state() is
+    stored in the coordinator's _mode_state, so their idle_state() is
     never actually read; it exists only to satisfy the Protocol uniformly."""
     assert _OffModeHandler().idle_state() is None
-    assert _PowerModeHandler(lambda: 10.0).idle_state() is None
+    assert _PowerModeHandler(_config(), lambda: 10.0).idle_state() is None
     assert _SolarModeHandler(_config()).idle_state() == solar.SolarState.idle()
     assert _SolarOnlyModeHandler(_config()).idle_state() == solar_only.SolarOnlyState.idle()
     assert _CaptarModeHandler(_config()).idle_state() == captar.CaptarState.idle()
@@ -255,7 +257,7 @@ def test_mode_handler_resume_state_per_mode():
     modes/_mode_state.py::ModeState.resumed()'s docstring). Captar has no such concept, so its
     resume_state() stays equal to idle_state(); Off/Power return None either way."""
     assert _OffModeHandler().resume_state() is None
-    assert _PowerModeHandler(lambda: 10.0).resume_state() is None
+    assert _PowerModeHandler(_config(), lambda: 10.0).resume_state() is None
     assert _SolarModeHandler(_config()).resume_state() == solar.SolarState.resumed()
     assert _SolarModeHandler(_config()).resume_state() != solar.SolarState.idle()
     assert _SolarOnlyModeHandler(_config()).resume_state() == solar_only.SolarOnlyState.resumed()
@@ -376,9 +378,9 @@ def test_off_mode_handler_always_commands_zero_and_passes_state_through():
 def test_power_mode_handler_delegates_to_modes_power_desired_current():
     """_PowerModeHandler (ADR-0012) wraps modes/power.py::desired_current unchanged, reading
     the coordinator's mutable target_current through a zero-arg getter bound at construction
-    (design doc Sec 3.4) rather than duplicating it onto CycleContext. Anchor: tests/modes/
+    rather than duplicating it onto CycleContext. Anchor: tests/modes/
     test_power.py's own STATE_CHARGING/target_current=10.0 -> 10.0 A expectation."""
-    handler = _PowerModeHandler(lambda: 10.0)
+    handler = _PowerModeHandler(_config(), lambda: 10.0)
     ctx = CycleContext(
         status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, baseline_w=0.0
     )
@@ -390,7 +392,7 @@ def test_power_mode_handler_delegates_to_modes_power_desired_current():
 def test_power_mode_handler_commands_zero_when_disconnected():
     """Confirms the handler re-reads status from ctx each call (not cached at construction) --
     anchored to tests/modes/test_power.py's disconnected -> 0.0 A expectation."""
-    handler = _PowerModeHandler(lambda: 10.0)
+    handler = _PowerModeHandler(_config(), lambda: 10.0)
     ctx = CycleContext(
         status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, baseline_w=0.0
     )
@@ -401,9 +403,9 @@ def test_power_mode_handler_commands_zero_when_disconnected():
 def test_power_mode_handler_reads_target_current_fresh_each_call():
     """target_current is coordinator-owned mutable state (set externally by the number entity),
     not part of "this cycle's readings" -- the getter must be re-invoked each call, not
-    memoized at construction (design doc Sec 3.4's stated rationale for the getter shape)."""
+    memoized at construction."""
     current_target = [10.0]
-    handler = _PowerModeHandler(lambda: current_target[0])
+    handler = _PowerModeHandler(_config(), lambda: current_target[0])
     ctx = CycleContext(
         status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, voltage=230.0, now=1.0, baseline_w=0.0
     )
@@ -412,6 +414,19 @@ def test_power_mode_handler_reads_target_current_fresh_each_call():
     second, _ = handler.desired_current(ctx, None)
     assert first == 10.0
     assert second == 16.0
+
+
+def test_should_read_power_cooldown_min_off_config_when_cooldown_minutes_is_read():
+    """R11 AC3/C5 (issue #1311): unlike Off (always 0.0, never read), Power's own
+    `cooldown_minutes` now reads `power_cooldown_min` off config -- the coordinator's
+    fault-stop cooldown start is its only reader (Power is never stored in `_mode_state` or
+    reached by `_dispatch_mode`'s own generic cooldown-start detection)."""
+    # Arrange
+    config = _config(power_cooldown_min=9.0)
+    handler = _PowerModeHandler(config, lambda: 10.0)
+
+    # Act / Assert
+    assert handler.cooldown_minutes == 9.0
 
 
 def test_solar_mode_handler_delegates_to_modes_solar_step():
@@ -587,9 +602,10 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     """SocGateResolver.resolve (ADR-0012, T2.1) wraps engines/soc_target.py's
     resolve_active_soc_limit + the inline _last_active_soc_limit comparison it replaces: with
     no prior call there is no "last" value to compare against, so the very first resolve always
-    reports changed -- mirroring the old code's None-vs-float first-cycle behavior."""
+    reports changed -- mirroring the old code's None-vs-float first-cycle behavior. Whether it
+    also reports `rose` is the sibling test below's own behaviour, not this one's."""
     resolver = SocGateResolver()
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -597,6 +613,27 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     )
     assert limit == 80.0
     assert changed is True
+
+
+def test_should_not_report_rose_on_the_first_call():
+    """#1378: the very first resolve() call has no prior limit to have risen from, so it never
+    reports rose=True even though it always reports changed=True (the sibling test above) --
+    the case `SocGateResolver`'s own docstring calls out, since a rise clears Power's SOC-limit
+    stop on a missing-reading cycle and a false rise on the very first cycle would clear a stop
+    that was never made either."""
+    # Arrange
+    resolver = SocGateResolver()
+
+    # Act
+    _limit, _changed, rose = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
+    assert rose is False
 
 
 def test_soc_gate_resolver_reports_unchanged_when_limit_is_stable():
@@ -610,7 +647,7 @@ def test_soc_gate_resolver_reports_unchanged_when_limit_is_stable():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -631,7 +668,7 @@ def test_soc_gate_resolver_reports_changed_when_limit_moves():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=True,
         solar_reserve_soc=60.0,
@@ -653,7 +690,7 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         50.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -661,6 +698,60 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
     )
     assert changed is False
     assert limit == 80.0
+
+
+def test_should_report_rose_when_the_resolved_limit_rises():
+    """#1378: a resolve() call whose resulting limit is *higher* than the previous one
+    reports rose=True as well as changed=True -- the R7 AC5 distinction `changed` alone cannot
+    draw (a fall changes the limit too, but must never report rose)."""
+    # Arrange
+    resolver = SocGateResolver()
+    resolver.resolve(
+        60.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Act
+    limit, changed, rose = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
+    assert changed is True
+    assert rose is True
+    assert limit == 80.0
+
+
+def test_should_report_changed_but_not_rose_when_the_resolved_limit_falls():
+    """#1378: a resolve() call whose resulting limit is *lower* than the previous one reports
+    changed=True but rose=False -- R7 AC5's "a lowered limit never ends it" needs this bit kept
+    apart from a plain `changed`, which #1335's own bug conflated with a rise."""
+    # Arrange
+    resolver = SocGateResolver()
+    resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Act
+    limit, changed, rose = resolver.resolve(
+        60.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
+    assert changed is True
+    assert rose is False
+    assert limit == 60.0
 
 
 # --- DeadlineUnreachableEdge (ADR-0024: pure True->False edge detection for the paired
@@ -1016,8 +1107,8 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     call, seeing the identical (urgent=False) input as the baseline call, resolves to the same
     mode. Proves the two calls agree when nothing escalates, not just when it does.
 
-    The name is historical and two `docs/plans/` documents cite it as evidence for ADR-0017's
-    policy extraction, so it is kept: but since #1078 the 16 A Solar baseline is NOT what keeps
+    The name is historical -- it evidenced ADR-0017's policy extraction and is kept for that
+    reason: but since #1078 the 16 A Solar baseline is NOT what keeps
     this out of urgency -- the slack test is, at 0.435 A required against a 25.6 A threshold.
     The baseline would only matter to the handback, which needs a latch this call does not
     carry. What the test still pins is the two select() calls agreeing when nothing escalates."""
@@ -1195,26 +1286,49 @@ def test_resolve_solar_reserve_gate_active_when_all_conditions_hold():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is True
     )
 
 
-def test_resolve_solar_reserve_gate_treats_none_forecast_as_zero():
-    """Mirrors coordinator.py's own `forecast_kwh if forecast_kwh is not None else 0.0` -- an
-    unmapped/unavailable forecast role must not raise and must never activate the cap."""
-    assert (
-        resolve_solar_reserve_gate(
-            profile=PROFILE_AUTO,
-            home_day_flag=True,
-            sun_is_down=True,
-            forecast_kwh=None,
-            forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
-        )
-        is False
+def test_should_not_activate_when_forecast_is_none():
+    """An unmapped/unavailable forecast role must not raise and must never activate the cap
+    (#1423: via the explicit None short-circuit, not a 0.0 fold -- the next test proves the
+    difference matters)."""
+    # Arrange
+    gate_kwargs = dict(
+        profile=PROFILE_AUTO,
+        home_day_flag=True,
+        sun_is_down=True,
+        forecast_kwh=None,
+        forecast_threshold_kwh=12.0,
+        deadline_reserved_day_resolved=False,
     )
+    # Act
+    result = resolve_solar_reserve_gate(**gate_kwargs)
+    # Assert
+    assert result is False
+
+
+def test_should_not_activate_when_forecast_is_none_even_under_a_non_positive_threshold():
+    """#1423: a None forecast (the same-day role unmapped or its reading unavailable, from
+    midnight) must force the condition to not hold outright -- not fold through the
+    None -> 0.0 default the old code compared against the threshold, which would wrongly
+    activate the cap were the configured threshold ever zero or negative (0.0 > -5.0)."""
+    # Arrange
+    gate_kwargs = dict(
+        profile=PROFILE_AUTO,
+        home_day_flag=True,
+        sun_is_down=True,
+        forecast_kwh=None,
+        forecast_threshold_kwh=-5.0,
+        deadline_reserved_day_resolved=False,
+    )
+    # Act
+    result = resolve_solar_reserve_gate(**gate_kwargs)
+    # Assert
+    assert result is False
 
 
 def test_resolve_solar_reserve_gate_inactive_under_manual():
@@ -1226,16 +1340,16 @@ def test_resolve_solar_reserve_gate_inactive_under_manual():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is False
     )
 
 
-def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow():
+def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_reserved_day():
     """Anchored to engines/test_soc_target.py::
-    test_reserve_inactive_when_deadline_resolved_for_tomorrow -- proves
-    deadline_tomorrow_resolved is actually threaded through to the wrapped engine call, not
+    test_reserve_inactive_when_deadline_resolved_for_reserved_day -- proves
+    deadline_reserved_day_resolved is actually threaded through to the wrapped engine call, not
     just accepted and ignored (all other tests here pass False)."""
     assert (
         resolve_solar_reserve_gate(
@@ -1244,7 +1358,80 @@ def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=True,
+            deadline_reserved_day_resolved=True,
         )
         is False
     )
+
+
+# --- resolve_reserved_day (#1422, R9 AC2) ---
+
+
+def test_should_return_tomorrow_when_now_is_in_the_evening_half_of_the_local_day():
+    """The evening half (from noon to midnight): the reserved day is still calendar
+    tomorrow, exactly like the pre-#1422 tomorrow_date."""
+    # Arrange
+    now_dt = datetime(2026, 1, 16, 23, 0, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_todays_own_date_when_now_is_past_midnight_before_noon():
+    """The pre-dawn half (from midnight to noon): the reserved day is the date that has
+    just begun -- today's own date -- not the day after it (#1422's regression: the shipped
+    code kept adding one more day here)."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 0, 1, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_the_same_reserved_day_on_either_side_of_the_midnight_it_crosses():
+    """The reserved day is one continuous calendar date across the midnight boundary (R9
+    AC2's "the date they read does not change at midnight") -- evening's tomorrow and the
+    following pre-dawn's today are the same date."""
+    # Arrange
+    evening_before = datetime(2026, 1, 16, 23, 59, 0)
+    just_after_midnight = datetime(2026, 1, 17, 0, 1, 0)
+
+    # Act
+    reserved_day_evening = resolve_reserved_day(evening_before)
+    reserved_day_pre_dawn = resolve_reserved_day(just_after_midnight)
+
+    # Assert
+    assert reserved_day_evening == reserved_day_pre_dawn == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_todays_own_date_when_now_is_a_winter_pre_dawn_hour():
+    """A pre-dawn hour well past midnight and still hours from sunrise (e.g. a Northern
+    Hemisphere winter morning) still resolves to today's own date, not the day after it --
+    guards against a split moved later than local noon still passing the 00:01 case alone."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 7, 30, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_tomorrow_at_the_exact_noon_boundary():
+    """The split is `<`, not `<=`: local noon itself is already the evening half, so it
+    resolves to calendar tomorrow -- guards against an off-by-one at the boundary itself."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 12, 0, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 18, 0, 0, 0).date()

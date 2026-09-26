@@ -9,16 +9,16 @@ from custom_components.smart_charging.profiles.manual import ManualPolicy
 @pytest.mark.parametrize("mode", [MODE_OFF, MODE_SOLAR, MODE_CAPTAR])
 def test_select_returns_active_mode_unchanged(mode):
     """resolution-rules.md: "Manual needs no table" -- a pure pass-through of the user's own
-    selection (R16's acceptance criterion), proven across every representative mode
-    (design doc §5), not just one."""
+    selection (R16's acceptance criterion), proven across every representative mode,
+    not just one."""
     assert ManualPolicy().select(active_mode=mode) == mode
 
 
 def test_select_ignores_every_other_kwarg():
     """Manual's own contract: no automatic mode change regardless of observable conditions
-    (R16's Manual criterion, requirements.md; NF1's general no-automatic-changes rule
-    applies via its own parenthetical) -- proven here by passing Auto's full kwarg set
-    alongside active_mode and confirming none of it changes the result."""
+    (R16's Manual criterion, requirements.md; ADR-0017 for the profile-as-policy split) --
+    proven here by passing Auto's full kwarg set alongside active_mode and confirming none of
+    it changes the result."""
     result = ManualPolicy().select(
         active_mode=MODE_OFF,
         urgent=True,

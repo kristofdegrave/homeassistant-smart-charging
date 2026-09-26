@@ -2,7 +2,7 @@
 
 import dataclasses
 import logging
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from datetime import time as time_of_day
 from unittest.mock import patch
 
@@ -61,6 +61,8 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.coordinator_cycle import ActiveCooldown, CycleContext
+from custom_components.smart_charging.engines.billing_protection import BaselineDebouncer
+from custom_components.smart_charging.engines.signal_conditioning import HouseholdWindow
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
@@ -150,6 +152,26 @@ class _FakeStore:
                 f"_FakeStore: {entity_domain}/{unique_id_suffix} was read as {value_type!r} "
                 f"but the fixture holds a {type(value)!r} value -- likely a mis-paired "
                 f"(platform, suffix, value_type) row"
+            )
+        return value
+
+    async def read_home_day_dates(self, unique_id_suffix):
+        """Stands in for adapters/store.py's Store.read_home_day_dates (NF14) -- the fixture
+        holds a `set[date]` directly under the same (Platform.SWITCH, suffix) key `read()`
+        would use for a plain bool, since this is the one owned-entity read that isn't a
+        plain typed value. No entry (the common {} case, same as every other field this file
+        constructs a coordinator against) means None -- "unregistered/unavailable,
+        unresolvable this cycle" -- matching the real Store's contract and letting a test's
+        own direct `coord.home_day_dates = ...` assignment survive `_read_owned_entities`
+        exactly like every `simple_reads` field already does. A fixture that wants to assert
+        the *resolved* "nothing set" case stores an explicit `set()` under the key."""
+        value = self._values.get((Platform.SWITCH, unique_id_suffix))
+        if value is None:
+            return None
+        if not isinstance(value, set):
+            raise AssertionError(
+                f"_FakeStore: {unique_id_suffix} was read via read_home_day_dates but the "
+                f"fixture holds a {type(value)!r} value, not a set[date]"
             )
         return value
 
@@ -396,10 +418,14 @@ async def test_adr0007_logs_fault_once_per_outage_not_per_cycle(hass, caplog):
     assert len(warnings) == 1, "a new outage after a recovery must log again, not stay suppressed"
 
 
-async def test_adr0007_safe_write_zero_swallows_write_exception(hass, caplog):
+async def test_should_swallow_and_warn_not_raise_when_the_zero_write_itself_fails_during_a_fault(
+    hass, caplog
+):
     """ADR-0007's fault path must not itself raise if the write-back adapter is unavailable:
-    _safe_write_zero's try/except must swallow the write exception (logged via
-    _LOGGER.exception) rather than let it escape _async_update_data (issue #504)."""
+    _safe_write_zero's try/except must swallow the write exception (logged once at WARNING,
+    C5's last sentence/issue #1311 -- not an ERROR with a traceback) rather than let it escape
+    _async_update_data (issue #504)."""
+    # Arrange
     adapters = _adapters(status=STATE_CHARGING)
     adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()  # forces the outer cycle-exception fault path
     adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
@@ -410,12 +436,162 @@ async def test_adr0007_safe_write_zero_swallows_write_exception(hass, caplog):
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
 
-    with caplog.at_level(logging.ERROR, logger=coordinator_module.__name__):
+    # Act
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
         result = await coord._async_update_data()  # must not raise
 
+    # Assert
     assert result.fault is True
     assert result.commanded_current == 0.0
-    assert _FAULT_WRITE_SWALLOW_LOG in caplog.text
+    write_warnings = [
+        r
+        for r in caplog.records
+        if _FAULT_WRITE_SWALLOW_LOG in r.getMessage() and r.levelno == logging.WARNING
+    ]
+    assert len(write_warnings) == 1
+    assert write_warnings[0].exc_info is None, "no traceback -- WARNING, not _LOGGER.exception"
+
+
+async def test_should_log_the_zero_write_failure_once_per_outage_when_it_keeps_failing(
+    hass, caplog
+):
+    """C5's last sentence/issue #1311: while the 0 A write itself keeps failing, cycle after
+    cycle, `_safe_write_zero` must log its WARNING once for the whole outage, not once per
+    cycle -- the same once-per-outage discipline `_log_fault`/`_was_faulted` already give the
+    read-side fault, but for a distinct piece of state (`_write_zero_failing`), since the write
+    can keep failing for cycles after the read-side fault that first triggered it recovers."""
+    # Arrange
+    adapters = _adapters(status=STATE_CHARGING)
+    adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+
+    # Act
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        for _ in range(3):  # same write outage, three consecutive cycles
+            result = await coord._async_update_data()
+            assert result.fault is True
+
+    # Assert
+    write_warnings = [
+        r
+        for r in caplog.records
+        if _FAULT_WRITE_SWALLOW_LOG in r.getMessage() and r.levelno == logging.WARNING
+    ]
+    assert len(write_warnings) == 1, "expected one WARNING for the whole outage, not one per cycle"
+
+
+async def test_should_log_recovery_once_at_info_when_the_zero_write_succeeds_again(hass, caplog):
+    """C5's last sentence/issue #1311: once the 0 A write itself starts succeeding again, that
+    recovery is logged once at INFO -- the write-failure half of the once-per-outage discipline,
+    mirroring `_was_faulted`'s own recovery INFO log for the read side. Runs the write-recovery
+    cycle twice to prove "once", not merely "at INFO": a second successful write while the read
+    side is still faulted must not log a second recovery."""
+    # Arrange
+    adapters = _adapters(status=STATE_CHARGING)
+    adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        await coord._async_update_data()
+    assert coord._write_zero_failing is True
+
+    # Act
+    caplog.clear()
+    coord._adapters[ROLE_CHARGER_CURRENT] = _FakeNumeric(0.0)  # the write recovers
+    with caplog.at_level(logging.INFO, logger=coordinator_module.__name__):
+        first = await coord._async_update_data()
+        second = await coord._async_update_data()  # still faulted on read; write keeps succeeding
+
+    # Assert
+    assert first.fault is True  # the read-side fault (_RaisingNumeric) is still active
+    assert second.fault is True
+    assert coord._write_zero_failing is False
+    recovery_infos = [
+        r for r in caplog.records if r.levelno == logging.INFO and "recovered" in r.getMessage()
+    ]
+    assert len(recovery_infos) == 1
+
+
+async def test_should_log_recovery_when_the_write_outage_ends_via_an_ordinary_clean_cycle(
+    hass, caplog
+):
+    """C5's last sentence/issue #1311: a write outage that ends through an ORDINARY clean
+    cycle -- both the read-side fault and the write itself recovering together, so the
+    recovery is observed through `_run_cycle`'s normal end-of-cycle `_write(desired)`, never
+    through another faulted `_safe_write_zero` retry -- must still log its recovery once at
+    INFO. Pins `_write_zero_failing`'s clear/log living in `_write` itself (the single write
+    site), not only inside `_safe_write_zero`; a version of the fix that cleared the flag only
+    inside `_safe_write_zero` would leave it stuck `True` here."""
+    # Arrange
+    adapters = _adapters(status=None)  # required-adapter fault -> _run_cycle's own self._write(0.0)
+    adapters[ROLE_CHARGER_CURRENT] = _RaisingWriteNumeric()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+    with caplog.at_level(logging.WARNING, logger=coordinator_module.__name__):
+        await coord._async_update_data()
+    assert coord._write_zero_failing is True
+
+    # Act -- both the read side and the write adapter recover, so this cycle is clean end to
+    # end and never reaches `_safe_write_zero` at all.
+    caplog.clear()
+    coord._adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_CHARGING)
+    coord._adapters[ROLE_CHARGER_CURRENT] = _FakeNumeric(0.0)
+    with caplog.at_level(logging.INFO, logger=coordinator_module.__name__):
+        result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert coord._write_zero_failing is False
+    write_recovery_infos = [
+        r
+        for r in caplog.records
+        if r.levelno == logging.INFO and "recovered" in r.getMessage() and "write" in r.getMessage()
+    ]
+    assert len(write_recovery_infos) == 1
+
+
+async def test_should_start_cooldown_when_a_fault_hits_a_fresh_coordinator_with_no_prior_write(
+    hass,
+):
+    """C5/R11 (issue #1311) negative-of-negative case: `_last_commanded_a` starts `None` (no
+    write has happened yet, e.g. immediately after a restart) and must NOT be treated the same
+    as "already 0 A" -- a fault on the very first cycle a fresh coordinator instance ever runs
+    still starts a cooldown, the conservative direction, since the charger may still be
+    delivering current from before the restart. Pins the `== 0.0` gate in
+    `coordinator.py`'s `_start_fault_stop_cooldown` against a regression to the old
+    `is None or <= 0`."""
+    # Arrange
+    config = _config(solar_cooldown_min=5.0)
+    adapters = _adapters(status=None, net_w=0.0, charger_w=0.0, ev_soc=50.0)  # faults immediately
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    assert coord._last_commanded_a is None  # no write has ever happened yet
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._active_cooldown is not None
+    assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
 
 
 @pytest.mark.parametrize(
@@ -461,6 +637,113 @@ async def test_adr0007_write_adapter_fault_during_run_cycle_early_fault_return_d
     # Two zero-write attempts: the early return's own `self._write(0.0)` (which raised), then
     # the outer handler's `_safe_write_zero` retry (which also raised and was swallowed there).
     assert adapters[ROLE_CHARGER_CURRENT].written == [0.0, 0.0]
+
+
+async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_pending_window_deferral(  # noqa: E501
+    hass,
+):
+    """Issue #1329 follow-up: `HouseholdWindow.deferred_previous` must be cleared on every
+    early-return fault path, the same reasoning `_clear_baseline_deferral` already states for
+    `BaselineDebouncer` -- a fault cycle that forces a 0 A write is a real command step, but the
+    ev_soc-fault return sits BEFORE `smooth_household_baseline` ever runs this cycle (unlike the
+    baseline debounce call, which sits before this gate and so isn't affected by it), so a stale
+    `deferred_previous=True` left over from an earlier cycle would wrongly freeze the household
+    window on the very next (recovery) cycle instead of folding its genuine reading in."""
+    # Arrange -- smoothing_window=4 (not this suite's usual 1): the freeze this test's seeded
+    # deferred_previous=True stands for can only ever happen at size > 1
+    # (`smooth_household_baseline`'s own guard), so window=1 could never have produced it.
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(), smoothing_window=4)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._household_window = HouseholdWindow(samples=(100.0,), deferred_previous=True)
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._household_window.deferred_previous is False
+
+
+async def test_should_not_clear_baseline_deferral_when_ev_soc_faults_after_a_command_step(hass):
+    """Round-2 review finding: the ev_soc fault return sits AFTER `debounce_baseline_w` already
+    ran this cycle (unlike the required-adapter fault and the top-level exception handler,
+    which both return before it) -- so a genuine deferral `debounce_baseline_w` itself just
+    made THIS cycle must survive the fault, exactly as it already does on an ordinary
+    (non-faulted) cycle. Clearing it here too would let a breaching household increase be
+    deferred for a second consecutive cycle, against R10 AC5's one-cycle bound (ADR-0039)."""
+    # Arrange -- a lower (more headroom) raw baseline than the last accepted one, with the
+    # command already stepped: debounce_baseline_w's own command-changed case (a) defers it and
+    # sets deferred_previous=True on ITS OWN, before the ev_soc gate is ever reached.
+    adapters = _adapters(status=STATE_CHARGING, net_w=500.0, charger_w=0.0, ev_soc=None)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._baseline_debouncer = BaselineDebouncer(accepted_w=1000.0, deferred_previous=False)
+    coord._command_stepped = True
+    coord._last_commanded_a = 10.0  # `_command_stepped=True` alone is unreachable in production
+    # (`_write` only ever sets it alongside a non-None `_last_commanded_a`) -- seeded together
+    # so this Arrange is a state a real cycle could actually produce.
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- deferred_previous stays True: it was legitimately set by THIS cycle's own
+    # debounce_baseline_w call, not left over from an earlier one the fault never consulted.
+    assert result.fault is True
+    assert coord._baseline_debouncer.deferred_previous is True
+    assert coord._baseline_debouncer.accepted_w == 1000.0  # still deferred, not yet committed
+
+
+async def test_should_pass_command_stepped_into_household_window_smoothing_when_the_previous_cycle_stepped_the_command(  # noqa: E501
+    hass, monkeypatch
+):
+    """Issue #1329 follow-up: the closed-loop HA-harness tests already pin
+    `smooth_household_baseline`'s own freeze behaviour at the engine level (its unit tests do
+    too), but neither pins that the coordinator actually passes its *own* `self._command_stepped`
+    through as `command_changed` rather than some hard-coded value -- this spies on the real
+    call to prove the value passed tracks the write that ended the PREVIOUS cycle, per that
+    parameter's own contract (ADR-0039)."""
+    # Arrange
+    seen_command_changed = []
+    real_smooth_household_baseline = coordinator_module.smooth_household_baseline
+
+    def _spy(raw_baseline_w, state, size, *, command_changed):
+        seen_command_changed.append(command_changed)
+        return real_smooth_household_baseline(
+            raw_baseline_w, state, size, command_changed=command_changed
+        )
+
+    monkeypatch.setattr(coordinator_module, "smooth_household_baseline", _spy)
+
+    # Act -- cycle 1 (first ever command, nothing to have stepped from); cycle 2 (a different
+    # charger_w commands a different current, stepping the write cycle 2 itself makes); cycle 3
+    # (any reading) is the one whose OWN call should see that step.
+    adapters_1 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0)
+    coord, _ = await _run_mode(hass, adapters_1, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    adapters_2 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0)
+    coord, result_2 = await _run_mode(
+        hass, adapters_2, _config(), MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    adapters_3 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0)
+    coord, _ = await _run_mode(
+        hass, adapters_3, _config(), MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+
+    # Assert -- cycle 2's own write commanded a different current than cycle 1's (surplus drops
+    # to 0 W, below the solar start threshold, so Solar holds at the 6 A minimum rather than
+    # continuing to command 12 A), so cycle 3's call is the only one of the three that sees
+    # command_changed=True.
+    assert result_2.commanded_current == 6.0  # cycle 2 stepped away from cycle 1's 12 A
+    assert seen_command_changed == [False, False, True]
 
 
 async def test_nf4_grid_voltage_none_is_not_fault(hass):
@@ -678,8 +961,13 @@ async def test_soc_gate_release_without_surplus_still_debounces_next_start(hass)
 
 
 @pytest.mark.parametrize("mode", [MODE_POWER, MODE_OFF])
-async def test_power_and_off_ignore_soc_entirely(hass, mode):
+async def test_should_not_fault_power_or_off_when_no_ev_soc_role_is_mapped(hass, mode):
     # Arrange: no ev_soc role configured at all -- Power/Off must not regress to needing one.
+    # With no role ever mapped, ev_soc is None on every cycle: Power's own SOC-limit stop
+    # (#1335) never sees a reading to latch on, so it stays untouched and Power keeps its
+    # target current (C5/ADR-0042) -- this is the never-yet-stopped case, distinct from
+    # test_deadline_soc_management_end_to_end.py's already-stopped-then-missing-reading case,
+    # where the same missing reading instead holds an existing stop.
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc_role=False)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
@@ -840,9 +1128,9 @@ async def test_dispatches_to_captar_when_selected(hass):
 
 
 async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass):
-    """R3's bookkeeping is not Captar-specific -- Off/Power update it too. Bypasses the
-    ample-headroom test helpers deliberately, to observe the tracker's own cold-start
-    behavior (design doc Sec 6.4)."""
+    """R21: tracking runs on every control cycle regardless of the active mode -- Off/Power
+    update it too, not just Captar. Bypasses the ample-headroom test helpers deliberately, to
+    observe the tracker's own cold-start behavior."""
     adapters = _adapters(status=STATE_DISCONNECTED, net_w=3400.0, charger_w=0.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
@@ -855,7 +1143,8 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
 
 
 async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
-    """entity-catalog.md:151/glossary -- `charger_power - net_power`, raw, distinct from R10's
+    """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary --
+    `charger_power - net_power`, raw, distinct from R10's
     smoothed control-path `surplus_w` (#602 T1). Cycle 2's baseline (net_w - charger_w =
     2000 - 3000 = -1000) happens to sit ABOVE cycle 1's (1000 - 3000 = -2000), so issue #990's
     debounce (which only delays a LOWER baseline) never engages here -- if a future edit
@@ -870,9 +1159,13 @@ async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
-    await coord._async_update_data()  # cycle 1: window=(1000.0,), smoothed==raw==1000.0
+    # cycle 1: household window=(-2000.0,) (net_w - charger_w), smoothed surplus ==
+    # raw surplus == 2000.0
+    await coord._async_update_data()
 
-    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)  # cycle 2: smoothed(1500) != raw(2000)
+    # cycle 2: household window=(-2000.0, -1000.0), smoothed surplus 1500.0 != raw surplus
+    # 1000.0 (ADR-0049: the joint window, not a net-only one)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)
     result = await coord._async_update_data()
 
     assert result.solar_surplus_w == 3000.0 - 2000.0
@@ -1119,7 +1412,7 @@ async def test_mapped_but_unavailable_external_monthly_peak_is_not_a_fault(hass)
 
 
 async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_higher_external(hass):
-    # D-6: CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
+    # CycleResult.monthly_peak_kw keeps meaning only the internally-tracked peak, never
     # the merged operand -- checked across TWO cycles, since monthly_peak_kw is produced by
     # self._peak_demand.update(...) before the merge; a refactor that wrote the merged value
     # back into the tracker would pass a one-cycle check and only surface on the next cycle.
@@ -1147,7 +1440,7 @@ async def test_monthly_peak_kw_still_carries_only_the_tracked_value_with_a_highe
 
 
 async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
-    # D-4: the mapped role's own raw reading surfaces via _read_role's cache write, same as
+    # The mapped role's own raw reading surfaces via _read_role's cache write, same as
     # any other wired read role.
     adapters = _adapters(
         status=STATE_DISCONNECTED, net_w=0.0, charger_w=0.0, monthly_peak_external=4.09
@@ -1164,7 +1457,7 @@ async def test_external_monthly_peak_reading_appears_in_adapter_readings(hass):
 
 
 async def test_external_monthly_peak_merge_ignores_captar_available(hass):
-    # D-5: the merge is not gated on captar_available -- it runs, and moves
+    # The merge is not gated on captar_available -- it runs, and moves
     # effective_peak_limit_kw, even with the capability off. R21's own AC requires the
     # tracked/merged value to still be tracked and surfaced for observability regardless of
     # capability (issue #1018's fix means `_apply_peak_clamp` itself no longer consults it in
@@ -1189,7 +1482,7 @@ async def test_external_monthly_peak_merge_ignores_captar_available(hass):
 
 
 async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak(hass):
-    # D-3: the PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
+    # The PROVISIONAL resolve_effective_peak_limit(urgent=False) call site (the
     # ev_soc-missing early-fault return) must also reflect the merged operand -- updating only
     # the final call site would leave this one on the unmerged value undetected.
     config = _config()
@@ -1210,7 +1503,8 @@ async def test_ev_soc_fault_early_return_also_reflects_the_external_monthly_peak
 
 
 async def test_adapter_readings_contains_every_currently_wired_role(hass):
-    """entity-catalog.md:154/ADR-0021 -- one key per currently-wired *read* role, excluding
+    """entity-catalog.md's `sensor.smart_charging_adapter_readings` row / ADR-0021 -- one key
+    per currently-wired *read* role, excluding
     ROLES_ADAPTER_READINGS_EXCLUDED (#602 T4)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=1000.0, charger_w=2000.0, ev_soc=50.0)
     adapters[ROLE_NOTIFICATION_TARGET] = _FakeNumeric("notify.mobile_app")  # write-only role
@@ -1352,7 +1646,7 @@ async def test_ev_soc_fault_does_not_advance_adapter_readings_at(hass, freezer):
     """Issue #648: the ev_soc-fault early return must NOT advance `_role_readings_at` to this
     cycle's own timestamp, exactly like the required-role fault path a few lines above it
     (coordinator.py's own comment: "the cache keeps whichever timestamp a prior successful
-    cycle set"). ADR-0021/entity-catalog.md:154 define
+    cycle set"). ADR-0021 and entity-catalog.md's own row define
     `sensor.smart_charging_adapter_readings`'s state as the timestamp of the LAST SUCCESSFUL
     cycle -- an ev_soc fault means this cycle wasn't one, so the timestamp must stay at
     cycle 1's value, not jump to cycle 2's, even though cycle 2's required-adapter read (status/
@@ -1404,8 +1698,9 @@ async def test_adapter_readings_at_advances_on_a_second_successful_cycle(hass, f
 
 
 async def test_time_to_full_min_matches_the_glossary_formula(hass):
-    """system-overview.md glossary/entity-catalog.md:152 -- capacity * (limit - soc) / 100,
-    projected at this cycle's own commanded (pre-clamp) current (#602 T3)."""
+    """system-overview.md glossary / entity-catalog.md's `sensor.smart_charging_time_to_full`
+    row -- capacity * (limit - soc) / 100, projected at the current `charger_current`
+    set-point (#602 T3)."""
     adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
     coord, result = await _run(hass, adapters, _config(), target=8.0)
     assert coord.active_mode == MODE_POWER
@@ -1470,8 +1765,10 @@ async def test_time_to_full_min_promoted_capacity_read_does_not_change_deadline_
 
 
 async def test_peak_headroom_a_matches_the_r3_clamp_target(hass):
-    """entity-catalog.md:153/control-cycle.md step 5 -- same raw-reading headroom the R3
-    clamp itself computes (#602 T2)."""
+    """entity-catalog.md's `sensor.smart_charging_peak_headroom_a` row / control-cycle.md
+    step 5 -- the same target and the same accepted household baseline the R3 clamp itself
+    holds (#602 T2). R3's deferral cases are pinned separately, by
+    test_peak_headroom_a_does_not_spike_from_a_transient_stale_charger_power_reading."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     config = dataclasses.replace(config, safety_margin_w=250.0)
@@ -1604,11 +1901,12 @@ async def test_peak_clamp_never_engages_for_a_selectable_mode_when_captar_absent
 
 
 async def test_power_never_stops_on_its_own_when_captar_capability_absent(hass):
-    """R17's own AC (requirements.md): with the CapTar capability absent, Power never stops
-    on its own and never enters a cooldown -- the force-stop branch this PR's gate now
-    prevents from running at all is Captar's own R3-breach stop (coordinator.py's
-    `_apply_peak_clamp`), so a sustained breach that would otherwise force a Captar-mode
-    cooldown must instead leave a Power-mode session commanding current, uninterrupted."""
+    """R11's AC (requirements.md): with the CapTar capability absent or R17's peak-protection
+    option off, Power never stops on its own and never enters a cooldown -- the force-stop
+    branch the capability gate prevents from running at all is Captar's own R3-breach stop
+    (coordinator.py's `_apply_peak_clamp`), so a sustained breach that would otherwise force a
+    Captar-mode cooldown must instead leave a Power-mode session commanding current,
+    uninterrupted."""
     config = _config()
     config = dataclasses.replace(
         config, max_peak_kw=1.0, peak_grace_min=0.0, captar_available=False
@@ -1949,10 +2247,258 @@ async def test_disconnect_clears_active_cooldown(hass):
     assert result.commanded_current == 16.0
 
 
+async def test_should_start_solar_cooldown_and_leave_charging_state_when_a_fault_cuts_the_current(
+    hass,
+):
+    """C5/R11 (issue #1311): a fault that cuts a charging current is a fault stop and starts
+    the active mode's own cooldown, exactly as that mode's own stop condition would, and takes
+    the mode out of its charging state -- both the coordinator-scoped `_active_cooldown` and
+    Solar's own per-mode `Phase.COOLDOWN`."""
+    # Arrange
+    config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    result = await coord._async_update_data()
+    assert result.commanded_current > 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+
+    # Act -- required-adapter fault (coordinator.py's `_read_cycle_inputs`-is-None branch)
+    # cuts the current in force (>0) to 0 A.
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+    assert coord._active_cooldown is not None
+    assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
+
+
+async def test_should_start_no_cooldown_when_a_fault_hits_while_the_current_is_already_zero(hass):
+    """C5/R11: a fault while the current in force is already 0 A starts no cooldown. Uses a
+    SOC-gated mode (Solar, idling below its start threshold) rather than `Off`, so the
+    assertion actually exercises the `_last_commanded_a`-based gate
+    (`coordinator.py`'s `_start_fault_stop_cooldown`) -- a mode-based gate (e.g. "skip only for
+    `Off`") would fail this test, since Solar's own `solar_cooldown_min` is non-zero here."""
+    # Arrange
+    config = _config()
+    idle = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)  # 0 W surplus
+    coord = SmartChargingCoordinator(
+        hass, adapters=idle, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    result = await coord._async_update_data()
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
+    assert coord._active_cooldown is None
+
+    # Act
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert result.commanded_current == 0.0
+    assert coord._active_cooldown is None
+
+
+@pytest.mark.parametrize(
+    "power_respect_peak,captar_available",
+    [(True, True), (True, False), (False, True), (False, False)],
+)
+async def test_should_start_power_cooldown_when_faulted_regardless_of_peak_option_and_captar(
+    hass, power_respect_peak, captar_available
+):
+    """R11 AC3 as amended (issue #1311): Power enters the fault-stop cooldown whatever its
+    `power_respect_peak` option and the CapTar capability -- unlike Power's own stop condition
+    (R3's sustained peak breach), which can only ever start a cooldown while both are true."""
+    # Arrange
+    config = dataclasses.replace(
+        _config(power_cooldown_min=9.0, power_respect_peak=power_respect_peak),
+        captar_available=captar_available,
+    )
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = 10.0
+    _seed_ample_peak_headroom(coord)
+    result = await coord._async_update_data()
+    assert result.commanded_current == 10.0
+
+    # Act
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert result.commanded_current == 0.0
+    assert coord._active_cooldown is not None
+    assert coord._active_cooldown.duration_s == config.power_cooldown_min * 60
+
+
+async def test_should_start_cooldown_when_the_cycle_exception_path_is_the_fault(hass):
+    """C5/ADR-0007 (issue #1311): the exception path in `_async_update_data` is also a fault
+    stop and starts the active mode's cooldown, exactly like the two `_run_cycle` early-return
+    fault paths."""
+    # Arrange
+    config = dataclasses.replace(_config(), captar_cooldown_min=6.0)
+    adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_CAPTAR
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    result = await coord._async_update_data()
+    assert result.commanded_current > 0.0
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.CHARGING
+
+    # Act
+    adapters[ROLE_CHARGER_STATUS] = _RaisingNumeric()  # forces _async_update_data's except path
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._mode_state[MODE_CAPTAR].phase == Phase.COOLDOWN
+    assert coord._active_cooldown is not None
+    assert coord._active_cooldown.duration_s == config.captar_cooldown_min * 60
+
+
+async def test_should_start_cooldown_when_ev_soc_missing_is_the_fault(hass):
+    """C5/R11 (issue #1311): the ev_soc-missing early return in `_run_cycle` is also a fault
+    stop and starts the active mode's cooldown."""
+    # Arrange
+    config = _config(solar_cooldown_min=4.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    result = await coord._async_update_data()
+    assert result.commanded_current > 0.0
+
+    # Act
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=None)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+    assert coord._active_cooldown is not None
+    assert coord._active_cooldown.duration_s == config.solar_cooldown_min * 60
+
+
+async def test_should_stay_blocked_when_the_fault_stop_cooldown_has_not_yet_elapsed(hass):
+    """C5/R11 (issue #1311): once a fault stop starts the cooldown, charging stays off even
+    once the fault itself clears and ample surplus returns, until the cooldown elapses."""
+    # Arrange
+    config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    await coord._async_update_data()
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    await coord._async_update_data()
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+
+    # Act -- fault clears and ample surplus (above the start threshold) returns, but
+    # essentially no wall-clock time has passed since the fault stop.
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=1000.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.COOLDOWN
+
+
+async def test_should_resume_when_cooldown_elapses_via_start_condition_not_pre_fault_current(
+    hass,
+):
+    """C5/R11 (issue #1311): once the fault stop's cooldown has elapsed, charging resumes only
+    through the active mode's own start condition -- never straight back to the current in
+    force before the fault."""
+    # Arrange
+    config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    result = await coord._async_update_data()
+    pre_fault_current = result.commanded_current
+    assert pre_fault_current > 0.0
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    await coord._async_update_data()
+    # Lower (but still above-threshold) surplus, and the cooldown not yet elapsed -- see
+    # test_should_stay_blocked_when_the_fault_stop_cooldown_has_not_yet_elapsed above.
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=1000.0, ev_soc=50.0)
+    await coord._async_update_data()
+
+    # Act -- age both the coordinator-scoped cooldown and Solar's own per-mode Cooldown
+    # phase into the past, simulating the cooldown having elapsed.
+    coord._active_cooldown = dataclasses.replace(coord._active_cooldown, stop_at=float("-inf"))
+    coord._mode_state[MODE_SOLAR] = dataclasses.replace(
+        coord._mode_state[MODE_SOLAR], phase_started_at=float("-inf")
+    )
+    result = await coord._async_update_data()
+
+    # Assert -- resumes through Solar's own start condition, computed from THIS cycle's
+    # (lower) surplus -- not restored straight back to the higher pre-fault current.
+    assert result.commanded_current > 0.0
+    assert result.commanded_current != pre_fault_current
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.CHARGING
+
+
+async def test_should_stay_off_when_the_cooldown_elapses_but_the_start_condition_is_not_met(hass):
+    """C5/R11 (issue #1311) negative case: elapsing the cooldown alone must not resume
+    charging -- the mode's own start condition (surplus at/above the start threshold) still
+    has to hold, ruling out an implementation that resumes unconditionally once the cooldown
+    elapses regardless of current conditions."""
+    # Arrange
+    config = _config(solar_hold_min=5.0, solar_cooldown_min=7.0)
+    charging = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=charging, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR
+    coord.soc_limit_override = 80.0
+    await coord._async_update_data()
+    coord._adapters = _adapters(status=None, net_w=0.0, charger_w=2760.0, ev_soc=50.0)
+    await coord._async_update_data()
+
+    # Act -- age the cooldown into the past, but surplus stays below the start threshold
+    # (net_w == charger_w -> 0 W surplus) on the recovery cycle.
+    coord._active_cooldown = dataclasses.replace(coord._active_cooldown, stop_at=float("-inf"))
+    coord._mode_state[MODE_SOLAR] = dataclasses.replace(
+        coord._mode_state[MODE_SOLAR], phase_started_at=float("-inf")
+    )
+    coord._adapters = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0, ev_soc=50.0)
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert result.commanded_current == 0.0
+    assert coord._mode_state[MODE_SOLAR].phase == Phase.IDLE
+
+
 async def test_power_respects_peak_by_default(hass):
     """Power's own target(16A) would normally be commanded outright (existing MVP
     behavior); with power_respect_peak left at its default (True), R17 now ALSO
-    bounds it by the R3 clamp -- a deliberate behavior change (design doc Sec 7)."""
+    bounds it by the R3 clamp -- a deliberate behavior change."""
     config = _config()
     config = dataclasses.replace(config, max_peak_kw=3.56)
     # Same headroom math as test_peak_clamp_reduces_captar_below_headroom: 10A available.
@@ -2480,9 +3026,105 @@ async def test_passed_morning_deadline_does_not_pin_auto_to_captar_all_afternoon
     assert result.active_mode == MODE_SOLAR
 
 
-async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
+async def test_should_resolve_no_deadline_when_checked_at_0030_on_a_home_day_whose_override_is_none(
+    hass, freezer
+):
+    """NF14/R13's last acceptance criterion, the issue's own named scenario: a home-day
+    override of "no deadline" applies for the WHOLE of the home day -- including just after
+    midnight, when a stale, undated flag would already have fallen back to the day-of-week
+    default (06:00) instead. Monday 2026-01-19 is the home day, with its weekday default at
+    06:00 and its home-day override left at None ("no deadline", R14's terminal-but-one row
+    winning over row 4)."""
+    # Arrange
+    # freezer.move_to takes a UTC instant; this harness's local zone is US/Pacific
+    # (UTC-8 in January), so 08:30 UTC is 00:30 local -- 00:30 on the home day itself.
+    freezer.move_to("2026-01-19 08:30:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.home_day_dates = {date(2026, 1, 19)}  # bound to the home day, not to "tomorrow"
+    coord.departure_dow_defaults[0] = time_of_day(6, 0)  # Monday's own weekday default
+    coord.departure_home_day_override = None  # explicit "no deadline" override
+    _seed_ample_peak_headroom(coord)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert -- "no deadline" (the home-day override) wins, not the 06:00 weekday default.
+    assert coord._required_current.required_a is None
+    assert coord._required_current.urgent is False
+    assert coord._required_current.unreachable is False
+
+
+async def test_should_resolve_todays_own_default_when_only_tomorrow_is_in_home_day_dates(
+    hass, freezer
+):
+    """The bug this task fixes, today's half: a flag bound to tomorrow alone must not also
+    override TODAY's own R14 resolution -- each date is looked up in `home_day_dates`
+    independently. Today (2026-01-18, a Sunday) has its own day-of-week default (06:00); only
+    tomorrow (2026-01-19, a Monday) is in `home_day_dates`, with a DIFFERENT home-day override
+    (08:00). Calling `resolve_deadline_for` directly -- bypassing R5/R15's next-occurrence
+    rollover, which would otherwise obscure which value each date actually resolved to --
+    proves today keeps its own default rather than picking up tomorrow's override."""
+    # Arrange
+    freezer.move_to("2026-01-18 20:00:00")  # Sunday, local noon (US/Pacific)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.home_day_dates = {date(2026, 1, 19)}  # tomorrow only, not today
+    coord.departure_dow_defaults[6] = time_of_day(6, 0)  # Sunday's own weekday default
+    coord.departure_home_day_override = time_of_day(8, 0)  # deliberately NOT today's default
+    now_dt = dt_util.now()
+    ctx = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, baseline_w=0.0
+    )
+
+    # Act
+    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+
+    # Assert
+    assert resolve_deadline_for(now_dt.date()) == time_of_day(6, 0)
+
+
+async def test_should_resolve_the_override_when_tomorrow_is_in_home_day_dates(hass, freezer):
+    """The bug this task fixes, tomorrow's half: the same setup as the test above, but
+    checking tomorrow's own resolution picks up the home-day override it IS bound to."""
+    # Arrange
+    freezer.move_to("2026-01-18 20:00:00")  # Sunday, local noon (US/Pacific)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.home_day_dates = {date(2026, 1, 19)}  # tomorrow only, not today
+    coord.departure_dow_defaults[6] = time_of_day(6, 0)  # Sunday's own weekday default
+    coord.departure_home_day_override = time_of_day(8, 0)  # deliberately NOT today's default
+    now_dt = dt_util.now()
+    ctx = CycleContext(
+        status=STATE_CHARGING, net_w=0.0, charger_w=0.0, voltage=230.0, now=0.0, baseline_w=0.0
+    )
+
+    # Act
+    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+
+    # Assert
+    tomorrow_date = now_dt.date() + timedelta(days=1)
+    assert resolve_deadline_for(tomorrow_date) == time_of_day(8, 0)
+
+
+async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass, freezer):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
-    mutual-exclusivity clause)."""
+    mutual-exclusivity clause).
+
+    Frozen in the evening (#1422: R9's gate now reads the *reserved* day, which past local
+    midnight is today's own date rather than tomorrow's -- an unfrozen/unspecified clock would
+    make this test's `home_day_dates` seeding, deliberately tomorrow's date, only sometimes
+    match depending on the real wall-clock hour a run happens to start at)."""
+    freezer.move_to(dt_util.as_utc(datetime(2026, 1, 15, 20, 0, 0)))
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state=SUN_STATE_BELOW_HORIZON)
     adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
     config = _config()
@@ -2492,14 +3134,14 @@ async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
-    coord.home_day_flag = True
+    coord.home_day_dates = {dt_util.now().date() + timedelta(days=1)}
     _seed_ample_peak_headroom(coord)
 
     result = await coord._async_update_data()
     assert result.active_soc_limit == 60.0  # DEFAULT_SOLAR_RESERVE_SOC -- reserve engaged
 
-    # R14 row 3 (home_day_flag already True above) wins over the day-of-week default, so the
-    # home-day override -- not departure_dow_defaults -- is what must resolve for the
+    # R14 row 3 (tomorrow already in home_day_dates above) wins over the day-of-week default,
+    # so the home-day override -- not departure_dow_defaults -- is what must resolve for the
     # one-day-ahead evaluation to stop returning "no deadline".
     coord.departure_home_day_override = dt_util.now().time()
     result = await coord._async_update_data()
@@ -3111,8 +3753,9 @@ async def test_solar_cooldown_delays_deadline_urgency_escalation_into_captar(has
     Idle by the mode switch (as before), but the coordinator-scoped `_active_cooldown` (fixed
     at Solar's own duration when it stopped) still blocks Captar's Idle -> Charging
     transition. This is control-cycle.md's own accepted trade-off: "an urgency escalation
-    (R5) may have to wait out the remainder of a running cooldown ... rather than this
-    Must-priority hardware protection being defeated"."""
+    can be held off for the remainder of a running cooldown (at most `Captar`'s 10
+    minutes), a bounded delay to R5's best-effort guarantee rather than a breach of R11's
+    Must-priority hardware protection"."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = _config()
@@ -3425,7 +4068,7 @@ async def test_seed_monthly_peak_passes_a_negative_kw_through_unchanged(hass):
 
 
 # --- Task 4.1 (ADR-0012 coordinator decomposition): explicit ADR-0006 clamp-integrity check,
-# made permanent regression tests rather than a one-time manual read (plan Step 4). ---
+# made permanent regression tests rather than a one-time manual read. ---
 
 
 async def test_power_opt_out_of_r3_does_not_disable_c4_ceiling(hass):
@@ -3463,7 +4106,7 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
 
     spied = (
         "resolve_voltage",
-        "smooth_net_power",
+        "smooth_household_baseline",
         "apply_peak_clamp",
         "clamp_to_ceiling",
         "apply_floor_cap",
@@ -3475,12 +4118,13 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
     _coord, result = await _run(hass, adapters, _config(), target=10.0)
 
     assert result.fault is False
-    # Voltage (step 3, NF4) resolves before this cycle's net-power smoothing call (step 2's
-    # mode-dispatch reading) in this implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap)
-    # then run in ADR-0006's fixed order -- neither reordered nor merged.
+    # Voltage (step 3, NF4) resolves before this cycle's household-baseline smoothing call
+    # (step 2's mode-dispatch reading, `smooth_household_baseline`, ADR-0049) in this
+    # implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap) then run in ADR-0006's fixed
+    # order -- neither reordered nor merged.
     assert call_order == [
         "resolve_voltage",
-        "smooth_net_power",
+        "smooth_household_baseline",
         "apply_peak_clamp",
         "clamp_to_ceiling",
         "apply_floor_cap",
@@ -3548,7 +4192,7 @@ async def test_set_active_profile_falls_back_to_manual_on_unrecognized_stored_pr
 
 
 async def test_read_owned_entities_leaves_field_unchanged_when_store_returns_none(hass):
-    """Success criterion 4: a missing/unresolvable read is not a fault -- keep the current value."""
+    """A missing/unresolvable read is not a fault -- keep the current value."""
     store = _FakeStore({})  # every read() call returns None
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
@@ -3595,13 +4239,56 @@ async def test_read_owned_entities_clamps_soc_limit_override_via_existing_setter
     assert coord.soc_limit_override == SOC_LIMIT_OVERRIDE_MAX
 
 
-async def test_read_owned_entities_updates_home_day_flag(hass):
-    store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): True})
+async def test_should_apply_home_day_dates_when_the_store_resolves_a_date(hass):
+    # Arrange
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): {tomorrow}})
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
     )
+
+    # Act
     await coord._read_owned_entities()
-    assert coord.home_day_flag is True
+
+    # Assert
+    assert coord.home_day_dates == {tomorrow}
+
+
+async def test_should_keep_the_prior_dates_when_the_store_read_is_unresolvable(hass):
+    """NF14: same "None means unresolvable, keep current" convention as every `simple_reads`
+    field (ADR-0018) -- an unregistered/unavailable switch (read_home_day_dates returning
+    None) must not clear `home_day_dates`, so a test's own direct field assignment survives
+    `_read_owned_entities` exactly like every other field's does."""
+    # Arrange
+    store = _FakeStore({})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.home_day_dates = {dt_util.now().date()}
+
+    # Act
+    await coord._read_owned_entities()
+
+    # Assert
+    assert coord.home_day_dates == {dt_util.now().date()}
+
+
+async def test_should_clear_stale_dates_when_the_store_resolves_to_empty(hass):
+    """The other half of the same contract: a REGISTERED, available switch with nothing set
+    resolves to an explicit empty set (not None), and that DOES get applied -- "an unset flag
+    stays unset (default off)" is a resolved value, not an unresolvable read."""
+    # Arrange
+    store = _FakeStore({(Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): set()})
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), store=store, config=_config(), interval_s=30
+    )
+    coord.home_day_dates = {dt_util.now().date()}  # a stale prior value
+
+    # Act
+    await coord._read_owned_entities()
+
+    # Assert
+    assert coord.home_day_dates == set()
 
 
 async def test_read_owned_entities_updates_departure_dow_defaults(hass):
@@ -3676,17 +4363,20 @@ async def test_read_owned_entities_does_not_overwrite_active_mode_under_auto(has
 
 
 async def test_read_owned_entities_applies_every_table_driven_read(hass):
-    """#652: the five reads with no cross-read dependency (target_current, soc_limit_override,
-    home_day_flag, the two departure overrides) now run through a `simple_reads` table instead
-    of five hand-written blocks -- confirms the loop applies every row in one call, catching an
+    """#652: the four reads with no cross-read dependency (target_current, soc_limit_override,
+    the two departure overrides) now run through a `simple_reads` table instead of four
+    hand-written blocks -- confirms the loop applies every row in one call, catching an
     early `break` or a duplicated/dropped table row that per-field tests (below) each run in
     isolation wouldn't. See _read_owned_entities' docstring for why this is a readability-only
-    change (asyncio.gather was investigated and rejected)."""
+    change (asyncio.gather was investigated and rejected). `home_day_dates` is read
+    separately (`read_home_day_dates`, NF14) but is covered by the same call, so it is
+    asserted here too."""
+    tomorrow = dt_util.now().date() + timedelta(days=1)
     store = _FakeStore(
         {
             (Platform.NUMBER, OWNED_SUFFIX_TARGET_CURRENT): 12.0,
             (Platform.NUMBER, OWNED_SUFFIX_SOC_LIMIT_OVERRIDE): 80.0,
-            (Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): True,
+            (Platform.SWITCH, OWNED_SUFFIX_HOME_DAY): {tomorrow},
             (Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOLIDAY): time_of_day(7, 30),
             (Platform.TIME, OWNED_SUFFIX_DEPARTURE_HOME_DAY): time_of_day(8, 0),
         }
@@ -3697,7 +4387,7 @@ async def test_read_owned_entities_applies_every_table_driven_read(hass):
     await coord._read_owned_entities()
     assert coord.target_current == 12.0
     assert coord.soc_limit_override == 80.0
-    assert coord.home_day_flag is True
+    assert coord.home_day_dates == {tomorrow}
     assert coord.departure_holiday_override == time_of_day(7, 30)
     assert coord.departure_home_day_override == time_of_day(8, 0)
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # PreToolUse(Bash) guard: refuse the destructive git commands that
-# docs/reference/contribution-workflow.md's "Commit & push authorization" section
+# docs/reference/method/contribution-workflow.md's "Commit & push authorization" section
 # excludes from the project's standing commit/push authorization.
 #
 # Contract: reads the PreToolUse payload on stdin; exit 0 with no output allows the
@@ -35,7 +35,7 @@
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
-DOC='docs/reference/contribution-workflow.md, section "Commit & push authorization"'
+DOC='docs/reference/method/contribution-workflow.md, section "Commit & push authorization"'
 
 payload=$(cat)
 
@@ -408,7 +408,7 @@ for seg in $segments; do
       # cd'd into.
       if [ "$control" = 0 ] &&
         git -C "$repo" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
-        deny "$seg" "this branch is already pushed, so rebasing it rewrites published history; step 3 of the workflow lets you 'git merge origin/main' instead"
+        deny "$seg" "this branch is already pushed, so rebasing it rewrites published history; the review step of the workflow lets you 'git merge origin/main' instead"
       fi
       ;;
   esac

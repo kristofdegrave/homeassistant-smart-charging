@@ -6,15 +6,14 @@ description: Use when picking up a GitHub issue labeled `idea` in the Smart Char
 # Work an idea
 
 An `idea` issue can be small or very large, and rarely maps 1:1 to a single artifact. This
-skill turns it into one or more scoped, context-labeled issues that the labeled pipeline can
-then draft — it never drafts an artifact or opens a PR itself.
+skill turns it into one or more scoped, context-labeled issues that the contribution workflow
+can then implement — it never drafts an artifact or opens a PR itself.
 
-This is a manual/interactive skill, not a CI-wired one: grilling is a genuine dialogue with a
-human, so it stays a session task rather than a non-interactive drafter.
+This is an interactive skill: the brainstorm is a genuine dialogue with a human.
 
-The stages this skill walks — the two tracks, the verification gate, the spec gate, what a
-child issue is, and when the idea issue closes — are defined once in the idea-to-result flow
-document, routed by `CLAUDE.md`'s **Contribution workflow** section. Read it first; this skill
+The stages this skill walks — the mandatory brainstorm, the two tracks, the verification gate,
+the spec gate, what a child issue is, and when the idea issue closes — are defined once in the
+flow document `CLAUDE.md`'s **Idea-to-product flow** topic routes to. Read it first; this skill
 only sequences those stages and says which skill performs each. Cite it, never restate it.
 
 ## The cycle
@@ -22,7 +21,9 @@ only sequences those stages and says which skill performs each. Cite it, never r
 1. **Read the idea issue** — title, body, and anything it links to (docs, related issues). An
    idea raised in conversation gets filed as an `idea` issue first, so there is something to
    record decisions against.
-2. **Grill it** — the `grilling` skill owns the technique. Two outputs, two homes: a **decision**
+2. **Brainstorm it** — mandatory, whatever form the idea arrived in; the flow's **Brainstorm**
+   stage says which of `grilling` and `brainstorming` fits the idea's shape, and each owns its
+   own technique. Two outputs, two homes: a **decision**
    is written to the idea issue as it settles, and a **question of fact** goes to the `research`
    skill, which records its finding as a comment on the issue that needed it. Stop at "the idea
    is scoped enough to split," not at "the work is designed in detail" — that detail belongs to
@@ -34,17 +35,18 @@ only sequences those stages and says which skill performs each. Cite it, never r
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
    new-behaviour track this step does not apply.
-5. **Settle whether the strand needs a `specs` issue** — the flow document says when one is
-   required on each track, and which analysis change cannot be approved until it exists. Where
-   it is required, it is one of the children filed below, and the `specs` work type drafts it
-   later.
+5. **Settle whether the strand needs an epic whose body carries the spec** — the flow document
+   says when one is required on each track, and which analysis change cannot be approved until
+   it exists. Where it is required, that epic is what step 6 files, and its body is written in
+   the closing step below rather than drafted later as a separate artifact.
    Record the answer on the issue either way, so it is not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
-   single-artifact idea, an epic plus its children for a multi-artifact strand — moving the
-   grilled decisions wherever the flow document says they end up. `file-task-issue` owns
-   attaching a child to its epic, so the epic body never carries a checklist of them; what a
-   child is and in what order children are filed is the flow document's. A part still too fuzzy
-   to scope keeps the `idea` label and gets worked later — recursion is expected, not an error.
+   single-artifact idea, an epic whose body is the spec plus the children cut from it for a
+   multi-artifact strand — moving the brainstormed decisions wherever the flow document says
+   they end up. The flow owns the closing step and its order, `file-task-issue` its mechanics, so the epic body never
+   carries a checklist of them; what a child is and in what order children are filed is the
+   flow document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
+   later — recursion is expected, not an error.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
@@ -57,24 +59,28 @@ only sequences those stages and says which skill performs each. Cite it, never r
 
 ## Rules
 
-- One context label per child issue — the pipeline's draft job already refuses to draft an issue
-  with zero or multiple context labels; don't hand it one. A child on the shipped-behaviour track
+- One context label per child issue — the `implement` skill stops on an issue with zero or
+  several, so don't hand it one. A child on the shipped-behaviour track
   may legitimately carry only its kind label until the fixing artifact is known.
-- Don't skip the `grilling` step to save a round-trip — an idea decomposed without the user's
+- Don't skip the brainstorm step to save a round-trip — an idea decomposed without the user's
   buy-in just relocates the ambiguity into the child issues.
 - Don't draft content for a child issue beyond what's needed to scope it (a clear title and a
   body stating the problem/intent) — the artifact itself is the downstream skill's job.
 
 ## Common mistakes
 
+The rules of the flow document and of `CLAUDE.md`'s **Issue conventions** are not restated
+here; the ones this cycle trips on most are designing before a shipped-behaviour claim is
+reproduced (step 4), filing a child before the epic body it is cut from has been through its
+review pass (step 6), a child with two context labels, and relabelling the idea issue as the
+epic. The mistakes that are this skill's own:
+
 - Closing the parent idea issue when only part of it was decomposed.
 - Relabeling/reusing the idea issue itself as the epic instead of filing a new, separate epic
   issue — the epic must stay open tracking children long after the idea issue is closed.
-- Leaving grilled decisions in chat scrollback, or leaving them on the idea issue after an epic
-  was filed instead of moving them into the epic body.
+- Leaving brainstormed decisions in chat scrollback, or leaving them on the idea issue after
+  an epic was filed instead of moving them into the epic body.
 - Designing a fix on the shipped-behaviour track before the claim has been reproduced.
-- Filing `development`/`testing` child issues before an approved plan exists for them to cite
-  in their `Plan:` line.
 - Giving a child issue two context labels (e.g. both `uc` and `requirement`) because the
   idea touches both — split it into two children instead.
 - Treating this as a green light to start implementing once issues exist — each child still

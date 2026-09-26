@@ -60,6 +60,7 @@ class SmartChargingConfig:
     peak_grace_min: float
     captar_cooldown_min: float
     power_respect_peak: bool
+    power_cooldown_min: float
     ev_battery_capacity_kwh: float
     max_solar_soc: float
     solar_step_pp: float

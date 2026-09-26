@@ -1,5 +1,6 @@
 """HA-harness tests for the RA3 Store (ADR-0018/0019)."""
 
+from datetime import date
 from datetime import time as time_of_day
 from unittest.mock import patch
 
@@ -9,6 +10,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.adapters.store import Store
 from custom_components.smart_charging.const import (
+    ATTR_APPLIES_TO,
     DOMAIN,
     OWNED_SUFFIX_HOME_DAY,
     OWNED_SUFFIX_MODE,
@@ -116,6 +118,120 @@ async def test_read_bool_off_returns_false(hass):
     assert await store.read(Platform.SWITCH, "home_day", bool) is False
 
 
+async def test_should_return_the_attribute_as_dates_when_the_switch_carries_applies_to(hass):
+    """NF14: `read_home_day_dates` reads `ATTR_APPLIES_TO` -- the set of dates the flag
+    applies to -- not the plain on/off state `read(..., bool)` above coerces."""
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: ["2026-01-18", "2026-01-19"]})
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result == {date(2026, 1, 18), date(2026, 1, 19)}
+
+
+async def test_should_return_none_when_the_switch_is_unregistered(hass):
+    """Same contract as read(): None means "unresolvable this cycle", not "resolved to
+    empty" -- the coordinator keeps its prior dates rather than clearing them (NF14)."""
+    # Arrange
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
+async def test_should_return_none_when_the_switch_is_registered_but_has_no_state(hass):
+    """Distinct from the unregistered case above: the entity registry knows about the switch
+    (e.g. its platform set up before the first state write) but `hass.states.get` has nothing
+    for it yet -- still unresolvable, not a resolved empty set."""
+    # Arrange
+    er.async_get(hass).async_get_or_create(
+        Platform.SWITCH, DOMAIN, "entry1_home_day", suggested_object_id="smart_charging_home_day"
+    )
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
+async def test_should_return_none_when_the_switch_is_unavailable(hass):
+    # Arrange
+    _register(
+        hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", STATE_UNAVAILABLE
+    )
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
+async def test_should_return_none_when_the_switch_is_unknown(hass):
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", STATE_UNKNOWN)
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
+async def test_should_return_an_empty_set_when_a_registered_switch_has_nothing_set(hass):
+    """The resolved-empty case, distinct from the three above: a real, available switch that
+    has never had a date bound to it -- "an unset flag stays unset (default off)"."""
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "off")
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result == set()
+
+
+async def test_should_drop_a_malformed_entry_and_keep_the_rest(hass):
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: ["2026-01-18", "not-a-date"]})
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result == {date(2026, 1, 18)}
+
+
+async def test_should_return_none_when_applies_to_is_not_a_list(hass):
+    """Dev-m2: a present-but-malformed `applies_to` (not a list at all) is "doesn't coerce",
+    the same outcome `read()`'s float/time branches give -- not a resolved empty set, which
+    the coordinator would apply and use to clear whatever dates were already in force."""
+    # Arrange
+    _register(hass, Platform.SWITCH, "smart_charging_home_day", "entry1_home_day", "on")
+    hass.states.async_set(HOME_DAY_ENTITY_ID, "on", {ATTR_APPLIES_TO: "not-a-list"})
+    store = Store(hass, "entry1")
+
+    # Act
+    result = await store.read_home_day_dates("home_day")
+
+    # Assert
+    assert result is None
+
+
 async def test_read_time_parses_isoformat(hass):
     _register(
         hass, Platform.TIME, "smart_charging_departure_mon", "entry1_departure_mon", "06:00:00"
@@ -185,7 +301,7 @@ async def test_write_unregistered_entity_returns_false(hass):
 
 
 async def test_write_unsupported_domain_returns_false(hass):
-    """Scope guard (design doc): only `number`/`switch` are supported today -- a wrong domain
+    """Scope guard: only `number`/`switch` are supported today -- a wrong domain
     must not issue a service call against an entity that cannot take it. Targets the mode
     select (a real select.py entity, OWNED_SUFFIX_MODE), not soc_limit_override/home_day --
     those live in the now-supported number/switch domains and would return False via the
@@ -200,7 +316,7 @@ async def test_write_unsupported_domain_returns_false(hass):
 
 
 async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchanged(hass):
-    """The clamp is the caller's job (design: Managers hold R6's 50-100 policy) -- the
+    """The clamp is the caller's job (Managers hold R6's 50-100 policy) -- the
     entity's own bounds are the backstop, and a violation is a logged no-op, never an
     exception escaping into a Manager's reaction path."""
     entry = await _setup_entry(hass)
@@ -214,8 +330,9 @@ async def test_write_out_of_range_value_returns_false_and_leaves_entity_unchange
 
 
 async def test_write_switch_true_turns_the_real_entity_on(hass):
-    """RA3 Store write half, switch domain (ADR-0018; M3's home_day_flag write, notifications
-    design doc §7): `True` calls `switch.turn_on` against the real HomeDaySwitch entity, going
+    """RA3 Store write half, switch domain (ADR-0018; M3's home_day_flag write,
+    entity-catalog.md's `switch.smart_charging_home_day` row): `True` calls `switch.turn_on`
+    against the real HomeDaySwitch entity, going
     through the entity (not around it) exactly like the `number` case."""
     entry = await _setup_entry(hass)
     store = Store(hass, entry.entry_id)

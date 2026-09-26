@@ -2,8 +2,7 @@
 
 Author `docs/design/project-plan.md`: the implementation task breakdown, build order, and
 per-service ADR flags, derived **mechanically** from an approved `docs/design/system-design.md`,
-per Löwy's "project design" step. Rationale:
-`docs/plans/2026-07-07-lowy-system-design-method.md`.
+per Löwy's "project design" step.
 
 This file is the `documentation` work type's work file for a change touching
 `docs/design/project-plan.md`, reached from the label's own `implement.md` one level up, which is
@@ -23,7 +22,7 @@ step collapses into a single sequenced, independently-testable task list — the
 
 ## Drafting the project plan
 
-**Step 1 (do the work)**, in order:
+**The implement step (do the work)**, in order:
 
 1. **Read the approved `system-design.md`** — the service map, each service's classification
    (Client/Manager/Engine/Resource Access/Resource), and the static diagram's call directions.
@@ -41,7 +40,8 @@ step collapses into a single sequenced, independently-testable task list — the
    on and the integration checkpoint that proves it's wired correctly with its callers.
 
 The approved task list is what the per-slice implementation specs and the implementation work
-under `custom_components/` are then derived from.
+— in the product-code tree the `development` work type's stack overlay names — are then
+derived from.
 
 ## Rules
 

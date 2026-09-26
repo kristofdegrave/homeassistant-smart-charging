@@ -28,7 +28,7 @@ A [control cycle](../system-overview.md#ubiquitous-language) observes that `Capt
 ## Alternate flows
 
 **2a — Blocked by cooldown** — branches from step 2.
-Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Captar`-mode cooldown this mode's own stop starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`); this is what can delay a deadline-urgency escalation into `Captar` for the remainder of a solar-mode cooldown (`../resolution-rules.md`)
+Given a rapid-cycling cooldown is still running after a previous stop (R11) — the `Captar`-mode cooldown this mode's own stop or a fault stop (C5) starts (default 10 minutes), or one carried in from a stop in another mode, since a running cooldown is not cleared by a mode switch (`../control-cycle.md`); this is what can delay a deadline-urgency escalation into `Captar` for the remainder of a solar-mode cooldown (`../resolution-rules.md`)
 When a control cycle runs
 Then the System does not start charging until the cooldown has fully elapsed, then starts on the next qualifying cycle.
 
@@ -44,7 +44,12 @@ R3's own grace period (default 2 minutes, held at the minimum charging current b
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Captar` mode
 When state of charge reaches the active SOC limit — whether the plain default, a stepped-up value, or a value `Auto` has lowered via the solar-reserve cap (R9) — the resolution is the same to `Captar`
-Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+Then the System stops charging (0 A) and stays stopped until a reading shows state of charge below the active SOC limit — whether because the limit was raised above it or state of charge fell — or the car is unplugged and replugged; a lowered limit never ends the stop (R7).
+
+**Fault stop.**
+Given the System is charging in `Captar` mode
+When a [fault](../system-overview.md#ubiquitous-language) cuts the current (C5)
+Then, from `Charging`, the System enters Cooldown for the `Captar` cooldown (R11), and resumes only through Cooldown's own exits (State model). This stop does not emit `CaptarChargingStopped`, which names this mode's own stops only; the fault is surfaced by `sensor.smart_charging_status` (C5).
 
 ## Postconditions
 
@@ -73,7 +78,7 @@ available [peak headroom](../system-overview.md#ubiquitous-language) — the hig
 that keeps net import at or below the effective peak limit minus the safety margin, floored at the
 minimum and capped at the maximum charging current (C1). Realising the absolute-headroom bound in
 the raw-reading clamp rather than in the mode is what makes `Captar`'s effective control law
-raw-based, unlike the solar modes' smoothed convergence toward 0 W (UC01/UC02). Because the clamp
+raw-based, unlike the solar modes' set-point from the smoothed solar surplus (UC01/UC02). Because the clamp
 acts on net import, any solar production is netted off first and self-consumed, with the grid
 supplying only the remainder. The `stateDiagram-v2` below is authoritative for the state set. All
 thresholds/timers are configurable (defaults shown). The peak-protection (R3) and
@@ -83,12 +88,17 @@ A disconnect (charger status leaving `connected`/`charging`) breaks the "car con
 and exits this use-case's scope from any state, returning to Idle; on disconnect the active SOC limit
 resets to the default (R7), which is why the diagram does not draw a disconnect edge from every state.
 
+A [fault](../system-overview.md#ubiquitous-language) that cuts the current while in Charging is a
+fault stop (C5): it enters Cooldown for this mode's cooldown, exactly as the mode's own stop does
+(R11), and charging resumes only through Cooldown's own exit. It can arise on any charging cycle,
+which is why the diagram does not draw it either.
+
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | SOC < active SOC limit & no cooldown → Charging |
 | Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | sustained R3 breach at the minimum charging current (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Captar` cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
-| SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
+| SocReached | 0 A | a reading shows SOC below the active SOC limit, or car unplugged/replugged → Idle (R7; a lowered limit never ends the stop) |
 
 **A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
 entry point: `Captar` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as
@@ -113,7 +123,7 @@ stateDiagram-v2
     Charging --> SocReached: SOC ≥ active SOC limit
     Cooldown --> Charging: cooldown elapsed (10 min)<br/>& charging conditions hold
     Cooldown --> Idle: cooldown elapsed<br/>& charging conditions not held
-    SocReached --> Idle: active SOC limit changes,<br/>or unplug/replug
+    SocReached --> Idle: SOC reading below the limit,<br/>or unplug/replug (never a lowered limit)
     note right of Charging
         Set-point: request maximum current; the R3 peak
         clamp fits it (raw) to the peak headroom — net
@@ -127,7 +137,7 @@ stateDiagram-v2
 
 - **R4** — Captar mode grid charging (charges to the peak-headroom set-point whenever active and its own conditions hold, independent of tariff; 0 A default when no condition permits charging).
 
-Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), sensor smoothing (R10), and voltage-aware conversion (NF4).
+Inherited from the shared mechanism (referenced, not restated): the active-SOC-limit resolution and reset (R7, `resolution-rules.md` — which `Auto` may lower via the solar-reserve cap, R9, UC07), the effective-peak-limit resolution (`resolution-rules.md`), the peak-protection (R3, C3) and grid-supply-ceiling (C4) clamps and the rapid-cycling cooldown/min-current invariant (R11) (`control-cycle.md`), sensor smoothing (R10), and voltage-aware conversion (R22).
 
 ## Relationships
 

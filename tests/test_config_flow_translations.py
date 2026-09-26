@@ -72,7 +72,7 @@ def _keys(schema) -> set[str]:
 
 # Step ids the config/options flows can show, discovered from the tables themselves --
 # `core` is the shared entry point both install and reconfigure delegate into (ADR-0027
-# point 5) and is deliberately not a CONFIG_TABLE row of its own (design, "Step ids"). Unlike
+# point 5) and is deliberately not a CONFIG_TABLE row of its own. Unlike
 # CONFIG_TABLE, `core` IS an OPTIONS_TABLE row (the options flow's own entry point,
 # async_step_init, renders no form of its own), so OPTIONS_STEP_IDS needs no such union.
 CONFIG_STEP_IDS = {row.step_id for row in cf.CONFIG_TABLE} | {cf.STEP_CORE}

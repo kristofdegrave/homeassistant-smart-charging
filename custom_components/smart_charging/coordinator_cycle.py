@@ -1,8 +1,9 @@
 """Coordinator-internal cycle decomposition: CycleContext, PeakDemandState, SocGateResolver, and
-the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_solar_reserve_gate, and
-resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge (ADR-0024).
+the ModeHandler Strategy (ADR-0012); SolarStepUpGate, resolve_reserved_day,
+resolve_solar_reserve_gate, and resolve_deadline_urgency (ADR-0023); DeadlineUnreachableEdge
+(ADR-0024).
 Imported only by coordinator.py. Pure -- no HA imports (mirrors engines/ purity, ADR-0009/0010),
-even though these aren't engines themselves (system-design Sec 4 rule 4: an engine may not call
+even though these aren't engines themselves (system-design.md §4 rule 4: an engine may not call
 another engine; these call engines).
 The five _*ModeHandler classes stay private -- build_mode_handlers() is the only construction
 site coordinator.py may reach across the module boundary for."""
@@ -11,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Protocol
 
 from .config import SmartChargingConfig
@@ -42,6 +43,7 @@ from .modes import captar, power, solar, solar_only
 from .profiles.policy import PROFILE_POLICIES
 
 _WATTS_PER_KILOWATT = 1000.0
+_RESERVED_DAY_SPLIT = time(12, 0)  # see resolve_reserved_day's docstring for why noon
 
 
 @dataclass  # deliberately not frozen -- steps mutate fields in place as each value resolves
@@ -59,8 +61,9 @@ class CycleContext:
     future consumer that genuinely needs one adds it back for real, not speculatively."""
 
     status: str
-    net_w: float  # raw, not the smoothed reading (coordinator.py's separate smoothed_net_w) --
-    # read by coordinator.py's two clamps, off this same ctx (issue #719)
+    net_w: float  # raw, not the smoothed reading (coordinator.py's separate, joint
+    # smoothed_household_w, ADR-0049) -- read by coordinator.py's two clamps, off this same ctx
+    # (issue #719)
     charger_w: float  # read by coordinator.py's two clamps, off this same ctx (issue #719)
     voltage: float
     now: float
@@ -119,8 +122,9 @@ class PeakDemandState:
     def update(self, net_w: float, now_dt: datetime, *, window_size: int) -> float:
         """Fold `net_w` into the smoothing window and return the running monthly-peak kW.
 
-        A month rollover resets the smoothing window too, not just tracked_kw (design doc
-        Sec 6.4) -- else this cycle's "smoothed" reading would partly reflect last month.
+        A month rollover resets the smoothing window too, not just tracked_kw
+        (control-cycle.md's Monthly peak demand tracking, R21) -- else this cycle's "smoothed"
+        reading would partly reflect last month.
         """
         current_month = (now_dt.year, now_dt.month)
         if current_month != self.tracked_month:
@@ -138,8 +142,10 @@ class PeakDemandState:
         A faithful restore: no clamp, since `update()` itself can legitimately produce a
         negative `tracked_kw` on a net-export month (peak_demand_tracker.py's own contract).
         `month` is left unchanged when the restored state carries no `period_month` (an older
-        stored value) -- the 15-minute `window` is deliberately never seeded (design doc
-        Sec 6.4), matching `update()`'s own reset-on-rollover behavior."""
+        stored value) -- the 15-minute `window` is deliberately never seeded (R21: the window
+        itself is "not preserved and rebuilds from the readings that follow", unlike the
+        tracked value, which R21/NF14 do require to survive), matching `update()`'s own
+        reset-on-rollover behavior."""
         self.tracked_kw = kw
         if month is not None:
             self.tracked_month = month
@@ -166,11 +172,12 @@ class ActiveCooldown:
     the duration fixed at the moment charging stopped -- not the incoming mode's own duration.
 
     `stop_at` (monotonic seconds, `ctx.now`) and `duration_s` are captured once, at the
-    instant a mode's own stop condition transitions it into `Phase.COOLDOWN` -- `duration_s`
-    is deliberately a plain float copied out of the stopping mode's own `cooldown_minutes` at
-    that instant, not re-read from config later, so a live config change mid-cooldown can
-    never shorten (or lengthen) a cooldown already running, mirroring R11's "not shortened by
-    a change in conditions" acceptance criterion."""
+    instant a mode's own stop condition transitions it into `Phase.COOLDOWN`, or, since issue
+    #1311, a fault stop does (C5/R11 AC2, via `coordinator.py`'s `_start_fault_stop_cooldown`)
+    -- `duration_s` is deliberately a plain float copied out of the stopping mode's own
+    `cooldown_minutes` at that instant, not re-read from config later, so a live config change
+    mid-cooldown can never shorten (or lengthen) a cooldown already running, mirroring R11's
+    "not shortened by a change in conditions" acceptance criterion."""
 
     stop_at: float
     duration_s: float
@@ -191,7 +198,13 @@ class ModeHandler(Protocol):
     branch or extending a tuple at every call site."""
 
     is_soc_gated: bool
-    """R7: whether SOC reaching the active limit stops this mode. False for Off/Power."""
+    """R7: whether this mode requires an SOC reading and holds a `resume_state()` at the
+    active limit via the coordinator's shared SOC-gated-stop guard. False for Off/Power --
+    Power still stops at the active limit when a reading is present (#1335), but through its
+    own coordinator-side latch (`_power_soc_limit_reached`, refreshed by
+    `_refresh_power_soc_limit_reached`) rather than through this flag or `_mode_state`, since
+    Power must never be made to *need* a reading (ADR-0042: a missing reading stays a non-
+    fault in Power)."""
 
     is_solar_mode: bool
     """R8/R9: whether this mode counts as "charging on solar" for the step-up/reserve-cap
@@ -199,11 +212,18 @@ class ModeHandler(Protocol):
 
     cooldown_minutes: float
     """R11/issue #974: this mode's own rapid-cycling cooldown duration -- read by the
-    coordinator only at the instant it detects a fresh transition into `Phase.COOLDOWN`, to
-    fix `ActiveCooldown.duration_s` for the coordinator-scoped cooldown (see coordinator.py's
-    `_active_cooldown` field). 0.0 and never read for Off/Power, neither of which is ever
-    stored in `_mode_state` or transitions through this module's shared cooldown-detection
-    code in `_dispatch_mode`."""
+    coordinator at the instant it detects a fresh transition into `Phase.COOLDOWN`, to fix
+    `ActiveCooldown.duration_s` for the coordinator-scoped cooldown (see coordinator.py's
+    `_active_cooldown` field), and, since issue #1311, by `_start_cooldown` (called from
+    `_start_fault_stop_cooldown`) for a fault stop. `Off`'s is 0.0, and read only in the one
+    edge case `_start_fault_stop_cooldown`'s own docstring names (a fault immediately after a
+    restart, or on the cycle switching into `Off`, while `_last_commanded_a` is not yet known
+    to be 0 A) -- reading it there starts an already-elapsed, harmless zero-length cooldown,
+    never a genuine stop; `Off` is never stored in `_mode_state` or transitions through this
+    module's shared cooldown-detection code in `_dispatch_mode` either way. `Power` is the one
+    mode whose `cooldown_minutes` is non-zero and genuinely read despite never being stored in
+    `_mode_state` -- only by the fault-stop path, since Power has no own stop condition that
+    reaches `_dispatch_mode`'s detection (R11 AC3)."""
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         """Return (desired_current_a, new_state); does not mutate ctx or state in place."""
@@ -228,12 +248,14 @@ class ModeHandler(Protocol):
 class _OffModeHandler:
     """Off mode has no modes/*.py module of its own to wrap -- commands 0 A unconditionally
     and passes state through unchanged, mirroring today's MODE_OFF branch, which never
-    touches per-mode state (design doc Sec 3.4)."""
+    touches per-mode state."""
 
     is_soc_gated = False
     is_solar_mode = False
-    cooldown_minutes = 0.0  # never read -- Off is never stored in `_mode_state` (design doc
-    # Sec 3.4)
+    cooldown_minutes = 0.0  # never stored in `_mode_state`; read only by
+    # `_start_fault_stop_cooldown`'s own restart/mode-switch edge case (issue #1311, see
+    # `ModeHandler.cooldown_minutes`'s own docstring above), which then starts a harmless,
+    # already-elapsed zero-length cooldown -- never a genuine stop
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return 0.0, state
@@ -249,15 +271,24 @@ class _PowerModeHandler:
     """Wraps modes/power.py::desired_current unchanged. power.desired_current reads the
     coordinator's own mutable target_current (set externally by the number entity), not
     anything on CycleContext -- so this handler takes a zero-arg getter bound at construction
-    (design doc Sec 3.4) rather than duplicating that value onto CycleContext each cycle."""
+    rather than duplicating that value onto CycleContext each cycle."""
 
     is_soc_gated = False
     is_solar_mode = False
-    cooldown_minutes = 0.0  # never read -- Power is never stored in `_mode_state` either (R11
-    # AC3's own Power cooldown is not yet implemented; tracked separately from issue #974)
 
-    def __init__(self, target_current_getter: Callable[[], float]) -> None:
+    def __init__(
+        self, config: SmartChargingConfig, target_current_getter: Callable[[], float]
+    ) -> None:
+        self._config = config
         self._target_current_getter = target_current_getter
+
+    @property
+    def cooldown_minutes(self) -> float:
+        """R11 AC3/C5 (issue #1311): Power has no own stop condition that ever transitions
+        through `_dispatch_mode`'s generic cooldown-start detection -- Power is never stored
+        in `_mode_state` at all -- so this is read only by the coordinator's own fault-stop
+        cooldown start (`_start_fault_stop_cooldown`), never by that detection."""
+        return self._config.power_cooldown_min
 
     def desired_current(self, ctx: CycleContext, state: Any) -> tuple[float, Any]:
         return power.desired_current(self._target_current_getter(), ctx.status), state
@@ -381,17 +412,17 @@ def build_mode_handlers(
 ) -> dict[str, ModeHandler]:
     """The ModeHandler registry's only construction site -- coordinator.py calls
     this instead of importing the five _*ModeHandler classes directly, keeping them private to
-    this module. `target_current_getter` is threaded straight through to _PowerModeHandler
-    (design doc Sec 3.4's own zero-arg getter, bound live rather than snapshotted); `config` to
-    every handler that reads config values (all but Off/Power).
+    this module. `target_current_getter` is threaded straight through to _PowerModeHandler's
+    own zero-arg getter, bound live rather than snapshotted; `config` to
+    every handler that reads config values (all but Off).
 
-    Deliberately deviates from design doc Sec 3.4's own snippet, which shows coordinator.py
-    building this same dict inline in `__init__` -- moved here instead so
-    coordinator.py no longer needs to import the five private classes to do it; the wiring
-    itself (which handler gets `config` vs. the getter) is unchanged from that snippet."""
+    Builds the dict here rather than inline in coordinator.py's `__init__` (an earlier
+    iteration of this split did) so coordinator.py no longer needs to import the five
+    private classes to do it; the wiring itself (which handler gets `config` vs. the
+    getter) is unchanged."""
     return {
         MODE_OFF: _OffModeHandler(),
-        MODE_POWER: _PowerModeHandler(target_current_getter),
+        MODE_POWER: _PowerModeHandler(config, target_current_getter),
         MODE_SOLAR: _SolarModeHandler(config),
         MODE_SOLAR_ONLY: _SolarOnlyModeHandler(config),
         MODE_CAPTAR: _CaptarModeHandler(config),
@@ -399,7 +430,7 @@ def build_mode_handlers(
 
 
 class SocGateResolver:
-    """Owns SOC-limit resolution + change detection (ADR-0012), replacing the inline
+    """Owns SOC-limit resolution + change/rise detection (ADR-0012), replacing the inline
     resolve_active_soc_limit call + _last_active_soc_limit comparison. Pure -- no hass.bus
     access; the coordinator still fires ActiveSocLimitChanged itself on a reported change
     (ADR-0009/0010 boundary: HA I/O stays coordinator-side)."""
@@ -414,12 +445,16 @@ class SocGateResolver:
         solar_reserve_active: bool,
         solar_reserve_soc: float,
         step_up_state: SolarStepUpState,
-    ) -> tuple[float, bool]:
-        """Return (this cycle's active SOC limit, whether it changed from the last resolve()).
+    ) -> tuple[float, bool, bool]:
+        """Return (this cycle's active SOC limit, whether it changed from the last resolve(),
+        whether it rose from the last resolve()).
 
         The first call always reports changed=True -- there is no prior resolve() to compare
-        against, mirroring the old code's None-vs-float first-cycle behavior.
-        """
+        against, mirroring the old code's None-vs-float first-cycle behavior -- but never
+        reports rose=True: there is no prior limit to have risen from either (R7 AC5, #1378
+        -- a lowered limit never ends Power's stop, so the caller must be able to tell "the
+        limit changed" apart from "the limit rose"; `changed` alone conflated a lowered limit
+        with a raised one)."""
         limit = resolve_active_soc_limit(
             override,
             solar_reserve_active=solar_reserve_active,
@@ -427,8 +462,9 @@ class SocGateResolver:
             step_up_state=step_up_state,
         )
         changed = limit != self._last_limit
+        rose = self._last_limit is not None and limit > self._last_limit
         self._last_limit = limit
-        return limit, changed
+        return limit, changed, rose
 
 
 class DeadlineUnreachableEdge:
@@ -478,7 +514,13 @@ class SolarStepUpGate:
     ) -> None:
         """R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- is_solar_mode_charging
         gates on THIS cycle's profile/mode/status, mirroring the coordinator's own prior inline
-        computation exactly. Mutates self.state in place; callers read .state afterward."""
+        computation exactly. Mutates self.state in place; callers read .state afterward.
+
+        The `profile == PROFILE_AUTO` check stays a plain flag rather than an ADR-0017
+        PROFILE_POLICIES registry lookup: ADR-0017's Context section is explicit that
+        SOC-limit coordination (R8/R9) is not part of Profile's decision at all -- it remains
+        the SOC-Target Engine's own job, gated by the active-profile/previous-mode flags the
+        Coordinator already holds, not a `profiles/`-owned object."""
         is_solar_mode_charging = (
             profile == PROFILE_AUTO and mode_is_solar and status in CHARGEABLE_STATES
         )
@@ -493,6 +535,27 @@ class SolarStepUpGate:
         )
 
 
+def resolve_reserved_day(now_dt: datetime) -> date:
+    """R9/UC07's reserved day (glossary, `system-overview.md`): calendar tomorrow's date from
+    evening until midnight, and the date that has just begun from midnight until the sun comes
+    up. It is one calendar date throughout that whole span -- it does not itself change at
+    midnight, only whether "now" is still before it or already inside it (#1422, R9 AC2).
+
+    The only distinction this function has to draw is which of those two spans `now_dt` falls
+    in, since the cap's own `sun_is_down` precondition already keeps a wrong value from
+    mattering once the sun is back up and a new evening's own reserved day is what's next in
+    play. The coordinator never reads a rising/setting time -- `_read_role(ROLE_SUN)` returns
+    only above-/below-horizon -- so there is no sun-keyed instant to split on directly; local
+    noon is used instead, splitting the calendar day at the one point every reserved-day
+    night this project resolves has fully crossed by (evening is always its second half,
+    the pre-dawn hours its first). This assumes the sun rises and sets once per calendar day,
+    which does not hold inside the polar circles during polar night/day -- out of scope for
+    this project (no installation target is at that latitude)."""
+    if now_dt.time() < _RESERVED_DAY_SPLIT:
+        return now_dt.date()
+    return now_dt.date() + timedelta(days=1)
+
+
 def resolve_solar_reserve_gate(
     *,
     profile: str,
@@ -500,19 +563,28 @@ def resolve_solar_reserve_gate(
     sun_is_down: bool,
     forecast_kwh: float | None,
     forecast_threshold_kwh: float,
-    deadline_tomorrow_resolved: bool,
+    deadline_reserved_day_resolved: bool,
 ) -> bool:
     """R9 solar-reserve-cap gating (ADR-0023) -- a thin wrapper over
-    engines/soc_target.py::resolve_solar_reserve_active, folding the forecast reading's
-    None-to-0.0 default in the one place that needs it. A plain function, not a class, because
-    unlike SolarStepUpGate it is stateless -- nothing is threaded across cycles."""
+    engines/soc_target.py::resolve_solar_reserve_active. A plain function, not a class,
+    because unlike SolarStepUpGate it is stateless -- nothing is threaded across cycles.
+
+    `forecast_kwh=None` short-circuits to False rather than folding through a 0.0 default
+    compared against `forecast_threshold_kwh` (#1423): the coordinator passes None both for
+    an unmapped/unavailable ROLE_SOLAR_FORECAST and, from midnight, for an unmapped/
+    unavailable ROLE_SOLAR_FORECAST_TODAY -- either way the forecast condition must not hold,
+    whatever the configured threshold happens to be (a negative threshold would wrongly
+    activate the cap otherwise -- the engine's own comparison is strict, so 0.0 was never a
+    problem)."""
+    if forecast_kwh is None:
+        return False
     return resolve_solar_reserve_active(
         profile=profile,
         home_day_flag=home_day_flag,
         sun_is_down=sun_is_down,
-        forecast_kwh=forecast_kwh if forecast_kwh is not None else 0.0,
+        forecast_kwh=forecast_kwh,
         forecast_threshold_kwh=forecast_threshold_kwh,
-        deadline_tomorrow_resolved=deadline_tomorrow_resolved,
+        deadline_reserved_day_resolved=deadline_reserved_day_resolved,
     )
 
 

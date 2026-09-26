@@ -45,6 +45,8 @@ from custom_components.smart_charging.const import (
     DEFAULT_POWER_COOLDOWN_MIN,
     DEFAULT_REMINDER_LEAD_H,
     DOMAIN,
+    OPTION_DISABLED_SEEN,
+    OPTION_USER_ENABLED,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     ROLE_CHARGER_STATUS,
     STATE_CHARGING,
@@ -226,8 +228,8 @@ class _StubPeakCoordinator:
 
 async def test_monthly_peak_sensor_restores_value_and_period_across_restart(hass):
     """A restored kW value + `period_month` attribute seeds the coordinator's Peak-Demand
-    Tracker's (tracked_kw, tracked_month) across a restart (design doc Sec 6.4) -- the
-    15-minute smoothing window is deliberately NOT seeded (Sec 6.4: rebuilds from scratch)."""
+    Tracker's (tracked_kw, tracked_month) across a restart (R21) -- the 15-minute smoothing
+    window is deliberately NOT seeded (R21: rebuilds from scratch)."""
     entity_id = "sensor.smart_charging_monthly_peak_kw"
     mock_restore_cache_with_extra_data(
         hass,
@@ -571,7 +573,7 @@ async def test_solar_surplus_sensor_enabled_when_solar_available(hass):
 async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(hass):
     """ADR-0028: a reload (ADR-0008) with solar_available flipped to True clears disabled_by
     on the entity that already exists in the registry from the prior (disabled) setup, and the
-    entity is live again (design doc §5: not just a registry-field flip)."""
+    entity is live again -- not just a registry-field flip."""
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
@@ -597,7 +599,7 @@ async def test_solar_surplus_sensor_reenables_on_reload_when_capability_returns(
 
 async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(hass):
     """ADR-0028: reverse of the above -- a reload with solar_available flipped to False
-    disables the previously-enabled entity and removes it from hass (design doc §5)."""
+    disables the previously-enabled entity and removes it from hass."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_SOLAR_AVAILABLE] = True
@@ -627,8 +629,128 @@ async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(h
     assert disabled_state is None or disabled_state.state == STATE_UNAVAILABLE
 
 
+async def test_should_mark_disabled_seen_when_a_fresh_install_registers_it_disabled(hass):
+    """ADR-0047 point 3: a fresh install with solar_available=False registers the sensor
+    disabled and marks it disabled_seen, so a user's later enable is recognized as theirs even
+    without ever having gone through a reload first."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    # Act
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entry_reg.options.get(DOMAIN, {}).get(OPTION_DISABLED_SEEN) is True
+
+
+async def test_should_keep_a_user_enable_live_when_reloaded_with_the_capability_still_absent(
+    hass,
+):
+    """R18/ADR-0047: a user's own enable of the solar-surplus sensor, made while
+    solar_available is False, survives a reload that leaves the capability still absent --
+    the enable half of R18 that ADR-0028 alone left unmet."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    # The user's own enable, exactly as HA's entity-registry websocket would leave it.
+    registry.async_update_entity(entity_id, disabled_by=None)
+
+    # Act -- a reload (ADR-0008), solar_available still False, forced explicitly since
+    # async_update_entry only fires the reload listener on an actual data change, and this
+    # case is a reload with nothing else changed.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+
+
+async def test_should_keep_an_enable_made_while_unloaded_when_the_entry_is_set_up_again(hass):
+    """R18/ADR-0047: an enable made while the config entry isn't loaded at all -- between an
+    unload and the next setup -- still sticks, since the mark lives on the row itself rather
+    than on a listener that only runs while the entry is loaded."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    # The user's enable, made while the entry sits unloaded.
+    registry.async_update_entity(entity_id, disabled_by=None)
+
+    # Act
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+
+
+async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(hass):
+    """R18/ADR-0047: once recognized, the user's enable survives a capability that then
+    returns and goes absent again, not just a single reload. One action in Act: building the
+    recognized-enable state, and the capability's own return that precedes this test's own
+    scenario, are both Arrange; the single absent-again reload is the Act, so a failure here
+    points at exactly that transition."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
+    )
+    registry.async_update_entity(entity_id, disabled_by=None)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    on_data = entry_data_base()
+    on_data[CONF_SOLAR_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=on_data)
+    await hass.async_block_till_done()
+    assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
+    assert registry.async_get(entity_id).options.get(DOMAIN, {}) == {
+        OPTION_USER_ENABLED: True
+    }  # pre-Act
+
+    # Act
+    hass.config_entries.async_update_entry(entry, data=entry_data_base())
+    await hass.async_block_till_done()
+
+    # Assert
+    assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+
+
 async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):
-    """Regression guard (design doc §3.1): async_setup_entry must resolve solar_available via
+    """Regression guard: async_setup_entry must resolve solar_available via
     entry.data.get(CONF_SOLAR_AVAILABLE, ...) -- the same pattern select.py/time.py already use
     -- and NOT via entry.runtime_data.coordinator._config, a private Client->Manager access
     path no platform file uses today. Rigs entry.data and a stubbed private attribute to
@@ -770,7 +892,7 @@ def test_config_mirror_sensor_reads_from_its_spec():
     be false for a bool spec."""
     # Fictional suffix/unit/device_class pairing, deliberately -- a real catalog object_id here
     # (e.g. "grid_supply_ceiling_a") would pair it with the WRONG unit/device_class for that row
-    # (that one is amperes/CURRENT per the design doc's mapping table), a copy-paste hazard for
+    # (that one is amperes/CURRENT per entity-catalog.md's row for it), a copy-paste hazard for
     # whoever writes T2's real fixtures.
     spec = _ConfigMirrorSpec(
         object_id_suffix="example_config_value",
@@ -800,8 +922,8 @@ def test_config_mirror_sensor_formats_a_bool_spec_value():
 async def test_async_setup_entry_registers_capability_config_mirror_sensors(hass):
     """Proves both non-options source buckets in one setup call: solar_available/
     captar_available come off entry.runtime_data.config (they ARE SmartChargingConfig fields);
-    deadline_available/notifications_available come off entry.data directly (they are NOT --
-    entity-catalog.md/#888's design doc)."""
+    deadline_available/notifications_available come off entry.data directly (they are NOT
+    SmartChargingConfig fields, #888)."""
     captured_entities = []
 
     def _capture(entities):
@@ -918,7 +1040,7 @@ async def test_async_setup_entry_registers_power_and_notification_config_mirror_
 
     assert mirrors["power_cooldown_min"].native_unit_of_measurement == UnitOfTime.MINUTES
     assert mirrors["reminder_lead_h"].native_unit_of_measurement == UnitOfTime.HOURS
-    # The other four have no unit/device_class per the design doc's mapping table --
+    # The other four have no unit/device_class per entity-catalog.md --
     # evening_prompt_time deliberately: its value is a plain "HH:MM" string, not a datetime, so
     # no SensorDeviceClass.TIMESTAMP applies despite entity-catalog.md's "time" column.
     for suffix in (
@@ -979,8 +1101,8 @@ async def test_async_setup_entry_power_and_notification_mirrors_fall_back_to_the
 # --- Installation/Charger/Peak protection config-mirror sensors (T2, ADR-0031, #888) -------
 
 # (object_id_suffix, SmartChargingConfig field, unit, device_class) -- object_id_suffix is the
-# catalog's documented id; the field name diverges from it for four of these twelve (design
-# doc's naming-drift table), which is exactly what this test pins.
+# catalog's documented id (entity-catalog.md); the SmartChargingConfig field name diverges from
+# that id for four of these twelve, which is exactly what this test pins.
 _T2_MIRROR_CASES = [
     ("smoothing_window", "smoothing_window", "cycles", None),
     (
@@ -1049,9 +1171,9 @@ async def test_async_setup_entry_registers_t2_config_mirror_sensors(hass):
 
 # --- EV/Solar config-mirror sensors (T3, ADR-0031, #888) -----------------------------------
 
-# (object_id_suffix, SmartChargingConfig field it reads, unit, device_class) -- per the design
-# doc's 35-row mapping table. object_id_suffix diverges from the config field name for the two
-# solar_only_rounding_* rows (design doc's naming-drift section).
+# (object_id_suffix, SmartChargingConfig field it reads, unit, device_class) -- per
+# entity-catalog.md's disabled-by-default rows. object_id_suffix diverges from the config field
+# name for the two solar_only_rounding_* rows.
 _T3_MIRROR_ROWS = [
     ("ev_battery_capacity_kwh", "ev_battery_capacity_kwh", UnitOfEnergy.KILO_WATT_HOUR, None),
     (

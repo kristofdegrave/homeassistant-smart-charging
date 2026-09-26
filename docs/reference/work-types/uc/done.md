@@ -60,13 +60,22 @@ this is the most common form 2.2 takes.
 
 ## 3. Writing quality
 
-**(3.1) What, not how.** No implementation detail — Python modules, HA services, timer helpers,
-persistence. Entity ids that are part of the ubiquitous language are fine. **Major** for a
-mechanism smuggled into a *what*; **Minor** for an incidental implementation aside.
+**(3.1) What, not how.** No implementation detail — modules, platform services, timer
+helpers, persistence. Entity ids that are part of the ubiquitous language are fine. **Major**
+for a mechanism smuggled into a *what*; **Minor** for an incidental implementation aside. One
+carve-out, which is why 5.1 can require what it requires: for a use-case that carries a State
+model under 5.1, the state set, its transitions, their threshold conditions and the set-point
+rule **are** the observable contract, so a State model is a *what*. The excluded *how* is the
+code realization of it — which module, which timer helper holds a cooldown, how the state
+survives a restart.
 
 **(3.2) The 6Cs pass.** Clarity, Concision, Completeness, Consistency, Correctness,
 Concreteness, per `CLAUDE.md`'s **Requirements standard**. A miss is **Minor** unless it makes
 the document wrong or unusable, which the items above already catch at their own severity.
+**Concision is decided as clutter**, by the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../method/ai-authoring.md#vocabulary) — its test, severities
+and scope — never by length. Items 2.2 and 2.3 are that test applied to a requirement and to a
+mechanism, and keep their own severities.
 
 **(3.3) No tracking refs in the body.** The rule — no PR numbers, no issue tracking statuses —
 and its reason are in `CLAUDE.md`'s **Review protocol for analysis documents** section, which
@@ -109,24 +118,17 @@ or it does not. Behaviour the code does not implement at all is this second case
 exemption from it. The same applies where the code implements something measurably different:
 a different default, bound, unit or ordering.
 
-**(4.3) A gap is filed.** Where the code does not satisfy an in-scope item, a `specs` child
-issue for that gap is filed as part of this PR and referenced in the body — a `specs` issue,
-never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow** section routes to.
+**(4.3) A gap is filed.** Where the code does not satisfy an in-scope item, an **epic** for
+that gap is filed as part of this PR and referenced in the body — an epic, whose body will
+carry the spec, never a task issue, for the reason `CLAUDE.md`'s **Contribution workflow**
+section routes to.
 A gap found and left unfiled is **Major**.
 
 **While drafting**, both items are discharged as you go rather than reconstructed at the end:
-write each finding into the PR body as you take the item, and open the `specs` issue in the
+write each finding into the PR body as you take the item, and open the epic in the
 same session so the body can reference it. `CLAUDE.md`'s **Tracker mechanics** section routes
 to the filing commands. This is the one piece of drafting order the bar carries, because both
 work files would otherwise hold the same copy of it.
-
-**On the CI drafting path**, neither item is dischargeable as written, and that is a property
-of the path rather than a lapse: the pipeline's drafter has no shell, so it cannot file an
-issue, and it does not write the PR body — the workflow supplies that from a fixed template.
-There, the item is discharged by recording the finding **in the draft itself**, as an open
-question for the reviewer, which is the substitution that path already makes for any step
-needing a human. The obligation is not waived; it transfers to whoever takes the draft
-forward, and an open question of that shape reads as the item discharged rather than missed.
 
 **Scope of that Major.** It is assertable only against evidence the judge actually holds. The
 author always holds the PR body, so it binds the self-check unconditionally. A reviewer may

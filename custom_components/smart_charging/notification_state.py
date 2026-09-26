@@ -1,7 +1,6 @@
 """UC08 evening-prompt lifecycle state machine (M3). Pure -- no HA imports (ADR-0009).
 
-Per docs/plans/2026-07-21-notifications-design.md Sec7: the Not-sent/Pending/
-Answered-yes/Answered-no/Timed-out lifecycle
+The Not-sent/Pending/Answered-yes/Answered-no/Timed-out lifecycle
 (docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md "State model") is a pure function
 of (prior state, observed inputs, now) with no I/O -- structurally identical to the mode
 state machines in ``modes/``. This module decides; ``managers/notification_manager.py``

@@ -36,7 +36,7 @@ def test_external_above_internal_wins():
 
 
 def test_internal_above_external_wins():
-    # ADR-0032 D-2: the merge only ever raises the operand, never lowers it below the
+    # ADR-0032: the merge only ever raises the operand, never lowers it below the
     # internally-tracked peak.
     assert resolve_monthly_peak_operand(5.0, 4.09) == 5.0
 

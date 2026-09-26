@@ -13,10 +13,10 @@ because one reviewer covers the whole analysis tree.
 
 ## Drafting a requirement
 
-- **Step 1 (draft)**: the requirement in `docs/analysis/requirements.md` — or the constraint
+- **The implement step (draft)**: the requirement in `docs/analysis/requirements.md` — or the constraint
   row, or the glossary term — in the format below, then self-check against `done.md` before
   requesting review.
-- **Propagate inside the analysis layer**, before step 3's review — the bar's 5.2 item
+- **Propagate inside the analysis layer**, before the review step — the bar's 5.2 item
   *Ripples are propagated* names the targets and judges the result. What that means while
   drafting: do it in the same sitting as the requirement itself, while you still know which
   documents you touched. A ripple deferred to a follow-up is the one that gets lost.
@@ -32,9 +32,10 @@ This is how you settle whether the change touches shipped behaviour, which is th
 - **What is in scope** is the *Code backing* item of `done.md` — for this work type, every
   acceptance criterion and constraint row the change adds or alters. Read them off the diff; do
   not re-derive the list here.
-- **The search.** Per in-scope item, search `custom_components/` for the behaviour it
-  constrains — the entity it names, the clamp, the lookup, the default. This is a targeted
-  lookup per item, never a sweep of the codebase.
+- **The search.** Per in-scope item, search the product-code tree — the `development` work
+  type's stack overlay names it — for the behaviour it constrains — the entity it names, the
+  clamp, the lookup, the default. This is a targeted lookup per item, never a sweep of the
+  codebase.
 - **State the finding, file what it turns up, and you are done** — the bar's items 4.2, *The
   finding is stated*, and 4.3, *A gap is filed*, state both, carry the drafting order, and
   judge the result. Done when both hold for every item you took.
@@ -71,12 +72,21 @@ The rules a finished requirement is judged by are the bar's, at the severity eac
 at, and are not repeated here. Two of them have a drafting order this file owns:
 
 - **Where a requirement lives** — the bar's 2.2, *Every requirement has exactly one home*,
-  states it and judges it. What that means while drafting: check the design document's coverage
-  table *before* writing, since a second home is nearly free to avoid and expensive to unpick.
+  states it and judges it. What that means while drafting: search the homes that item lists for
+  the requirement *before* writing, since a second home is nearly free to avoid and expensive to
+  unpick.
 - **What, not how** — the rule itself is `CLAUDE.md`'s **Requirements standard**, and the bar's
   5.2 judges the criterion-level form of it. What that means while drafting: if you cannot
   state the criterion without naming a module, a service call or a data structure, the *what*
   hasn't been found yet.
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
+
+### Skills
+
+The method skills this work file uses, by step: `research` when a fact a requirement rests on
+is external, cited from the document by linking the issue comment; `receiving-code-review` in
+the review step. This work type names no stack skill.
 
 ## Common mistakes
 

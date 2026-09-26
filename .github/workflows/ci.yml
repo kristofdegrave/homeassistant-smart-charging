@@ -69,13 +69,15 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
-      - run: python -m pip install ruff==0.15.22
+      # The ruff version comes from requirements-test.txt, the one place it is pinned, so the
+      # lint CI runs and the lint a local environment runs cannot drift apart.
+      - run: python -m pip install "$(grep -E '^ruff==' requirements-test.txt)"
       - run: ruff check .
       - run: ruff format --check .
 
   authoring:
     # Not gated on the `changes` filter above: that filter is about integration code, and this
-    # job is about .claude/**. Diff-scoped, so it only ever looks at what a PR adds -- see the
+    # job is about process files. Diff-scoped, so it only ever looks at what a PR adds -- see the
     # script's header for why the back-catalogue is deliberately out of scope. Skipped on
     # push/dispatch, where there is no PR diff to scope to.
     if: github.event_name == 'pull_request'
@@ -97,6 +99,73 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/check-authoring-rules.sh "$BASE_SHA"
+      # The word budget (.github/check-word-budget.py, caps in .claude/profile.yml): diff-scoped
+      # like the check above, and in this job for the same non-blocking weight. `!cancelled()`,
+      # so a red authoring step does not hide a budget overrun until the next push.
+      - uses: actions/setup-python@v7
+        if: ${{ !cancelled() }}
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyyaml==6.0.3
+        if: ${{ !cancelled() }}
+      - name: Word-budget check self-test
+        if: ${{ !cancelled() }}
+        run: bash .github/test-check-word-budget.sh
+      - name: Word budget (no process file grows past its cap, or at all once over it)
+        if: ${{ !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/check-word-budget.sh "$BASE_SHA"
+
+  method:
+    # The method check: heading anchors in both directions between CLAUDE.md and the files
+    # that point at it, CLAUDE.md agreeing with .claude/profile.yml (the profile document
+    # present, with its flow deviations naming enabled work types), every enabled work type
+    # complete, every repo-installed dependency present, no profile value inside a method
+    # file. The script's header is the authority on each rule; this is a summary.
+    # Repo-wide, unlike `authoring` above: the break comes from editing CLAUDE.md or the
+    # profile, so a PR renaming a heading must fail against skills it never touches. Runs on
+    # push as well, since a merge of two clean PRs can still combine into a broken tree. Not
+    # gated on the `changes` filter, which is about integration code.
+    #
+    # Blocking here, warning-only in the local pre-commit hook (.github/hooks/pre-commit): a
+    # `workflow` change mid-rename must stay committable, and this job is where the finding is
+    # caught instead. Whether it is a *required* status check is branch protection's call,
+    # like `authoring`.
+    #
+    # The job also carries the two PR-time halves of the upstream-drift check: its fixtures,
+    # and `--validate` over the real dependency manifest. Both belong beside the method check
+    # rather than in the weekly job -- each is an agreement between files a PR edits, and the
+    # weekly job is where a break would go unnoticed.
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      # PyYAML is the check's one dependency: the profile is YAML, and the runner image does
+      # not promise it.
+      - run: python -m pip install pyyaml==6.0.3
+      # The check's own fixtures run first, for the same reason `authoring` runs its tests
+      # first: they are its only correctness evidence and would otherwise rot silently.
+      - name: Method check self-test
+        run: bash .github/test-check-method.sh
+      - name: Method check (anchors, profile agreement, work-type completeness, layers)
+        run: bash .github/check-method.sh
+      # Only the drift check's fixtures, never the check itself: comparing pins with upstream
+      # needs the network and belongs to the weekly schedule (upstream-drift.yml), whereas a
+      # PR that breaks the check has to fail here rather than a week later in a job nobody
+      # watches. The fixtures are offline by construction, so this adds no flakiness and no
+      # rate-limit surface to a required-adjacent job.
+      - name: Drift check self-test
+        run: bash .github/test-check-upstream-drift.sh
+      # The check's parse-only half, against the real manifest. Comparing pins with upstream
+      # needs the network and belongs to the weekly schedule; reading the manifest does not,
+      # and has to fail here: one unreadable row aborts the comparison and takes every other
+      # row's verdict with it, so a malformed row must not be able to ship green.
+      - name: Dependency manifest is readable and every pin has a known scheme
+        run: bash .github/check-upstream-drift.sh --validate
 
   test:
     needs: changes

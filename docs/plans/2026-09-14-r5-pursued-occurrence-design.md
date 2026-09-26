@@ -16,9 +16,9 @@ a test anchor rather than restated.
 | --- | --- |
 | `engines/deadline.py` — the urgency-state parameter and return, the hold, the backstop | The required-current formula itself (R5/R15, unchanged) |
 | `engines/soc_target.py` — R9's sixth precondition | R9's cap rule itself; only its precondition set grows |
-| `coordinator.py` / `coordinator_cycle.py` — threading one occurrence where a boolean is threaded | ADR-0006's step order — no step added, removed or reordered |
+| `coordinator.py` / `coordinator_cycle.py` — threading one occurrence where a boolean is threaded, and one further fact out of the same early return for the clear edge (D-9) | ADR-0006's step order — no step added, removed or reordered |
 | Both of the escalated rate's bounds moved to smoothed readings | The R3 clamp, the C4 clamp, and the `peak_headroom` readout — all stay raw |
-| Closing #1006 (there is no separate hold left to build) | `debounce_baseline_w` (ADR-0039) — not on this path; see D-3 |
+| Closing #1006 (there is no separate hold left to build) | `debounce_baseline_w` (ADR-0039) — R3's deferral, which R5 `:92` keeps off the smoothed operand; see D-3 |
 
 ## Project-plan slice this derives from
 
@@ -27,15 +27,17 @@ out by M1"), **E3** (SOC-Target — R9's cap activation), **E5**/**E6** (the pea
 values), and **M1** (Coordinator — "Owns and threads every Engine's cross-cycle state, the Deadline
 Engine's included").
 
-**What those documents do *not* yet say.** On `main`, `project-plan.md`'s E5 entry and
-`system-design.md:157` contrast two *limits* — in-force versus raised — and neither mentions a
-smoothed operand. The rule is owned by `requirements.md` R5 and by `system-overview.md`'s
-`escalated maximum permitted rate` and `maximum permitted rate` entries, which is where this spec
-cites it; the design documents are being brought into line by the pass tracked in **#1141**. This
-spec derives from the analysis layer, not from a sentence in `docs/design/` that is not there yet.
+**Where each rule is owned.** The smoothed operand is stated by `requirements.md` R5 `:90-92`
+and by `system-overview.md`'s `escalated maximum permitted rate` and `maximum permitted rate`
+entries, which is where this spec cites it. The design layer now says the same in its own terms —
+`project-plan.md` E5 ("the readout to a raw one, R5's to the smoothed baseline") for the peak
+headroom and E6 ("The headroom operation is the one R5 specifies on the smoothed baseline") for
+the C4 headroom, and `system-design.md` §5.1 (`:455`, `:457`), which fits both to the smoothed
+baseline. `system-design.md:162` (Billing Protection) carries the
+in-force-versus-raised limit contrast.
 
 `system-design.md` §5.1's sequence is unchanged by this slice: no step is added, removed or
-reordered, and smoothing (`:418`) already precedes the escalated-headroom call (`:430`), so the
+reordered, and smoothing (`:442`) already precedes the escalated-headroom call (`:455`), so the
 smoothed operands are available where they are needed. ADR-0006's call-order spy test should pass
 untouched — a success criterion below.
 
@@ -79,9 +81,15 @@ the only question the test asks. ADR-0010's Decision (package placement) does no
 already covers `CycleContext`'s shape; `system-design.md` §3's two-kind split already says M1 owns
 and threads Engine state. Nothing structural is being decided, only applied.
 
-Four existing ADRs are *honoured* rather than changed: **ADR-0006** (two clamp call sites, cycle
+Five existing ADRs are *honoured* rather than changed: **ADR-0006** (two clamp call sites, cycle
 order), **ADR-0009** (test tiers, named per task), **ADR-0012** (`CycleContext`), **ADR-0024**
-(`DeadlineUnreachableCleared` pairing — D-6 explains why it needs no new arm).
+(`DeadlineUnreachableCleared` pairing — D-6 explains why it needs no new arm), and **ADR-0042**
+(that pairing's `ev_soc`-becomes-`None` row, narrowed — D-9 states the structure, T13 builds it).
+
+**ADR-0042 is not a counter-example to this section's title.** It was opened and merged on its own
+issue, against a contradiction that predates this slice; this slice consumes it. What would falsify
+the title is a structural decision taken *here*, and D-9 takes none — it records where an
+already-decided rule lands.
 
 ## Concrete decisions
 
@@ -128,79 +136,30 @@ capability, which release in opposite directions — that distinction is the cal
 
 ### D-3 — both bounds read smoothed; the operand carries no R3 deferral
 
-The one thing #1154 says this spec must resolve rather than assume. Two questions hide in it, and
-they resolve differently.
+**Both questions this decision once argued are now stated outright by the source, and are cited
+here as test anchors rather than re-derived.** `requirements.md` R5:
 
-**Which bounds move.** Both — and this is an **inference, not a stated rule**.
+- `:90` — the escalated maximum permitted rate is computed from a **smoothed** household
+  baseline, not the instantaneous reading, while urgency's own delivery stays clamped on raw.
+- `:91` — **every** bound of that rate which depends on a household reading is fitted to that
+  same smoothed baseline: both the peak headroom R3 would leave and the headroom the grid supply
+  ceiling (C4) leaves. C1's maximum charging current depends on no reading and is unaffected, and
+  the peak bound is a bound at all only where the peak clamp is composed — so not with the CapTar
+  capability absent (R18), nor under `Power`'s R17 opt-out.
+- `:92` — that smoothed baseline is the negation of R10's smoothed solar surplus — the admitted
+  mean in household sign, `smoothed_household_w` — and carries **no** R3
+  deferral.
 
-`_escalated_maximum_permitted_rate_a(ctx, *, peak_operand_kw)` composes
-`min(max_current, ceiling_headroom_a(ctx.net_w, ctx.charger_w))` and appends
-`peak_headroom_a(ctx.baseline_w, …)` **only when `self._peak_clamp_would_run()`**
-(`coordinator.py:1233`). So the rate has three bounds at most and often two: the peak bound is
-absent with the CapTar capability absent (R18) and under `Power`'s R17 opt-out, which is the same
-carve-out the clamp takes. C1's `max_current` is config and reads nothing.
+The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
+criteria.
 
-That leaves **two baseline-dependent bounds where both exist, and one where the peak bound does
-not.** The analysis scopes the smoothing to the *household baseline*, which is the peak bound's
-operand, and in the same breath names C4's ceiling among the raw readers. So the text can be read
-either way.
-
-This slice reads it as *both bounds smoothed*, because the rate is a **forecast** and a bound fitted
-to this instant defeats that purpose whichever bound it is: a single cycle of household load
-shrinking the forecast through C4 is #1078's own symptom, one bound down. The "C4 reads raw"
-statement is about the **clamp**, which is on the delivery path and must react to this instant — a
-different operation on the same Engine, already split as `ceiling_headroom_a`/`clamp_to_ceiling`.
-The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw.
-
-Because this document holds the only copy of that rule, **#1167** asks R5 or the glossary to state
-which reading each bound is fitted to. The text stays here until it does, and if the answer comes
-back the other way, the source wins.
-
-**Whether the operand carries R3's deferrals.** It does not. The argument, and the one text that
-cuts against it:
-
-- The glossary names two different things: *"the [household baseline]"* — net import minus charger
-  power — and *"the **accepted** baseline R3 solves from"*, which is the first after R3's two
-  deferral cases have been applied (`system-overview.md`, `household baseline`).
-- R3's own acceptance criterion scopes the deferrals to its clamp: *"The household baseline **this
-  check** solves around is this control cycle's own reading, except in exactly two cases"*
-  (`requirements.md` R3).
-- R10's exemption criterion attributes them to R3 and separates them from the smoothing window:
-  *"R3 applies **its own** deferrals to the household baseline it solves around, stated in R3 and
-  authoritative there; they are not this window … and neither is ever substituted for this window in
-  either direction."* (The elided clause is the breaching-increase bound, which the paragraph below
-  addresses directly rather than relies on.)
-- R5's own AC and the `escalated maximum permitted rate` entry use the bare glossary term. The
-  raw-versus-smoothed contrast is drawn in the `maximum permitted rate` entry — *"this one is what
-  the clamp actually delivered, fitted to a raw reading, while that one is a forecast fitted to a
-  smoothed household baseline"*. Neither entry contrasts deferral.
-
-**The counter-text.** R3 AC1 says the household-baseline resolution runs every control cycle
-*"because readouts gated on other capabilities consume its result"* — the one place the analysis has
-a non-R3 consumer reading the *accepted*, deferred baseline. Read hard, that says the deferrals
-attach to the resolved term rather than to R3's check.
-
-It does not carry, for two reasons. The consumer that criterion names is
-`sensor.smart_charging_solar_surplus_w`, a **raw** readout of this instant — the deferrals are part
-of what makes an instantaneous readout trustworthy, which is the opposite of a forecast's need. And
-R3's deferrals bound only what they claim to: `requirements.md` bounds a *breaching increase* at one
-control cycle while explicitly allowing runs of up to **three**. A three-cycle-old operand is a
-defensible input to a clamp that must not over-react and a poor input to a forecast R10's window is
-already smoothing — but it is not, as an earlier draft of this document asserted, forbidden by any
-"never more than one cycle" rule. That rule is about breaches, not about deferral in general.
-
-So: on balance, **undeferred** — a two-of-three argument with the counter-text answered, not an
-airtight derivation. Because it is a derivation across three documents rather than a stated rule,
-**#1164** asks R5 or the glossary to say it in one line. It does not block this slice, and if it
-lands contradicting this, the source wins and D-3 changes with it.
-
-**Where it lands.** `_run_cycle` already computes `smoothed_net_w`; it is carried on `CycleContext`
-as its own field. `_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so
-it derives the peak bound's operand itself — `ctx.smoothed_net_w - ctx.charger_w` — rather than
-reading a `_run_cycle` local it cannot see. The C4 bound takes `net_w=ctx.smoothed_net_w` with
-`charger_w` unchanged, since R10 smooths net grid power alone. Deliberately *not* derived from
-`ctx.surplus_w`, which is that operand's exact negation: one refactor of either would silently
-change the other.
+**Where it lands.** *Amended once `:92` named the baseline: R10's admitted mean in household sign, not a
+net-only mean minus raw `charger_w`, which would move the forecast by up to (N − 1)/N of every
+charger step.* `_run_cycle` already folds that mean (`smoothed_household_w`, household sign); it is carried on
+`CycleContext` as its own field, `smoothed_baseline_w`. `_escalated_maximum_permitted_rate_a` fits
+the peak bound to it directly and the C4 bound as `net_w=ctx.smoothed_baseline_w, charger_w=0.0`.
+`ctx.surplus_w` is that mean's negation by design now; the separate name keeps the forecast's
+operand visible rather than borrowed from the solar dispatch.
 
 ### D-4 — the backstop's operands, and where the following occurrence comes from
 
@@ -310,6 +269,45 @@ parameter and the result field, and derives the boolean internally; T4 moves the
 the new parameter and removes the old one in the same commit that stops passing it. Every commit in
 between is green.
 
+### D-9 — the clear edge is told whether the cycle established anything (ADR-0042)
+
+[ADR-0042](../adl/0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) decides the rule and
+owns it; in brief, `DeadlineUnreachableCleared` fires only on a cycle that **established** the
+deadline is no longer unreachable, and the two halves of `deadline_resolvable` answer that question
+differently — a disconnect is a genuine exit, a missing state of charge establishes nothing. This
+decision records only the structure that lands in, which is D-5's split extended from the pursued
+occurrence to the event.
+
+`DeadlineUnreachableEdge.resolve` takes a second argument and holds its prior flag when the cycle
+established no outcome — the behaviour it already has across both fault early-returns, now owed to
+every such cycle rather than only the two that also fault:
+
+```python
+def resolve(self, unreachable: bool, *, outcome_established: bool = True) -> tuple[bool, bool]:
+    """Return (this cycle's `unreachable`, whether it just cleared from True to False).
+
+    `outcome_established=False` means no required current could be computed this cycle, so the
+    prior flag is held and no clear is reported (ADR-0042).
+    """
+```
+
+The keyword's default is `True` for the same reason D-8 gives for `pursued_occurrence`'s. There is
+one production call site (`coordinator.py`, off the single `DeadlineUnreachableEdge()` at `:203`),
+but **seven existing tests** in `tests/test_coordinator_cycle.py` call `resolve` with `unreachable`
+positionally and nothing else. A required second argument turns all seven red in the commit that
+adds it; a defaulted keyword leaves every one of them asserting exactly what it asserts today, which
+is correct — a cycle that establishes an outcome is the case they cover.
+
+**Where the fact comes from.** `resolve_deadline_urgency`'s non-resolvable early return already
+distinguishes the two halves for the occurrence (D-5). It carries the same distinction out for the
+event rather than the coordinator re-deriving it: re-deriving `status in CHARGEABLE_STATES` on the
+coordinator side would be a second, separately written copy of the predicate the module boundary
+exists to keep single — the hazard `resolve_deadline_urgency`'s own docstring names.
+
+**What does not change.** The edge still reads `RequiredCurrentResult.unreachable` for *which* exit
+occurred; ADR-0042 narrows only the claim that the flag alone is sufficient. Every release path
+D-6 relies on keeps clearing for free.
+
 ## Structure
 
 | Piece | File | `system-design.md` service |
@@ -318,11 +316,13 @@ between is green.
 | The hold's release order and the backstop | same | **E4** |
 | R9's sixth precondition | `custom_components/smart_charging/engines/soc_target.py` | **E3** SOC-Target Engine |
 | `self._pursued_occurrence`, threaded in and out (init at `coordinator.py:213`) | `coordinator.py` | **M1** Coordinator |
-| `smoothed_net_w` on `CycleContext`, **both** construction sites | `coordinator.py`, `coordinator_cycle.py` | **M1** |
-| `_escalated_maximum_permitted_rate_a` reads both smoothed operands | `coordinator.py` | **M1** calling **E5** and **E6** |
+| `smoothed_baseline_w` on `CycleContext`, **both** construction sites | `coordinator.py`, `coordinator_cycle.py` | **M1** |
+| `_escalated_maximum_permitted_rate_a` fits both bounds to that one smoothed baseline | `coordinator.py` | **M1** calling **E5** and **E6** |
 | `following_occurrence` from the pursued occurrence's following day | `coordinator.py`, `coordinator_cycle.py` | **M1** calling **E4** |
 | R18's release | — **no code**; the entry reload already makes it (D-7) | — |
 | The unreachable-block guard and the notification payload | `coordinator.py` | **M1** calling **M3** |
+| `DeadlineUnreachableEdge.resolve`'s `outcome_established` argument and its hold (D-9) | `coordinator_cycle.py` | **M1** |
+| The non-resolvable early return carrying that fact out, and the fire site consuming it (D-9) | `coordinator_cycle.py`, `coordinator.py` | **M1** calling **M3** |
 | R9's precondition wired from the threaded-in value | `coordinator_cycle.py` | **M1** calling **E3** |
 
 Signatures after the slice:
@@ -372,36 +372,34 @@ def resolve_solar_reserve_active(
 `tests/engines/test_deadline.py` and `tests/engines/test_soc_target.py`, no HA harness. The
 coordinator threading, the `CycleContext` field, the R18 release, the notification payload and the
 two-baseline split are HA-coupled — **HA harness**, in `tests/test_coordinator.py`,
-`tests/test_coordinator_cycle.py` and `tests/test_deadline_soc_management_end_to_end.py`. Each task
-names its tier and its exact file.
+`tests/test_deadline_soc_management_end_to_end.py`, `tests/test_notifications_end_to_end.py` (T5)
+and `tests/test_captar_end_to_end.py` (T10). Each task names its tier and its exact file.
 
-## Deliberate deferrals, and one known deviation
+`tests/test_coordinator_cycle.py` is a **third** placement and belongs to the first group, not the
+second: it is plain pytest over `coordinator_cycle.py`'s pure units — its own module docstring says
+so, and it imports no harness. The clear-edge detector D-9 adds (T13) is one of those units and is
+tested there; only T13's *cycle* half needs the harness. Where an earlier draft of this document put
+that file on the HA-harness list, the list was wrong and the file has not moved.
+
+## Deliberate deferrals, and the known deviations
 
 - **No entity surfaces the pursued occurrence.** `entity-catalog.md` lists none; adding one is a
   `requirement` change, not this slice's.
-- **Known deviation — a SOC-unavailable cycle re-arms the unreachable notification.**
+- **Closed, was a known deviation — a SOC-unavailable cycle re-arms the unreachable notification.**
   `coordinator_cycle.py`'s non-resolvable early return yields `unreachable=False`, which reaches
-  `_unreachable_edge` and fires `DeadlineUnreachableCleared`, re-arming M3. D-5 now has that same
+  `_unreachable_edge` and fires `DeadlineUnreachableCleared`, re-arming M3. D-5 has that same
   cycle *preserve* the pursued occurrence, so the next healthy cycle is held again,
   `unreachable` goes True, and a **second notification fires for the same occasion** — which R5 and
   `UC05` both forbid.
 
-  It is newly reachable because of this slice, not newly wrong. On the shipped tree that cycle also
-  clears `_urgency_latched`, so urgency ends outright and a later notice is a legitimately new
+  It was newly reachable because of this slice, not newly wrong. On the tree before it, that cycle
+  also clears `_urgency_latched`, so urgency ends outright and a later notice is a legitimately new
   occasion; the slice keeps the urgency state and not the notification latch.
 
-  **The rule is not in doubt.** R5's AC states it as a Must — *"A control cycle on which state of
-  charge is unavailable ends no occasion … the system holds the notification state it already had
-  and neither notifies nor re-arms"* — and `UC05` says the same, citing ADR-0024 as its reason. What
-  disagrees is one row of **ADR-0024's exit table**, which bundles a disconnect together with a
-  missing state of charge, written under the assumption ADR-0024 itself states two paragraphs later:
-  that such a cycle is always a fault cycle. `is_soc_gated` makes that untrue for `Off` and `Power`.
-
-  **So this is a deferral, not an open question.** The fix is deferred for one reason: ADR-0024 is
-  Accepted, and a spec must not silently contradict an Accepted ADR — it is superseded first
-  (#1178), and the code change follows from that. This slice ships the deviation and pins it: T5
-  lands a strict-xfail test that a SOC-unavailable cycle mid-hold does not re-arm the notice, which
-  fails today and turns red the moment #1178's fix lands, so the deviation cannot close unnoticed.
+  It was deferred for one reason — ADR-0024 was Accepted and a spec must not silently contradict an
+  Accepted ADR. **ADR-0042 has since narrowed the row that disagreed**, so the reason is spent and
+  the fix is in scope: **D-9** states the structure it lands in and **T13** builds it, un-xfailing
+  T5's guard in the same commit.
 - **Known deviation — a sustained SOC-role outage suspends the backstop.** The backstop is the
   engine's (D-4), and the engine is reached only when `deadline_resolvable` is True. D-5 has the
   SOC-unavailable half of that gate preserve the occurrence, which is what `UC05` requires — but it
@@ -420,7 +418,7 @@ names its tier and its exact file.
   backstop would be releasing on a cycle that established nothing about the deadline, which `UC05`
   prohibits in terms. The deviation is the analysis layer's own answer. What is imprecise is
   `resolution-rules.md`'s unconditional "a hold never outlives one deadline cycle", which does not
-  carry `UC05`'s fault-cycle qualifier — a defect there rather than here, raised in #1178.
+  carry `UC05`'s fault-cycle qualifier — a defect there rather than here, raised in #1201.
 - **The baseline calls are not skipped while held.** `system-design.md` §5.1's note says the two
   R5 tests "and the baseline calls that exist only to feed them" are skipped under a hold. T2 does
   the engine half; the Coordinator will still call `mode_desired_current`. It is a query that
@@ -437,7 +435,8 @@ names its tier and its exact file.
   gating are decided above or deferred by name here, never assumed: D-2 pins the release order the
   current control flow would swallow, D-5 the fault cycle *and* the two halves of the non-resolvable
   early return, D-6 the crash and the payload, D-7 the R18 release. Each is a place where the
-  obvious implementation drops a release R5 requires. Three bullets above carry a **Known
-  deviation** label; the two *deferred* ones each carry a test — the suspended backstop, and the
-  notification re-arm (#1178). The third, the C4 clamp staying raw while its headroom moves, is a
-  deliberate difference rather than a deferral, and T10 pins it.
+  obvious implementation drops a release R5 requires. Two bullets above still carry a **Known
+  deviation** label. One is *deferred* and carries a test — the suspended backstop. The other, the
+  C4 clamp staying raw while its headroom moves, is a deliberate difference rather than a deferral,
+  and T10 pins it. A third deviation, the notification re-arm, was deferred pending an ADR and is
+  now closed: D-9 and T13 build the fix, and T5's guard turns green with it.

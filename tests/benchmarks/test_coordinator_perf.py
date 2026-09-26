@@ -4,7 +4,7 @@ Separate from the functional suite in tests/test_coordinator.py -- these tests r
 bound the cost of repeatedly running the hot path (SmartChargingCoordinator._async_update_data),
 not its behavior. A real baseline.json now exists (issue #708 Task 3.1); ceilings stay
 deliberately generous headroom above it (a CI-runner tripwire for gross regressions, not a
-performance SLA), not tightened by this suite itself (design doc S3.1).
+performance SLA), not tightened by this suite itself.
 """
 
 import json
@@ -142,7 +142,7 @@ async def test_power_mode_cycle_perf(hass):
     once for CPU/RSS, once in its own tracemalloc window, issue #739), discards the first
     as warm-up, and reports median (primary comparator) plus max_cpu_ms -- a small-n proxy
     for a 95th percentile, not a true one: with only _BATCHES - _WARMUP_BATCHES measured
-    batches, a statistically rigorous p95 isn't meaningful (design doc S3)."""
+    batches, a statistically rigorous p95 isn't meaningful."""
     coord = SmartChargingCoordinator(
         hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore()
     )
@@ -160,7 +160,7 @@ async def test_power_mode_cycle_perf(hass):
     peak_values = [b[2] for b in measured]
 
     median_cpu_ms = statistics.median(cpu_values)
-    max_cpu_ms = max(cpu_values)  # small-n p95 proxy (design doc S3) -- not a true percentile
+    max_cpu_ms = max(cpu_values)  # small-n p95 proxy -- not a true percentile
     median_rss_delta_kb = statistics.median(rss_values)
     median_peak_kb = statistics.median(peak_values)
 

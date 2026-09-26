@@ -28,9 +28,9 @@ label gets a directory when its work type has content worth writing down, and ea
 appears when that role has content of its own: a label may have a work file without a
 completion bar or vice versa. `workflow` is the extreme case and a deliberate one — it is never
 drafted from an issue, so it has **no work file and no completion bar**, and its directory holds
-`review.md` alone. Do not manufacture the other two for symmetry: `CLAUDE.md`'s **Model
-selection** section argues why that label has no drafted work, and a placeholder work file would
-contradict it. The row is what says which files exist, so an absent file is a fact about the
+`review.md` alone. Do not manufacture the other two for symmetry: the document `CLAUDE.md`'s
+**Model selection** section routes to argues why that label has no drafted work, and a
+placeholder work file would contradict it. The row is what says which files exist, so an absent file is a fact about the
 row, not a gap in this tree.
 
 ## The three roles
@@ -44,18 +44,16 @@ and this line is the copy that shrinks.
 
 | File | What it holds | Who reads it |
 |---|---|---|
-| `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author, and a CI drafting run. |
-| `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — `CLAUDE.md`'s **Model selection** section says why one file serves both. |
+| `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author. |
+| `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — the document `CLAUDE.md`'s **Model selection** section routes to says why one file serves both. |
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
 `review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
-`requirement`, `specs`, `development`, `testing`, `documentation` and `workflow` — every label
+`requirement`, `development`, `testing`, `documentation` and `workflow` — every label
 that has a directory, `requirement/review.md` being a pointer to `uc/`'s the way its `done.md`
 is. A label whose directory holds `review.md` and nothing else is migrated, not half-built —
 see the paragraph above. What a generic reviewer holds instead — the output contract, the anchoring rules and how
-a checklist is resolved — sits with whoever applies the checklist: `.claude/agents/reviewer.md`
-locally, and CI's own review-workflow prompt, which has no agent to spawn and self-applies the
-file instead.
+a checklist is resolved — sits with the agent that applies the checklist, `.claude/agents/reviewer.md`.
 
 ## When a label branches
 
@@ -99,9 +97,9 @@ unbranched label's directory.
 ## When two labels share a bar
 
 Two labels may point at **one** `done.md` rather than each having their own. **Whether a given
-pair may is `CLAUDE.md`'s Model selection section to decide** — it states the rule that earns
-it, and this document does not repeat it: a rule restated here, however carefully attributed,
-is a second copy that drifts.
+pair may is decided by the rule *Two rows may share one bar*** — in the document `CLAUDE.md`'s
+**Model selection** section routes to — and this document does not repeat that rule: a rule
+restated here, however carefully attributed, is a second copy that drifts.
 
 What the shape looks like where it applies: each label still has its own directory with its own
 `done.md` in it, and one of those files is a route to the other rather than a copy of it. Only
@@ -109,6 +107,61 @@ the contents are shared — no label loses its directory, and nothing moves out 
 
 Two branches of one label are a different case, not this one — see **When a label branches**
 above.
+
+## Stack overlays
+
+The files above are **method**: they travel between repositories, so nothing in them belongs
+to the platform or the language this project happens to be built on. What does belongs in an
+**overlay**, one file per declared stack beside the core files:
+
+```text
+docs/reference/work-types/<label>/overlays/<stack>.md
+```
+
+`<stack>` is a stack the profile declares — the distinct `stack:` values of
+`.claude/profile.yml`'s `dependencies.stack`, each with an entry under its `stacks` key. An
+overlay is a **stack** file by position — the method check places it in that layer without
+frontmatter — and a stack package installs it; the method never edits one to say so.
+
+**The slot.** A core file that takes overlays ends with a `## Overlays` section, and that
+section is the slot: it says to apply the overlays the declared stacks provide and which
+section of them this file takes. A label has a slot when any of its label-level role files
+carries that section. **A slot exists for a stack rule, never for symmetry**: today
+`development` and `testing` have one, because building and testing the product is where the
+platform and the language carry rules of their own. A label whose stack material is a path or
+an example does not get a slot — it routes to those two overlays (*the product-code tree the
+`development` overlay names*, *the `testing` bar's harness split*) or states the example in
+platform-neutral words — and `workflow`, review-only and human-authored, has none either. That
+routing puts one obligation on the `development` overlays: **between them they name the
+product-code tree**, in an entry titled *Where the code lives*, whatever else a stack has to
+say — a `development` overlay set reading only `none` leaves those routes pointing at nothing.
+The method check refuses every shape that breaks
+this: a slot without a file for a declared stack, an `overlays/` directory anywhere but at the
+label level of an enabled label with a slot, an overlay named for a stack the profile does not
+declare. The script's header is the authority on the exact list; this paragraph states the
+rule.
+
+**The shape of an overlay.** Three `##` sections named for the roles — **Implement**, **Done**,
+**Review** — each read with the core file of that role as one work file, one bar or one
+checklist; a reviewer applying a bar applies the overlay's Done section as part of it, and the
+dispatch is unchanged. Every entry names the core rule or bar item it extends, in the core
+file's own words, so a reader can put the two side by side; an item's severity is the core
+item's unless the overlay's entry states one of its own. An overlay **adds** stack material and
+never restates a method rule — a restated rule is the one-source-of-truth defect above, in a
+file the method cannot see. Where a label branches (**When a label branches**), the overlay
+sits at the label's own level and each entry names the branch it belongs to.
+
+**The `none` marker.** A stack with nothing to add to a work type still provides the file, and
+its whole content is the one word `none`: the slot's rule says what that means, and the check
+reads the file's presence, not its content. An absent file is a gap; a `none` file is a stated
+fact.
+
+**No stack token in a core file.** The method check's check 5 refuses, in any method-layer
+file of this tree, the tokens the profile lists per stack under `stacks.<stack>.tokens` and the
+name of any stack skill. So a core file refers to a stack fact by role — *the product-code
+tree*, *the platform reference*, *the boundary*, *the harness split* — and the overlay states
+it, whichever label's core file the reference sits in. The token list is the profile's, chosen by hand and stated as such there: a word the method
+uses everywhere in its own right is not on it.
 
 ## What a file in this tree may say
 
@@ -118,12 +171,14 @@ this project's paths, its documents and its tracker commands directly. That refe
 exactly which of its checklist items still apply to such a file and which are carved out — read
 it there rather than inferring the line from examples here, and note that the carve-out it
 grants is scoped to those directories. This README is not one of them: it is an ordinary
-reference document under `docs/reference/`, outside that rule's subject matter altogether.
+reference document under `docs/reference/`, outside that rule's subject matter altogether. An
+overlay under `overlays/` is a stack file, not a method one, and may spell the stack freely;
+**Stack overlays** above is the whole of what binds it.
 
 Two rules bind every file in this tree, in full, this README included:
 
 - **One source of truth per fact.** A rule stated in the bar is not restated in the work file;
   the work file points at the bar's item by number and title and says what it means while
   drafting. The same goes the other way, and for anything `CLAUDE.md` already owns.
-- **The content is instructions to future runs**, CI runs included. Write it as instruction,
-  with completion criteria a run can decide, not as commentary about the work type.
+- **The content is instructions to future runs.** Write it as instruction, with completion
+  criteria a run can decide, not as commentary about the work type.

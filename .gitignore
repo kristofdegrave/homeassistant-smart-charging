@@ -221,7 +221,7 @@ __marimo__/
 .claude/worktrees/
 
 # Claude Code personal settings — permission rules here are local-only by design:
-# the committed .claude/settings.json also applies to CI (claude-code-action),
+# the committed .claude/settings.json applies to every session run in this repository,
 # so broad/destructive allow rules must never be tracked.
 .claude/settings.local.json
 

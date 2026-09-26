@@ -12,7 +12,7 @@ a bar per document, and which one a change falls under, is stated once in the la
 
 There is no 6Cs pass here. That check is for behavioural requirements and use-cases; a service
 decomposition's correctness is judged by whether each cut encapsulates a real volatility and the
-call directions hold, not by Clarity/Concision/etc.
+call directions hold, not by Clarity/Concision/etc. Clutter is still checked, as item 6 below.
 
 **What the design is judged against, beyond itself.** In `docs/analysis/`:
 `system-overview.md` (the authoritative Ubiquitous Language glossary and the control-loop /
@@ -67,7 +67,7 @@ item 3 validates against.
   fix is to add the term to the glossary first, not to reword the design around it.
 - Every requirement ID referenced exists in `requirements.md` — a reference to an ID that does
   not exist is **Major**, since the design is claiming coverage it cannot have.
-- The service map does not contradict `control-cycle.md`'s coordinator loop or the existing
+- The service map does not contradict `control-cycle.md`'s own loop or the existing
   "adapter role" concept in `system-overview.md`. Where the design changes one of those
   concepts it says so explicitly; a **silent** divergence is **Major**, an explicit one is a
   finding only if the document it changes is not updated in the same change.
@@ -77,3 +77,7 @@ item 3 validates against.
 diagram (Mermaid `sequenceDiagram`) per major use case. A missing static diagram is **Major** —
 item 2 and item 3 are both decided against it. A major use case with no dynamic diagram is
 **Minor** per occurrence, **Major** where the document has none at all.
+
+**(6) No clutter**, as the *Clutter* entry in
+[`ai-authoring.md`'s Vocabulary](../../../method/ai-authoring.md#vocabulary) defines it, at its
+severities and in its scope.

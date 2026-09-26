@@ -8,10 +8,9 @@ one is written is [`implement.md`](implement.md) and [`../requirement/implement.
 none of it is restated here.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
-not here either. They are the same for every review and live with whoever applies this
-checklist — the generic `reviewer` agent definition locally, the review workflow's own prompt
-in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
-way, through `CLAUDE.md`'s **Model selection** table.
+not here either. They are the same for every review and live with the generic `reviewer`
+agent definition that applies this checklist, which reaches this file through `CLAUDE.md`'s
+**Model selection** table.
 
 **Why one file for two labels**, and why [`../requirement/review.md`](../requirement/review.md)
 points here: the same reason [`done.md`](done.md) gives for itself. The `uc` and `requirement`
@@ -37,10 +36,6 @@ Always read, in `docs/analysis/`:
 Then [`done.md`](done.md), the completion bar, before you start scoring rather than while you
 write up.
 
-If the caller names a plan or design doc, read it for its coverage table. The template a
-document is judged against is not taken from there — the bar names it, by the same route the
-author drafted against.
-
 ## The checks that are yours alone
 
 [`done.md`](done.md) is the bulk of the checklist: apply every item in it as a review
@@ -52,9 +47,10 @@ bar item states for itself, except where a bar item hands part of that scope to 
 and says so. The Code-backing item does exactly that, and (B) is the receiving end.
 
 **(A) Your budget for the bar's Code-backing item.** The bar says what is in scope; this says
-how much of it you may check. For each in-scope item, run **one** targeted `Grep` over
-`custom_components/` for the behaviour it asserts — the entity id, the adapter role, the
-default, the bound, the event name, the precedence rule it names — and open at most one file,
+how much of it you may check. For each in-scope item, run **one** targeted `Grep` over the
+product-code tree (the one the `development` work type's stack overlay names) for the
+behaviour it asserts — the entity id, the adapter role, the default, the bound, the event
+name, the precedence rule it names — and open at most one file,
 the best match. **Stop after three items**: say the set was sampled and name the three you
 took. Six tool calls is the most this check may cost a review, because a review of this tree
 runs on the lighter turn ceiling and a truncated review is re-run from cold. The read-first
@@ -62,7 +58,7 @@ list above does not grow for this check.
 
 **(B) What you can assert about that item depends on the evidence you were given.** This is the
 half of the bar's *Scope of that Major* the bar hands here, and it is stated once — here. Given
-the PR body and no reference to a filed `specs` issue for the gap, that Major is assertable —
+the PR body and no reference to a filed epic for the gap, that Major is assertable —
 report it. *Not* given the PR body, you cannot tell a missing filing from an unseen one: report
 **Minor** and say the gap is Major unless such an issue has been filed for it. Never report
 Major on evidence you were not given — the code for a new requirement or a new use-case

@@ -1,91 +1,138 @@
 # Work type: `adr` — how the work is done
 
-Capture an architectural decision as a numbered, immutable Architecture Decision Record under
-`docs/adl/`, per
-[ADR-0001](../../../adl/0001-use-architecture-decision-records.md) — the decision to use ADRs
-at all, and why the template looks the way it does.
+How an Architecture Decision Record under `docs/adl/` is written — and nothing else. It is the
+`adr` row's work file in `CLAUDE.md`'s **Model selection** table.
+- Why ADRs exist and why the template looks as it does:
+  [ADR-0001](../../../adl/0001-use-architecture-decision-records.md).
+- What the finished record must satisfy: `done.md`, the completion bar. Most of what a review
+  will say is already there — open it before drafting, not after.
+- Whether the decision should be an ADR at all is settled when the issue is filed and re-checked
+  against the bar's item 1, *It should be an ADR at all* — not while drafting.
 
-This file is the `adr` row's work file in `CLAUDE.md`'s **Model selection** table. It carries
-**how an ADR is written** and nothing else.
+## Before the branch exists
 
-The worthiness test is not part of how an ADR is written: whether this decision should be an
-ADR at all is answered when the issue is filed, and re-answered by the reviewer against the
-completion bar's item 1, not while drafting.
+- **Number: one above the highest held.** Several ADRs may be in flight at once, and an open
+  `adr/NNNN` branch reserves its number. Re-run the count, never remember it:
+  1. `git fetch --prune origin`;
+  2. take the highest `NNNN` in `git ls-tree --name-only origin/main docs/adl/` and
+     `git branch -r --list 'origin/adr/[0-9][0-9][0-9][0-9]'`;
+  3. add one;
+  4. reserve it before drafting: create the remote branch at `origin/main` with
+     `gh api repos/$REPO/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`
+     (`$REPO` per `CLAUDE.md`'s **Tracker mechanics**), then fetch and read back that
+     `origin/adr/NNNN` is that sha. The worktree is cut as the implement step cuts it; the
+     reservation is its ancestor. A 422 `Reference already exists` means the number was
+     taken: re-count. Any other failure: stop and report.
 
-## Drafting an ADR
+  A merged ADR's leftover branch never exceeds `main`'s highest: harmless. Never
+  reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
+  *Template conformance*, judges the result.
+- **Branch `adr/<adr-number>`**, zero-padded — not the issue number. The contribution workflow
+  lets a work file override the number segment when it states the exception and why; this is
+  that statement: the record's own number is its identity, and the branch is what reserves it.
+  Its reservation is step 4 of the count; never clobber a branch of that name.
 
-- **Numbering** (part of step 1, before drafting): the bar's item 2, *Template conformance*,
-  defines the number and the filename and judges them. What that means while drafting: resolve
-  the number *before* the branch exists, since the branch is named after it — and never reuse
-  or renumber one. A superseded ADR keeps its number, which is why the highest existing number
-  is the only safe thing to count from.
-- **Branch naming exception** (the general rule this overrides is in the contribution workflow,
-  which lets a context label's own work file override the number segment when that file states
-  the exception and its reason — this is that statement): an ADR
-  branches as `adr/<adr-number>` — its own zero-padded sequential number from the step above,
-  not the issue number. Since that number comes from what's merged on `main` rather than a
-  unique issue number, it isn't collision-free across concurrent ADRs: **only one ADR may be in
-  flight (drafted but not yet merged) at a time.** Resolve the number before creating the
-  worktree/branch, not after; CI does the equivalent in `_ai-draft.yml` right after checkout,
-  and refuses (clears `needs-draft`, comments why) rather than clobbering if that branch
-  already exists upstream.
-- **Step 1 (draft)**: against `docs/adl/template.md` — Status, Context, **Considered options**
-  (every option seriously evaluated, each with Pro/Con — not just the chosen one), Decision,
-  Consequences.
-- **Step 2 (PR)**: one PR per ADR — see **Rules** below.
-- **Cross-check against existing ADRs and design docs**, before step 3: does this decision
-  contradict an existing `Accepted` ADR? The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, defines what the finished pair has to
-  look like and judges it. What that means while drafting: go and look, before you have written
-  a Decision that assumes nothing conflicts — the check is cheap then and expensive afterwards,
-  and it is the step most often skipped.
+## Drafting
+
+1. **Cross-check existing ADRs and design docs first** — does this contradict an Accepted ADR?
+   The bar's item 8, *It doesn't contradict an Accepted ADR without superseding it*, judges the
+   result. Cheap before the Decision is written, expensive after;
+   the step most often skipped.
+2. **Draft against `docs/adl/template.md`**, section by section — the Summary last, though it
+   sits first:
+   - **Context — the forces, not the derivation.** The bar's item 3, *Context states the
+     forces — not the answer, and not the derivation*, judges it. Write what was found, not
+     how: one sentence naming the site beats four paragraphs proving it.
+   - **Considered options** — every option seriously evaluated, each with a real Pro and Con
+     (the bar's item 4, *The considered options are real*). Reached this section with only the
+     chosen option? Stop and name what else was on the table, even "do nothing".
+   - **Decision** — name the option and point at its trade-offs; don't restate them (the bar's
+     item 4 again).
+   - **Consequences** — follow-up work, what gets easier or harder (the bar's item 5,
+     *Consequences follow from the Decision*), and the Blast radius per the template (the bar's
+     item 6, *The Blast radius is complete, and closes the record*).
+   - **Summary** — written once the Decision is settled, from the Decision and the chosen
+     option's Cons, never from memory of the argument (the bar's item 12, *The Summary matches
+     the record*).
+   - **Links** — only the targets the bar's item 11, *Links point only at targets that outlive
+     the record*, allows; name everything else in prose.
+     For example, the use-case is cited as `UC12`, never linked by its file.
 
 ## Rules
 
-- **One problem, one decision per ADR** — the bar's item 7, *One problem, one decision*, states it and judges it. What that
-  means while drafting: a design doc that bundles several architectural choices produces
-  several ADRs, not one ADR carrying several decisions.
-- **One PR per ADR.** No PR contains more than one ADR, or an ADR plus unrelated non-ADR work,
-  even if they're closely related — file a separate issue and open a separate PR per ADR so
-  each decision gets its own review. This doesn't cap an ADR at one PR outright: a genuine
-  follow-up on the same ADR still follows the workflow doc's multi-PR convention for that
-  issue. The ADL row (the bar's item 2, *Template conformance*) and any supersession Status-line edit
-  belong to the same ADR's PR, not a separate one. The bar's item 2, *Template conformance*,
-  is where the ADL row itself is judged.
-- **Immutable once Accepted.** Never edit an Accepted ADR's Context/Decision/Consequences to
-  reflect a change of mind — write a new ADR that supersedes it. This file is the only home
-  for the **author and fix side** of the rule; a fix run reaches it through the `adr` row, so
-  it never needs restating in a skill. The reviewer's side of it lives with the reviewer — in
-  the files the `adr` row's review column names and in CI's review prompt — and is not a
-  duplicate of this.
-  Two guards, because the rule is easy to over-apply:
-  - **Read "Accepted" from the base branch, not the working tree** — `git show <base>:<path>`,
-    where `<base>` is the base commit the caller gives you (CI's prompt supplies it; locally,
-    resolve the PR's base). A bare branch name may not resolve in a fresh checkout.
-    The reason is the drafting convention stated in the bar's item 10, *Status is `Accepted`
-    before `needs-approval`*: under it, a working-tree read makes an ADR still being drafted
-    look immutable. If the file doesn't exist on the base, or its
-    Status there isn't already `Accepted`, normal fixes apply. If the base **cannot be read at
-    all** — no base ref fetched, the command unavailable — do not fall back to the working
-    tree: treat the record as Accepted, which by the next guard means only a finding arguing
-    the *decision* is wrong becomes **Skipped** — write-up findings are still fixed normally.
-    Say in the summary that the base read failed. That is the loud failure of the two; a wrong
-    Skipped entry is one a human reads and reverses, where a wrong edit rewrites an accepted
-    decision with nothing to notice it.
-  - **Only the *decision* is immutable, not the write-up.** A finding about a missing Con, a
-    Decision that doesn't reference its options, or a Consequence that doesn't follow is fixed
-    normally. Only a finding arguing an already-Accepted *decision* is wrong becomes a
-    **Skipped** entry, recorded as a candidate for a superseding ADR.
-- **List the rejected options for real** — the bar's item 4, *The considered options are real*, states it and judges it. What that
-  means while drafting: if you reach the Considered options section with only the option you
-  chose, stop and name what else was on the table, even if it is just "do nothing" / "keep the
-  status quo".
-- **Reference, don't restate.** If a decision depends on a requirement or use-case, cite it
-  (`R7`, `UC03`) rather than re-deriving it.
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
+- **Reference, don't restate.** Anywhere in the record, cite a requirement or use-case (`R7`,
+  `UC03`) rather than re-deriving it.
+- **One problem, one decision per ADR** — the bar's item 7, *One problem, one decision*. A
+  design doc bundling several architectural choices yields several ADRs.
+- **One PR per ADR** — no second ADR, no unrelated non-ADR work, however close. The ADL row
+  (the bar's item 2) and any supersession Status-line edit (item 8) belong in that same PR. A
+  genuine follow-up on the same ADR uses the workflow's multi-PR convention for its issue.
+- **Status `Accepted` from the first draft** — the bar's item 10, *Status is `Accepted` before
+  `needs-approval`*, is the rule's only home.
+- **Merge in number order**, so `main` never holds a number above one still open. An
+  `Abandoned` ADR merges like any other, so a higher one waits for it too.
+  - **Who checks, and when:** the review step, as `review.md`'s exit check, at any exit that
+    applies `needs-approval`. It fetches, lists the `adr/NNNN` branches as the count does,
+    and looks for a lower number whose record is not on `origin/main`.
+  - **One found:** the PR goes on hold instead, per
+    [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels);
+    at the cap, its one escalation comment also names the sibling.
+  - **How the hold ends:** once the lower ADR merges, the human partner grants a round. The next
+    pass first merges `origin/main` in, where an ADL-row conflict is expected, and reads the
+    complete log.
+- **Abandoned, not deleted.** An ADR the human partner drops before it merges keeps its number
+  and its full draft: it merges with `Status: Abandoned — <why, in one sentence>`, and its ADL
+  row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log that the
+  count could hand out again.
+  - Dropped before any draft exists: the record is the template's title, Date, that Status
+    line and a one-sentence Summary (`Abandoned before a decision was taken: <why>`).
+  - A supersession or deprecation edit the draft made to another ADR is reverted before the
+    merge, its ADL row with it, so that record stays as it was.
+  - The bar's scope line says which items score it.
+- **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
+  reads as if written right the first time. A clarifying paragraph added beside the flawed one
+  is not a fix; it is how a record grows longer every round without getting clearer.
+- **Immutable once merged.** An ADR that exists on the base is edited in exactly three ways,
+  whatever its Status there — `Superseded`, `Deprecated` and `Abandoned` records included —
+  and this list is the rule's only home, for author, fixer and reviewer alike:
+  - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation, or
+    to correct one merged as anything but `Accepted` or `Abandoned` — the bar's item 10 — to
+    `Accepted`;
+  - a typo fix that changes no meaning;
+  - a repair of something that directs the reader to act and is **actually broken**:
+    - a link that no longer resolves: re-point it at the same content's new path; where that
+      content is gone, keep its name in prose and drop the link;
+    - an instruction against a file that no longer exists: strike it.
+
+    Nothing is restated or added in place of either. A link that still resolves is not broken,
+    however it could break later, and a path mentioned in prose is not an instruction.
+
+  Nothing else is changed in that record. A change of mind is a new ADR that supersedes it;
+  a better write-up, a Summary, a sturdier link are left as the record stands. Two guards:
+  - **Read existence from the base, not the working tree:** `git show <base>:<path>`, `<base>`
+    the PR's base commit — a bare branch name may not resolve in a fresh checkout. The Status
+    line decides nothing: under the bar's item 10 every draft reads `Accepted` in the working
+    tree, and a record that is on the base was merged, whichever Status it carries now.
+    - Not on the base → a draft; fix normally.
+    - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
+      tree. Treat the record as merged and say in the summary that the base read failed. A
+      wrong Skipped entry is one a human reads and reverses; a wrong edit rewrites a merged
+      record unseen.
+  - **A finding whose fix would be an edit outside the list is Skipped, not fixed.** One that
+    the decision is wrong is recorded as a candidate for a superseding ADR; any other is recorded
+    as declined under this rule.
+
+### Skills
+
+`research` for the facts an ADR's Context rests on, cited from the record by linking the issue
+comment; `receiving-code-review` in the review step. This work type names no stack skill.
 
 ## Common mistakes
 
 - Skipping the issue-first step for a decision nobody has discussed yet.
-- Editing an old ADR's Decision text instead of writing a new ADR that supersedes it.
+- Writing the investigation into Context instead of the forces.
+- Editing an old ADR's Decision instead of writing one that supersedes it.
 - Bundling two ADRs, or an ADR plus unrelated work, into one PR.
-- Drafting against this file alone and never opening `done.md` — the bar is where most of what
-  a review will say already is.
+- Drafting against this file alone and never opening `done.md`.

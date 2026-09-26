@@ -22,9 +22,10 @@ class NumericReadAdapter(_ReadOnlyAdapter):
 
     Carries no unit contract -- the value is whatever the entity reports. ADR-0038 covers
     only the power-valued roles; the remaining roles on this adapter (`grid_voltage` V,
-    `ev_soc` %, `ev_battery_capacity` kWh, `solar_forecast` kWh, and via the read/write
-    subclass below `charger_current` A and `vehicle_charge_limit` %) carry the same class of
-    hazard and are named there as follow-up, each needing its own unit set decided.
+    `ev_soc` %, `ev_battery_capacity` kWh, `solar_forecast` kWh, `solar_forecast_today` kWh,
+    and via the read/write subclass below `charger_current` A and `vehicle_charge_limit` %)
+    carry the same class of hazard and are named there as follow-up, each needing its own unit
+    set decided.
     """
 
     async def read(self) -> float | None:

@@ -34,7 +34,7 @@ def test_deterministic_given_identical_inputs():
 def test_cooldown_blocks_restart_until_elapsed():
     # Cooldown entry itself is coordinator-driven (a sustained R3 breach, or a
     # mode-switch/disconnect reset) -- this module only knows how to sit in
-    # cooldown and re-arm once it elapses, per design doc Sec 6.3.
+    # cooldown and re-arm once it elapses.
     state = CaptarState(Phase.COOLDOWN, phase_started_at=0.0)
     desired, state = step(state=state, now=5 * 60, **DEFAULTS)
     assert desired == 0.0
@@ -45,7 +45,7 @@ def test_cooldown_blocks_restart_until_elapsed():
 
 
 def test_no_soc_related_phase():
-    # Design doc Sec 5/6.3: SOC gating is entirely the coordinator's job -- there
+    # SOC gating is entirely the coordinator's job -- there
     # is no way to construct a "soc reached" CaptarState at all, and any
     # non-Idle/Charging/Cooldown phase (e.g. the shared enum's Hold) is rejected
     # rather than silently treated as charging.

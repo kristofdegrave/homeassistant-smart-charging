@@ -17,3 +17,18 @@ here would make the reviewer open the author's recipe to find out which bar appl
 
 Everything about how either document is written is in the branch file. Nothing is duplicated
 here, and a change that touches both documents follows both.
+
+## Rules
+
+The rules either document is written by are the branch file's. Two hold for both branches and
+are stated once, here: the form below, and the skills.
+
+- **Form** — per *Write rules as items, with the shortest example that teaches them*, in
+  [`ai-authoring.md`'s Principles](../../method/ai-authoring.md#principles).
+
+### Skills
+
+The method skills this work type uses, by step: `domain-driven-design` for the strategic-design
+vocabulary the decomposition is argued in; `research` when a fact a design rests on is
+external, cited from the document by linking the issue comment; `receiving-code-review` in the
+review step. This work type names no stack skill.

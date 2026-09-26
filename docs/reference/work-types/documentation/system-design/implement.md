@@ -2,8 +2,11 @@
 
 Author `docs/design/system-design.md`: a volatility-based service decomposition — static and
 dynamic architecture — derived from the behaviour already drafted under `docs/analysis/`, per
-Juval Löwy's IDesign Method. Full rationale for why this phase exists and where it sits in the
-pipeline: `docs/plans/2026-07-07-lowy-system-design-method.md`.
+Juval Löwy's IDesign Method. **Why the phase exists:** the analysis-first pipeline settles
+behaviour and then takes structural decisions one ADR at a time, with nothing stating the
+service architecture those decisions sit inside — this document is that statement. Where it sits
+in the pipeline, and what it therefore surfaces, is the **Design** stage of
+[idea-to-product.md](../../../method/idea-to-product.md#7-design).
 
 This file is the `documentation` work type's work file for a change touching
 `docs/design/system-design.md`, reached from the label's own `implement.md` one level up, which
@@ -21,7 +24,7 @@ wearing this method's vocabulary.
 
 ## Drafting the system design
 
-**Step 1 (do the work)**, in order:
+**The implement step (do the work)**, in order:
 
 1. **Enumerate the behaviour already drafted** — the use cases under
    `docs/analysis/use-cases/`, and `control-cycle.md`. List them; do not start
@@ -34,12 +37,13 @@ wearing this method's vocabulary.
    bar's item 1 judges that rationale, so an unwritten one is a finding rather than an
    omission.
 3. **Encapsulate each volatility in exactly one service**, classified as one of:
-   - **Client** — a consumer of the system (HA automations/UI/entities).
+   - **Client** — a consumer of the system: an automation, a UI, an entity.
    - **Manager** — orchestrates one use case's flow, in a specific order; the "how".
    - **Engine** — reusable business/policy logic scoped to one volatility; never orchestrates.
    - **Resource Access** — encapsulates *how* one specific resource is reached; isolates that
      access volatility from everything above it.
-   - **Resource** — the external thing itself (charger, HA entity state, tariff/captar source).
+   - **Resource** — the external thing itself: the charger, a platform entity's state, the
+     tariff/captar source.
 4. **Static architecture diagram** (Mermaid `flowchart TD`): the service map with allowed call
    directions only — Client → Manager → {Engine, Resource Access} → Resource. State explicitly
    the one allowed pattern (if any) for Manager-to-Manager orchestration; state that Engines

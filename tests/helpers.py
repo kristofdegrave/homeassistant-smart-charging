@@ -17,11 +17,13 @@ collection time.
 """
 
 import dataclasses
-from datetime import timedelta
+from datetime import date, timedelta
 
+from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.util import dt as dt_util
 
 from custom_components.smart_charging.const import (
+    ATTR_APPLIES_TO,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
@@ -158,6 +160,27 @@ def seed_owned_entity(hass, entity_id: str, state: str) -> None:
     test's former direct coordinator.<field> = ... assignment now that the Coordinator reads
     these fields through the Store each cycle instead of taking a pushed value."""
     hass.states.async_set(entity_id, state)
+
+
+def seed_home_day(hass, dates: set[date]) -> None:
+    """`seed_owned_entity`'s counterpart for `switch.smart_charging_home_day` (NF14): that
+    helper sets only the plain on/off state, but reading the flag now goes through
+    `Store.read_home_day_dates` (adapters/store.py), which reads the `ATTR_APPLIES_TO`
+    attribute -- the set of dates the flag applies to -- not the bare on/off state. Passing an
+    empty `dates` (or one that omits tomorrow) is "no home day", exactly like the real
+    `HomeDaySwitch` when nothing has set it.
+
+    `dates` is a `set[date]`, not "today"/"tomorrow" -- so a test seeding "the flag set the
+    evening before, still applying to today" and a test seeding "the flag being set again
+    right now, for tomorrow" call this the same way, passing whichever concrete date(s) each
+    scenario needs (NF14's "at most today's and tomorrow's at once")."""
+    tomorrow = dt_util.now().date() + timedelta(days=1)
+    state = STATE_ON if tomorrow in dates else STATE_OFF
+    hass.states.async_set(
+        "switch.smart_charging_home_day",
+        state,
+        {ATTR_APPLIES_TO: sorted(d.isoformat() for d in dates)},
+    )
 
 
 def seed_today_deadline(hass, *, hours_from_now):

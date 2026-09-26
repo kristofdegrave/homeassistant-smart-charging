@@ -5,15 +5,14 @@ Status: Accepted
 
 ## Context
 
-[`docs/plans/2026-07-08-runtime-dashboard-design.md`](../plans/2026-07-08-runtime-dashboard-design.md)
-decided the runtime dashboard's (UC11, R19) card types, layout, and label-driven extensibility
-mechanism (the `sc_runtime`/`sc_install` labels driving an `auto-entities` card), but explicitly
-left "how the dashboard reaches the user" as an open question — deliberately out of scope for
-that doc. [`docs/plans/2026-08-10-runtime-dashboard-sequencing.md`](../plans/2026-08-10-runtime-dashboard-sequencing.md)
-is where that gap was identified as needing its own ADR before the C5 implementation spec can be
-written; it initially framed the dependency as "HA's frontend/Lovelace **storage** API," a framing
-this ADR refines once the option set below is laid out in full — the chosen mechanism turns out
-not to use the storage API at all.
+The runtime dashboard's (UC11, R19) card types, layout, and label-driven extensibility mechanism
+— the `sc_runtime`/`sc_install` labels driving an `auto-entities` card — were settled when the
+dashboard was specified, and that specification explicitly left "how the dashboard reaches the
+user" as an open question, deliberately out of scope there. Sequencing the dashboard work is where
+that gap was identified as needing its own ADR before the C5 implementation spec can be written;
+that sequencing initially framed the dependency as "HA's frontend/Lovelace **storage** API," a
+framing this ADR refines once the option set below is laid out in full — the chosen mechanism turns out not to use
+the storage API at all.
 
 That question has real, hard-to-reverse structural weight, so it gets its own ADR rather than
 being decided inline in the C5 implementation spec (`write-impl-spec`'s "derive, don't design"
@@ -71,8 +70,7 @@ once created, the integration never touches its stored content again, on any lat
 - Pro: keeps B1's full editability with no ongoing clobber risk — the integration writes exactly
   once, at first creation, so there is nothing left to silently overwrite. The
   `auto-entities`/label mechanism already means the *runtime settings* section needs no rewrite to
-  stay current (`2026-07-08-runtime-dashboard-design.md` Decision 1), so this isn't a compromise on
-  that axis.
+  stay current, as the dashboard's own design decided, so this isn't a compromise on that axis.
 - Con: the integration itself still adds new **status/power-flow** readouts over time on fixed,
   non-label-driven tile cards — this ADR's own prerequisite catalog update just added three
   (`sensor.smart_charging_solar_surplus_w`, `sensor.smart_charging_time_to_full`,
@@ -153,8 +151,8 @@ read-backs, exactly as system-design.md already states.
   both the duplicate-`url_path` case (updating the existing registration rather than erroring) and
   removal on `async_unload_entry` (an ADR-0008 reload is unload-then-setup, so the panel must be
   torn down and re-added cleanly each time).
-- Because the runtime-settings section is label-driven (`2026-07-08-runtime-dashboard-design.md`
-  Decision 1) and the whole file is regenerated from the current template on every reload, neither
+- Because the runtime-settings section is label-driven, as the dashboard's own design decided,
+  and the whole file is regenerated from the current template on every reload, neither
   a new `sc_runtime`-labelled entity nor a new fixed status tile needs a dashboard-specific
   migration step — unlike Option B2, there is no "existing install's dashboard is now stale" state
   to detect or reconcile.

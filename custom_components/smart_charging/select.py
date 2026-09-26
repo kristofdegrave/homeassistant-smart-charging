@@ -50,7 +50,7 @@ class _RestoreOptionMixin:
 
 class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, SelectEntity):
     """User-set active charging mode. Option list is gated by Solar installed and CapTar
-    available (design doc §3/§4, R18 scoped), composing independently -- each mode family
+    available (R18 capabilities), composing independently -- each mode family
     is only offered when its own config-time toggle is True."""
 
     _attr_translation_key = "mode"
@@ -75,7 +75,9 @@ class ModeSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, Select
 
 class ProfileSelect(SmartChargingEntity, _RestoreOptionMixin, RestoreEntity, SelectEntity):
     """User-set charging profile -- `Manual` (the mode selector drives dispatch) or `Auto`
-    (E2's own mode-selection drives dispatch, R16). Mirrors `ModeSelect` (design doc §4)."""
+    (E2's own mode-selection drives dispatch, R16). Mirrors `ModeSelect`'s restore/select
+    shape above, with no capability gating of its own -- both profile options are always
+    offered."""
 
     _attr_translation_key = "profile"
     _object_id_suffix = OWNED_SUFFIX_PROFILE

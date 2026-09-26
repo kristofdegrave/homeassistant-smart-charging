@@ -1,7 +1,7 @@
 # ADR-0023: Decompose `_run_cycle` into named per-step methods (extends ADR-0012)
 
 Date: 2026-08-10
-Status: Accepted
+Status: Superseded by ADR-0046
 
 ## Context
 
@@ -227,8 +227,7 @@ and a growing edit surface for every new cross-cutting concern — is real and w
 - Choosing between the two unit kinds is a judgment call at extraction time, not a fixed
   recipe — a future contributor adding a new step still has to ask "does this touch an
   adapter" the way this ADR's own Decision section had to.
-- Follow-up: a `docs/plans` implementation spec and TDD task plan, the same pattern
-  ADR-0012 used, is the next step — this ADR does not itself implement any code change, and
+- This ADR does not itself implement any code change, and
   the exact method names, boundaries, and test list are implementation-spec-level detail,
   not part of this decision.
 - If a future addition reveals a step whose extraction doesn't fit either unit kind cleanly,

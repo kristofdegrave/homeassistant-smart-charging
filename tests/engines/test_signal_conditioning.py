@@ -1,7 +1,9 @@
 """Plain-pytest tests for the Signal-Conditioning engine (E7, voltage slice)."""
 
 from custom_components.smart_charging.engines.signal_conditioning import (
+    HouseholdWindow,
     resolve_voltage,
+    smooth_household_baseline,
     smooth_net_power,
 )
 
@@ -61,3 +63,65 @@ def test_supports_a_much_larger_window_for_the_peak_tracker():
         smoothed, window = smooth_net_power(sample, window, size=90)
     assert len(window) == 90
     assert smoothed == (1000.0 * 89 + 10000.0) / 90
+
+
+# R10/issue #1329: `smooth_household_baseline` folds `net_w - charger_w` into the same rolling
+# window `smooth_net_power` maintains, except on a cycle whose own command changed -- see the
+# function's own docstring for why (ADR-0039's insight, applied to the smoothing window this
+# time rather than to R3's raw clamp operand).
+
+
+def test_should_fold_the_reading_when_the_command_held_steady():
+    # Arrange
+    state = HouseholdWindow((100.0, 100.0))
+    # Act
+    smoothed, new_state = smooth_household_baseline(-400.0, state, size=4, command_changed=False)
+    # Assert
+    assert new_state == HouseholdWindow((100.0, 100.0, -400.0), deferred_previous=False)
+    assert smoothed == (100.0 + 100.0 - 400.0) / 3
+
+
+def test_should_freeze_the_window_when_the_command_changed():
+    # Arrange
+    state = HouseholdWindow((100.0, -400.0))
+    # Act -- a wildly different reading, but the command stepped on the write that ended the
+    # previous cycle, so this cycle's net_w/charger_w may still be measuring that actuation.
+    smoothed, new_state = smooth_household_baseline(9000.0, state, size=4, command_changed=True)
+    # Assert -- the window is untouched and its existing mean stands for one more cycle.
+    assert new_state == HouseholdWindow((100.0, -400.0), deferred_previous=True)
+    assert smoothed == (100.0 - 400.0) / 2
+
+
+def test_should_fold_the_first_ever_reading_even_when_the_command_changed():
+    # Arrange -- an empty window: there is no prior mean to fall back on (ADR-0039's own
+    # "nothing to debounce against yet" case), so the very first reading is always accepted.
+    # Act
+    smoothed, new_state = smooth_household_baseline(
+        -2345.0, HouseholdWindow(), size=4, command_changed=True
+    )
+    # Assert
+    assert new_state == HouseholdWindow((-2345.0,), deferred_previous=False)
+    assert smoothed == -2345.0
+
+
+def test_should_fold_the_reading_when_the_command_changed_but_the_window_size_is_one():
+    # Arrange -- size=1 has no history to protect: `smooth_net_power` keeps only the newest
+    # sample at that size regardless, so the freeze must not apply there.
+    state = HouseholdWindow((100.0,))
+    # Act
+    smoothed, new_state = smooth_household_baseline(9000.0, state, size=1, command_changed=True)
+    # Assert
+    assert new_state == HouseholdWindow((9000.0,), deferred_previous=False)
+    assert smoothed == 9000.0
+
+
+def test_should_fold_the_reading_when_the_previous_cycle_already_deferred_once():
+    # Arrange -- deferred_previous is already True: a mode adjusting its own request most
+    # cycles (Solar tracking a drifting surplus) must not have every reading discarded, so the
+    # freeze is capped at one cycle in a row (mirrors ADR-0039's own `deferred_previous`).
+    state = HouseholdWindow((100.0, -400.0), deferred_previous=True)
+    # Act
+    smoothed, new_state = smooth_household_baseline(9000.0, state, size=4, command_changed=True)
+    # Assert -- folded in despite command_changed, and the cap resets.
+    assert new_state == HouseholdWindow((100.0, -400.0, 9000.0), deferred_previous=False)
+    assert smoothed == (100.0 - 400.0 + 9000.0) / 3

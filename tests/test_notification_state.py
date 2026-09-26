@@ -2,8 +2,8 @@
 
 Anchors: UC08 preconditions, trigger, and state model (R13) --
 docs/analysis/use-cases/UC08-plan-tomorrow-home-day.md. This module owns none of those
-rules -- it cites them as test anchors, per docs/plans/2026-07-21-notifications-design.md
-Sec7 and Sec11 (pure state machine -> plain pytest, ADR-0009).
+rules -- it cites them as test anchors, per ADR-0009's split criterion (pure logic with no
+I/O -> plain pytest).
 """
 
 from datetime import date, datetime, time

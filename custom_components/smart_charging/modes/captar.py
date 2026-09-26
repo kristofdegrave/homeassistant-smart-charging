@@ -1,12 +1,12 @@
 """Captar charging-mode engine (E1 -- UC03). Pure -- no HA imports (ADR-0006/0009).
 
 Simplest of the mode state machines: Idle -> Charging -> Cooldown. No Hold (no
-surplus threshold to ride out -- R4) and no SOC-related phase (design doc Sec 5:
-the coordinator gates on SOC, this module never sees why it isn't dispatched).
+surplus threshold to ride out -- R4) and no SOC-related phase: the coordinator
+gates on SOC, and this module never sees why it isn't dispatched.
 Unlike Solar/SolarOnly, the transition INTO cooldown is not decided here either --
 a sustained R3 breach is detected by the Billing-Protection engine (E5), and the
-coordinator forces `state` to `cooldown(now)` when that happens (design doc Sec
-6.3): "the clamp decides the set-point this cycle, not the mode" (UC03). This
+coordinator forces `state` to `cooldown(now)` when that happens: "the clamp
+decides the set-point this cycle, not the mode" (UC03). This
 module only knows how to sit in cooldown and re-arm once it elapses, and to
 request the maximum current whenever it is actually dispatched.
 State is a small frozen dataclass threaded by the coordinator -- this module

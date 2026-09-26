@@ -12,7 +12,8 @@ that own those.
 
 Scoped deliberately: this file carries only rules that are **not** owned elsewhere — HA
 platform conventions belong to `ha-integration-knowledge`, everything about the event loop to
-`async-python-patterns`, and this project's structural rules to `CLAUDE.md` and the ADRs.
+`async-python-patterns`, and this project's structural rules to the ADRs (`CLAUDE.md`'s
+**Architecture Decision Records (ADRs)** topic).
 
 ## Error handling
 

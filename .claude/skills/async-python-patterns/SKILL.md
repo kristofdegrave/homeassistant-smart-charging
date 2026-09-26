@@ -12,7 +12,7 @@ integration's job is to not block it and not leak work off it.
 
 Scoped deliberately — HA platform conventions live in `ha-integration-knowledge`, general
 (non-async) Python mistakes in `python-anti-patterns`, and this project's structural rules in
-`CLAUDE.md` and the ADRs.
+the ADRs (`CLAUDE.md`'s **Architecture Decision Records (ADRs)** topic).
 
 **When this file applies** — the single statement of the condition, which everything else
 points at: any changed file under `custom_components/smart_charging/` that is **not** pure

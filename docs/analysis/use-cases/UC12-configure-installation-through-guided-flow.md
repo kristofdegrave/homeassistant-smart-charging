@@ -94,7 +94,7 @@ variants.
    the net-power mapping, the optional grid-voltage mapping, the optional low-tariff mapping (with
    its own state-translation table when the mapped entity does not already report on/off), the
    [supply voltage](../system-overview.md#ubiquitous-language) fallback used when the grid-voltage
-   mapping is absent (NF4), the [grid supply ceiling](../system-overview.md#ubiquitous-language),
+   mapping is absent (R22), the [grid supply ceiling](../system-overview.md#ubiquitous-language),
    and the [grid safety offset](../system-overview.md#ubiquitous-language) (C4). The
    supply-voltage fallback sits on this step, beside the grid-voltage mapping it substitutes for,
    rather than on the `ev_charger` step: both are the same "Installation area" concern in
@@ -131,7 +131,8 @@ variants.
    at all while this capability is absent (R3 AC1) — 6a gives the mapping's own rationale for why
    it is left unmapped by default.
 7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
-   presents the solar-production and solar-forecast mappings and solar's own thresholds: the
+   presents the solar-production mapping, the next-day solar-forecast mapping and the optional
+   same-day one (R9), and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
    `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown duration, the
    restart debounce duration, the solar step-up size, trigger gap, and ceiling, and the
@@ -178,16 +179,27 @@ capability declarations; `grid`'s net-power, grid-voltage, and low-tariff mappin
 charger-current, charger-status, and charger-power mappings; `vehicle`'s EV state-of-charge,
 EV-battery-capacity-sensor, vehicle-charge-limit, and car-at-home mappings — unconditionally, since
 the `vehicle` step is ungated; `captar`'s optional external monthly-peak mapping when CapTar is
-declared present (6a); `solar`'s solar-production and solar-forecast mappings when solar is
-declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
+declared present (6a); `solar`'s solar-production mapping, next-day solar-forecast
+mapping and optional same-day one when solar is declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
 managed; and `notifications`' notification-target mapping when notifications are wanted. Only the
 `core`, `grid`, `ev_charger`, and `vehicle` mapping halves are shown unconditionally; `captar`,
 `solar`, `deadline`, and `notifications` each appear only while their own capability is declared
 present. The `power` step never appears, since it has no mapping half.
-Submitting updates only the data bucket and reloads the config entry. A capability declared absent
+Submitting updates only the data bucket. A capability declared absent
 here that was present before drops that capability's mapping fields from the data bucket on save;
 any of its thresholds already stored in the options bucket are left untouched (changing them is the
 options flow's job, 1b).
+When the user submits the last step the reconfigure flow showed them
+Then the System [reloads](../system-overview.md#ubiquitous-language)
+([ADR-0008](../../adl/0008-reconfigure-reload-behavior.md)), and the first control cycle after the
+reload uses the saved values (NF11 AC3).
+The reload ends every post-surplus hold, peak-breach grace period, cooldown and restart debounce
+running at the moment of the save (R11's restart and reload criterion). It also empties the
+smoothing window, which refills, while every [runtime
+configuration](../system-overview.md#ubiquitous-language) value holds the value last set, or its
+default where none was. NF14 states the whole of what a reload clears and what it keeps.
+A household that saves mid-cooldown therefore loses the rest of that cooldown's protection, a
+trade-off ADR-0008 accepts.
 
 **1b — Options flow** — replaces the install flow from the Trigger onward.
 Given the user opens Configure on an existing entry
@@ -209,6 +221,10 @@ when solar is installed, `deadline`'s reminder lead time when deadlines are mana
 toggles](../system-overview.md#ubiquitous-language) and evening-prompt time when
 notifications are wanted.
 Submitting updates only the options bucket.
+When the user submits the last step the options flow showed them
+Then the System reloads, exactly as a reconfigure save does (1a): the first control cycle after the
+reload uses the saved values, the control interval included (NF11 AC3), and the reload ends,
+clears and keeps exactly what 1a states.
 
 **4a — When the car-at-home mapping is required** — branches from step 4.
 Given the user is on the `vehicle` step
@@ -365,7 +381,8 @@ it was before the flow started.
   required when solar is declared; the car-at-home presence mapping required when a vehicle
   charge-limit is mapped or deadlines are managed) is, after this use-case, a plain required field
   local to the one step that needs it — the first two unconditionally required on their own step,
-  the third by the field-level rule 4a.
+  the third by the field-level rule 4a. The same-day solar-forecast mapping (R9) is optional and
+  unmapped by default (NF12).
 - Two gaps the previous step model named as out of scope are closed by **this** step model: the
   solar-production mapping is now presented on the `solar` step, and the `Power`-mode cooldown on
   the `power` step, so every catalogued adapter role and `config-options` key the flow is
@@ -429,7 +446,7 @@ flowchart TD
         OD -- deadline --> O8["8 deadline threshold"]
         OD -- notifications --> O9["9 notifications thresholds"]
         OD -- "absent" --> OSkip["Skip that step"]
-        O6 --> OSubmit["Update options bucket only"]
+        O6 --> OSubmit["Update options bucket only<br/>+ reload entry"]
         O7 --> OSubmit
         O8 --> OSubmit
         O9 --> OSubmit
@@ -487,11 +504,11 @@ a changed capability's submit is the reconfigure flow (1a), and a changed per-no
 submit is the options flow (1b, above) — both trigger a config-entry reload (ADR-0008;
 `entity-catalog.md`'s reconfigure-flow timing note records the same fact for the capability half),
 so either kind of change is in force from the coordinator's first cycle after its own reload,
-meeting AC12's "within the next control cycle" by the one mechanism, not two.
+meeting NF11's "within the next control cycle", to which AC12 defers, by the one mechanism, not two.
 
 This use-case owns R18's *configurability* half — whether a capability or toggle is
-user-configurable, whether an absent capability's own inputs are offered/required, and the timing
-at which a submitted change of either kind takes effect (AC12). The *behavioural* half — what an
+user-configurable, whether an absent capability's own inputs are offered/required, and how a
+submitted change of either kind meets the timing NF11 sets for it (AC12). The *behavioural* half — what an
 absent capability or a disabled toggle actually changes about charging or notifications — is owned
 by whichever document realizes that behaviour: `resolution-rules.md` (Auto's mode-selection
 branches, AC2/AC5/AC7, and R15's no-remaining-effect clause of AC8), `control-cycle.md` (the peak
@@ -525,7 +542,10 @@ and carries the matching acceptance criteria (AC9, AC10, AC11).
 Referenced, not restated: the data/options split
 ([ADR-0005](../../adl/0005-config-entry-structure-and-interval.md)) governs where each field this
 use-case presents is ultimately stored; [NF3](../requirements.md#nf3--all-device-io-via-adapter-roles)
-governs why every mapping field exists at all (adapter roles).
+governs why every mapping field exists at all (adapter roles). What a save through 1a or 1b
+ends and keeps is owned by R11's restart and reload criterion and by NF14, and when the saved
+values take effect by NF11 AC3; 1a names what a save does to the running system and leaves the
+full statement to them.
 
 ## Relationships
 
