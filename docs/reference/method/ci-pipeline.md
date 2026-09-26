@@ -489,7 +489,7 @@ argument says nobody watches.
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required. The
   two `remarks` exits — the cap and the non-docs hand-off — also add `needs-decision`; the
-  clean verdict never does. `needs-approval` answers *is the automated work done*,
+  clean verdict never does. `needs-approval` answers *may a human merge it as it stands*,
   `needs-decision` answers *is a reason not to merge still open*. That gives three states a
   maintainer scanning the PR list can tell apart: clean (`needs-approval` alone), capped (both)
   and, from an interactive session only, held (`needs-decision` alone —

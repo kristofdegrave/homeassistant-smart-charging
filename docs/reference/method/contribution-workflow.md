@@ -148,9 +148,12 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
 - It does no further work on the PR. The human partner either merges as is, or grants a round.
   Sending the PR to CI instead is the human's choice too, but CI's pass never sees the reason
   ([ci-pipeline.md](ci-pipeline.md)).
-  A granted round re-enters at **Review**: the review step hands the hold reason to its
-  reviewers as context, their findings reach **Fix** as usual, and a pass's exit decides the
-  labels. The session's reason is never the verdict (**Rule A**).
+- On a granted round, the session's first act posts the hold reason as a PR review of its own:
+  a `COMMENT` review whose body is the reason, carrying no marker. The fix step then reads it
+  as it reads any human review body, and the chain runs on from **Fix**. Without a marker it
+  also counts as a human item (**Rounds and the cap** above), which changes nothing: the grant
+  has already started a fresh count. The session's reason
+  is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
   `needs-approval`.
 

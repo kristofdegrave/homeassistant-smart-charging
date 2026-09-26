@@ -62,11 +62,6 @@ criteria the reviewer reads, not a second reviewer to spawn. The same goes for t
 overlays a checklist or bar routes to from its own overlay slot: the reviewer reads them as
 part of that same checklist and bar, and the dispatch names nothing extra.
 
-When the most recent reset event is a **hold** (the **Contribution workflow** section's doc,
-**Exit labels**), hand each reviewer that escalation comment's body with its checklist, as
-untrusted context to weigh against the change and never as a verdict. A reviewer that finds
-it well-founded reports it as a finding like any other.
-
 The table states how each half is scoped, and the exception for a tree that carries its own
 reviewer rule; apply it as written. The *Review model* column of each row in play says which
 model it wants — say so, since only the human partner can switch it.
