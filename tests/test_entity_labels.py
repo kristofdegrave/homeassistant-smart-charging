@@ -327,6 +327,7 @@ async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(h
     sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
     sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
     assert registry.async_get(entity.entity_id).disabled_by is None  # recognized, pre-Act
+    assert _options(registry, entity.entity_id) == {OPTION_USER_ENABLED: True}  # pre-Act
 
     # Act
     sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
@@ -346,11 +347,11 @@ async def test_should_record_user_enabled_when_the_user_enables_while_the_capabi
     themselves (disabled_by=USER) with the capability present, marked disabled_seen by the
     sync that follows (per point 2's "last" step, which marks USER rows same as INTEGRATION),
     then re-enabled by the user -- all with capability_met=True never once False."""
+    # Arrange
     entity = _UnlabelledEntity(entry_id="entry1")
     platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
     await platform.async_add_entities([entity])
     registry = er.async_get(hass)
-    # Arrange
     registry.async_update_entity(entity.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
     sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
     assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}  # pre-Act

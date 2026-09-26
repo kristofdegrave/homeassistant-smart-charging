@@ -46,6 +46,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_REMINDER_LEAD_H,
     DOMAIN,
     OPTION_DISABLED_SEEN,
+    OPTION_USER_ENABLED,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     ROLE_CHARGER_STATUS,
     STATE_CHARGING,
@@ -735,6 +736,9 @@ async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(h
     hass.config_entries.async_update_entry(entry, data=on_data)
     await hass.async_block_till_done()
     assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
+    assert registry.async_get(entity_id).options.get(DOMAIN, {}) == {
+        OPTION_USER_ENABLED: True
+    }  # pre-Act
 
     # Act
     hass.config_entries.async_update_entry(entry, data=entry_data_base())

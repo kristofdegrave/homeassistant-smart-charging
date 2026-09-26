@@ -28,6 +28,7 @@ from custom_components.smart_charging.const import (
     DOMAIN,
     LABEL_SC_RUNTIME,
     OPTION_DISABLED_SEEN,
+    OPTION_USER_ENABLED,
 )
 from custom_components.smart_charging.time import (
     DAY_OF_WEEK_DEFAULTS,
@@ -314,7 +315,7 @@ async def test_departure_time_user_disable_survives_capability_toggle(hass):
     """ADR-0028: a user's own disabled_by=USER on one departure-time entity must survive a
     deadline_available toggle in either direction, while its label keeps tracking the
     capability correctly regardless -- the two mechanisms are independent, since the entity
-    being force-enabled by the user doesn't mean the capability is present."""
+    being enabled by the user doesn't mean the capability is present."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_DEADLINE_AVAILABLE] = True
@@ -459,6 +460,9 @@ async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(h
     hass.config_entries.async_update_entry(entry, data=on_data)
     await hass.async_block_till_done()
     assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
+    assert registry.async_get(entity_id).options.get(DOMAIN, {}) == {
+        OPTION_USER_ENABLED: True
+    }  # pre-Act
 
     # Act
     hass.config_entries.async_update_entry(entry, data=data)
