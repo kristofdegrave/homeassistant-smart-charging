@@ -1,57 +1,7 @@
-# CI: the lifecycle as jobs, and the repository's own checks
+# CI: the repository's own checks
 
-Two things live here. First, how [contribution-workflow.md](contribution-workflow.md)'s
-lifecycle runs when CI, not an interactive session, is the actor: a shape, with no
-implementation. A project may run the whole lifecycle in interactive sessions and no CI job at
-all. Second, the regular CI checks whose reasons this document owns: label vocabulary sync, the
-docs-only close guard and the upstream-pin drift check.
-
-## The lifecycle as CI jobs
-
-The lifecycle's steps are the same ones in CI. Only who takes each step changes, and so does
-how a step is started.
-
-**One trigger label per step.** A label starts each job:
-- a **drafting** label, on an issue, starts the job that drafts it into a PR;
-- a **review** label, on a PR, starts the job that reviews it;
-- a **fix** label, on a PR, starts the job that addresses the posted findings.
-
-A context label alone starts nothing. It selects the row of `CLAUDE.md`'s **Model selection**
-table that the job follows, and a job reads that row rather than keeping its own copy of it.
-A trigger label is applied by a human, as the go-signal, or by the job before it, as the
-hand-off to the next step. A session that takes a step itself has no reason to apply the step's
-trigger, and doing so would start a second actor on the same work.
-
-**Each job does one task.**
-- Drafting drafts the artifact, opens the PR and hands it to review.
-- Review applies the checklists the row and the changed paths select, posts its findings and
-  ends in a verdict: clean, or remarks.
-- Fix addresses the posted findings, commits, and hands the PR back to review.
-
-A review never commits a fix, and a fix never reviews its own output. That is the author/reviewer
-separation of [contribution-workflow.md](contribution-workflow.md)'s **Rule A**, kept across
-jobs: the job that wrote a change is never the one that judges it.
-
-**Review and fix loop to a cap.** A remarks verdict starts fix, and fix starts review again. The
-loop stops at a clean verdict or at a cap on automatic fix cycles. The cap is needed because no
-one watches the loop run, so a finding the fix job cannot resolve would otherwise spend cycles
-without end. It counts CI's own cycles only.
-[contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap** counts the
-interactive session's rounds, and neither count bounds the other.
-
-**`needs-approval` hands the PR to the human.** Both ways out of the loop end the same way:
-- a clean verdict applies `needs-approval`;
-- reaching the cap applies `needs-approval` and `needs-decision`.
-
-Both labels keep the meanings [contribution-workflow.md](contribution-workflow.md)'s **Exit
-labels** gives them. From there a human merges the PR as it stands, or grants CI one more cycle
-by applying the fix label again. The merge is always a human act, whichever actor drafted or
-reviewed the PR.
-
-**What the shape leaves to the project running it.** It sets no bot identity, no permission a
-job holds, and nothing about what a job may commit or trust. A job acts on issue and PR text
-that anyone can write, so these are decisions, and the project that adopts CI records them for
-itself.
+The regular CI checks whose reasons this document owns: label vocabulary sync, the docs-only
+close guard and the upstream-pin drift check.
 
 ## Label vocabulary sync
 
@@ -248,8 +198,8 @@ no change to run on, because the change happens in someone else's repository.
 mirrors — several deliberately drop or invert upstream behaviour — so an upstream commit is a
 question, not a patch. The workflow's token grants no write beyond opening and editing one
 issue, so the property is enforced by what it *can* do rather than only by what its steps say.
-It applies `workflow` and no other label: a scheduled job that applied a label able to start
-work would start work nobody asked for.
+It applies `workflow` and no other label: the report is for a human to triage, and any other
+label would classify or route work the job has not judged.
 
 **One open report, updated in place.** The report is found by two conditions, each doing a
 different job. A marker in the body — not the title and not the label, either of which a
