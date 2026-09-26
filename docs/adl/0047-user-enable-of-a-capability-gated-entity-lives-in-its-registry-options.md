@@ -28,11 +28,9 @@ shape the answer:
   or `user`. Core then reloads the config entry 30 s later, and `sync_disabled_by` sees `None`
   with the capability still absent, so it disables the entity again.
 - **`disabled_by` alone cannot say who enabled a row.** At setup, "never disabled" and "the user
-  just enabled it" look the same. Something else has to tell them apart: either an observer of
-  the change as it happens (`EVENT_ENTITY_REGISTRY_UPDATED` carries the changed fields' old
-  values, but not who made the change), or a mark the integration leaves on the rows it sees
-  disabled. Only this integration writes `INTEGRATION`, since the websocket accepts only `None`
-  or `user`.
+  just enabled it" look the same. Only this integration writes `INTEGRATION`, and
+  `EVENT_ENTITY_REGISTRY_UPDATED` carries the changed fields' old values, but not who made the
+  change.
 - **An enable can happen while the entry is not loaded**, after a failed setup or between the
   unload and the setup of a reload. R18 still requires it to stick.
 - **The record binds more than today's entities.** ADR-0028's Consequences tell every future
@@ -136,8 +134,9 @@ not loaded (E's first Con). The Cons of A and F are the price.
    and drops the mark whenever it writes `None` itself. Last, a row left `INTEGRATION` or `USER`
    gets `disabled_seen`. A capability that returns does not clear `user_enabled`: only the user's
    own disable does. The signature does not change.
-3. **First registration.** A post-add step in `entity.py`, called beside `sync_labels`, marks a
-   row that is `INTEGRATION` and not yet marked, as Option F describes.
+3. **First registration.** A post-add step in `entity.py`, called after `async_add_entities` in
+   each gated platform's setup (beside `sync_labels` where the platform has one), marks a row
+   that is `INTEGRATION` and not yet marked, as Option F describes.
 4. **A removed entity.** The integration does nothing. The record is part of the row, so HA
    removes it with the row, restores it with the row, and purges it with the orphaned row once
    the entry is gone.
@@ -186,7 +185,7 @@ This narrows ADR-0028 in two places, and nothing else in it changes:
 | `custom_components/smart_charging/entity.py:36` | Re-enables an `INTEGRATION` row without dropping a mark | Point 2 |
 | `custom_components/smart_charging/entity.py:54` | `sync_labels`'s docstring gives a user's enable as `disabled_by=USER` | Correct the docstring |
 | `custom_components/smart_charging/sensor.py:72` | Imports `sync_disabled_by`, not the post-add step | Point 3 |
-| `custom_components/smart_charging/sensor.py:418` | Calls `sync_disabled_by`; no post-add mark | Point 3 |
+| `custom_components/smart_charging/sensor.py:418` | Calls `sync_disabled_by`; no post-add mark | Point 3, after its `async_add_entities` call |
 | `custom_components/smart_charging/time.py:43` | Imports `sync_disabled_by`, not the post-add step | Point 3 |
 | `custom_components/smart_charging/time.py:77` | The departure-time docstring: a user can "force the entity back on" | Correct the docstring |
 | `custom_components/smart_charging/time.py:78` | Gives that enable as `disabled_by=USER` | Correct the docstring |
