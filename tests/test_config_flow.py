@@ -1009,14 +1009,17 @@ async def test_solar_power_entity_can_be_mapped(hass):
     assert result["data"][CONF_SOLAR_POWER_ENTITY] == "sensor.solar_power"
 
 
-async def test_solar_forecast_today_entity_is_optional(hass):
+async def test_should_create_the_entry_when_solar_forecast_today_is_left_blank(hass):
     """NF12: absent by default -- a submission that leaves it blank still creates the entry."""
+    # Arrange / Act
     result = await _run_install_flow(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
+    # Assert
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert CONF_SOLAR_FORECAST_TODAY_ENTITY not in result["data"]
 
 
-async def test_solar_forecast_today_entity_can_be_mapped(hass):
+async def test_should_save_the_mapping_when_solar_forecast_today_is_submitted(hass):
+    # Arrange / Act
     result = await _run_install_flow(
         hass,
         capabilities={CONF_SOLAR_AVAILABLE: True},
@@ -1027,6 +1030,7 @@ async def test_solar_forecast_today_entity_can_be_mapped(hass):
             }
         },
     )
+    # Assert
     assert result["data"][CONF_SOLAR_FORECAST_TODAY_ENTITY] == "sensor.solar_forecast_today"
 
 

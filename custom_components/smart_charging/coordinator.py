@@ -490,25 +490,29 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         deadline_reserved_day = resolve_deadline_for(reserved_day)
 
         # R9's forecast condition (#1423): until midnight the reserved day's forecast is
-        # `solar_forecast` (the next-day sensor); from midnight until the sun comes up it is
-        # the optional `solar_forecast_today` (same-day) one while mapped, forcing the
-        # condition to not hold -- via resolve_solar_reserve_gate's own None short-circuit,
-        # never a 0.0 default -- while that role is unmapped or its reading unavailable (the
-        # deliberate midnight-lift fallback, entity-catalog.md's `solar_forecast_today` row).
-        # Both roles are read every cycle regardless of which one feeds the gate, like every
-        # other optional role here (issue #717/#911) -- so ROLE_SOLAR_FORECAST_TODAY keeps
-        # reporting its real reads in `sensor.smart_charging_adapter_readings` too. Midnight
-        # has passed for the current reserved-day night exactly when today's calendar date
-        # already equals reserved_day (resolve_reserved_day's own docstring).
+        # `solar_forecast` (the next-day sensor). From midnight until the sun comes up it is
+        # the optional `solar_forecast_today` (same-day) one instead, while that role is
+        # mapped. While it is unmapped, or its reading is unavailable, the condition does not
+        # hold from midnight -- via resolve_solar_reserve_gate's own None short-circuit, never
+        # a 0.0 default (the deliberate midnight-lift fallback, entity-catalog.md's
+        # `solar_forecast_today` row). Both roles are read every cycle regardless of which one
+        # feeds the gate, like every other optional role here (issue #717/#911) -- so
+        # ROLE_SOLAR_FORECAST_TODAY keeps reporting its real reads in
+        # `sensor.smart_charging_adapter_readings` too. Midnight has passed for the current
+        # reserved-day night exactly when today's calendar date already equals reserved_day
+        # (resolve_reserved_day's own docstring). `reserved_day_forecast_kwh` is a separate
+        # name from either role's own reading -- the two are never mixed, and this makes that
+        # visible at the call site instead of overwriting `forecast_kwh` in place.
         forecast_kwh = await self._read_role(ROLE_SOLAR_FORECAST)
         forecast_today_kwh = await self._read_role(ROLE_SOLAR_FORECAST_TODAY)
-        if now_dt.date() == reserved_day:
-            forecast_kwh = forecast_today_kwh
+        reserved_day_forecast_kwh = (
+            forecast_today_kwh if now_dt.date() == reserved_day else forecast_kwh
+        )
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=reserved_day in self.home_day_dates,
             sun_is_down=ctx.sun_is_down,
-            forecast_kwh=forecast_kwh,
+            forecast_kwh=reserved_day_forecast_kwh,
             forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
             deadline_tomorrow_resolved=deadline_reserved_day is not None,
         )

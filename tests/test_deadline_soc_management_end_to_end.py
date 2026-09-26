@@ -1127,9 +1127,10 @@ async def test_should_hold_the_cap_past_midnight_when_only_mondays_default_would
 # day's forecast is read from the next-day sensor (solar_forecast); from midnight until the sun
 # comes up, from the optional same-day sensor (solar_forecast_today) while mapped, forcing the
 # forecast condition to not hold (never zero-defaulted) while it is unmapped or its reading is
-# unavailable. Every test below deliberately sets solar_forecast and solar_forecast_today to
-# values on OPPOSITE sides of the threshold, so a value read from the wrong sensor at the wrong
-# time flips the assertion rather than passing it by coincidence.
+# unavailable. Most tests below set solar_forecast and solar_forecast_today on OPPOSITE sides of
+# the threshold, so a value read from the wrong sensor at the wrong time flips the assertion
+# rather than passing it by coincidence; each test's own docstring says which sensor is under
+# test and what the other one is held at.
 
 
 async def test_should_read_the_next_day_forecast_until_midnight_even_when_a_same_day_one_is_mapped(
@@ -1137,7 +1138,12 @@ async def test_should_read_the_next_day_forecast_until_midnight_even_when_a_same
 ):
     """R9's forecast criterion (#1423): before midnight the reserved day's forecast still comes
     from `solar_forecast` alone, whatever `solar_forecast_today` reports -- a mapped same-day
-    sensor must not leak into the pre-midnight resolution."""
+    sensor must not leak into the pre-midnight resolution. This assertion also holds unchanged
+    against the pre-#1423 coordinator, which never read `solar_forecast_today` at all -- it is
+    the pre-midnight half of the next test's own precondition guard, kept as its own test so the
+    "no leak before midnight" claim is checkable by name rather than folded into a guard for a
+    different assertion."""
+    # Arrange
     _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
@@ -1155,16 +1161,22 @@ async def test_should_read_the_next_day_forecast_until_midnight_even_when_a_same
     await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
     await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17)
 
+    # Act
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    # solar_forecast (5.0) is what's read before midnight -- insufficient, cap not engaged.
+
+    # Assert: solar_forecast (5.0) is what's read before midnight -- insufficient, cap not
+    # engaged.
     assert coordinator.data.active_soc_limit == 80.0  # DEFAULT_SOC_LIMIT
 
 
-async def test_should_switch_to_the_mapped_same_day_forecast_from_midnight(hass, freezer):
+async def test_should_switch_to_the_mapped_same_day_forecast_when_midnight_passes(hass, freezer):
     """R9's forecast criterion (#1423): from midnight until the sun comes up, the reserved
     day's forecast comes from the mapped `solar_forecast_today` instead -- the inverse of the
-    test above, proving the switch happens in both directions."""
+    test above, proving the switch happens in both directions. Unlike that test, this one is
+    genuinely red against the pre-#1423 coordinator: the old code kept reading `solar_forecast`
+    (5.0, insufficient) across midnight and would never have raised the limit to 55.0."""
+    # Arrange
     _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
@@ -1196,10 +1208,51 @@ async def test_should_switch_to_the_mapped_same_day_forecast_from_midnight(hass,
     assert coordinator.data.active_soc_limit == 55.0
 
 
+async def test_should_lift_the_cap_when_the_same_day_forecast_is_insufficient_at_midnight(
+    hass, freezer
+):
+    """R9's forecast criterion (#1423): the reverse of the switch above -- a mapped same-day
+    sensor that is BELOW threshold after midnight lifts the cap even though the next-day sensor
+    that engaged it before midnight is still above threshold and unchanged. Without this case,
+    an implementation that took the larger of the two readings after midnight (instead of
+    replacing one with the other) would still pass every other test in this section."""
+    # Arrange
+    _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    hass.states.async_set("sensor.solar_forecast_today", "5.0")  # below it
+    coordinator = await _setup(
+        hass,
+        data_overrides={
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+        },
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17)
+
+    # Arrange (precondition guard): engaged before midnight (solar_forecast is sufficient).
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0
+
+    # Act: cross midnight into Saturday.
+    await _cross_midnight(hass, freezer, datetime(2026, 1, 17, 0, 1, 0))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert: solar_forecast_today (5.0) is now read instead -- insufficient, cap lifts.
+    assert coordinator.data.active_soc_limit == 80.0
+
+
 async def test_should_lift_the_cap_at_midnight_when_no_same_day_forecast_is_mapped(hass, freezer):
     """UC07 2a / R9 (#1423): the deliberate fallback -- with no same-day sensor mapped, the
     forecast condition stops holding the instant midnight passes, so the cap lifts even though
     the next-day sensor that engaged it pre-midnight has not itself changed."""
+    # Arrange
     _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
@@ -1233,6 +1286,7 @@ async def test_should_lift_the_cap_at_midnight_when_the_same_day_forecast_readin
     """R9's forecast criterion (#1423): a mapped same-day sensor whose reading is unavailable
     is treated the same as unmapped -- the forecast condition does not hold, so the cap lifts
     at midnight, it does not fail open."""
+    # Arrange
     _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
