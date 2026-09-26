@@ -8,9 +8,9 @@ description: Use in an interactive session whenever the session needs a decision
 How this project puts a decision to the human partner. That every such decision comes here is
 the decisions rule under `CLAUDE.md`'s **Contribution workflow**; this skill is the how.
 
-The method is `grilling`'s — call the Skill tool with "grilling" and follow it: the design tree,
-the frontier, and facts found by the agent rather than asked. Three deviations win where they
-differ:
+Unless a stage names `brainstorming` (below), the method is `grilling`'s — call the Skill tool
+with "grilling" and follow it: the design tree, the frontier, and facts found by the agent
+rather than asked. Three deviations win where they differ:
 
 1. **One question per turn**, not the whole frontier in one round. Take one question from the
    frontier, give its context and your recommended answer, and wait for the reply before
