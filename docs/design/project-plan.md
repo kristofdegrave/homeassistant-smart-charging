@@ -408,7 +408,8 @@ it is wired to its callers).
 - **Builds:** the smoothed solar surplus (R10 smoothing window, ADR-0049): one sample per cycle
   pairing raw `net_w` with raw `charger_w`, a cycle's sample not admitted when M1 reports the
   charger current just changed, within R10's bounds; `solar_w` is read raw and never smoothed.
-  Negated, that mean is also the smoothed household baseline M1 passes to R5's headroom calls.
+  Negated, that mean is also the smoothed household baseline M1 passes to R5's headroom calls
+  (ADR-0051).
   Also resolved supply voltage with the NF4 fallback. State (the window and its not-admitted flag)
   is threaded by M1.
 - **Depends on:** ADR-0010, ADR-0049; raw readings from RA1 and the command-changed signal M1
@@ -458,8 +459,9 @@ it is wired to its callers).
   a `DataUpdateCoordinator` (ADR-0006). ADR-0015 grandfathers it at the package root rather than
   moving it under `managers/` with M2/M3.
 - **Status:** shipped, with two gaps — **partial:** R5's forecast reads the wrong baseline. The
-  escalated maximum permitted rate is specified on the *smoothed* household baseline while
-  delivery stays on raw, and both of its **baseline-dependent** bounds are affected: the coordinator
+  escalated maximum permitted rate is specified on the *smoothed* household baseline, E7's
+  admitted mean negated (ADR-0051), while delivery stays on raw, and both of its
+  **baseline-dependent** bounds are affected: the coordinator
   passes the raw, debounced baseline to the peak-headroom call and the raw readings to the C4
   ceiling-headroom call. (The rate's third bound, C1's minimum/maximum charging current, is config
   and reads nothing.) Designed, not built. The second gap is E7's joint window (ADR-0049): M1
