@@ -86,8 +86,8 @@ against a statement that turns out to be premature.
 
 ## Rounds and the cap
 
-- **The cap exists because the chain runs unattended** (**Rule B**): a finding the fix step
-  cannot resolve would otherwise loop without end.
+- **The cap exists because the chain runs unattended** (**Rule B**): a finding no fix
+  resolves would otherwise loop without end.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
