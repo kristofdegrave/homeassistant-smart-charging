@@ -36,6 +36,7 @@ from custom_components.smart_charging.coordinator_cycle import (
     _SolarOnlyModeHandler,
     build_mode_handlers,
     resolve_deadline_urgency,
+    resolve_reserved_day,
     resolve_solar_reserve_gate,
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
@@ -1300,3 +1301,76 @@ def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow
         )
         is False
     )
+
+
+# --- resolve_reserved_day (#1422, R9 AC2) ---
+
+
+def test_should_return_tomorrow_when_now_is_in_the_evening_half_of_the_local_day():
+    """The evening half (from noon to midnight): the reserved day is still calendar
+    tomorrow, exactly like the pre-#1422 tomorrow_date."""
+    # Arrange
+    now_dt = datetime(2026, 1, 16, 23, 0, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_todays_own_date_when_now_is_past_midnight_before_noon():
+    """The pre-dawn half (from midnight to noon): the reserved day is the date that has
+    just begun -- today's own date -- not the day after it (#1422's regression: the shipped
+    code kept adding one more day here)."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 0, 1, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_the_same_reserved_day_on_either_side_of_the_midnight_it_crosses():
+    """The reserved day is one continuous calendar date across the midnight boundary (R9
+    AC2's "the date they read does not change at midnight") -- evening's tomorrow and the
+    following pre-dawn's today are the same date."""
+    # Arrange
+    evening_before = datetime(2026, 1, 16, 23, 59, 0)
+    just_after_midnight = datetime(2026, 1, 17, 0, 1, 0)
+
+    # Act
+    reserved_day_evening = resolve_reserved_day(evening_before)
+    reserved_day_pre_dawn = resolve_reserved_day(just_after_midnight)
+
+    # Assert
+    assert reserved_day_evening == reserved_day_pre_dawn == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_todays_own_date_when_now_is_a_winter_pre_dawn_hour():
+    """A pre-dawn hour well past midnight and still hours from sunrise (e.g. a Northern
+    Hemisphere winter morning) still resolves to today's own date, not the day after it --
+    guards against a split moved later than local noon still passing the 00:01 case alone."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 7, 30, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_tomorrow_at_the_exact_noon_boundary():
+    """The split is `<`, not `<=`: local noon itself is already the evening half, so it
+    resolves to calendar tomorrow -- guards against an off-by-one at the boundary itself."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 12, 0, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 18, 0, 0, 0).date()
