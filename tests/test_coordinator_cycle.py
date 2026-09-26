@@ -1248,7 +1248,7 @@ def test_resolve_solar_reserve_gate_active_when_all_conditions_hold():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is True
     )
@@ -1265,7 +1265,7 @@ def test_should_not_activate_when_forecast_is_none():
         sun_is_down=True,
         forecast_kwh=None,
         forecast_threshold_kwh=12.0,
-        deadline_tomorrow_resolved=False,
+        deadline_reserved_day_resolved=False,
     )
     # Act
     result = resolve_solar_reserve_gate(**gate_kwargs)
@@ -1285,7 +1285,7 @@ def test_should_not_activate_when_forecast_is_none_even_under_a_non_positive_thr
         sun_is_down=True,
         forecast_kwh=None,
         forecast_threshold_kwh=-5.0,
-        deadline_tomorrow_resolved=False,
+        deadline_reserved_day_resolved=False,
     )
     # Act
     result = resolve_solar_reserve_gate(**gate_kwargs)
@@ -1302,16 +1302,16 @@ def test_resolve_solar_reserve_gate_inactive_under_manual():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is False
     )
 
 
-def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow():
+def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_reserved_day():
     """Anchored to engines/test_soc_target.py::
-    test_reserve_inactive_when_deadline_resolved_for_tomorrow -- proves
-    deadline_tomorrow_resolved is actually threaded through to the wrapped engine call, not
+    test_reserve_inactive_when_deadline_resolved_for_reserved_day -- proves
+    deadline_reserved_day_resolved is actually threaded through to the wrapped engine call, not
     just accepted and ignored (all other tests here pass False)."""
     assert (
         resolve_solar_reserve_gate(
@@ -1320,7 +1320,7 @@ def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=True,
+            deadline_reserved_day_resolved=True,
         )
         is False
     )

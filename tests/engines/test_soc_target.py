@@ -157,7 +157,7 @@ def test_reserve_active_when_all_conditions_hold():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is True
     )
@@ -171,14 +171,14 @@ def test_reserve_inactive_under_manual():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is False
     )
 
 
-def test_reserve_inactive_when_deadline_resolved_for_tomorrow():
-    # R9/UC07: mutually exclusive with a departure deadline resolved for tomorrow.
+def test_reserve_inactive_when_deadline_resolved_for_reserved_day():
+    # R9/UC07: mutually exclusive with a departure deadline resolved for the reserved day.
     assert (
         resolve_solar_reserve_active(
             profile=PROFILE_AUTO,
@@ -186,7 +186,7 @@ def test_reserve_inactive_when_deadline_resolved_for_tomorrow():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=True,
+            deadline_reserved_day_resolved=True,
         )
         is False
     )
@@ -200,7 +200,7 @@ def test_reserve_inactive_when_forecast_at_or_below_threshold():
             sun_is_down=True,
             forecast_kwh=12.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is False
     )
@@ -214,7 +214,7 @@ def test_reserve_inactive_when_home_day_flag_clear():
             sun_is_down=True,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is False
     )
@@ -228,7 +228,7 @@ def test_reserve_inactive_while_sun_is_up():
             sun_is_down=False,
             forecast_kwh=15.0,
             forecast_threshold_kwh=12.0,
-            deadline_tomorrow_resolved=False,
+            deadline_reserved_day_resolved=False,
         )
         is False
     )

@@ -54,7 +54,7 @@ def resolve_solar_reserve_active(
     sun_is_down: bool,
     forecast_kwh: float,
     forecast_threshold_kwh: float,
-    deadline_tomorrow_resolved: bool,
+    deadline_reserved_day_resolved: bool,
 ) -> bool:
     """R9/UC07's cap-activation condition -- shared by `resolve_active_soc_limit`'s
     row 1 and Auto mode-selection's row 4 (E2), per resolution-rules.md's note
@@ -71,7 +71,7 @@ def resolve_solar_reserve_active(
         and home_day_flag
         and sun_is_down
         and forecast_kwh > forecast_threshold_kwh
-        and not deadline_tomorrow_resolved
+        and not deadline_reserved_day_resolved
     )
 
 
