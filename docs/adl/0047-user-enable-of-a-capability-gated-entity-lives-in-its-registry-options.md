@@ -6,10 +6,10 @@ Status: Accepted
 ## Summary
 
 In the context of capability-gated entities that `sync_disabled_by` re-disables on every reload,
-facing a user's enable that Home Assistant records as the same `disabled_by=None` the integration
-uses for its own resting state, we decided on the entity registry's per-entity `options` under
-this integration's domain key, to keep an enable made while the entry is loaded through every
-capability change, restart and reload, accepting that any websocket client can write the record.
+facing a user's enable that HA records as the same `None` the integration rests at, we decided on
+the entity registry's per-entity `options` under this integration's domain key, with a mark the
+integration's own setup leaves on each row it sees disabled, to keep that enable through every
+capability change, restart and reload, accepting that it rests on who writes a row.
 
 ## Context
 
@@ -27,10 +27,14 @@ shape the answer:
 - **A user's enable is `disabled_by=None`.** The registry's websocket update accepts only `None`
   or `user`. Core then reloads the config entry 30 s later, and `sync_disabled_by` sees `None`
   with the capability still absent, so it disables the entity again.
-- **The row alone cannot say who enabled it.** At setup, "never disabled" and "the user just
-  enabled it" look the same. So the enable has to be noticed when it happens, by a listener on
-  `EVENT_ENTITY_REGISTRY_UPDATED`. That event carries the changed fields' old values, but not
-  who made the change.
+- **`disabled_by` alone cannot say who enabled a row.** At setup, "never disabled" and "the user
+  just enabled it" look the same. Something else has to tell them apart: either an observer of
+  the change as it happens (`EVENT_ENTITY_REGISTRY_UPDATED` carries the changed fields' old
+  values, but not who made the change), or a mark the integration leaves on the rows it sees
+  disabled. Only this integration writes `INTEGRATION`, since the websocket accepts only `None`
+  or `user`.
+- **An enable can happen while the entry is not loaded**, after a failed setup or between the
+  unload and the setup of a reload. R18 still requires it to stick.
 - **The record binds more than today's entities.** ADR-0028's Consequences tell every future
   capability-gated entity to reuse its helpers, and the record will persist on users'
   installations. Moving it after upgrade means a migration.
@@ -78,36 +82,63 @@ with `EntityRegistry.async_update_entity_options`, which replaces only this doma
 
 ### Option D — Do nothing; R18's enable half stays unmet
 
-- Pro: No new record and no listener.
+- Pro: No new record and no new setup step.
 - Con: A user's enable is undone 30 s later, every time, which R18 forbids. Keeping it would mean
   weakening R18.
 
+Options A to C each still need a way to tell a user's enable from the integration's own `None`.
+Options E and F are the two found.
+
+### Option E — A registry-update listener that records the enable as it happens
+
+Each gated platform subscribes to `EVENT_ENTITY_REGISTRY_UPDATED` after its own setup writes, so
+every `disabled_by` change it sees was made by someone else, and releases it through
+`entry.async_on_unload`.
+
+- Pro: It sees each change as it happens, including a disable followed by a re-enable between
+  two setups.
+- Con: An enable made while the entry is not loaded reaches no listener, so the next setup
+  disables the entity again, against R18.
+- Con: A bus subscription per gated platform, and every test that drives a platform's setup with
+  a stub entry must give it `async_on_unload`.
+
+### Option F — A mark the integration's own setup leaves on each row it sees disabled
+
+Setup marks every row it finds or leaves disabled by `INTEGRATION` or `USER`. The next setup reads
+a marked row that is now `None` as a user's enable, however long ago and whether or not the entry
+was loaded. A row created at first registration is marked just after `async_add_entities`, since
+HA reserves `Entity.get_initial_entity_options` for its component base classes.
+
+- Pro: It catches every enable, loaded or not, with no subscription. It stays in ADR-0028's
+  setup-time shape.
+- Con: It rests on who writes a row. HA's device and config-entry re-enables touch only rows they
+  disabled themselves, so only a user's enable returns a marked row to `None`. Nothing documents
+  that; it holds in HA's registry code
+  ([research](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1361#issuecomment-5844276275)).
+- Con: A disable followed by a re-enable of an enabled row between two setups is not seen. The
+  row ends where it started, so it is treated as left alone.
+
 ## Decision
 
-Option A. It is the only option whose record lives and dies with its entity (A's second Pro)
-without a reload per toggle (B's first Con) or a file to version and prune (C's first Con).
-D fails R18. A's Cons are the price.
+Options A and F. A is the only storage whose record lives and dies with its entity (A's second
+Pro) without a reload per toggle (B's first Con) or a file to version and prune (C's first Con),
+and D fails R18. F is the only way of telling the enable apart that meets R18 while the entry is
+not loaded (E's first Con). The Cons of A and F are the price.
 
-1. **The record.** `options[DOMAIN]["user_enabled"] = True` on the entity's registry row. The key
-   is a named constant, and `DOMAIN` is the integration domain.
-2. **The listener.** It lives in `entity.py`, beside `sync_disabled_by`. Each gated platform's
-   `async_setup_entry` registers it after its own `sync_disabled_by` calls and
-   `async_add_entities`, for the unique ids that platform gates, and releases it through
-   `entry.async_on_unload`. It subscribes with
-   `hass.bus.async_listen(EVENT_ENTITY_REGISTRY_UPDATED, …)`, filtered to `update` events whose changes carry `disabled_by`. It matches rows by `platform`
-   and `unique_id` rather than by `entity_id`, so renaming an entity does not lose it. Registering
-   it after the integration's own setup writes means every `disabled_by` change it sees was made
-   by someone else.
-3. **Setting and clearing.** A change from `INTEGRATION` or `USER` to `None` is a user's enable,
-   and writes the record. It does so whether or not the capability is present, since R18 lets
-   only an entity the user has left alone follow the capabilities. A change to `USER` is a
-   user's disable, and removes the `user_enabled` key. Any other disabler (`DEVICE`,
-   `CONFIG_ENTRY`) leaves the record as it is.
-4. **`sync_disabled_by` narrowed.** While the capability is absent, a row with `disabled_by=None`
-   and the record is left enabled. Otherwise the helper behaves as ADR-0028 has it, and its
-   signature does not change. A capability that returns does not clear the record: only the
-   user's own disable does.
-5. **A removed entity.** The integration does nothing. The record is part of the row, so HA
+1. **The record.** `options[DOMAIN]` on the entity's registry row holds two flags, each a named
+   constant: `disabled_seen`, the mark of Option F, and `user_enabled`, the user's enable.
+   `DOMAIN` is the integration domain.
+2. **`sync_disabled_by` narrowed.** Before ADR-0028's flip, for an existing row:
+   - `None` with `disabled_seen` is a user's enable: it sets `user_enabled` and drops the mark;
+   - `USER` is a user's disable: it drops `user_enabled`.
+
+   The flip then leaves a `None` row with `user_enabled` enabled while the capability is absent,
+   and drops the mark whenever it writes `None` itself. Last, a row left `INTEGRATION` or `USER`
+   gets `disabled_seen`. A capability that returns does not clear `user_enabled`: only the user's
+   own disable does. The signature does not change.
+3. **First registration.** A post-add step in `entity.py`, called beside `sync_labels`, marks a
+   row that is `INTEGRATION` and not yet marked, as Option F describes.
+4. **A removed entity.** The integration does nothing. The record is part of the row, so HA
    removes it with the row, restores it with the row, and purges it with the orphaned row once
    the entry is gone.
 
@@ -115,61 +146,62 @@ This narrows ADR-0028 in two places, and nothing else in it changes:
 
 - The premise in its Decision that a user forces an entity back on with `disabled_by=USER`. That
   Decision's reason for keeping the label independent still stands, with the enable recorded as
-  in point 1.
+  in point 1, and the label keeps following the capability.
 - The contract its Consequences give `sync_disabled_by`, which only flipped `None` and
-  `INTEGRATION`. That contract gains point 4.
+  `INTEGRATION`. That contract gains point 2.
 
 ## Consequences
 
 - Easier: a capability-gated entity added later gets R18's enable half from `sync_disabled_by`
-  and the listener beside it, with no storage of its own. Harder: a gated platform's setup has
-  one more step, registering the listener, and the tests of the helpers gain the record's cases.
-- Foreclosed: an enable made while the entry is not loaded — its setup failed, or a reload is
-  between unload and setup — reaches no listener, so the next setup disables the entity again.
-  Every listener-based option shares this window; the user enables the entity again once the
-  entry is loaded.
-- Follow-up: the development task that implements R18's enable half builds points 1 to 4 in
-  `entity.py`, `const.py`, `sensor.py` and `time.py`, with tests, and corrects the two
-  docstrings and the `test_sensor.py` stub the Blast radius marks non-conforming. Those tests
-  cover a user's enable while the capability is absent surviving a reload and a capability
-  change, a user's later disable clearing the record, and a re-enable while the capability is
-  present.
+  and the post-add step, with no storage and no listener of its own. Harder: `sync_disabled_by`
+  now reads and writes the row's options as well as `disabled_by`, and its tests gain the mark's
+  cases.
+- Follow-up: the development task that implements R18's enable half builds points 1 to 3 in
+  `entity.py`, `const.py`, `sensor.py` and `time.py`, with tests, and corrects the docstrings the
+  Blast radius marks non-conforming. The tests cover:
+  - a user's enable while the capability is absent surviving a reload and a capability change;
+  - the same enable made while the entry is not loaded;
+  - a user's later disable clearing the record;
+  - a re-enable while the capability is present;
+  - a first-registered row being marked.
 - ADR-0028's ADL row gains a pointer to this record in the same change. Its Status stays
   `Accepted`.
 
-**Blast radius.** `rg -n 'sync_disabled_by|RegistryEntryDisabler\.(USER|INTEGRATION)|disabled_by=USER|force[sd]? (the entity |an entity )?back on|own choice to enable or disable|own enable( or |/)disable choice|enabled it themselves' custom_components/ tests/ docs/ .claude/ .github/ CLAUDE.md`
-— 72 hits outside this record, run from the repository root. It is keyed three ways. On the
-helper whose contract changes, for its callers and descriptions. On the two disablers that helper
-reads and writes, for the tests that assert its contract on a registry row without naming it.
-And on R18's rule and the premise this record corrects, in each spelling the tree uses: a user's
-enable as `USER`, "force … back on", "own choice to enable or disable", "own enable/disable
-choice", "enabled it themselves". The dot-directories are named, because a root sweep skips
-them.
+**Blast radius.** Two searches, run from the repository root:
+
+1. `rg -n 'sync_disabled_by|RegistryEntryDisabler\.(USER|INTEGRATION)|disabled_by=USER|force[sd]? (the entity |an entity )?back on|own choice to enable or disable|own enable( or |/)disable choice|enabled it themselves|user has enabled|chose to re-enable' custom_components/ tests/ docs/ .claude/ .github/ CLAUDE.md`
+   — 75 hits outside this record. It is keyed on the helper whose contract changes, for its
+   callers and descriptions; on the two disablers that helper reads and writes, for the tests
+   that assert its contract on a row without naming it; and on the wordings of R18's rule and of
+   the premise this record corrects found in the tree. The dot-directories are named, because a
+   root sweep skips them.
+2. `rg -n 'async_setup_entry\(' tests/` — 10 hits: the tests that drive a gated platform's setup
+   directly, which a new setup step could break.
 
 | Site | Today | Follow-up |
 |---|---|---|
-| `custom_components/smart_charging/entity.py:12` | `sync_disabled_by` writes `INTEGRATION` over a user's enable | Point 4 |
-| `custom_components/smart_charging/entity.py:16` | Its docstring: flips only between `None` and `INTEGRATION` | Point 4 |
-| `custom_components/smart_charging/entity.py:35` | Writes `INTEGRATION` on any `None` row while the capability is absent | Point 4 |
+| `custom_components/smart_charging/entity.py:12` | `sync_disabled_by` reads and writes `disabled_by` only | Point 2 |
+| `custom_components/smart_charging/entity.py:16` | Its docstring: flips only between `None` and `INTEGRATION` | Point 2 |
+| `custom_components/smart_charging/entity.py:35` | Writes `INTEGRATION` on any `None` row while the capability is absent | Point 2 |
+| `custom_components/smart_charging/entity.py:36` | Re-enables an `INTEGRATION` row without dropping a mark | Point 2 |
 | `custom_components/smart_charging/entity.py:54` | `sync_labels`'s docstring gives a user's enable as `disabled_by=USER` | Correct the docstring |
-| `custom_components/smart_charging/sensor.py:72` | Imports `sync_disabled_by`, not the listener | Point 2 |
-| `custom_components/smart_charging/sensor.py:418` | Calls `sync_disabled_by`; no listener registered | Point 2 |
-| `custom_components/smart_charging/time.py:43` | Imports `sync_disabled_by`, not the listener | Point 2 |
+| `custom_components/smart_charging/sensor.py:72` | Imports `sync_disabled_by`, not the post-add step | Point 3 |
+| `custom_components/smart_charging/sensor.py:418` | Calls `sync_disabled_by`; no post-add mark | Point 3 |
+| `custom_components/smart_charging/time.py:43` | Imports `sync_disabled_by`, not the post-add step | Point 3 |
 | `custom_components/smart_charging/time.py:77` | The departure-time docstring: a user can "force the entity back on" | Correct the docstring |
 | `custom_components/smart_charging/time.py:78` | Gives that enable as `disabled_by=USER` | Correct the docstring |
-| `custom_components/smart_charging/time.py:125` | Calls `sync_disabled_by`; no listener registered | Point 2 |
-| `tests/test_sensor.py:635` | Its test drives `sensor.async_setup_entry` with a stub entry that has no `async_on_unload` | Point 2: give the stub `async_on_unload` |
-| `tests/test_sensor.py:644` | Fakes `sync_disabled_by` in that test | Point 2: as above |
-| `tests/test_sensor.py:648` | Patches the fake in; the stub entry still lacks `async_on_unload` | Point 2: as above |
+| `custom_components/smart_charging/time.py:80` | Calls it the entity "the user chose to re-enable" | Correct the docstring |
+| `custom_components/smart_charging/time.py:125` | Calls `sync_disabled_by`; no post-add mark | Point 3 |
 
-45 other hits conform: `entity.py:36` (re-enables an `INTEGRATION` row once the capability
-returns, unchanged by point 4); `entity.py:50` (names `sync_disabled_by`'s lookup, still true);
-`sensor.py:389` (a config mirror is never resynced, so a user's enable already stays); the other
-tests in `test_entity_labels.py`, `test_time.py`, `test_sensor.py` and `test_init.py` (ADR-0028's
-contract and the user's disable, which still hold); and `project-plan.md`, `system-design.md` and
+57 other hits conform: `entity.py:50` (names `sync_disabled_by`'s lookup, still true);
+`sensor.py:389` (a config mirror is never resynced, so a user's enable already stays); the tests
+in `test_entity_labels.py`, `test_time.py`, `test_sensor.py` and `test_init.py` (ADR-0028's
+contract and the user's disable still hold; the fake at `test_sensor.py:644` keeps the unchanged
+signature); search 2's ten setup drivers (the post-add step finds no registered row and does
+nothing, and needs nothing new of the entry); and `project-plan.md`, `system-design.md` and
 `entity-catalog.md`, which state the behaviour this record delivers. Out of scope: R18
-(`requirements.md:323`) and UC11 (l. 266) state the rule this record serves, and stay as written.
-ADR-0028's seven hits (l. 151–187) are immutable; its l. 171 premise and l. 179 contract are what
-this record narrows. ADR-0031's three hits and `test_sensor.py:1185` keep config mirrors disabled
-by default and outside `sync_disabled_by`. ADR-0028's ADL row (`docs/adl/README.md:37`) points
-here.
+(`requirements.md:323`) and UC11 (l. 119, 127, 266) state the rule this record serves, and stay as
+written. ADR-0028's seven hits (l. 151–187) are immutable; its l. 171 premise and l. 179 contract
+are what this record narrows. ADR-0031's three hits and `test_sensor.py:1185` keep config mirrors
+disabled by default and outside `sync_disabled_by`. ADR-0028's ADL row (`docs/adl/README.md:37`)
+points here.
