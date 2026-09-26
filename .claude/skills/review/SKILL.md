@@ -70,8 +70,9 @@ reviewer rule; apply it as written. The *Review model* column of each row in pla
 model it wants — say so, since only the human partner can switch it.
 
 - Post all their findings as **one** review. Several reviews for one pass would make the
-  round count above count reviewers, not passes. Name every checklist that was applied, including any that returned nothing — after
-  aggregation a reader cannot otherwise tell a clean checklist from one that was never applied.
+  round count above count reviewers, not passes. Name every checklist that was applied,
+  including any that returned nothing — after aggregation a reader cannot otherwise tell a
+  clean checklist from one that was never applied.
 - **Read each resolved checklist's *What the review step supplies and runs* section**, where
   it has one: fetch the inputs it names and hand them over, since reviewers have no shell.
 - Spawn every reviewer **fresh, never inline**. An author reviewing their own work in the session
@@ -87,10 +88,11 @@ their supplier.
 
 Who puts the exit labels on, and when, is the exit-labels rule under `CLAUDE.md`'s
 **Contribution workflow**; this is the review step's part of it. Once the pass is posted, do
-exactly one of these, from the pass's own result and the count above. First run the exit check that
-section names, if any: one that finds a blocking reason puts the PR in the end state of the
-hold rule under `CLAUDE.md`'s **Contribution workflow** (`needs-decision` alone, its
-escalation comment) instead of a clean or capped exit's labels, and that comment names it.
+exactly one of these, from the pass's own result and the count above. Where the exit would put
+an exit label on, first run the exit check each resolved checklist's *What the review step
+supplies and runs* section names: one that finds a blocking reason puts the PR in the end
+state of the hold rule under `CLAUDE.md`'s **Contribution workflow** (`needs-decision` alone,
+its escalation comment) instead of that exit's labels, and that comment names it.
 
 - **Clean pass** (as the routed doc defines it): apply `needs-approval` and remove a stale
   `needs-decision` — two operations, so a failed removal cannot take the add down with it;
