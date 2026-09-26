@@ -130,9 +130,10 @@ This narrows ADR-0028 in two places, and nothing else in it changes:
   entry is loaded.
 - Follow-up: the development task that implements R18's enable half builds points 1 to 4 in
   `entity.py`, `const.py`, `sensor.py` and `time.py`, with tests, and corrects the two
-  docstrings and the `test_sensor.py` stub the Blast radius marks non-conforming. Those tests cover a user's
-  enable while the capability is absent surviving a reload and a capability change, a user's
-  later disable clearing the record, and a re-enable while the capability is present.
+  docstrings and the `test_sensor.py` stub the Blast radius marks non-conforming. Those tests
+  cover a user's enable while the capability is absent surviving a reload and a capability
+  change, a user's later disable clearing the record, and a re-enable while the capability is
+  present.
 - ADR-0028's ADL row gains a pointer to this record in the same change. Its Status stays
   `Accepted`.
 
