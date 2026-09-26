@@ -99,8 +99,8 @@ below; the table is kept as a record of which tasks passed through which gate.
 | --- | --- | --- | --- | --- |
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
-| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence, and the missed-deadline hold read from it, designed but not built; E8 partial — R11's cooldown/hold gating designed, not built |
-| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M1 partial — R5's forecast still passes raw readings to both of its baseline-dependent bounds, the smoothed split being designed but not built; M3 partial — UC10's plug-in reminder designed, not built |
+| **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence, and the missed-deadline hold read from it, designed but not built; E7 partial — ADR-0049's joint smoothing window designed, not built; E8 partial — R11's cooldown/hold gating designed, not built |
+| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M1 partial — R5's forecast still passes raw readings to both of its baseline-dependent bounds, the smoothed split being designed but not built, and it does not yet thread ADR-0049's joint window; M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow (UC12); Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
@@ -403,13 +403,20 @@ it is wired to its callers).
 **E7 — Signal-Conditioning Engine** *(stateful)*
 - **Service:** Engine, V8 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
 - **Status:** shipped — `engines/signal_conditioning.py`; tests in
-  `tests/engines/test_signal_conditioning.py`. ADR-0036 confirms the net-power-only scope below.
-- **Builds:** smoothed `net_w` (R10 smoothing window; `solar_w` is read raw and never smoothed) and
-  resolved supply voltage with the NF4 fallback. State (the smoothing window) is threaded by M1.
-- **Depends on:** ADR-0010; raw readings from RA1 — supplied by M1.
-- **Testable on its own:** plain pytest — window smoothing given a state parameter; NF4 voltage
-  fallback (voltage `None` does **not** enter the fault path).
-- **Integration checkpoint:** ⎔ M1 threads the smoothing state in/out each cycle.
+  `tests/engines/test_signal_conditioning.py`. E7 partial — ADR-0049's joint window is designed,
+  per system-design §3, but not built: the shipped engine smooths `net_w` alone, ADR-0036's scope.
+- **Builds:** the smoothed solar surplus (R10 smoothing window, ADR-0049): one sample per cycle
+  pairing raw `net_w` with raw `charger_w`, a cycle's sample not admitted when M1 reports the
+  charger current just changed, within R10's bounds; `solar_w` is read raw and never smoothed.
+  Also resolved supply voltage with the NF4 fallback. State (the window and its not-admitted flag)
+  is threaded by M1.
+- **Depends on:** ADR-0010, ADR-0049; raw readings from RA1 and the command-changed signal M1
+  already holds for E5's baseline debounce (ADR-0039) — both supplied by M1.
+- **Testable on its own:** plain pytest — window smoothing given a state parameter; a
+  command-changed cycle's sample not admitted and the mean already admitted standing, within
+  R10's bounds; NF4 voltage fallback (voltage `None` does **not** enter the fault path).
+- **Integration checkpoint:** ⎔ M1 threads the window and its flag in/out each cycle, and every
+  fault return before the smoothing step clears the flag, so it cannot stay latched (ADR-0049).
 
 **E8 — Cycle-Invariant Engine** *(pure today — R11's cooldown/hold is deferred and its timers live in M1; stateful once that lands)*
 - **Service:** Engine, V9 (cross-cutting). **ADR gate: G-ADR-0010** (resolved).
@@ -449,12 +456,14 @@ it is wired to its callers).
 - **Service:** Manager (the control cycle, `control-cycle.md`). Home: `coordinator.py` (ADR-0002),
   a `DataUpdateCoordinator` (ADR-0006). ADR-0015 grandfathers it at the package root rather than
   moving it under `managers/` with M2/M3.
-- **Status:** shipped, with one gap — **partial:** R5's forecast reads the wrong baseline. The
+- **Status:** shipped, with two gaps — **partial:** R5's forecast reads the wrong baseline. The
   escalated maximum permitted rate is specified on the *smoothed* household baseline while
   delivery stays on raw, and both of its **baseline-dependent** bounds are affected: the coordinator
   passes the raw, debounced baseline to the peak-headroom call and the raw readings to the C4
   ceiling-headroom call. (The rate's third bound, C1's minimum/maximum charging current, is config
-  and reads nothing.) Designed, not built.
+  and reads nothing.) Designed, not built. The second gap is E7's joint window (ADR-0049): M1
+  does not yet pass it the command-changed signal, thread its flag, or clear that flag on the
+  fault returns before the smoothing step. Designed, not built.
   E5 and E6 point here rather than carrying it themselves, since which baseline reaches an Engine
   is the Coordinator's choice and neither Engine can tell one operand from the other. Otherwise shipped —
   `coordinator.py` plus `coordinator_cycle.py`; tests in
