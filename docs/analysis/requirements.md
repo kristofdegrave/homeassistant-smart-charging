@@ -134,7 +134,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 - [ ] A solar step-up raises the active SOC limit only under the `Auto` profile, while charging in a solar mode (`Solar` or `SolarOnly`, R8); switching between those two preserves an in-effect step-up.
 - [ ] When the active mode is no longer a solar mode, any solar step-up is cleared and the active SOC limit returns to the default limit.
 - [ ] On disconnect, any solar step-up is cleared; the active SOC limit then resolves from the remaining rows in the priority order above — the default limit, unless the solar-reserve cap (R9) still holds, since R9's own conditions never depend on connectedness.
-- [ ] Once charging has stopped at the active SOC limit, it stays stopped until a state-of-charge reading is below the active SOC limit, the active SOC limit rises on a cycle without a reading, or the car is unplugged and replugged — or a restart or a reload clears the stop (NF14). A lowered limit never ends it. A raised one ends it on a cycle without a reading even when the unread state of charge is above the new limit; on a cycle with one, the reading decides. On a cycle with a state-of-charge reading, charging does not resume above the active SOC limit.
+- [ ] Once charging has stopped at the active SOC limit, it stays stopped until a state-of-charge reading is below the active SOC limit, on a cycle without a reading, the active SOC limit is higher than on the previous control cycle, or the car is unplugged and replugged — or a restart or a reload clears the stop (NF14). A lowered limit never ends it. Such a rise ends it even when the unread state of charge is above the new limit; on a cycle with a reading, charging does not resume above the active SOC limit.
 
 ---
 

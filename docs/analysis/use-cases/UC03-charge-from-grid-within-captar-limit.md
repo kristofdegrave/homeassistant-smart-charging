@@ -44,7 +44,7 @@ R3's own grace period (default 2 minutes, held at the minimum charging current b
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Captar` mode
 When state of charge reaches the active SOC limit — whether the plain default, a stepped-up value, or a value `Auto` has lowered via the solar-reserve cap (R9) — the resolution is the same to `Captar`
-Then the System stops charging (0 A) and does not resume above that limit until a reading shows state of charge below it — the limit raised above it, or state of charge fallen below it — or the car is unplugged and replugged; a lowered limit never ends the stop (R7).
+Then the System stops charging (0 A) and stays stopped until a reading shows state of charge below the active SOC limit — whether because the limit was raised above it or state of charge fell — or the car is unplugged and replugged; a lowered limit never ends the stop (R7).
 
 **Fault stop.**
 Given the System is charging in `Captar` mode
