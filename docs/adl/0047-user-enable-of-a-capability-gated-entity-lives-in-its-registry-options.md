@@ -8,8 +8,8 @@ Status: Accepted
 In the context of capability-gated entities that `sync_disabled_by` re-disables on every reload,
 facing a user's enable that Home Assistant records as the same `disabled_by=None` the integration
 uses for its own resting state, we decided on the entity registry's per-entity `options` under
-this integration's domain key, to keep that enable through every capability change, restart and
-reload, accepting that any websocket client can write the record too.
+this integration's domain key, to keep an enable made while the entry is loaded through every
+capability change, restart and reload, accepting that any websocket client can write the record.
 
 ## Context
 
@@ -52,7 +52,7 @@ with `EntityRegistry.async_update_entity_options`, which replaces only this doma
 - Con: Any websocket client can write the record (`options_domain` on the registry update). A
   forged record can only keep an entity enabled, which the user can do anyway.
 - Con: HA documents registry `options` for no custom integration. Core's own `sensor.private` is
-  the only precedent.
+  the only precedent for integration-private data there.
 - Con: The record is invisible in the UI. A user cannot see why an entity whose capability is
   absent stays on.
 
@@ -124,9 +124,13 @@ This narrows ADR-0028 in two places, and nothing else in it changes:
 - Easier: a capability-gated entity added later gets R18's enable half from `sync_disabled_by`
   and the listener beside it, with no storage of its own. Harder: a gated platform's setup has
   one more step, registering the listener, and the tests of the helpers gain the record's cases.
+- Foreclosed: an enable made while the entry is not loaded — its setup failed, or a reload is
+  between unload and setup — reaches no listener, so the next setup disables the entity again.
+  Every listener-based option shares this window; the user enables the entity again once the
+  entry is loaded.
 - Follow-up: the development task that implements R18's enable half builds points 1 to 4 in
   `entity.py`, `const.py`, `sensor.py` and `time.py`, with tests, and corrects the two
-  docstrings the Blast radius marks non-conforming. Those tests cover a user's
+  docstrings and the `test_sensor.py` stub the Blast radius marks non-conforming. Those tests cover a user's
   enable while the capability is absent surviving a reload and a capability change, a user's
   later disable clearing the record, and a re-enable while the capability is present.
 - ADR-0028's ADL row gains a pointer to this record in the same change. Its Status stays
@@ -146,22 +150,25 @@ them.
 | `custom_components/smart_charging/entity.py:12` | `sync_disabled_by` writes `INTEGRATION` over a user's enable | Point 4 |
 | `custom_components/smart_charging/entity.py:16` | Its docstring: flips only between `None` and `INTEGRATION` | Point 4 |
 | `custom_components/smart_charging/entity.py:35` | Writes `INTEGRATION` on any `None` row while the capability is absent | Point 4 |
-| `custom_components/smart_charging/entity.py:50` | `sync_labels`'s docstring, naming `sync_disabled_by` beside the `USER` premise | Correct the docstring |
-| `custom_components/smart_charging/entity.py:54` | Gives a user's enable as `disabled_by=USER` | Correct the docstring |
-| `custom_components/smart_charging/time.py:77` | The departure-time docstring: a user can "force the entity back on" | Correct the docstring |
-| `custom_components/smart_charging/time.py:78` | Gives that enable as `disabled_by=USER` | Correct the docstring |
-| `custom_components/smart_charging/time.py:43` | Imports `sync_disabled_by`, not the listener | Point 2 |
-| `custom_components/smart_charging/time.py:125` | Calls `sync_disabled_by`; no listener registered | Point 2 |
+| `custom_components/smart_charging/entity.py:54` | `sync_labels`'s docstring gives a user's enable as `disabled_by=USER` | Correct the docstring |
 | `custom_components/smart_charging/sensor.py:72` | Imports `sync_disabled_by`, not the listener | Point 2 |
 | `custom_components/smart_charging/sensor.py:418` | Calls `sync_disabled_by`; no listener registered | Point 2 |
+| `custom_components/smart_charging/time.py:43` | Imports `sync_disabled_by`, not the listener | Point 2 |
+| `custom_components/smart_charging/time.py:77` | The departure-time docstring: a user can "force the entity back on" | Correct the docstring |
+| `custom_components/smart_charging/time.py:78` | Gives that enable as `disabled_by=USER` | Correct the docstring |
+| `custom_components/smart_charging/time.py:125` | Calls `sync_disabled_by`; no listener registered | Point 2 |
+| `tests/test_sensor.py:635` | Its test drives `sensor.async_setup_entry` with a stub entry that has no `async_on_unload` | Point 2: give the stub `async_on_unload` |
+| `tests/test_sensor.py:644` | Fakes `sync_disabled_by` in that test | Point 2: as above |
+| `tests/test_sensor.py:648` | Patches the fake in; the stub entry still lacks `async_on_unload` | Point 2: as above |
 
-47 other hits conform: `entity.py:36` (re-enables an `INTEGRATION` row once the capability
-returns, unchanged by point 4); `sensor.py:389` (a config mirror is never resynced, so a user's
-enable already stays); the tests in `test_entity_labels.py`, `test_time.py`, `test_sensor.py` and
-`test_init.py` (ADR-0028's contract and the user's disable, which still hold); and
-`project-plan.md`, `system-design.md` and `entity-catalog.md`, which state the behaviour this
-record delivers. Out of scope: R18 (`requirements.md:323`) and UC11 (l. 266) state the rule this
-record serves, and stay as written. ADR-0028's seven hits (l. 151–187) are immutable; its l. 171
-premise and l. 179 contract are what this record narrows. ADR-0031's three hits and
-`test_sensor.py:1185` keep config mirrors disabled by default and outside `sync_disabled_by`.
-ADR-0028's ADL row (`docs/adl/README.md:37`) points here.
+45 other hits conform: `entity.py:36` (re-enables an `INTEGRATION` row once the capability
+returns, unchanged by point 4); `entity.py:50` (names `sync_disabled_by`'s lookup, still true);
+`sensor.py:389` (a config mirror is never resynced, so a user's enable already stays); the other
+tests in `test_entity_labels.py`, `test_time.py`, `test_sensor.py` and `test_init.py` (ADR-0028's
+contract and the user's disable, which still hold); and `project-plan.md`, `system-design.md` and
+`entity-catalog.md`, which state the behaviour this record delivers. Out of scope: R18
+(`requirements.md:323`) and UC11 (l. 266) state the rule this record serves, and stay as written.
+ADR-0028's seven hits (l. 151–187) are immutable; its l. 171 premise and l. 179 contract are what
+this record narrows. ADR-0031's three hits and `test_sensor.py:1185` keep config mirrors disabled
+by default and outside `sync_disabled_by`. ADR-0028's ADL row (`docs/adl/README.md:37`) points
+here.
