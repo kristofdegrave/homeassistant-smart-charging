@@ -69,7 +69,7 @@ from .const import (
     STATUS_FAULT,
     STATUS_OK,
 )
-from .entity import SmartChargingEntity, sync_disabled_by
+from .entity import SmartChargingEntity, mark_disabled_seen, sync_disabled_by
 
 
 class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
@@ -591,3 +591,4 @@ async def async_setup_entry(
             *(_ConfigMirrorSensor(entry.entry_id, spec) for spec in mirror_specs),
         ]
     )
+    mark_disabled_seen(er.async_get(hass), Platform.SENSOR, solar_surplus_sensor.unique_id)

@@ -18,7 +18,10 @@ from pytest_homeassistant_custom_component.common import (
 
 from custom_components.smart_charging.const import DOMAIN, LABEL_SC_RUNTIME
 from custom_components.smart_charging.entity import (
+    OPTION_DISABLED_SEEN,
+    OPTION_USER_ENABLED,
     SmartChargingEntity,
+    mark_disabled_seen,
     sync_disabled_by,
     sync_labels,
 )
@@ -255,3 +258,142 @@ async def test_sync_disabled_by_noop_when_not_yet_registered(hass):
 
     assert registry.async_get_entity_id(Platform.SENSOR, DOMAIN, unique_id) is None
     assert len(registry.entities) == entity_count_before
+
+
+def _options(registry, entity_id):
+    return dict(registry.async_get(entity_id).options.get(DOMAIN, {}))
+
+
+async def test_sync_disabled_by_marks_disabled_seen_on_the_row_it_disables(hass):
+    """ADR-0047 point 2: a row this call disables (INTEGRATION) is left marked disabled_seen,
+    so a later external enable is recognized as the user's own."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+
+    assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}
+
+
+async def test_sync_disabled_by_recognizes_an_external_enable_of_a_marked_row(hass):
+    """ADR-0047: a marked (disabled_seen), currently-disabled row that some other caller (the
+    user, via the entity-registry websocket) flips to disabled_by=None is recognized on the
+    next sync_disabled_by call as the user's own enable -- it stays enabled even though the
+    capability is still absent, and the row now records user_enabled."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    assert registry.async_get(entity.entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+    # The user's own enable, made through some other path (the websocket, or -- the case this
+    # ADR exists for -- while the config entry wasn't loaded at all): only disabled_by=None is
+    # observed here, exactly as HA itself would leave it.
+    registry.async_update_entity(entity.entity_id, disabled_by=None)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+
+    entry = registry.async_get(entity.entity_id)
+    assert entry.disabled_by is None
+    assert _options(registry, entity.entity_id) == {OPTION_USER_ENABLED: True}
+
+
+async def test_sync_disabled_by_user_enable_survives_capability_absent_present_absent(hass):
+    """ADR-0047: once recognized, the user's enable survives every later capability change --
+    absent, present, and absent again -- until the user disables it themselves."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    registry.async_update_entity(entity.entity_id, disabled_by=None)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    assert registry.async_get(entity.entity_id).disabled_by is None
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
+    assert registry.async_get(entity.entity_id).disabled_by is None
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    assert registry.async_get(entity.entity_id).disabled_by is None
+    assert _options(registry, entity.entity_id) == {OPTION_USER_ENABLED: True}
+
+
+async def test_sync_disabled_by_own_capability_return_does_not_mark_user_enabled(hass):
+    """Regression guard: the ordinary, capability-driven re-enable (this call's own None write
+    when capability_met flips True) must NOT be mistaken for the user's enable -- only an
+    externally-made None is. Otherwise every entity would look user-enabled after its
+    capability simply returns."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
+
+    entry = registry.async_get(entity.entity_id)
+    assert entry.disabled_by is None
+    assert _options(registry, entity.entity_id) == {}
+
+
+async def test_sync_disabled_by_user_disable_clears_the_user_enabled_record(hass):
+    """ADR-0047: a user's own later disable (disabled_by=USER) clears any user_enabled record,
+    per the Decision's 'only the user's own disable does' -- so a stale record can't
+    resurrect a since-disabled entity."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    registry.async_update_entity(entity.entity_id, disabled_by=None)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    assert _options(registry, entity.entity_id) == {OPTION_USER_ENABLED: True}
+
+    registry.async_update_entity(entity.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+
+    assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}
+
+
+async def test_mark_disabled_seen_marks_a_freshly_registered_disabled_row(hass):
+    """ADR-0047 point 3: the post-add step marks a row that entity_platform.py itself just
+    created disabled (entity_registry_enabled_default=False -> disabled_by=INTEGRATION at
+    creation), since HA reserves get_initial_entity_options for its own base classes rather
+    than a hook this integration can use at creation time."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    entity._attr_entity_registry_enabled_default = False
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+    assert registry.async_get(entity.entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert _options(registry, entity.entity_id) == {}
+
+    mark_disabled_seen(registry, Platform.SENSOR, entity.unique_id)
+
+    assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}
+
+
+async def test_mark_disabled_seen_noop_for_an_entity_registered_enabled(hass):
+    """A freshly registered, enabled entity (capability already met at first install) needs no
+    mark -- only a disabled row needs to be told apart from a user's future enable."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
+
+    mark_disabled_seen(registry, Platform.SENSOR, entity.unique_id)
+
+    assert _options(registry, entity.entity_id) == {}
+
+
+async def test_mark_disabled_seen_noop_when_not_yet_registered(hass):
+    """Mirrors sync_disabled_by's and sync_labels's own no-op case."""
+    registry = er.async_get(hass)
+    unique_id = "entry1_never_registered"
+
+    mark_disabled_seen(registry, Platform.SENSOR, unique_id)
+
+    assert registry.async_get_entity_id(Platform.SENSOR, DOMAIN, unique_id) is None

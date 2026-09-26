@@ -8,17 +8,31 @@ from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
 
+# ADR-0047: the two flags this integration keeps under its own key in a gated entity's
+# registry `options` (options[DOMAIN]), Options A + F of that record. `disabled_seen` is the
+# mark Option F's post-add step and sync_disabled_by leave on every row they see disabled
+# (INTEGRATION or USER), so a later external flip to None -- the user's own enable, however it
+# happened and whether or not the entry was loaded meanwhile -- is told apart from this
+# module's own capability-driven write of None. `user_enabled` is that recognized enable
+# itself, kept until the user's own disable clears it; a capability's return never does.
+OPTION_DISABLED_SEEN = "disabled_seen"
+OPTION_USER_ENABLED = "user_enabled"
+
 
 def sync_disabled_by(
     registry: er.EntityRegistry, domain: str, unique_id: str, *, capability_met: bool
 ) -> None:
-    """Pre-add registry sync (ADR-0028): flips disabled_by between None and
-    RegistryEntryDisabler.INTEGRATION as capability_met changes, for an entity that already has
-    a registry row. No-ops if the entity isn't registered yet (a brand-new entity's initial
-    disabled state is set by _attr_entity_registry_enabled_default at add time instead -- there
-    is no row for this call to act on before that) or if the row is somehow missing despite a
-    matching entity_id. Never touches any other existing disabled_by value (notably USER) in
-    either direction.
+    """Pre-add registry sync (ADR-0028, narrowed by ADR-0047): flips disabled_by between None
+    and RegistryEntryDisabler.INTEGRATION as capability_met changes, for an entity that already
+    has a registry row -- except a row the user has enabled themselves while the capability is
+    absent, which this call now recognizes and leaves alone (R18's enable half, ADR-0047).
+    No-ops if the entity isn't registered yet (a brand-new entity's initial disabled state is
+    set by _attr_entity_registry_enabled_default at add time instead -- there is no row for
+    this call to act on before that) or if the row is somehow missing despite a matching
+    entity_id. Never touches any other existing disabled_by value in either direction beyond
+    what ADR-0047 adds: a user's own disabled_by=USER is still left untouched, and clears any
+    stale user_enabled record instead (only the user's own disable does, per that ADR's
+    Decision).
 
     `domain` is the entity's platform domain (e.g. "sensor", "time") -- the same first
     positional argument `registry.async_get_entity_id(domain, platform, unique_id)` itself
@@ -31,10 +45,63 @@ def sync_disabled_by(
     existing = registry.async_get(entity_id)
     if existing is None:
         return
-    if not capability_met and existing.disabled_by is None:
+
+    options = existing.options.get(DOMAIN, {})
+    seen = options.get(OPTION_DISABLED_SEEN, False)
+    user_enabled = options.get(OPTION_USER_ENABLED, False)
+    disabled_by = existing.disabled_by
+
+    # ADR-0047 point 2, before the flip: tell a user's enable and a user's disable apart from
+    # this call's own resting state.
+    if disabled_by is None and seen:
+        user_enabled = True
+        seen = False
+    elif disabled_by is er.RegistryEntryDisabler.USER:
+        user_enabled = False
+
+    # ADR-0028's flip, now skipping the disable half for a row the user has enabled.
+    if not capability_met and disabled_by is None and not user_enabled:
         registry.async_update_entity(entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION)
-    elif capability_met and existing.disabled_by is er.RegistryEntryDisabler.INTEGRATION:
+        disabled_by = er.RegistryEntryDisabler.INTEGRATION
+    elif capability_met and disabled_by is er.RegistryEntryDisabler.INTEGRATION:
         registry.async_update_entity(entity_id, disabled_by=None)
+        disabled_by = None
+        seen = False  # this call's own write of None is never a user's enable.
+
+    # ADR-0047 point 2, last: a row left disabled (by either disabler) is marked, so the next
+    # external flip to None is recognized.
+    if disabled_by in (er.RegistryEntryDisabler.INTEGRATION, er.RegistryEntryDisabler.USER):
+        seen = True
+
+    new_options: dict[str, bool] = {}
+    if seen:
+        new_options[OPTION_DISABLED_SEEN] = True
+    if user_enabled:
+        new_options[OPTION_USER_ENABLED] = True
+    if new_options != dict(options):
+        registry.async_update_entity_options(entity_id, DOMAIN, new_options or None)
+
+
+def mark_disabled_seen(registry: er.EntityRegistry, domain: str, unique_id: str) -> None:
+    """Post-add registry sync (ADR-0047's Option F, point 3): marks a freshly first-registered
+    row that entity_platform.py itself created disabled (disabled_by=INTEGRATION, from
+    _attr_entity_registry_enabled_default=False) with disabled_seen, so a later user enable is
+    recognized even if it happens while the config entry isn't loaded at all. Called after
+    async_add_entities, beside sync_labels where the platform has one -- HA reserves
+    Entity.get_initial_entity_options for its own component base classes, so there is no hook
+    to do this at creation time itself. No-ops for a row registered enabled (nothing to tell
+    apart yet) or already marked (a later reload's sync_disabled_by owns the mark from here)."""
+    entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+    if entity_id is None:
+        return
+    existing = registry.async_get(entity_id)
+    if existing is None:
+        return
+    if existing.disabled_by is not er.RegistryEntryDisabler.INTEGRATION:
+        return
+    if existing.options.get(DOMAIN, {}).get(OPTION_DISABLED_SEEN, False):
+        return
+    registry.async_update_entity_options(entity_id, DOMAIN, {OPTION_DISABLED_SEEN: True})
 
 
 def sync_labels(
@@ -51,7 +118,8 @@ def sync_labels(
     entity_id attribute -- a registry-disabled entity never gets added to hass, so its instance
     may have no reliable entity_id to read; the registry lookup works regardless of whether the
     entity was added live this reload (ADR-0028's Decision requires the label to stay correct
-    even for a capability-absent entity a user forced back on with disabled_by=USER)."""
+    even for a capability-absent entity a user has enabled themselves -- disabled_by=None with
+    the ADR-0047 record recognizing it as theirs, not disabled_by=USER)."""
     manageable = manageable_labels or owned_labels
     if not manageable:
         return

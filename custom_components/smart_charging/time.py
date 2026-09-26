@@ -40,7 +40,7 @@ from .const import (
     DEPARTURE_OVERRIDE_HOME_DAY,
     LABEL_SC_RUNTIME,
 )
-from .entity import SmartChargingEntity, sync_disabled_by, sync_labels
+from .entity import SmartChargingEntity, mark_disabled_seen, sync_disabled_by, sync_labels
 
 WEEKDAY_DEFAULT = time(6, 0)
 
@@ -74,10 +74,11 @@ class SmartChargingDepartureTime(SmartChargingEntity, RestoreEntity, TimeEntity)
 
     ADR-0028: `_attr_entity_registry_enabled_default` is likewise gated on `deadline_available`
     -- registry-disabled (not just dashboard-hidden) when the capability is absent. The two
-    mechanisms stay independent on purpose: a user can force the entity back on
-    (`disabled_by=USER`) while the capability is still absent, and in that case the label must
-    still reflect `deadline_available` correctly so the dashboard stays consistent even for a
-    capability-absent entity the user chose to re-enable.
+    mechanisms stay independent on purpose: a user can enable the entity themselves
+    (`disabled_by=None`, recognized and kept as theirs by `entity.py`'s `sync_disabled_by` and
+    `mark_disabled_seen`, ADR-0047) while the capability is still absent, and in that case the
+    label must still reflect `deadline_available` correctly so the dashboard stays consistent
+    even for a capability-absent entity the user has chosen to re-enable.
     """
 
     _manageable_labels = frozenset({LABEL_SC_RUNTIME})
@@ -134,6 +135,7 @@ async def async_setup_entry(
             owned_labels=entity._owned_labels,
             manageable_labels=entity._manageable_labels,
         )
+        mark_disabled_seen(registry, Platform.TIME, entity.unique_id)
 
 
 __all__ = [

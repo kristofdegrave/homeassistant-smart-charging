@@ -28,6 +28,7 @@ from custom_components.smart_charging.const import (
     DOMAIN,
     LABEL_SC_RUNTIME,
 )
+from custom_components.smart_charging.entity import OPTION_DISABLED_SEEN
 from custom_components.smart_charging.time import (
     DAY_OF_WEEK_DEFAULTS,
     OVERRIDE_DEFAULTS,
@@ -344,6 +345,110 @@ async def test_departure_time_user_disable_survives_capability_toggle(hass):
 
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.USER
     assert registry.async_get(entity_id).labels == {LABEL_SC_RUNTIME}
+
+
+async def test_departure_time_first_registration_is_marked_disabled_seen(hass):
+    """ADR-0047 point 3: a fresh install with deadline_available=False registers every
+    departure-time entity disabled and marks it disabled_seen."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    entry_reg = registry.async_get(entity_id)
+    assert entry_reg.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entry_reg.options.get(DOMAIN, {}).get(OPTION_DISABLED_SEEN) is True
+
+
+async def test_departure_time_user_enable_survives_reload_with_capability_absent(hass):
+    """R18/ADR-0047: a user's own enable of a departure-time entity, made while
+    deadline_available is False, survives a reload that leaves the capability still absent."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+
+    hass.config_entries.async_update_entry(entry, data=data)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(entity_id).disabled_by is None
+
+
+async def test_departure_time_user_enable_made_while_entry_unloaded_survives_setup(hass):
+    """R18/ADR-0047: an enable made while the config entry isn't loaded at all still sticks on
+    the next setup, since the record lives on the row rather than on a listener."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert registry.async_get(entity_id).disabled_by is None
+
+
+async def test_departure_time_user_enable_survives_capability_present_then_absent_again(hass):
+    """R18/ADR-0047: once recognized, the user's enable survives a capability that then
+    returns and goes absent again."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    registry.async_update_entity(entity_id, disabled_by=None)
+    hass.config_entries.async_update_entry(entry, data=data)
+    await hass.async_block_till_done()
+    assert registry.async_get(entity_id).disabled_by is None
+
+    on_data = entry_data_base()
+    on_data[CONF_DEADLINE_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=on_data)
+    await hass.async_block_till_done()
+    assert registry.async_get(entity_id).disabled_by is None
+
+    hass.config_entries.async_update_entry(entry, data=data)
+    await hass.async_block_till_done()
+    assert registry.async_get(entity_id).disabled_by is None
 
 
 async def test_departure_time_restored_value_survives_disable_cycle(hass):
