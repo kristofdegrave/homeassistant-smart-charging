@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.5](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.4...v0.4.5) (2026-09-26)
+
+
+### Bug Fixes
+
+* _ai-review.yml applies the non-docs guard instead of only logging it ([#1132](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1132)) ([ae0dbdb](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/ae0dbdb6f0e8477ed77c34d34e50751625005321))
+* gate the R3 peak clamp on the CapTar capability (R3 AC1) ([#1144](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1144)) ([f7f65ab](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/f7f65aba4e10842a1f2c09a7fc4292bcfda134a2))
+* in Power, a stop at the active SOC limit ends when the limit rises, not when it changes (R7 AC5, UC04) ([#1392](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1392)) ([767d182](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/767d182e4853f5022853c73d7e4b3fa481791d4f))
+* judge R5 urgency on deadline slack, not on the baseline mode ([#1101](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1101)) ([1d1cd80](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/1d1cd80264d6df3fb54c41328dbc53ba2adf7e22))
+* keep the `bug` label description inside GitHub's 100-character cap ([#1090](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1090)) ([b6cc624](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/b6cc62490f7b529f87aee53a78e4fb66a1f939d3))
+* Power stops at the active SOC limit itself ([#1335](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1335)) ([#1345](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1345)) ([12bd8ed](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/12bd8ed156ce5b83e434fd17d1058b61398ed634))
+* skip inert heredoc bodies in the destructive-git guard ([#1086](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1086)) ([61b17ab](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/61b17abb3fb8ee10de2c05b9dae40470c89a9ba3))
+* stop the R3 peak clamp oscillating against its own actuation (ADR-0039) ([#1048](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1048)) ([5753e7d](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/5753e7d8046553b0a0d836e83c9c1e72f9f22b36))
+* the solar modes' set-point settles under steady inputs (R10) ([#1380](https://github.com/kristofdegrave/homeassistant-smart-charging/issues/1380)) ([786cc6d](https://github.com/kristofdegrave/homeassistant-smart-charging/commit/786cc6dd34d40c9f0b32b94321bc5d6b0eebb1bc))
+
 ## [0.4.4](https://github.com/kristofdegrave/homeassistant-smart-charging/compare/v0.4.3...v0.4.4) (2026-09-11)
 
 
