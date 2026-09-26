@@ -272,8 +272,8 @@ their difference. A named field rather than `-ctx.surplus_w`: the two are the sa
 design, and the name keeps the forecast's operand visible at the call site (D-3).
 
 **Both construction sites, and no default.** `CycleContext` is built twice in
-`custom_components/`: `coordinator.py:667` and `:1698`, the baseline dry-run, whose docstring warns
-that a placeholder there is the `#990` hazard. `smoothed_baseline_w` is added as a **required** field —
+`custom_components/`: `coordinator.py`'s `_run_cycle` ctx and the baseline dry-run ctx, whose
+docstring warns that a placeholder there is the `#990` hazard. `smoothed_baseline_w` is added as a **required** field —
 no default — for the reason that docstring gives: a permissive default lets a forgotten construction
 site fail open silently, and this field decides a forecast. That makes the test constructions in
 `tests/test_coordinator_cycle.py` part of this commit; move them here rather than in a follow-up,
