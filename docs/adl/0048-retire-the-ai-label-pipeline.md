@@ -157,9 +157,9 @@ No hit conforms: 398 + 62 hits are in the rows above.
 
 Neither search keys on a bare "CI", which the documents also use for the pipeline as an actor
 ("CI therefore refuses to draft…"). Over the same scope, `rg -n -e '\bCI\b'` returns 171 hits:
-155 in files the rows above already hold, and 16 in seven other files, all of them regular CI —
+156 in files the rows above already hold, and 15 in seven other files, all of them regular CI —
 the release workflow, the benchmarks, the authoring and drift checks, and the ADR bar's own
-carve-out — which keep describing it. The pipeline lines among the 155 are removed or rewritten
+carve-out — which keep describing it. The pipeline lines among the 156 are removed or rewritten
 by a final sweep, once the pipeline's files are gone.
 
 Out of scope: `.github/workflows/upstream-drift.yml:112` and `:114`, two of the second search's
