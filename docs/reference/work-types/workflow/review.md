@@ -10,29 +10,27 @@ review, which is why it carries a full checklist where other labels' review docu
 only what their bar cannot.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
-not here. They are the same for every review and live with whoever applies this checklist — the
-generic `reviewer` agent definition locally, the review workflow's own prompt in CI, which has
-no agent to spawn and self-applies instead. Both reach this file the same way, through
-`CLAUDE.md`'s **Model selection** table. Your own handling of untrusted material is stated
-there and once; check **(1)** below is about containment in the artifact under review, which is
+not here. They are the same for every review and live with the generic `reviewer` agent
+definition, which reaches this file through `CLAUDE.md`'s **Model selection** table. Your own
+handling of untrusted material is stated there and once; check **(1)** below is about containment in the artifact under review, which is
 a different question with the same subject.
 
 ## What this label covers
 
-A change to this project's AI pipeline itself and the process docs it is driven by — a skill
+A change to this project's process and to the files that drive its runs — a skill
 (`.claude/skills/`), an agent definition (`.claude/agents/`), a CI workflow
 (`.github/workflows/`), the project profile and the two scripts that read it
 (`.claude/profile.yml`; `.github/setup-labels.sh`, which writes its `labels` to the
 repository; `.github/profile-env.sh`, which prints its tracker values for the reference's
 recipes), an issue form
 (`.github/ISSUE_TEMPLATE/`), the harness configuration that decides what a run may do
-(`.claude/settings.json` and the hooks it wires, `.claude/hooks/`) — a local session and a CI
-worker alike, which is why the committed settings file is the restricted one and
-`settings.local.json` is the ignored one, as `.gitignore` says at the line — or the canonical
-process reference (`docs/reference/`, `CLAUDE.md`). The workflow, skill and agent files run with
-write-scoped credentials
-(`ANTHROPIC_API_KEY`, a write-scoped `GITHUB_TOKEN`/PAT) against untrusted issue and PR content,
-so this checklist weighs security at least as heavily as quality. An issue form carries no
+(`.claude/settings.json` and the hooks it wires, `.claude/hooks/`) — which is why the committed
+settings file is the restricted one and `settings.local.json` is the ignored one, as
+`.gitignore` says at the line — or the canonical process reference (`docs/reference/`,
+`CLAUDE.md`). A workflow runs with repository secrets
+and a write-scoped `GITHUB_TOKEN`, and a skill or agent steers a run that reads untrusted issue
+and PR content with write access to the repository, so this checklist weighs security at least
+as heavily as quality. An issue form carries no
 credentials itself but can still point at load-bearing process semantics (e.g. `adr.yml`
 linking to the ADR worthiness test) that must stay in sync with what it references.
 
@@ -42,17 +40,12 @@ Always read:
 
 - The changed files.
 - `docs/reference/method/ai-authoring.md`, which `CLAUDE.md`'s **Authoring AI artifacts** section
-  routes to — the shared vocabulary, the checklist for each artifact type (skill / agent /
-  CI worker prompt), and its non-negotiables. A work-type document under
+  routes to — the shared vocabulary, the checklist for each artifact type (skill / agent), and
+  its non-negotiables. A work-type document under
   `docs/reference/work-types/<label>/` is one of these artifacts even though it is not a skill;
   that reference's own opening says how far it binds one and which checklist to apply, and its
   scope is the label directories — not this tree's own `README.md`, which that file says is an
   ordinary reference document outside the rule's subject matter.
-- If a changed file is a CI workflow: `.github/workflows/ai-pipeline.yml` (the router — label
-  guards, fork-PR handling, permissions-per-job) for context on how the changed file fits.
-- If a changed file is a CI workflow, a skill (`.claude/skills/`), or an agent definition
-  (`.claude/agents/`): `docs/reference/method/ci-pipeline.md`, for each job's stated scope
-  (draft/review/fix are one task each) and the `needs-*` label contract.
 - If a changed file is `.claude/settings.json` or under `.claude/hooks/`: the other half of
   the pair — the wiring names the script, the script is what the wiring runs, and a review of
   one that never opened the other cannot tell whether the guard still fires — together with
@@ -62,42 +55,41 @@ Always read:
   set `.github/setup-labels.sh` writes), plus
   `docs/reference/method/contribution-workflow.md`'s **Issue conventions** — the canonical
   context-label vocabulary, to check the form's `labels:` value against it — and
-  `docs/reference/method/ci-pipeline.md`'s **Label vocabulary sync**, to check the CI-side files stay
-  in step; and, for `adr.yml`, the document `CLAUDE.md`'s **Architecture Decision Records
-  (ADRs)** topic routes to, since the form links to it.
+  `docs/reference/method/ci-pipeline.md`'s **Label vocabulary sync**, to check the other places
+  the vocabulary is baked into stay in step; and, for `adr.yml`, the document `CLAUDE.md`'s
+  **Architecture Decision Records (ADRs)** topic routes to, since the form links to it.
 
 ## Review checklist
 
 **(1) Prompt-injection containment in the reviewed artifact (Critical if missing)**
-- Any worker prompt that feeds issue/PR/commit content to Claude explicitly labels that
-  content as untrusted data, not instructions, and states what to do if it tries to redirect
-  behavior (record as a finding / attempted injection, never comply).
-- Any drafter-style job (writes files from untrusted input) constrains what it can actually
-  commit via an allow-list mechanism (e.g. `add-paths` scoped to the artifact type's own
-  tree) — not solely a prompt-level instruction. A prompt-only constraint is not defense in
-  depth; flag its absence as Critical.
-- No change widens an existing containment boundary (an `add-paths` scope, an `--allowed-tools`
-  grant, a fork-PR guard) without the PR explaining why the wider blast radius is safe.
+- Any skill, agent or workflow step that feeds issue/PR/commit content to a model explicitly
+  labels that content as untrusted data, not instructions, and states what to do if it tries
+  to redirect behavior (record as a finding / attempted injection, never comply).
+- Any job that writes files or commits from untrusted input constrains what it can actually
+  commit by a mechanism (a path allow-list, a token scoped to what the job may write) — not
+  solely a prompt-level instruction. A prompt-only constraint is not defense in depth; flag
+  its absence as Critical.
+- No change widens an existing containment boundary (a path allow-list, a tool grant, a
+  fork-PR guard) without the PR explaining why the wider blast radius is safe.
 
 **(2) Least privilege**
-- `--allowed-tools` / tool grants are the minimum the task needs, each with a comment saying
-  why (the authoring checklist's CI-worker section).
-- Job `permissions:` blocks grant only what that job's steps use; a reviewer/drafter job that
-  only needs to comment does not get `contents: write`.
-- Secrets stay behind the `ai` environment; no new step reads a secret into a log-visible
+- Tool grants — an agent definition's `tools`, a `permissions.allow` entry, a workflow step's
+  own grant — are the minimum the task needs.
+- Job `permissions:` blocks grant only what that job's steps use; a job that only needs to
+  comment does not get `contents: write`.
+- A secret is read only by the step that uses it; no new step reads one into a log-visible
   context (`echo`, unquoted interpolation into a shell command that could be echoed).
 
 **(3) Fork-PR / trust boundary**
-- A job that can spend `ANTHROPIC_API_KEY` or push commits keeps (or, if this change touches
-  that logic, correctly preserves) the existing guards: `pull_request` not
-  `pull_request_target`, the sender-is-maintainer check, and — for jobs with `contents: write`
-  — the `head.repo.full_name == github.repository` fork exclusion.
-- If the change extends a path filter (`ai-pipeline.yml`'s `on.pull_request.paths` or
-  similar), confirm the newly in-scope paths don't let a fork PR trigger a privileged job it
+- A job that holds a secret or can push commits keeps (or, if this change touches that logic,
+  correctly preserves) the guards that keep a fork PR out of it: `pull_request` not
+  `pull_request_target`, and any sender or head-repository check the job carries.
+- If the change widens a trigger (a new event, a wider path filter), confirm the newly
+  in-scope events don't let a fork PR reach a job holding a secret or write access it
   couldn't reach before.
 
 **(4) Authoring checklist (per artifact type)**
-- Apply the matching checklist section (skill / agent / CI worker prompt) of
+- Apply the matching checklist section (skill / agent) of
   `docs/reference/method/ai-authoring.md` to the changed file(s) — or, for a work-type document, the
   skill checklist as that reference scopes it.
 - The harness configuration has no section there, deliberately — that reference says why, and
@@ -137,10 +129,10 @@ Always read:
   see; a core file that reads *the stack overlay names it* with no overlay entry that does is
   a broken route — Major, since the rule then has no home.
 - The context-label vocabulary's values are
-  `docs/reference/method/contribution-workflow.md`'s and the CI-side sync obligation — every pipeline
-  place that vocabulary is baked into and must move together — is
+  `docs/reference/method/contribution-workflow.md`'s and the sync obligation — every place that
+  vocabulary is baked into and must move together — is
   `docs/reference/method/ci-pipeline.md`'s. A change to one place that doesn't update the rest is a
-  Major finding (silent drift in the vocabulary the whole label-driven pipeline trusts).
+  Major finding (silent drift in the vocabulary the label-keyed routing trusts).
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: its frontmatter `labels:` value is a
   label `.claude/profile.yml`'s `labels` defines — one of the canonical context labels above, or the
   pre-triage `idea` label for `idea.yml` (a form advertising a label that doesn't exist yet is a
@@ -150,10 +142,9 @@ Always read:
 - The issue-to-merge lifecycle is the document `CLAUDE.md`'s **Contribution workflow** topic
   routes to; `CLAUDE.md` and every skill's "Follows this project's contribution workflow" line
   only point to it, never restate its steps. When any of the docs `CLAUDE.md` links there change,
-  cross-check their claims about `_ai-draft.yml`/`_ai-review.yml`/`_ai-fix.yml` behavior
-  (commit-prefix mapping, branch scheme, loop caps) against those files' actual current
-  behavior — a plausible-sounding claim that drifted from what the workflow doc actually does
-  is a Major finding.
+  cross-check their claims about a skill's, hook's or script's behavior (commit-prefix mapping,
+  branch scheme, the review cap) against that file's actual current behavior — a
+  plausible-sounding claim that drifted from what the file actually does is a Major finding.
 - Every pointer a changed skill or agent definition writes to project material is in the
   `` `CLAUDE.md`'s **Topic** `` form, and the topic resolves — to an entry of `CLAUDE.md`'s
   routing table or one of its `##` headings. A pointer naming the owning document's heading
@@ -177,11 +168,6 @@ Always read:
   statement of the rule, since it then has no owner to be checked against and drifts unseen.
   Scoped to what the diff writes, per that reference's **Permanent scope: as written or
   changed, never as a sweep** — a finding raised against untouched prose is out of scope.
-- If a changed skill (`.claude/skills/`) or agent definition (`.claude/agents/`) runs in an
-  interactive session, it must never instruct adding `needs-draft`/`needs-review`/`needs-work`
-  itself — per `docs/reference/method/ci-pipeline.md`, those are CI-only triggers; an interactive
-  session does review/fix locally instead. Flag as Major (silently hands work to CI the human
-  didn't ask for, and can collide with CI's own loop-cap accounting).
 
 **(5) Non-negotiables unaffected**
 - Write and review still happen in separate sessions/agents (a skill or workflow must never
