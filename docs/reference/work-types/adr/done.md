@@ -7,7 +7,8 @@ How an ADR is written is `implement.md`; checks about the *change* belong with t
 **Scope: the bar scores a record the change adds.** On a record that already exists on the base,
 only review check (A) applies, and whether a permitted edit is itself correct — a finding the
 fixer may not act on is not raised. An `Abandoned` record is scored on item 2's filename and
-ADL-row bullets and on item 10 only.
+ADL-row bullets, item 10, and the presence of a Summary: one sentence is enough, none →
+**Major**.
 
 ## The bar
 
@@ -81,8 +82,8 @@ other ADRs. A term that departs from them → **Minor**.
 
 **(10) Status is `Accepted` before `needs-approval`.** The only home of this convention: **an
 ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it — or
-`Abandoned — <why>` once dropped (`implement.md`'s *Abandoned, not deleted*). A round that left it
-otherwise is corrected once the pass is clean. Handed over with any other Status → **Major**:
+`Abandoned — <why>` once dropped (`implement.md`'s *Abandoned, not deleted*). A round that left
+it otherwise is corrected once the pass is clean. Handed over with any other Status → **Major**:
 the ADL row (item 2) would record a decision the log says was never taken.
 
 **(11) Links point only at targets that outlive the record.** A merged record's link is touched

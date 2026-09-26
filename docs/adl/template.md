@@ -2,7 +2,8 @@
 
 Date: YYYY-MM-DD <!-- the date this ADR was created; never changes, even if Status later does -->
 Status: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN | Abandoned — <why, in one sentence>
-<!-- An Abandoned record with no draft stops here; a drafted one keeps its sections (the adr work file). -->
+<!-- Abandoned with no draft: only a one-sentence Summary follows; a drafted one keeps all -->
+<!-- its sections (the adr work file). -->
 
 ## Summary
 

@@ -84,10 +84,10 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
     complete log.
 - **Abandoned, not deleted.** An ADR the human partner drops before it merges keeps its number
   and its full draft: it merges with `Status: Abandoned — <why, in one sentence>`, and its ADL
-  row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log, and the
-  count could hand its number out again.
-  - Dropped before any draft exists: the record is the template's title, Date and that Status
-    line, so the reservation still merges.
+  row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log that the
+  count could hand out again.
+  - Dropped before any draft exists: the record is the template's title, Date, that Status
+    line and a one-sentence Summary (`Abandoned before a decision was taken: <why>`).
   - A supersession or deprecation edit the draft made to another ADR is reverted before the
     merge, its ADL row with it, so that record stays as it was.
   - The bar's scope line says which items score it.
