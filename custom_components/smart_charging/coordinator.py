@@ -82,7 +82,7 @@ from .engines.billing_protection import (
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import ceiling_headroom_a, clamp_to_ceiling
-from .engines.signal_conditioning import resolve_voltage, smooth_net_power
+from .engines.signal_conditioning import HouseholdWindow, resolve_voltage, smooth_household_baseline
 from .modes._phase import Phase
 from .profiles.policy import PROFILE_POLICIES
 
@@ -211,7 +211,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # own registry guard (issue #718's PROFILE_POLICIES lookup) -- a corrupted stored
         # profile would otherwise re-read and re-reject identically every cycle.
         self._last_rejected_profile: str | None = None
-        self._net_window: tuple[float, ...] = ()
+        # R10/issue #1329: the household-baseline rolling window `smooth_household_baseline`
+        # threads across cycles, plus its own one-cycle-deferral cap -- see `HouseholdWindow`.
+        self._household_window = HouseholdWindow()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
         # ADR-0007/issue #1311: `_safe_write_zero`'s own once-per-outage dedup for the 0 A
@@ -219,7 +221,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # keep failing for many cycles after the read-side fault that first forced it
         # recovers). See `_safe_write_zero`'s own docstring.
         self._write_zero_failing = False
-        # M1's OWN 15-minute window (E5), distinct from R10's `_net_window` above --
+        # M1's OWN 15-minute window (E5), distinct from R10's `_household_window` above --
         # a MonthlyPeakSensor restore may seed `_peak_demand.tracked_kw`/`.tracked_month` before
         # the first cycle; the window itself is deliberately never persisted (R21), so it
         # always starts empty here. Owned by PeakDemandState (ADR-0012).
@@ -341,7 +343,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         except Exception as err:  # noqa: BLE001 - every failure funnels to the fault path (ADR-0007)
             self._enter_fault(f"cycle exception: {err}")
             await self._safe_write_zero()
-            self._clear_baseline_deferral()
             return CycleResult(
                 commanded_current=0.0,
                 fault=True,
@@ -519,7 +520,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if inputs is None:
             self._enter_fault("required adapter returned None")
             await self._write(0.0)
-            self._clear_baseline_deferral()
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
             # ADR-0021 and entity-catalog.md's `sensor.smart_charging_adapter_readings` row
             # define the entity's own state as the timestamp of
@@ -609,7 +609,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and status in CHARGEABLE_STATES
             and ev_soc is None
         ):
-            self._enter_fault("ev_soc required while a solar mode is active but missing/None")
+            self._enter_fault(
+                "ev_soc required while a solar mode is active but missing/None",
+                clear_baseline_deferral=False,
+            )
             await self._write(0.0)
             # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
             # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
@@ -634,17 +637,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # __init__.py's SmartChargingConfig already applies DEFAULT_SMOOTHING_WINDOW for a
         # pre-solar config entry that predates this option; smoothing runs every cycle
         # regardless of mode.
-        smoothed_net_w, self._net_window = smooth_net_power(
-            net_w, self._net_window, size=self._config.smoothing_window
+        # Issue #1329/R10: folds `net_w - charger_w` -- the household's own load, independent
+        # of what the charger itself drew -- into the window, so Solar/SolarOnly's set-point
+        # settles under steady inputs. `command_changed=self._command_stepped` is the same
+        # signal `debounce_baseline_w` above already reads for R3 (ADR-0039). See
+        # `smooth_household_baseline`'s own docstring for the full reasoning.
+        smoothed_household_w, self._household_window = smooth_household_baseline(
+            net_w - charger_w,
+            self._household_window,
+            size=self._config.smoothing_window,
+            command_changed=self._command_stepped,
         )
-        surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
-        # the baseline-mode dry-run. Reads the same stale charger_w a step-down can leave
-        # behind for one cycle (issue #990) -- deliberately not debounced here, unlike
-        # solar_surplus_w/peak_headroom_a/apply_peak_clamp above: `smooth_net_power` already
-        # runs `net_w` through R10's own multi-cycle smoothing window, which dampens (though
-        # does not eliminate) a one-cycle stale-charger_w spike the same way it dampens any
-        # other transient. Revisit if a real-world report ties a Solar/SolarOnly misstep to
-        # this specific staleness rather than #990's already-fixed R3/display paths.
+        surplus_w = -smoothed_household_w  # shared by Solar/SolarOnly dispatch below and the
+        # baseline-mode dry-run.
         now = self.hass.loop.time()  # injected, not read inside modes/engines
         # ADR-0012: carries this cycle's readings/derived values into the ModeHandler registry
         # lookup below, replacing the loose local variables the old dispatch chain threaded by
@@ -1735,15 +1740,30 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     def _clear_baseline_deferral(self) -> None:
         """ADR-0039/R3 case (a): `deferred_previous` means "the previous CONTROL CYCLE deferred
         on the command-changed ground", not "the previous call to `debounce_baseline_w` did".
-        A cycle that returns before that call is reached -- the required-adapter fault in
-        `_run_cycle`, or any exception funnelled to `_async_update_data` -- deferred nothing, yet
-        still writes 0 A, which is a real step. Leaving the flag set would block case (a) on the
-        RECOVERY cycle, which is precisely the cycle whose `charger_w` is stale from that forced
-        drop to 0 A: the reading then looks far below the accepted baseline, case (a) cannot
-        reject it, and the debounce window commits a contaminated, headroom-inflating value.
-        Cleared here rather than in the engine, since only the coordinator knows a cycle ended
-        without consulting it."""
+        A cycle that returns before that call is ever reached this cycle -- always true of the
+        required-adapter fault, and true of the top-level exception handler except when the
+        exception itself is raised downstream of the call (`_enter_fault`'s own docstring says
+        more) -- deferred nothing, yet still writes 0 A, which is a real step. Leaving the flag
+        set would
+        block case (a) on the RECOVERY cycle, which is precisely the cycle whose `charger_w` is
+        stale from that forced drop to 0 A: the reading then looks far below the accepted
+        baseline, case (a) cannot reject it, and the debounce window commits a contaminated,
+        headroom-inflating value. Cleared here rather than in the engine, since only the
+        coordinator knows a cycle ended without consulting it; called from `_enter_fault` at
+        those two sites rather than from each directly (ADR-0046's one-statement-per-fault-site
+        body rule) -- the third (ev_soc) is NOT one of them, since it DOES reach the debounce
+        call this cycle, and `_enter_fault` skips this clear there (`clear_baseline_deferral`)."""
         self._baseline_debouncer = replace(self._baseline_debouncer, deferred_previous=False)
+
+    def _clear_household_window_deferral(self) -> None:
+        """Issue #1329's own version of `_clear_baseline_deferral` just above, for
+        `smooth_household_baseline`'s `HouseholdWindow.deferred_previous` rather than
+        `debounce_baseline_w`'s `BaselineDebouncer.deferred_previous` -- same reasoning, and
+        called from the same `_enter_fault` call sites. Unlike `_clear_baseline_deferral`, this
+        one's needed at all three: the ev_soc fault return sits after the baseline debounce
+        call (unaffected by it) but before the household-window call ever runs this cycle,
+        which the other two fault sites also never reach."""
+        self._household_window = replace(self._household_window, deferred_previous=False)
 
     async def _write(self, value: float) -> None:
         """The single write site (ADR-0039's `_command_stepped`/`_last_commanded_a` are
@@ -1788,11 +1808,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             _LOGGER.warning("smart_charging fault: %s", reason)
             self._was_faulted = True
 
-    def _enter_fault(self, reason: str) -> None:
+    def _enter_fault(self, reason: str, *, clear_baseline_deferral: bool = True) -> None:
         """ADR-0007/C5's single fault-handling code path, one call: logs the fault
-        (`_log_fault`'s own once-per-outage discipline) and starts the fault stop's cooldown
-        (`_start_fault_stop_cooldown`, C5/R11, issue #1311) together, so each of the three
-        fault sites is one statement in its caller's body -- ADR-0046's body rule for
-        `_run_cycle` (a call to a named step, one statement each) rather than two."""
+        (`_log_fault`'s own once-per-outage discipline), starts the fault stop's cooldown
+        (`_start_fault_stop_cooldown`, C5/R11, issue #1311), and clears the household window's
+        own one-cycle-deferral cap (issue #1329) together, so each of the three fault sites is
+        one statement in its caller's body -- ADR-0046's body rule for `_run_cycle` (a call to a
+        named step, one statement each) rather than several.
+
+        `clear_baseline_deferral` defaults True for two of the three call sites. The
+        required-adapter fault always returns before `debounce_baseline_w` is reached this
+        cycle, exactly the case `_clear_baseline_deferral`'s own docstring describes. The
+        top-level exception handler is the same by default, but not a guarantee -- it wraps the
+        whole of `_run_cycle`, so an exception raised downstream of `debounce_baseline_w` (or
+        even of `smooth_household_baseline`) reaches it too, and clearing a flag that cycle's
+        own call legitimately just set is an accepted residual there (unchanged from `main`'s
+        own unconditional clear at that site) rather than a case this parameter tries to cover.
+        The THIRD call site -- the ev_soc fault -- passes `clear_baseline_deferral=False`, and
+        for it the ordering *is* a guarantee: it always sits AFTER `debounce_baseline_w` already
+        ran this cycle, so a `deferred_previous=True` reaching here was set by that same cycle's
+        own, legitimate call and must survive the fault exactly as it would survive an ordinary
+        cycle (round-2 review finding, #1380) -- clearing it here would let a breaching
+        household increase defer for two consecutive cycles, against R10 AC5's one-cycle bound
+        (ADR-0039). `_clear_household_window_deferral` carries no ev_soc-site split -- all three
+        fault sites are guaranteed to return before `smooth_household_baseline` reaches this
+        cycle -- but shares the exception-handler residual above, since that site's guarantee is
+        the same non-guarantee either way."""
         self._log_fault(reason)
         self._start_fault_stop_cooldown()
+        if clear_baseline_deferral:
+            self._clear_baseline_deferral()
+        self._clear_household_window_deferral()
