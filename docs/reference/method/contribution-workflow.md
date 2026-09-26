@@ -83,9 +83,9 @@ exception: `cleanup` is triggered by the human stating that the merge happened, 
 session does not watch for the merge — no step dispatches it, and the skill itself guards
 against a statement that turns out to be premature.
 
-## Rule C — decisions go through `grilling`
+## Rule C — decisions go through `clarify`
 
-In an interactive session, a decision put to the human partner is asked through `grilling`,
+In an interactive session, a decision put to the human partner is asked through `clarify`,
 never as a loose question in a status report.
 
 ## Rounds and the cap
@@ -115,9 +115,8 @@ never as a loose question in a status report.
   fixing again: the review step, at the end of that pass, puts the exit labels on (**Exit
   labels** below) and posts one escalation comment handing the disagreement to the human,
   who has **two decisions**: merge as is, accepting the open findings, or **grant another
-  round** — a fresh count, since the escalation comment is itself the reset event. In-session
-  they are asked through `grilling`. A grant is an instruction given to the session, never
-  inferred from a thread or a default answer.
+  round** — a fresh count, since the escalation comment is itself the reset event. A grant
+  is an instruction given to the session, never inferred from a thread or a default answer.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply

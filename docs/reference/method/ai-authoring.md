@@ -125,7 +125,7 @@ because the steps still visible ahead pull attention towards being done. *Demand
 bound asks: "every changed path has its checklist applied" forces legwork where "review the PR"
 does not, and it binds flat reference ("every rule applied") as much as a sequence. `grilling`
 shows both — a fuzzy opening bound ("until you reach a shared understanding") rescued by a
-checkable terminal gate (the user confirms) and a high-demand question format. Sharpen the bound
+checkable terminal gate (the user confirms) and a high-demand round format. Sharpen the bound
 first; hiding later steps needs a context boundary (a subagent, a hand-off).
 
 **Negation.** Steering by prohibition drags the forbidden behaviour into context and makes it

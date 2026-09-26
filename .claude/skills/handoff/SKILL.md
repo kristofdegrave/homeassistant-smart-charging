@@ -43,9 +43,9 @@ Name skills, not procedures — the skill carries its own instructions.
 
 - Artifact work: `implement`, which resolves the issue's row of `CLAUDE.md`'s **Model
   selection** table and follows the work file it names. Cite the row, don't restate the table.
-- Before an issue exists: `work-idea` (an `idea` issue), `file-task-issue` (file the issues
-  that fall out).
-- Any open question the human partner has to settle, at any step: `grilling`.
+- Before an issue exists: `work-idea` (an `idea` issue), `grilling` (stress-test a decision
+  with the human partner), `file-task-issue` (file the issues that fall out).
+- Any open question the human partner has to settle, at any step: `clarify`.
 - Once an issue has a PR: record which step of the contribution workflow the work is at, and
   route there — the doc `CLAUDE.md`'s **Contribution workflow** section routes to names the
   skill each step runs through, so the note does not.

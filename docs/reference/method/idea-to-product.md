@@ -87,7 +87,7 @@ buy-in relocates the ambiguity into the child issues, so no idea skips this stag
 own the technique, and the shape of the idea picks between them:
 
 - **`grilling`** for a branch-heavy idea — one where settling a decision opens further
-  decisions, so the dialogue has to work a design tree.
+  decisions, so the dialogue has to work a design tree in rounds.
 - **`brainstorming`** for a narrow one — a single artifact or a single behaviour, where the
   questions are few and the design converges in one pass.
 
