@@ -32,12 +32,14 @@ charger power, so a lagging charger reading has to be kept out of the window.
   ADR-0039 settled that for R3's baseline; it holds equally for a sample entering a window.
 - **R3, C4 and the raw net-power reading must not move**, so a breach cannot hide behind a
   window (ADR-0006, R3).
-- **The evidence is the author's simulation and the HA-harness regressions.** Above a window
-  of 1, Option A settles in simulation with and without the lag, and Option B at no size. The
-  regressions pin windows 4 and 6. At a window of 1, A defers nothing and equals C, with no
-  result recorded under the lag. Option D was not simulated.
+
+Step numbers are ADR-0006's.
 
 ## Considered options
+
+Options A to C come from the author's simulation, and the HA-harness regressions pin windows 4
+and 6. D is argued, not run. At a window of 1, A defers nothing and equals C, with no result
+recorded under the lag.
 
 ### Option A — Smooth net import and charger power together, per sample
 
@@ -75,19 +77,18 @@ this cycle's own reading.
 - Pro: the engine stays judgeable from its readings alone, with no new parameter or flag, and
   R10's "most recent N samples" stays true.
 - Con: on every command change, a sample taken with a lagging charger reading enters the window
-  and stays for N cycles: the self-actuation ADR-0039 found for R3, now averaged in. This is
-  argued, not measured.
+  and stays for N cycles: the self-actuation ADR-0039 found for R3, now averaged in.
 
 ## Decision
 
 **Option A.** It is the only option measured to settle above a window of 1 (its first Pro
-against B's and C's first Cons). It is chosen over D on D's Con, an argument, not a measurement;
-should D be shown to settle, dropping the deferral is a later decision. A takes nothing from R3
+against B's and C's first Cons), and is chosen over D on D's Con; should D be shown to settle,
+dropping the deferral is a later decision. A takes nothing from R3
 or C4.
 
 This narrows **one clause**, in ADR-0006's step 2 and repeated in ADR-0036's Decision: for
-step 6's solar surplus, charger power now enters smoothed, jointly with net import. Its every
-consumer reads it: the `Solar` and `SolarOnly` dispatch, `Auto`'s solar-surplus test and the
+step 6's solar surplus, charger power now enters smoothed, jointly with net import. Every
+consumer of it reads the new form: the `Solar` and `SolarOnly` dispatch, `Auto`'s solar-surplus test and the
 baseline-mode dry-run. Both records keep Status `Accepted`, unedited.
 
 Unchanged:
@@ -108,8 +109,8 @@ command-changed signal; its flag, separate from R3's, travels with the window.
   from the readings alone, as ADR-0039 accepted for R3.
 - **Requirements** follow-up: a `requirement` task rewords R10's What and window criterion, the
   overview and glossary, `entity-catalog.md`, UC02's set-point and `control-cycle.md`: the
-  solar surplus is smoothed from the household baseline, with the deferral. Until then the
-  analysis layer describes Option C.
+  solar surplus is smoothed from the household baseline, with the deferral. It lands before the
+  code follow-up merges, analysis first.
 - Out of scope: R5's escalated-rate forecast. R5 fits it to a smoothed, undeferred household
   baseline, on the premise that the window already keeps out the system's own actuation; this
   record's Context is evidence against it for the solar surplus. Which form R5 reads, and
@@ -165,9 +166,9 @@ The dot-directories are named, because a root sweep skips them.
 | `docs/analysis/entity-catalog.md:130` | The solar set-point converges the smoothed net value | Requirements |
 | `docs/analysis/control-cycle.md:17` | Purpose: smooth the net grid power reading | Requirements |
 | `docs/analysis/control-cycle.md:74` | Step 2 node: smooth `net_w` | Requirements |
-| `docs/analysis/control-cycle.md:79` | Step 6 node: smoothed `net_w`, raw `charger_w` | Requirements |
+| `docs/analysis/control-cycle.md:79` | Dispatch node (its step 4): smoothed `net_w`, raw `charger_w` | Requirements |
 | `docs/analysis/control-cycle.md:106` | Step 2: raw `net_w` enters the window | Requirements |
-| `docs/analysis/control-cycle.md:149` | Step 6 passes smoothed `net_w` | Requirements |
+| `docs/analysis/control-cycle.md:149` | Its step 4 passes smoothed `net_w` | Requirements |
 | `docs/analysis/use-cases/UC02-charge-from-solar-only.md:94` | Set-point keeps smoothed net grid import ≤ 0 W | Requirements |
 | `docs/analysis/use-cases/UC02-charge-from-solar-only.md:142` | Charging row: the same | Requirements |
 | `docs/analysis/use-cases/UC02-charge-from-solar-only.md:181` | Diagram: the same | Requirements |
