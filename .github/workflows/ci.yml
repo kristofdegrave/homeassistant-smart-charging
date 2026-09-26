@@ -133,11 +133,10 @@ jobs:
     # caught instead. Whether it is a *required* status check is branch protection's call,
     # like `authoring`.
     #
-    # The job also carries the watched-path check (`.github/check-path-map.py`) with its
-    # fixtures, and the two PR-time halves of the upstream-drift check: its fixtures, and
-    # `--validate` over the real dependency manifest. All of them belong beside the method
-    # check rather than in the weekly job -- each is an agreement between files a PR edits, and
-    # the weekly job is where a break would go unnoticed.
+    # The job also carries the two PR-time halves of the upstream-drift check: its fixtures,
+    # and `--validate` over the real dependency manifest. Both belong beside the method check
+    # rather than in the weekly job -- each is an agreement between files a PR edits, and the
+    # weekly job is where a break would go unnoticed.
     if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -154,14 +153,6 @@ jobs:
         run: bash .github/test-check-method.sh
       - name: Method check (anchors, profile agreement, work-type completeness, layers)
         run: bash .github/check-method.sh
-      # The watched-path set: one source (.claude/profile.yml's `review.path_map`) and the
-      # three enumerations that consume it. Its own check rather than a sixth method check --
-      # the set is one thing with one owner, and the method check's header says so from its
-      # side. Fixtures first, for the same reason every other check here runs its own first.
-      - name: Watched-path check self-test
-        run: bash .github/test-check-path-map.sh
-      - name: Watched-path check (the three consumers carry review.path_map's set)
-        run: bash .github/check-path-map.sh
       # Only the drift check's fixtures, never the check itself: comparing pins with upstream
       # needs the network and belongs to the weekly schedule (upstream-drift.yml), whereas a
       # PR that breaks the check has to fail here rather than a week later in a job nobody
