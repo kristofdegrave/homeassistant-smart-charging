@@ -122,12 +122,12 @@ with what its finding must name:
 A finding that cannot name what its form requires is not clutter. **Length alone is never a
 clutter finding**: a long document whose every line is load-bearing is correct, and splitting
 one to look shorter only moves the duplication. A length a template sets is conformance, judged
-by that document's own bar. Severity: **Minor**; **Major** where a restated copy already
+by that document's own bar; a cap `.claude/profile.yml`'s `word_budgets` sets is held by
+`.github/check-word-budget.py`, not a reviewer. Severity: **Minor**; **Major** where a restated copy already
 disagrees with its owner, since a reader then has two answers. Scope: as **Permanent scope: as
 written or changed, never as a sweep** below states it for pointers, read for the content a
-change writes. ADR-0042's Context is the worked example: it quotes ADR-0024's exit-table row and R5's
-criterion and traces `_run_cycle`'s early returns — restatement and narrative — where one sentence
-naming the site carries the force.
+change writes. ADR-0042's Context is the worked example: restatement and narrative where one sentence naming
+the site carries the force.
 
 **Completion criteria.** Every step ends on a condition telling the run it is done. *Clarity*:
 can it tell done from not-done? A fuzzy bound invites **premature completion** — stopping early
