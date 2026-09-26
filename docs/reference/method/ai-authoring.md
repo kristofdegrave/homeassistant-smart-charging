@@ -80,7 +80,7 @@ below.
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
 exists and when to reach for it. Only the first is minimised here; the second is the price of the
 split, not a cost to drive to zero. `grill-me` spends cognitive load to buy zero context load;
-`grilling` pays a three-sentence description every turn to stay model-reachable.
+`grilling` pays a two-sentence description every turn to stay model-reachable.
 
 **Information hierarchy.** Three rungs, by how immediately a run needs the material: in-file
 step, in-file reference, reference disclosed behind a pointer. **Progressive disclosure** is the
