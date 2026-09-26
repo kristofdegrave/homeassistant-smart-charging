@@ -16,13 +16,13 @@ default change can't silently flip an Urgent/Unreachable or step-up boundary in 
 without also touching this file.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import dt as dt_util
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.smart_charging.adapters.sun import (
     SUN_STATE_ABOVE_HORIZON,
@@ -869,8 +869,11 @@ async def test_uc07_solar_reserve_normal_reserved_normal_cycle(hass, freezer):
 
     Frozen on a Saturday so "no deadline for tomorrow" (Sunday, R14 default None) is
     genuinely true of the real departure-time entities (ADR-0018, issue #402) -- unfrozen,
-    this precondition would depend on whatever the real wall-clock weekday happened to be."""
-    freezer.move_to("2026-01-17 12:00:00")
+    this precondition would depend on whatever the real wall-clock weekday happened to be.
+    Frozen in the evening, not just on the date -- see `_freeze_local`'s docstring below (the
+    naive "12:00:00" this file used before #1422 was actually 04:00 local, the wrong side of
+    the reserved-day split for a flag seeded as tomorrow's date)."""
+    _freeze_local(freezer, datetime(2026, 1, 17, 20, 0, 0))
     calls = _capture_charger_current_writes(hass)
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
@@ -935,8 +938,12 @@ async def test_uc07_manual_profile_never_engages_the_reserve(hass, freezer):
 async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass, freezer):
     """UC05/UC07 mutual-exclusivity case: a departure deadline resolved for tomorrow lifts an
     already-active reserve cap on the very same cycle it becomes resolved (R9's precondition
-    ceasing to hold), not one cycle later."""
-    freezer.move_to("2026-01-17 12:00:00")
+    ceasing to hold), not one cycle later.
+
+    Frozen in the evening, not just on the date -- see `_freeze_local`'s docstring below (the
+    naive "12:00:00" this file used before #1422 was actually 04:00 local, the wrong side of
+    the reserved-day split for a flag seeded as tomorrow's date)."""
+    _freeze_local(freezer, datetime(2026, 1, 17, 20, 0, 0))
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")
@@ -964,3 +971,119 @@ async def test_uc07_deadline_appearing_lifts_the_reserve_the_same_cycle(hass, fr
     await hass.async_block_till_done()
 
     assert coordinator.data.active_soc_limit == 80.0  # reserve lifted -- default resolves again
+
+
+# --- UC07 regression (#1422, diagnosed by #1363): the cap's home-day flag and its deadline
+# precondition must read the RESERVED day (calendar tomorrow until midnight, the date that has
+# just begun from midnight until sun-up) -- not the day after it. Both tests set the flag
+# through the real switch (never `seed_home_day`, which writes the on/off state directly) and
+# select profile/mode through `select.select_option` (never `seed_owned_entity`): after
+# `freezer` crosses midnight the coordinator re-reads owned entities through the Store on its
+# next refresh, and a value only ever pushed as raw state is not what a real user action
+# produces (this file's own past `seed_owned_entity` + clock-advance hazard, see #1363's
+# diagnosis comment).
+
+
+async def _turn_on_home_day(hass):
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.smart_charging_home_day"}, blocking=True
+    )
+
+
+async def _select_option(hass, entity_id, option):
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": entity_id, "option": option}, blocking=True
+    )
+
+
+def _freeze_local(freezer, local_dt):
+    """`freezer.move_to` takes its string/naive-datetime argument as UTC, not this harness's
+    configured local zone (US/Pacific) -- passing a naive local time straight through silently
+    shifts the actual local clock by the zone offset, which is invisible to every existing test
+    in this file (none of them cares which side of local midnight "now" falls on) but would
+    make a midnight-crossing test freeze at the wrong side of it. `dt_util.as_utc` makes the
+    conversion explicit (mirrors `test_notifications_end_to_end.py`'s own `_setup`/`_tick`)."""
+    freezer.move_to(dt_util.as_utc(local_dt))
+
+
+async def _cross_midnight(hass, freezer, local_dt):
+    """Freeze the real clock at `local_dt` (naive, local) and fire the real, already-scheduled
+    midnight refresh (`HomeDaySwitch._async_refresh_at_midnight`, `async_track_time_change`) --
+    mirrors `test_notifications_end_to_end.py`'s own `_tick`: the freeze alone does not reach a
+    `homeassistant.helpers.event` time tracker, only `async_fire_time_changed` delivers the
+    frozen instant to it."""
+    _freeze_local(freezer, local_dt)
+    async_fire_time_changed(hass, dt_util.utcnow())
+    await hass.async_block_till_done()
+
+
+async def test_should_hold_the_cap_past_midnight_when_the_flag_was_set_the_evening_before(
+    hass, freezer
+):
+    """#1422 (R9 AC1/AC6, R13's last criterion): a home-day flag set the evening before a
+    Saturday keeps the solar-reserve cap engaged across midnight until sun-up, instead of
+    lifting at 00:00 -- the shipped bug. Saturday is chosen so the day after the reserved day
+    (Sunday) has no compiled day-of-week default, isolating the flag from the deadline
+    precondition (mirrors #1363's diagnosis loop)."""
+    _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    coordinator = await _setup(
+        hass,
+        data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17) at this moment
+
+    # Evening: every precondition holds for the reserved day (Saturday) -- cap engaged.
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0
+    assert coordinator.active_mode == MODE_OFF
+
+    # Cross midnight into Saturday. The reserved day is still Saturday (today, now) -- the cap
+    # must stay engaged, and Auto must not escalate to Captar for an overnight top-up.
+    await _cross_midnight(hass, freezer, datetime(2026, 1, 17, 0, 1, 0))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0  # still the reserve cap, not the 80% default
+    assert coordinator.active_mode == MODE_OFF  # not escalated to Captar
+    assert calls[-1]["value"] == 0.0
+
+
+async def test_should_hold_the_cap_past_midnight_when_only_mondays_default_would_leak_in(
+    hass, freezer
+):
+    """#1422 (R9 AC1/AC6, R14's last criterion, `resolution-rules.md`'s "the same table,
+    evaluated for the reserved day"): a home-day flag set the evening before a Sunday keeps the
+    cap engaged past midnight even though Monday (the day after the reserved day) has a
+    compiled 06:00 default -- the shipped bug reads that default as if it were resolved for the
+    reserved day itself and lifts the cap on it."""
+    _freeze_local(freezer, datetime(2026, 1, 17, 23, 0, 0))  # Saturday evening
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "20.0")
+    coordinator = await _setup(
+        hass,
+        data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Sunday 2026-01-18) at this moment
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0
+
+    # Cross midnight into Sunday (the reserved day, no compiled default of its own). Monday --
+    # the day after the reserved day -- has a real 06:00 default, but it must not be read as
+    # "a deadline resolved for the reserved day" and lift the cap.
+    await _cross_midnight(hass, freezer, datetime(2026, 1, 18, 0, 1, 0))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0  # still engaged -- Monday's default is ignored

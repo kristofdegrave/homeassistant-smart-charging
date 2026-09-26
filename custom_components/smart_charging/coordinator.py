@@ -68,6 +68,7 @@ from .coordinator_cycle import (
     SolarStepUpGate,
     build_mode_handlers,
     resolve_deadline_urgency,
+    resolve_reserved_day,
     resolve_solar_reserve_gate,
 )
 from .engines.billing_protection import (
@@ -416,18 +417,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     ) -> tuple[time_of_day | None, Callable[[date], time_of_day | None]]:
         """R14's departure-external/sun/low-tariff reads and the date-parameterised deadline
         table, plus R9's solar-reserve-cap gating (resolve_solar_reserve_gate,
-        coordinator_cycle.py) -- the two are resolved together because R9's gate needs
-        tomorrow's deadline, this same block's own result. Mutates ctx.sun_is_up/
+        coordinator_cycle.py) -- the two are resolved together because R9's gate needs the
+        reserved day's deadline, this same block's own result. Mutates ctx.sun_is_up/
         ctx.sun_is_down/ctx.low_tariff_active/ctx.solar_reserve_active in place (ADR-0012's
         existing "assign onto ctx as each value resolves" pattern) and returns
         (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use. deadline_tomorrow
-        has two consumers, not one: R9's own gate (which deliberately fixes on tomorrow's
-        calendar date) and R15's next-occurrence rule (issue #1005), which needs whichever date
-        the occurrence falls on. They coincide today only because both are `now + 1 day` -- a
-        future change to R9's lookahead must not silently move urgency with it, so re-resolve
-        via the closure rather than widening this value's meaning if the two ever diverge.
-        resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) calls for
-        today's deadline. is_holiday is
+        has exactly one consumer -- R15's next-occurrence rule (issue #1005), which needs
+        calendar tomorrow whatever R9's own lookahead does -- and stays calendar tomorrow on
+        purpose (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
+        (`resolve_reserved_day`, coordinator_cycle.py), a separate call through the same
+        closure, so a future change to either one cannot silently move the other's date with
+        it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) also
+        calls, for today's deadline. is_holiday is
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
         table never matches. Each optional-role read here goes through `_read_role` (issue
         #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
@@ -475,17 +476,25 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 day_of_week_default=self.departure_dow_defaults.get(target_date.weekday()),
             )
 
-        # R9's precondition (UC07): the same R14 table evaluated one day ahead.
+        # deadline_tomorrow: R15's next-occurrence rule alone (issue #1005) -- calendar
+        # tomorrow, always, per the docstring above.
         tomorrow_date = now_dt.date() + timedelta(days=1)
         deadline_tomorrow = resolve_deadline_for(tomorrow_date)
+
+        # R9's precondition (UC07): the same R14 table, evaluated for the reserved day (#1422)
+        # -- tomorrow's date until midnight, today's own date (the day that has just begun)
+        # from midnight until sun-up -- never the day after it, which is what tomorrow_date
+        # above becomes once midnight has passed.
+        reserved_day = resolve_reserved_day(now_dt)
+        deadline_reserved_day = resolve_deadline_for(reserved_day)
         forecast_kwh = await self._read_role(ROLE_SOLAR_FORECAST)
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
-            home_day_flag=tomorrow_date in self.home_day_dates,
+            home_day_flag=reserved_day in self.home_day_dates,
             sun_is_down=ctx.sun_is_down,
             forecast_kwh=forecast_kwh,
             forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
-            deadline_tomorrow_resolved=deadline_tomorrow is not None,
+            deadline_tomorrow_resolved=deadline_reserved_day is not None,
         )
         return deadline_tomorrow, resolve_deadline_for
 
