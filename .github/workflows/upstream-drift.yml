@@ -5,8 +5,8 @@ name: Upstream drift
 # and every verdict it can reach are .github/check-upstream-drift.py's, and this workflow only
 # carries the answer to a human. Why it exists, why it may never edit a skill or the manifest,
 # and how a report is closed, are in the CI document `CLAUDE.md`'s **Contribution workflow**
-# topic routes to -- the CI lifecycle and the repository's own checks -- under "The upstream-pin
-# drift check", the single source for that argument; this header does not restate it.
+# topic routes to, under "The upstream-pin drift check" -- the single source for that argument;
+# this header does not restate it.
 #
 # Three invariants this file must keep. Why each one holds is in the routed document; what
 # they are is this file's own subject, and every step below is written to one of them:

@@ -5,8 +5,8 @@ name: Close guard
 # implement code and closing a code task with one marks the work done while it is still
 # outstanding. Why it is a status check rather than a review checklist item, why it is its own
 # workflow rather than a job in ci.yml, and the branch-protection step it still needs, are in
-# docs/reference/method/ci-pipeline.md's "The docs-only close guard" -- the CI lifecycle and the
-# repository's own checks, the single source for that argument; this header does not restate it.
+# docs/reference/method/ci-pipeline.md's "The docs-only close guard" -- the single source for
+# that argument; this header does not restate it.
 
 on:
   pull_request:
