@@ -77,7 +77,7 @@ jobs:
 
   authoring:
     # Not gated on the `changes` filter above: that filter is about integration code, and this
-    # job is about .claude/**. Diff-scoped, so it only ever looks at what a PR adds -- see the
+    # job is about process files. Diff-scoped, so it only ever looks at what a PR adds -- see the
     # script's header for why the back-catalogue is deliberately out of scope. Skipped on
     # push/dispatch, where there is no PR diff to scope to.
     if: github.event_name == 'pull_request'
@@ -99,6 +99,23 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/check-authoring-rules.sh "$BASE_SHA"
+      # The word budget (.github/check-word-budget.py, caps in .claude/profile.yml): diff-scoped
+      # like the check above, and in this job for the same non-blocking weight. `!cancelled()`,
+      # so a red authoring step does not hide a budget overrun until the next push.
+      - uses: actions/setup-python@v7
+        if: ${{ !cancelled() }}
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyyaml==6.0.3
+        if: ${{ !cancelled() }}
+      - name: Word-budget check self-test
+        if: ${{ !cancelled() }}
+        run: bash .github/test-check-word-budget.sh
+      - name: Word budget (no process file grows past its cap, or at all once over it)
+        if: ${{ !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: bash .github/check-word-budget.sh "$BASE_SHA"
 
   method:
     # The method check: heading anchors in both directions between CLAUDE.md and the files
