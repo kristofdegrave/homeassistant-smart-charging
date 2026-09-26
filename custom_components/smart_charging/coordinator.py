@@ -438,11 +438,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
         bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
-        flag currently applies to (at most today's and tomorrow's at once). Resolving today's
-        and tomorrow's deadline are two separate calls to the same closure with two different
-        dates, so each reads the home-day flag for its own date and neither can leak into the
-        other, which is what fixes the flag set in the evening for tomorrow also overriding
-        today's resolution."""
+        flag currently applies to (at most today's and tomorrow's at once). Resolving today's,
+        calendar tomorrow's and the reserved day's deadline are three separate calls to the
+        same closure, one per date, so each reads the home-day flag for its own date and none
+        can leak into another -- which is what fixes the flag set in the evening for tomorrow
+        also overriding today's resolution."""
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
@@ -460,11 +460,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if low_tariff_reading is not None:
             ctx.low_tariff_active = low_tariff_reading
 
-        # R14's four-row table, evaluated for a given calendar date -- shared by both today's
-        # deadline (urgency, below) and tomorrow's (R9's one-day-ahead precondition, UC07),
-        # so the other six args can never drift apart between the two call sites. NF14: the
-        # home-day row is looked up for THIS date alone, never for "whichever the flag was
-        # last read for".
+        # R14's four-row table, evaluated for a given calendar date -- shared by today's
+        # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule) and the
+        # reserved day's (R9's precondition, UC07), so the other six args can never drift apart
+        # between call sites. NF14: the home-day row is looked up for THIS date alone, never
+        # for "whichever the flag was last read for".
         def resolve_deadline_for(target_date: date) -> time_of_day | None:
             return resolve_departure_deadline(
                 external_configured,
@@ -752,9 +752,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 # R15/issue #1005: the next occurrence may fall tomorrow (today's departure
                 # time already passed), and R14's terminal row is a day-of-week default, so
                 # tomorrow's own resolution is needed rather than today's time on tomorrow's
-                # date. This is the same value R9's solar-reserve gate already resolved above
-                # -- reused, not resolved a second time -- gated on `deadline_resolvable` here
-                # so it matches `deadline_today`'s own gating (R9 needs it ungated).
+                # date. `deadline_tomorrow` is calendar tomorrow's own resolution, resolved
+                # once in `_resolve_deadline_and_reserve` and reused here -- not resolved a
+                # second time -- gated on `deadline_resolvable` here so it matches
+                # `deadline_today`'s own gating. R9's solar-reserve gate no longer shares this
+                # value (#1422): it resolves the reserved day's deadline separately.
                 deadline_tomorrow=deadline_tomorrow if deadline_resolvable else None,
                 now_dt=now_dt,
                 effective_battery_capacity_kwh=effective_battery_capacity_kwh,

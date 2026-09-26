@@ -1347,3 +1347,30 @@ def test_should_return_the_same_reserved_day_on_either_side_of_the_midnight_it_c
 
     # Assert
     assert reserved_day_evening == reserved_day_pre_dawn == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_todays_own_date_when_now_is_a_winter_pre_dawn_hour():
+    """A pre-dawn hour well past midnight and still hours from sunrise (e.g. a Northern
+    Hemisphere winter morning) still resolves to today's own date, not the day after it --
+    guards against a split moved later than local noon still passing the 00:01 case alone."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 7, 30, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 17, 0, 0, 0).date()
+
+
+def test_should_return_tomorrow_at_the_exact_noon_boundary():
+    """The split is `<`, not `<=`: local noon itself is already the evening half, so it
+    resolves to calendar tomorrow -- guards against an off-by-one at the boundary itself."""
+    # Arrange
+    now_dt = datetime(2026, 1, 17, 12, 0, 0)
+
+    # Act
+    reserved_day = resolve_reserved_day(now_dt)
+
+    # Assert
+    assert reserved_day == datetime(2026, 1, 18, 0, 0, 0).date()
