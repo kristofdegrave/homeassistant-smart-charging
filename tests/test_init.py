@@ -1,6 +1,6 @@
 """End-to-end setup test (M1 + C1 + C2 + adapters)."""
 
-from datetime import time, timedelta
+from datetime import datetime, time, timedelta
 from unittest.mock import AsyncMock, patch
 
 from homeassistant.components import frontend
@@ -580,8 +580,12 @@ async def test_solar_reserve_soc_option_threaded_engages_configured_cap_live(has
 
     Frozen on a Saturday so "no departure deadline anywhere" (Sat/Sun's own R14 default is
     None) is genuinely true of the real departure-time entities (ADR-0018, issue #402) --
-    unfrozen, this precondition would depend on the real wall-clock weekday."""
-    freezer.move_to("2026-01-17 12:00:00")
+    unfrozen, this precondition would depend on the real wall-clock weekday. Frozen in the
+    evening, not merely on the date: `freezer.move_to` takes a naive string as UTC, not this
+    harness's configured local zone -- this file's own past naive "12:00:00" literal was
+    actually 04:00 local, before local noon, the wrong side of #1422's reserved-day split for
+    a flag seeded as tomorrow's date. `dt_util.as_utc` below makes the conversion explicit."""
+    freezer.move_to(dt_util.as_utc(datetime(2026, 1, 17, 20, 0, 0)))
     seed_charger_states(hass, status="Charging")
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold

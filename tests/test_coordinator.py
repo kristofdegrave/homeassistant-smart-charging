@@ -3104,9 +3104,15 @@ async def test_should_resolve_the_override_when_tomorrow_is_in_home_day_dates(ha
     assert resolve_deadline_for(tomorrow_date) == time_of_day(8, 0)
 
 
-async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass):
+async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass, freezer):
     """The one-day-ahead deadline resolution feeds resolve_solar_reserve_active (R9's
-    mutual-exclusivity clause)."""
+    mutual-exclusivity clause).
+
+    Frozen in the evening (#1422: R9's gate now reads the *reserved* day, which past local
+    midnight is today's own date rather than tomorrow's -- an unfrozen/unspecified clock would
+    make this test's `home_day_dates` seeding, deliberately tomorrow's date, only sometimes
+    match depending on the real wall-clock hour a run happens to start at)."""
+    freezer.move_to(dt_util.as_utc(datetime(2026, 1, 15, 20, 0, 0)))
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state=SUN_STATE_BELOW_HORIZON)
     adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
     config = _config()
