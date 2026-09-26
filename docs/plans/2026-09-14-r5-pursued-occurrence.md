@@ -248,7 +248,7 @@ path the split changes); **plain pytest** · `tests/test_coordinator_cycle.py` f
 the smoothing window and the debounced raw value disagree — asserts, in one test:
 
 - the escalated rate's **peak** bound is computed from the smoothed baseline;
-- its **C4 ceiling** bound is computed from the smoothed net reading (`requirements.md` R5 `:91`);
+- its **C4 ceiling** bound is computed from the same smoothed baseline (`requirements.md` R5 `:91`);
 - the R3 clamp and the C4 clamp both still compute from raw;
 - `sensor.smart_charging_peak_headroom_a` is still the raw-based readout.
 
@@ -262,16 +262,18 @@ other fixture that bound is never composed, the peak assertion is vacuous, and t
 instruction above has no reachable state to describe. **Add a second, smaller case** on a
 CapTar-absent fixture: the rate is C1/C4 only, and its C4 bound is still smoothed.
 
-**Implementation.** **One** new `CycleContext` field, `smoothed_net_w` — not two.
-`_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so it derives the peak
-operand itself: `peak_headroom_a(baseline_w=ctx.smoothed_net_w - ctx.charger_w)` and
-`ceiling_headroom_a(net_w=ctx.smoothed_net_w)`, with `charger_w` unchanged since R10 smooths net
-grid power alone. Both reads are the helper's and no other caller's. Do not derive either from
-`ctx.surplus_w`, which is the peak operand's exact negation (D-3).
+**Implementation.** *Amended after the forecast's baseline was decided (R5's third
+smoothed-baseline criterion): the bounds read R10's admitted joint mean, not a net-only mean.*
+**One** new `CycleContext` field, `smoothed_baseline_w` — the admitted mean `_run_cycle` already
+folds (`smoothed_household_w`). `_escalated_maximum_permitted_rate_a` takes only `ctx` and
+`peak_operand_kw` and fits both bounds to it: `peak_headroom_a(baseline_w=ctx.smoothed_baseline_w)`
+and `ceiling_headroom_a(net_w=ctx.smoothed_baseline_w, charger_w=0.0)`, the helper reading only
+their difference. A named field rather than `-ctx.surplus_w`: the two are the same value by
+design, and the name keeps the forecast's operand visible at the call site (D-3).
 
 **Both construction sites, and no default.** `CycleContext` is built twice in
 `custom_components/`: `coordinator.py:579` and `:1382`, the baseline dry-run, whose docstring warns
-that a placeholder there is the `#990` hazard. `smoothed_net_w` is added as a **required** field —
+that a placeholder there is the `#990` hazard. `smoothed_baseline_w` is added as a **required** field —
 no default — for the reason that docstring gives: a permissive default lets a forgotten construction
 site fail open silently, and this field decides a forecast. That makes the test constructions in
 `tests/test_coordinator_cycle.py` part of this commit; move them here rather than in a follow-up,
@@ -282,8 +284,14 @@ placeholder is sound there **only** because that ctx never reaches `_apply_peak_
 `_escalated_maximum_permitted_rate_a`. State the guarantee at the site rather than leaving the
 reader to infer it from the neighbour.
 
-**Mutation checks**, two — point the peak bound back at `ctx.baseline_w`, then the C4 bound back at
-`ctx.net_w`, and confirm the test fails each time on its own.
+**A second failing test**, for R5 `:92`'s testable consequence: with the household steady and the
+window full of samples from that spell, one change of charger current leaves the escalated rate
+identical on the step cycle and every cycle after — once with the charger power reading tracking
+the draw, once with it lagging one cycle.
+
+**Mutation checks**, three — point the peak bound back at `ctx.baseline_w`, then the C4 bound back
+at `ctx.net_w`/`ctx.charger_w`, then fold the lagged cycle's sample in, and confirm a test fails
+each time on its own.
 
 **Anchors:** `requirements.md` R5 `:90-92` — the smoothed operand, every reading-dependent bound
 fitted to it, and no R3 deferral on it — and R10; `system-overview.md`'s `escalated maximum

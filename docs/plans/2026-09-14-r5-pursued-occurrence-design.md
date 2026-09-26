@@ -151,13 +151,13 @@ here as test anchors rather than re-derived.** `requirements.md` R5:
 The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
 criteria.
 
-**Where it lands.** `_run_cycle` already computes `smoothed_net_w`; it is carried on `CycleContext`
-as its own field. `_escalated_maximum_permitted_rate_a` takes only `ctx` and `peak_operand_kw`, so
-it derives the peak bound's operand itself — `ctx.smoothed_net_w - ctx.charger_w` — rather than
-reading a `_run_cycle` local it cannot see. The C4 bound takes `net_w=ctx.smoothed_net_w` with
-`charger_w` unchanged, since R10 smooths net grid power alone. Deliberately *not* derived from
-`ctx.surplus_w`, which is that operand's exact negation: one refactor of either would silently
-change the other.
+**Where it lands.** *Amended once `:92` named the baseline: R10's admitted joint mean, not a
+net-only mean minus raw `charger_w`, which would move the forecast by up to (N − 1)/N of every
+charger step.* `_run_cycle` already folds that mean (`smoothed_household_w`); it is carried on
+`CycleContext` as its own field, `smoothed_baseline_w`. `_escalated_maximum_permitted_rate_a` fits
+the peak bound to it directly and the C4 bound as `net_w=ctx.smoothed_baseline_w, charger_w=0.0`.
+`ctx.surplus_w` is that mean's negation by design now; the separate name keeps the forecast's
+operand visible rather than borrowed from the solar dispatch.
 
 ### D-4 — the backstop's operands, and where the following occurrence comes from
 
@@ -314,8 +314,8 @@ D-6 relies on keeps clearing for free.
 | The hold's release order and the backstop | same | **E4** |
 | R9's sixth precondition | `custom_components/smart_charging/engines/soc_target.py` | **E3** SOC-Target Engine |
 | `self._pursued_occurrence`, threaded in and out (init at `coordinator.py:213`) | `coordinator.py` | **M1** Coordinator |
-| `smoothed_net_w` on `CycleContext`, **both** construction sites | `coordinator.py`, `coordinator_cycle.py` | **M1** |
-| `_escalated_maximum_permitted_rate_a` reads both smoothed operands | `coordinator.py` | **M1** calling **E5** and **E6** |
+| `smoothed_baseline_w` on `CycleContext`, **both** construction sites | `coordinator.py`, `coordinator_cycle.py` | **M1** |
+| `_escalated_maximum_permitted_rate_a` fits both bounds to that one smoothed baseline | `coordinator.py` | **M1** calling **E5** and **E6** |
 | `following_occurrence` from the pursued occurrence's following day | `coordinator.py`, `coordinator_cycle.py` | **M1** calling **E4** |
 | R18's release | — **no code**; the entry reload already makes it (D-7) | — |
 | The unreachable-block guard and the notification payload | `coordinator.py` | **M1** calling **M3** |
