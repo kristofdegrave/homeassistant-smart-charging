@@ -1,6 +1,6 @@
 ---
 name: submit-pr-review
-description: "Use when posting review findings to a pull request in this project — from CI (_ai-review.yml) or from a local pass run by the review skill, once the pass's reviewer agents have returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules, the CI verdict marker, and the local round marker — CI and local runs both follow it so they never drift."
+description: "Use when posting review findings to a pull request in this project from a pass run by the review skill, once the pass's reviewer agents have returned findings. Submits findings as a native GitHub PR review (event COMMENT) with inline line comments, so they render in the Files changed tab on the exact lines. The single source of truth for the review payload, anchoring rules and the round marker."
 ---
 
 # Submit a PR review
@@ -10,8 +10,9 @@ inline comments — never as a plain issue comment. Findings then render in the 
 tab and land on the exact diff lines.
 
 **Never** use `event: APPROVE` or `event: REQUEST_CHANGES`. The human maintainer is the sole
-merge gate (the merge rule under `CLAUDE.md`'s **Contribution workflow** topic), and a bot
-cannot request-changes or approve a bot-authored PR anyway (GitHub 422). Always `COMMENT`.
+merge gate (the merge rule under `CLAUDE.md`'s **Contribution workflow** topic), and the
+account that opened the PR cannot approve or request changes on it anyway (GitHub 422).
+Always `COMMENT`.
 
 ## 1. Build the review payload
 
@@ -50,20 +51,13 @@ reference.
   identified (quote each with its file), treated as at least Major.
 - End with a ready-to-merge recommendation.
 
-## 4. Verdict marker — differs by caller
+## 4. Round marker
 
-- **CI mode** (`_ai-review.yml`, running as a bot): the **VERY LAST line** of the body MUST be
-  exactly one machine-readable marker — the router keys on it:
-  - `<!-- ai-review-verdict: remarks -->` if there is at least one Critical or Major finding
-    that must be addressed before merge;
-  - `<!-- ai-review-verdict: clean -->` otherwise (Minor/Nit findings alone are clean).
-- **Local mode** (you post as a human `gh` identity): do **NOT** emit the verdict marker, and
-  DO end the body with exactly `<!-- local-review-round -->`. The verdict marker is CI's
-  routing/cycle-count signal; a local review carrying it would be miscounted as an automatic
-  fix cycle. A review without the CI marker reads as ordinary human feedback, which the
-  `address-review-remarks` skill already picks up via its human-comment / `ai-fix-ack` path;
-  the local marker exists only for the interactive round count the review step keeps. CI
-  never greps for it, and it counts a population CI's own cap never sees.
+- The **last line** of the body is exactly `<!-- local-review-round -->`, and the body carries
+  no other marker. It exists only for the round count the `review` skill keeps.
+- The fix step does not key on it: the review is posted under the human partner's own
+  account, so the `fix` skill's §2 finds its comments as it finds any comment by that
+  account.
 
 ## 5. Submit — and recover from a 422
 
@@ -77,14 +71,11 @@ comment — the review must be posted.
 
 ## Who calls this
 
-- **CI**: `_ai-review.yml`'s prompt references this skill and supplies the repo, PR number,
-  head SHA, and base SHA. It runs as the workflow bot, so it uses CI mode (with the marker).
-- **Locally**: the `review` skill runs the pass. Every reviewer it spawns is read-only —
-  they return findings, they do not post — so once they have all returned, the main session
-  posts their findings here as **one** review in local mode (round marker, no verdict marker).
-  One pass is one review, however many reviewers ran. The PR always exists by then: the
-  implement step of the contribution workflow — the doc `CLAUDE.md`'s **Contribution
-  workflow** section routes to — guarantees it.
-  Anchor each finding that carries a file path + new-version line as an inline comment; put
-  the rest in the body. If there is no PR (an uncommitted local draft), report the findings in
-  the session instead of posting.
+The `review` skill runs the pass and supplies the repo, PR number, head SHA and base SHA.
+Every reviewer it spawns is read-only — they return findings, they do not post — so once they
+have all returned, the main session posts their findings here as **one** review, carrying the
+round marker. One pass is one review, however many reviewers ran. The PR always exists by
+then: the implement step of the contribution workflow — the doc `CLAUDE.md`'s **Contribution
+workflow** section routes to — guarantees it. Anchor each finding that carries a file path +
+new-version line as an inline comment; put the rest in the body. If there is no PR (an
+uncommitted local draft), report the findings in the session instead of posting.

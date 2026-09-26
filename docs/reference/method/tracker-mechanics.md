@@ -501,7 +501,7 @@ assuming a batch all landed.
 
 ## Relationship to the review-mechanics skills
 
-`submit-pr-review` and `address-review-remarks` carry tracker commands
+`submit-pr-review` and `fix` carry tracker commands
 of their own. Which of their commands may be written out rather than routed, and which file
 wins where both spell the same one out, is
 settled by [ai-authoring.md](ai-authoring.md)'s **Tracker-dependent mechanics route through

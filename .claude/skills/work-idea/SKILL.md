@@ -6,11 +6,10 @@ description: Use when picking up a GitHub issue labeled `idea` in the Smart Char
 # Work an idea
 
 An `idea` issue can be small or very large, and rarely maps 1:1 to a single artifact. This
-skill turns it into one or more scoped, context-labeled issues that the labeled pipeline can
-then draft — it never drafts an artifact or opens a PR itself.
+skill turns it into one or more scoped, context-labeled issues that the contribution workflow
+can then implement — it never drafts an artifact or opens a PR itself.
 
-This is a manual/interactive skill, not a CI-wired one: the brainstorm is a genuine dialogue
-with a human, so it stays a session task rather than a non-interactive drafter.
+This is an interactive skill: the brainstorm is a genuine dialogue with a human.
 
 The stages this skill walks — the mandatory brainstorm, the two tracks, the verification gate,
 the spec gate, what a child issue is, and when the idea issue closes — are defined once in the
@@ -60,8 +59,8 @@ only sequences those stages and says which skill performs each. Cite it, never r
 
 ## Rules
 
-- One context label per child issue — the pipeline's draft job already refuses to draft an issue
-  with zero or multiple context labels; don't hand it one. A child on the shipped-behaviour track
+- One context label per child issue — the `implement` skill stops on an issue with zero or
+  several, so don't hand it one. A child on the shipped-behaviour track
   may legitimately carry only its kind label until the fixing artifact is known.
 - Don't skip the brainstorm step to save a round-trip — an idea decomposed without the user's
   buy-in just relocates the ambiguity into the child issues.

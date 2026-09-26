@@ -1,6 +1,6 @@
 ---
 name: diagnosing-bugs
-description: Use when a defect is reported against the shipped Smart Charging integration — a claim that the running system misbehaves — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context such as a CI drafter run.
+description: Use when a defect is reported against the shipped Smart Charging integration — a claim that the running system misbehaves — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
 ---
 
 # Diagnosing bugs

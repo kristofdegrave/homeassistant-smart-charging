@@ -47,8 +47,7 @@ Name skills, not procedures — the skill carries its own instructions.
   with the human partner), `file-task-issue` (file the issues that fall out).
 - Once an issue has a PR: record which step of the contribution workflow the work is at, and
   route there — the doc `CLAUDE.md`'s **Contribution workflow** section routes to names the
-  skill each step runs through, so the note does not. `address-review-remarks` is CI's entry
-  for the fix step, not the local one.
+  skill each step runs through, so the note does not.
 
 ## Rules
 

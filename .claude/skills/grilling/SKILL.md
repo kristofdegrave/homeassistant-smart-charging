@@ -1,6 +1,6 @@
 ---
 name: grilling
-description: Use when the user, in an interactive session, explicitly asks to be "grilled" or "grill me" on a plan, decision, or idea, or asks to stress-test their thinking on one. Requires a human respondent — never self-invoke this in a non-interactive context (e.g. a CI drafter/reviewer run) since it blocks on answers nothing will provide.
+description: Use when the user, in an interactive session, explicitly asks to be "grilled" or "grill me" on a plan, decision, or idea, or asks to stress-test their thinking on one. Requires a human respondent — never self-invoke this in a non-interactive context since it blocks on answers nothing will provide.
 ---
 
 # Grilling
@@ -48,6 +48,6 @@ This technique targets large, branch-heavy decisions — e.g. `work-idea`'s brai
 For a single, narrowly-scoped question, the built-in `brainstorming` skill's one-question dialogue
 is a lighter fit; use whichever the referencing skill names.
 
-This is interactive-only: if you find yourself invoked with no human able to answer (e.g. inside
-a non-interactive CI run), do not block — make the recommended answer the default for every open
-question, record them as open questions in your output, and proceed.
+This is interactive-only: if you find yourself invoked with no human able to answer, do not
+block — make the recommended answer the default for every open question, record them as open
+questions in your output, and proceed.
