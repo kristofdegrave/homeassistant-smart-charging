@@ -146,6 +146,8 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   starts a fresh count. The label operations and the comment follow
   [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
 - It does no further work on the PR. The human partner either merges as is, or grants a round.
+  Sending the PR to CI instead is the human's choice too, but CI's pass never sees the reason
+  ([ci-pipeline.md](ci-pipeline.md)).
   A granted round re-enters at **Review**: the review step hands the hold reason to its
   reviewers as context, their findings reach **Fix** as usual, and a pass's exit decides the
   labels. The session's reason is never the verdict (**Rule A**).

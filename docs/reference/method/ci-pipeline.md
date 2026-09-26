@@ -489,15 +489,15 @@ argument says nobody watches.
   verdict on a non-docs diff all add `needs-approval` — same label, same meaning as the
   interactive flow: no automated work pending, human approval to merge still required. The
   two `remarks` exits — the cap and the non-docs hand-off — also add `needs-decision`; the
-  clean verdict never does. `needs-approval` answers *does this need a human*,
-  `needs-decision` answers *is a reason not to merge still open* — findings the review left
-  open, or an interactive session's hold ([contribution-workflow.md](contribution-workflow.md)'s
-  **Exit labels**) — the two states a maintainer scanning the PR list most needs to tell apart,
-  and indistinguishable from the first label alone. Every run that reaches the routing step
-  clears a stale `needs-approval` before any
-  verdict is applied — the removal there is unconditional; a stale
-  `needs-decision` is cleared only by a `clean` verdict, so a granted extra cycle that comes
-  back clean drops it, while a run that produced no verdict at all leaves the findings-open
-  signal standing.
+  clean verdict never does. `needs-approval` answers *is the automated work done*,
+  `needs-decision` answers *is a reason not to merge still open*. That gives three states a
+  maintainer scanning the PR list can tell apart: clean (`needs-approval` alone), capped (both)
+  and, from an interactive session only, held (`needs-decision` alone —
+  [contribution-workflow.md](contribution-workflow.md)'s **Exit labels**). CI never holds a PR,
+  and a CI pass on a held PR does not see the hold's reason. Every run that reaches the routing
+  step clears a stale `needs-approval` before any verdict is applied — the removal there is
+  unconditional; a stale `needs-decision` is cleared only by a `clean` verdict, so a granted
+  extra cycle that comes back clean drops it, while a run that produced no verdict at all
+  leaves the open reason standing.
 - **Merge** (the **Clean up** step's precondition, unchanged): always a manual human action regardless of which path
   drafted or reviewed the PR.
