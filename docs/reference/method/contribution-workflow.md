@@ -120,12 +120,13 @@ never as a loose question in a status report.
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
-  own markers (the local round marker, an `ai-fix-` marker, the escalation marker, the
-  self-grant marker — a marked item is the session's footprint under the developer's own
-  account, **Git identity** below), posted while an exit label was on: after its `labeled`
-  event and before any later `unlabeled` one. Nothing else resets the count, a self-grant
-  comment included; no reset event means counting from the PR's first review. This is the
-  rule's only statement — the `review` skill's *Count the rounds* item is its one procedure.
+  own markers (the local round, `ai-fix-`, escalation and self-grant markers; **Git identity**
+  below), posted while an exit label was on: after its `labeled` event and before any later
+  `unlabeled` one. Every session post carries one — a review's inline comments via its body,
+  else `fix`'s note marker — bar the hold-reason review (**Exit labels** below). Nothing else
+  resets the count, a self-grant comment included; no reset event means counting from the
+  PR's first review. This is the rule's only statement — the `review` skill's *Count the
+  rounds* item is its one procedure.
   A round the human grants, or a human review, therefore never gets refused by a cap it did
   not ask for.
 
@@ -166,9 +167,8 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
   since the review step never reads human review bodies as findings. The fix step then reads it
-  as it reads any human review body, and the chain runs on from **Fix**. Without a marker it
-  also counts as a human item (**Rounds and the cap** above), which changes nothing: the grant
-  has already started a fresh count. The session's reason
+  as it reads any human review body, and the chain runs on from **Fix**. Unmarked, it also
+  counts as a human item, which changes nothing: the grant already started a fresh count. The session's reason
   is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
   `needs-approval`.

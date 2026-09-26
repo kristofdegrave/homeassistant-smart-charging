@@ -8,7 +8,7 @@ description: Use in an interactive session to run this project's contribution wo
 The fix step of the interactive lifecycle, type-agnostic. Model-invocable on purpose, so "/fix #N"
 and "address the review" both reach it. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns the step. This skill is the single source for which
-comments are findings, the fix policy, the reply marker and the summary.
+comments are findings, the fix policy, the reply markers and the summary.
 
 ## 1. Before any fix: stale exit labels
 
@@ -19,8 +19,7 @@ on and a **human item** — as the contribution workflow's **Rounds and the cap*
 event, take both off, whichever is present: the human has said work is pending, so the labels
 are false. The **Exit labels** section (routed from `CLAUDE.md`'s **Contribution workflow**
 section) names this step as the actor; the remove form, its behaviour on an absent label and
-the read-back are **Tracker mechanics**'. Nothing in this skill puts them back; the next
-pass's exit does.
+the read-back are **Tracker mechanics**'.
 
 ## 2. Locate the findings
 
@@ -29,9 +28,9 @@ as comments by a login that does not end in `[bot]`:
 
 - **Inline comments** — list the PR's review comments (`gh api
   "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate`) and keep every one by such a login
-  that does not itself carry `<!-- ai-fix-ack -->` and has no later reply carrying it in the
-  same thread (a reply's `in_reply_to_id` is the thread's first comment). Such a reply means
-  an earlier run already handled it.
+  that does not itself carry an `<!-- ai-fix-` marker (§5) and has no later reply carrying
+  `<!-- ai-fix-ack -->` in the same thread (a reply's `in_reply_to_id` is the thread's first
+  comment). Such a reply means an earlier run already handled it.
 - **Review bodies** — list the PR's reviews (`gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"
   --paginate`) and keep every non-empty body by such a login posted after the most recent
   `<!-- ai-fix-summary -->` comment (all of them when there is none). A local review's body
@@ -90,10 +89,13 @@ Fixing is re-authoring — work with the same context the original author had:
 1. Apply §3, re-authoring per §4 rather than patching around the work file.
 2. Reply in its thread via `resolve-review-thread` §1: what changed (with file references),
    which issue was filed, or why not — one or two sentences. The body starts with
-   `<!-- ai-fix-ack -->`: it is how the next run's §2 and the round count's human-item test
-   tell the session's replies from the human partner's under the one account. Never put it on
-   a comment that is not a direct answer to a finding. A review body has no thread — account
-   for it in the summary instead, mentioning the reviewer by `@login`.
+   `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. A review body
+   has no thread — account for it in the summary instead, mentioning the reviewer by `@login`.
+
+Any other thread reply or PR comment the session posts, in any step, that no other marker of
+the session's fits starts with `<!-- ai-fix-note -->`, which marks nothing handled. Which posts
+carry a marker is the **Rounds and the cap** rule (routed from `CLAUDE.md`'s **Contribution
+workflow** section).
 
 ## 6. Then once, for the run
 

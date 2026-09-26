@@ -12,8 +12,8 @@ the run**, after the fixes are committed and pushed.
 
 ## 1. Reply in the thread
 
-`fix` §5 owns what the reply says and the `ai-fix-ack` marker it starts with; `CLAUDE.md`'s
-**Tracker mechanics** section routes to the REST call. Use both as written.
+`fix` §5 owns what the reply says and the marker it starts with; `CLAUDE.md`'s **Tracker
+mechanics** section routes to the REST call. Use both as written.
 
 ## 2. Resolve — only what was actually fixed, and only after the push
 
