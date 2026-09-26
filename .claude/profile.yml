@@ -66,15 +66,6 @@ labels:
       color: f2a101
       description: "Not yet scoped — work it with the work-idea skill into context-labelled issues"
   action:
-    - name: needs-draft
-      color: 0e8a16
-      description: "Issue: with one context label, trigger the CI drafter"
-    - name: needs-review
-      color: fbca04
-      description: "PR: trigger the fresh AI review"
-    - name: needs-work
-      color: d93f0b
-      description: "PR: trigger the AI fix pass to address review remarks"
     - name: needs-approval
       color: b60205
       description: "PR: no automated work pending — a maintainer may merge it as it stands"
@@ -185,48 +176,6 @@ review:
   # to, counted as interactive_cap is. The same section defines the self-grant and routes here
   # for this number rather than stating it.
   interactive_ceiling: 5
-  # Changed path → the work type whose review checklist judges it. This is the no-label row
-  # of CLAUDE.md's Model selection table, and applies to every PR whatever its label. It is
-  # the fourth enumeration of that set, and the SOURCE of the other three — that row,
-  # ai-pipeline.yml's path filter and _ai-review.yml's diff enumeration, each spelling it in
-  # its own grammar. The watched-path check (.github/check-path-map.py, run by ci.yml) holds all three
-  # to this copy and names which one is missing which tree, so adding a tree still means
-  # editing all four but no longer means remembering to. Only this copy says what a tree is
-  # *for*, which is why it is the source and not merely the fourth. CLAUDE.md's row states the
-  # obligation; the CI document its Contribution workflow topic routes to states why the three
-  # are verified against this rather than generated from it.
-  path_map:
-    - work_type: adr
-      paths: ["docs/adl/**"]
-    - work_type: uc
-      paths: ["docs/analysis/**"]
-    - work_type: documentation
-      paths: ["docs/design/**"]
-    - work_type: development
-      paths: ["custom_components/**"]
-    - work_type: testing
-      paths: ["tests/**"]
-    - work_type: workflow
-      paths:
-        - ".github/workflows/**"
-        - ".github/ISSUE_TEMPLATE/**"
-        - ".github/setup-labels.sh"
-        - ".github/profile-env.sh"
-        # The two checked-in checks, their fixtures, the git hooks, the Claude Code
-        # PreToolUse guard and the settings file that wires it: each is a gate or a rule's
-        # mechanical half, so an edit to one is `workflow` work like the rule itself. The
-        # settings file earns its entry twice over — an edit there decides whether the guard
-        # runs at all, so leaving it out would review the guard and not its off switch.
-        - ".github/check-*"
-        - ".github/test-check-*"
-        - ".github/hooks/**"
-        - ".claude/hooks/**"
-        - ".claude/settings.json"
-        - ".claude/skills/**"
-        - ".claude/agents/**"
-        - ".claude/profile.yml"
-        - "docs/reference/**"
-        - "CLAUDE.md"
 
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.

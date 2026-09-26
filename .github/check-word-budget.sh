@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run the word-budget check (.github/check-word-budget.py) with whichever Python on PATH can
-# import PyYAML, as .github/check-path-map.sh does and for the same reason.
+# import PyYAML, as .github/check-method.sh does and for the same reason.
 #
 # Usage:  .github/check-word-budget.sh BASE [--root DIR]
 #

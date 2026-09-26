@@ -8,9 +8,9 @@ rule a **review dispatch** applies — which files a row resolves to, which chec
 gets, how each is scoped — is stated in that section and only there; nothing here adds to or
 narrows it, and nothing here is a step in resolving a file. What this document does carry
 beyond reasoning is the handful of obligations on whoever **edits** the table — keeping the
-review model in step, keeping the path map's enumerations in step, what a label rename
-touches — which a dispatch never applies. Every `##` below is a topic and every `###` one
-rule, so a pointer reaches any of them through that section.
+review model in step, what a label rename touches — which a dispatch never applies. Every `##`
+below is a topic and every `###` one rule, so a pointer reaches any of them through that
+section.
 
 ## Reviewers and their model
 
@@ -145,32 +145,13 @@ What a `workflow` author reads instead is in `CLAUDE.md`'s **Authoring AI artifa
 
 ## The no-label row's path map
 
-### The path map is one of four enumerations of one set
+### The path map is one list, in one place
 
-`docs/analysis/**` names the `uc` checklist because that tree
-is wider than either label sharing it — `requirement`'s file points at the same one. An entry reaches a CI review only if its tree is also in
-`ai-pipeline.yml`'s path filter, which decides whether a job runs at all, and in
-`_ai-review.yml`'s diff enumeration, which decides what a checklist can see. Those two are
-enumerations beside the row's list, and `.claude/profile.yml`'s `review.path_map` is the
-fourth — and the **source** of the other three, because it is the only one that says what a
-tree is *for* and the only one a script can read without parsing prose. It is the source of the
-*set* and not of the routing: the CI workers still resolve routing from the row above, and
-`.claude/profile.yml`'s own header says no step of `_ai-review.yml` reads that file. That is
-why the row states that adding a tree means adding it in all four.
+The row's arrow list in `CLAUDE.md` is the one enumeration of the changed-path set, so adding
+or moving a tree means editing that list alone.
 
-Which it still does, but not from memory: the watched-path check
-(`.github/check-path-map.py`, run by `ci.yml`) holds all three consumers to the source and
-fails the PR naming which enumeration is missing which tree. Why each consumer is verified
-against the source rather than generated from it — a decision taken per consumer — is
-[ci-pipeline.md](ci-pipeline.md)'s, under **The watched-path check**. The method check no
-longer holds any part of this set; its own header records the handover.
-
-The two CI omissions the check now catches would each have failed differently, which is why
-catching them at all is worth a check rather than a convention. Left out of the **path
-filter**, no job runs, which silences the label half too, since a job that never runs cannot
-add a reviewer. Left out of the **diff enumeration** alone, the job does run, sees nothing
-under that tree, and can post a clean verdict over a change no checklist read — a false clean,
-and the worse of the two.
+`docs/analysis/**` names the `uc` checklist because that tree is wider than either label
+sharing it — `requirement`'s file points at the same one.
 
 ### Adding or renaming a context label
 

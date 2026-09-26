@@ -14,8 +14,8 @@ Steps → Edge cases → Requirements satisfied**.
 ## Purpose
 
 Run the [coordinator](system-overview.md#ubiquitous-language) once per [control
-interval](system-overview.md#ubiquitous-language): read the sensors, smooth the net grid power
-reading, ask the [active mode](system-overview.md#ubiquitous-language) module for a desired
+interval](system-overview.md#ubiquitous-language): read the sensors, smooth the solar
+surplus, ask the [active mode](system-overview.md#ubiquitous-language) module for a desired
 charger current, clamp that current with peak protection, and set it — while, alongside those
 steps, keeping the [monthly peak demand](system-overview.md#ubiquitous-language) up to date
 (R21). The coordinator executes the
@@ -35,7 +35,8 @@ timers, the has-charged flag and restart-debounce timer (R11), the step-up/reser
 hold](system-overview.md#ubiquitous-language) is read from rather than separately tracked), both
 threaded in step 4, and the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
-charger currents that R3's deferral cases key on — each
+charger currents that R3's deferral cases and R10's admission rule key on, and whether R10's
+window left the previous cycle's sample out — each
 homed in the rule or use-case that defines its lifecycle.
 
 ## Domain events produced
@@ -71,12 +72,12 @@ homed in the rule or use-case that defines its lifecycle.
 ```mermaid
 flowchart TD
     Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3)"]
-    Read --> Smooth["Smooth net_w<br/>(rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
+    Read --> Smooth["Smooth solar surplus<br/>(charger_w − net_w per sample;<br/>rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — R22)"]
     Volt --> SocLimit["Resolve & materialize active SOC limit<br/>(resolution-rules.md; sensor.smart_charging_active_soc_limit;<br/>ActiveSocLimitChanged on change)"]
     SocLimit --> Dispatch["Dispatch to active mode module<br/>(coordinator reads active mode — NF1)"]
-    Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule: smoothed net_w,<br/>raw charger_w, supply voltage)"]
+    Dispatch --> Desired["Desired charger current<br/>(mode's set-point rule: smoothed<br/>solar surplus, supply voltage)"]
     Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped entirely when the CapTar<br/>capability is absent, R18;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
     Peak -->|no| Ceiling
@@ -103,14 +104,18 @@ flowchart TD
    readouts that also read it (`solar_surplus_w`, `entity-catalog.md`) are gated on the solar
    capability instead and must still resolve on an installation with no CapTar.
    Produces `SensorsRead`.
-2. **Smooth the net grid power reading (R10).** The coordinator pushes this cycle's raw `net_w`
-   into a rolling window of the last *N* samples (configurable, default 4) and recomputes its
-   [smoothed value](system-overview.md#ubiquitous-language). The smoothed value feeds
-   charging-rate decisions; the raw value is retained for peak protection. A spike lasting a
-   single cycle does not move the smoothed value; a change sustained across the full window
-   does, within the following cycle. `solar_w` is deliberately not smoothed: no charging-rate step
-   of this cycle consumes it, since [solar surplus](system-overview.md#ubiquitous-language) is
-   `charger_w − net_w` (R10). Step 1 reads it every cycle solely to surface it as an attribute of
+2. **Smooth the solar surplus (R10).** The coordinator pairs this cycle's raw `net_w` and
+   `charger_w` into one [solar surplus](system-overview.md#ubiquitous-language) sample,
+   `charger_w − net_w`, admits it to a rolling window of the last *N* samples (configurable,
+   default 4) and recomputes the window's
+   [smoothed value](system-overview.md#ubiquitous-language). On a cycle whose sample R10 does not
+   admit, because the charger current was just changed, the window keeps its earlier samples and
+   their smoothed value stands; R10 is authoritative for when that applies and for its
+   one-cycle bound. The smoothed value feeds charging-rate decisions; the raw readings are
+   retained for peak protection. A spike lasting a single cycle does not change the set-point it
+   feeds; a change sustained across the full window does, within the following cycle. `solar_w` is
+   deliberately not smoothed: no charging-rate step of this cycle consumes it, since solar surplus
+   is formed from net import and charger power alone (R10). Step 1 reads it every cycle solely to surface it as an attribute of
    `sensor.smart_charging_adapter_readings` (ADR-0021), so it stays a raw reading throughout.
 3. **Resolve the supply voltage (R22).** The coordinator selects the [supply
    voltage](system-overview.md#ubiquitous-language) used for all amperes↔watts conversions this
@@ -146,7 +151,7 @@ flowchart TD
    Then the coordinator determines the resolved
    active mode — the `select.smart_charging_mode` selection under `Manual`, or `Auto`'s selection
    (`resolution-rules.md`, whose *Target met* row compares against this resolved active SOC limit) under
-   `Auto` — calls the matching module, passing the smoothed `net_w` alongside the raw readings and
+   `Auto` — calls the matching module, passing the smoothed solar surplus alongside the raw readings and
    the resolved voltage, and surfaces the resolved value read-only as
    `sensor.smart_charging_active_mode`. The module returns a [desired charger
    current](system-overview.md#ubiquitous-language) using its

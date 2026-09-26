@@ -18,13 +18,13 @@
 
 ## Trigger
 
-A [control cycle](../system-overview.md#ubiquitous-language) observes that smoothed [solar surplus](../system-overview.md#ubiquitous-language) has reached at least the [solar start threshold](../system-overview.md#ubiquitous-language) (default 1300 W for `SolarOnly`, chosen so the [minimum charging current](../system-overview.md#ubiquitous-language) can be met from solar alone). Here *smoothed* solar surplus rides on the smoothed [net import](../system-overview.md#ubiquitous-language) (`control-cycle.md` step 2), consistent with the `solar surplus` formula `charger_w − net_w`.
+A [control cycle](../system-overview.md#ubiquitous-language) observes that smoothed [solar surplus](../system-overview.md#ubiquitous-language) has reached at least the [solar start threshold](../system-overview.md#ubiquitous-language) (default 1300 W for `SolarOnly`, chosen so the [minimum charging current](../system-overview.md#ubiquitous-language) can be met from solar alone). Here *smoothed* solar surplus is smoothed from each cycle's own [net import](../system-overview.md#ubiquitous-language) and charger power together (`control-cycle.md` step 2; R10 is authoritative).
 
 ## Main success scenario
 
 1. **Given** `SolarOnly` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a solar stop or carried in from a stop in another mode).
 2. **When** smoothed solar surplus reaches at least the solar start threshold (default 1300 W), **then** the System starts charging within one control cycle — immediately, whether this is the connection's first start or the threshold is already met the moment `Idle` is entered (2b covers a threshold crossing while already waiting in `Idle`, once the has-charged flag is set).
-3. **And** the System converts the smoothed solar surplus into a whole-ampere set-point using the configured [amp-step rounding](../system-overview.md#ubiquitous-language) strategy — default `round down` (the highest whole ampere that keeps smoothed net grid import at or below 0 W, solar-only, never importing) — recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
+3. **And** the System converts the smoothed solar surplus into a whole-ampere set-point using the configured [amp-step rounding](../system-overview.md#ubiquitous-language) strategy — default `round down` (the highest whole ampere the smoothed solar surplus covers, so net grid import stays at or below 0 W) — recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
 
 ## Alternate flows
 
@@ -91,8 +91,8 @@ Then, from `Charging` or `Hold`, the System enters Cooldown for the solar-mode c
 
 The set-point rule for the charging state is a **direct per-cycle computation**: each cycle the
 System converts smoothed surplus into a whole-ampere set-point using the configured amp-step
-rounding strategy (default `round down` — the highest whole ampere that keeps smoothed net grid
-import at or below 0 W; `round up` accepts a bounded grid top-up instead; `round to nearest` can
+rounding strategy (default `round down` — the highest whole ampere the smoothed solar surplus
+covers; `round up` accepts a bounded grid top-up instead; `round to nearest` can
 toggle between the two nearest amp steps), capping at the maximum charging current (C1). Unlike
 UC01, where rounding is fixed to `round up`, this strategy is configurable here. It differs from
 UC01 in one respect: there is **no ongoing grid fallback** (while charging, the floor at the
@@ -139,7 +139,7 @@ immediately when the threshold is met the moment cooldown elapses, without ever 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | smoothed surplus ≥ start threshold, SOC < active SOC limit, no cooldown → Charging, immediately if the has-charged flag is not yet set, else once the threshold has held for the restart debounce period (default 1 min) |
-| Charging | whole ampere from configured amp-step rounding strategy (default: highest ampere keeping smoothed net import ≤ 0 W; no ongoing grid fallback) | surplus < start threshold → Hold · SOC ≥ active SOC limit → SocReached |
+| Charging | whole ampere from configured amp-step rounding strategy (default: highest ampere the smoothed surplus covers; no ongoing grid fallback) | surplus < start threshold → Hold · SOC ≥ active SOC limit → SocReached |
 | Hold | minimum charging current (grid-drawn shortfall accepted, bounded to this period) | surplus ≥ start threshold → Charging · hold period (1 min) elapsed → Cooldown · sustained R3 breach at the minimum current, only while the CapTar capability is present (stop → R11 solar-mode cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) |
 | SocReached | 0 A | a reading shows SOC below the active SOC limit (R7; a lowered limit never ends the stop) → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) · car unplugged/replugged → Idle (disconnect clears the has-charged flag) |
@@ -178,7 +178,7 @@ stateDiagram-v2
     note right of Charging
         Set-point: configured amp-step rounding
         strategy (default: highest whole ampere
-        keeping smoothed net import ≤ 0 W),
+        the smoothed surplus covers),
         recomputed each cycle; cap = maximum
         current (C1). No ongoing grid fallback —
         only the bounded Hold draws from the grid.
