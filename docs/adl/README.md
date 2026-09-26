@@ -54,7 +54,8 @@ template.
 | [0045](0045-every-adr-opens-with-a-summary.md) | Every new ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
 | [0046](0046-cycle-composition-rules-and-complexity-guard.md) | The control cycle's composition rules, held by a complexity guard (supersedes [ADR-0023](0023-decompose-run-cycle-into-named-steps.md)) | Accepted |
 | [0047](0047-user-enable-of-a-capability-gated-entity-lives-in-its-registry-options.md) | A user's own enable of a capability-gated entity is recorded in that entity's registry options (narrows [ADR-0028](0028-registry-level-disabling-for-capability-gated-entities.md)) | Accepted |
-| [0048](0048-retire-the-ai-label-pipeline.md) | Retire the AI label pipeline — the lifecycle runs in local sessions only (deprecates [ADR-0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) and [ADR-0020](0020-skillspector-advisory-pr-scan.md)) | Accepted |
+| [0048](0048-retire-the-ai-label-pipeline.md) | Retire the AI label pipeline — the lifecycle runs in local sessions only (deprecates [ADR-0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) and [ADR-0020](0020-skillspector-advisory-pr-scan.md)) — its kept abstract CI description narrowed by [ADR-0050](0050-the-method-keeps-no-ci-lifecycle-description.md) | Accepted |
 | [0049](0049-solar-surplus-smooths-net-and-charger-power-together.md) | Step 6's solar surplus is smoothed from net import and charger power together (narrows [ADR-0006](0006-coordinator-and-data-flow.md) and [ADR-0036](0036-step-2-smooths-net-power-only.md)) | Accepted |
+| [0050](0050-the-method-keeps-no-ci-lifecycle-description.md) | The method keeps no description of CI's lifecycle (narrows [ADR-0048](0048-retire-the-ai-label-pipeline.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
