@@ -65,8 +65,7 @@ PR naming each enumeration still missing it. Why the three are verified rather t
 and how each omission would fail if one ever shipped, are in the document this section routes
 to and the CI document it routes onward to. `docs/postmortems/**` keeps its
 own rule from the **Post-mortems** topic: a plain fresh-agent pass weighted to quotation
-accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md` or another file the
-list routes to it.
+accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md`.
 
 **Label and path both route, and neither overrides the other.** So a
 PR gets the union: every tree's checklist from the no-label row's path map, **plus** the label
