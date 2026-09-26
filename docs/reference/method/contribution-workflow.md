@@ -105,10 +105,10 @@ against a statement that turns out to be premature.
   itself the reset event. A grant is an instruction given to the session, never inferred from
   a thread.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
-  kinds: the escalation comment posted at the cap, and a **human item** — a review, PR
-  comment or review-thread reply by an author whose login does not end in `[bot]`, whose body
-  carries none of the
-  session's own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
+  kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
+  (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
+  by an author whose login does not end in `[bot]`, whose body carries none of the session's
+  own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
   a marked item is the session's footprint under the developer's own account, **Git
   identity** below), posted while an exit label was on: after its `labeled` event and before
   any later `unlabeled` one. Nothing else resets the count; no reset event means counting from
@@ -119,14 +119,15 @@ against a statement that turns out to be premature.
 ## Exit labels
 
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. Both exits have one actor: the **review step**, at the end of the pass it
+human decides**. `needs-approval` adds that a human may merge the PR **as it stands**, which is
+why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both exits have one actor: the **review step**, at the end of the pass it
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision` if one is present. After the last pass the cap allows, with Critical or Major
 still open, it applies `needs-decision` **alongside** `needs-approval` and posts the one
 escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
-skill applies either label, and neither replaces manual merge approval (**Merge and issue
-closing** below).
+skill applies either label; the one exception is the session putting a PR on hold (below).
+Neither label replaces manual merge approval (**Merge and issue closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a granted round: both labels come off no later than the review step's
@@ -135,6 +136,34 @@ review step's first act removes them whenever a reset event of either kind prece
 and a label is still on (a grant given in-session posts nothing, so only the review step sees
 it; a human item may reach the review step directly) — and that pass's exit re-applies
 whichever is then correct.
+
+**A blocking reason found after the exit puts the PR on hold.** When the session learns, before
+the merge, that a PR carrying `needs-approval` should not merge as it stands:
+
+- It takes `needs-approval` off, and puts `needs-decision` on alone. `needs-decision` alone
+  means the PR is **on hold**: no automated work is running on it, and a human decides.
+- It posts the reason on the PR as an escalation comment ending in the escalation marker. That
+  comment is a reset event (**Rounds and the cap** above), so a round the human partner grants
+  starts a fresh count. The label operations and the comment follow
+  [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
+- It does no further work on the PR. The human partner either merges as is, or grants a round.
+  Sending the PR to CI instead is the human's choice too, but CI's pass never sees the reason,
+  and a `clean` verdict there lifts the hold, over a reason nobody weighed
+  ([ci-pipeline.md](ci-pipeline.md)).
+- On a granted round, the session's first act posts the hold reason as a PR review of its own:
+  a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
+  [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, whose local mode
+  adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
+  since the review step never reads human review bodies as findings. The fix step then reads it
+  as it reads any human review body, and the chain runs on from **Fix**. Without a marker it
+  also counts as a human item (**Rounds and the cap** above), which changes nothing: the grant
+  has already started a fresh count. The session's reason
+  is never the verdict (**Rule A**): the review step's next pass decides the exit.
+- A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
+  `needs-approval`.
+
+The session applies the hold itself, rather than asking the human partner to hold a PR that
+still carries `needs-approval`.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).
