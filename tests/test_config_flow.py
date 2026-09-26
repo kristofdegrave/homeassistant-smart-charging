@@ -94,6 +94,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    CONF_SOLAR_FORECAST_TODAY_ENTITY,
     CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_ONLY_HOLD_MIN,
     CONF_SOLAR_ONLY_MIDPOINT,
@@ -1006,6 +1007,31 @@ async def test_solar_power_entity_can_be_mapped(hass):
         per_step_input={STEP_SOLAR: {**SOLAR_INPUT, CONF_SOLAR_POWER_ENTITY: "sensor.solar_power"}},
     )
     assert result["data"][CONF_SOLAR_POWER_ENTITY] == "sensor.solar_power"
+
+
+async def test_should_create_the_entry_when_solar_forecast_today_is_left_blank(hass):
+    """NF12: absent by default -- a submission that leaves it blank still creates the entry."""
+    # Arrange / Act
+    result = await _run_install_flow(hass, capabilities={CONF_SOLAR_AVAILABLE: True})
+    # Assert
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert CONF_SOLAR_FORECAST_TODAY_ENTITY not in result["data"]
+
+
+async def test_should_save_the_mapping_when_solar_forecast_today_is_submitted(hass):
+    # Arrange / Act
+    result = await _run_install_flow(
+        hass,
+        capabilities={CONF_SOLAR_AVAILABLE: True},
+        per_step_input={
+            STEP_SOLAR: {
+                **SOLAR_INPUT,
+                CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+            }
+        },
+    )
+    # Assert
+    assert result["data"][CONF_SOLAR_FORECAST_TODAY_ENTITY] == "sensor.solar_forecast_today"
 
 
 async def test_uc12_2a_solar_absent_skips_the_solar_step(hass):
@@ -2335,7 +2361,11 @@ def test_uc12_6a_captar_mapping_fragment_has_exactly_the_external_peak_field():
 
 
 def test_uc12_step7_solar_fragments_have_exactly_uc12s_fields():
-    assert _keys(SOLAR_MAPPING_SCHEMA) == {CONF_SOLAR_POWER_ENTITY, CONF_SOLAR_FORECAST_ENTITY}
+    assert _keys(SOLAR_MAPPING_SCHEMA) == {
+        CONF_SOLAR_POWER_ENTITY,
+        CONF_SOLAR_FORECAST_ENTITY,
+        CONF_SOLAR_FORECAST_TODAY_ENTITY,
+    }
     assert _keys(_solar_threshold_schema()) == {
         CONF_SOLAR_START_THRESHOLD_W,
         CONF_SOLAR_ONLY_START_THRESHOLD_W,

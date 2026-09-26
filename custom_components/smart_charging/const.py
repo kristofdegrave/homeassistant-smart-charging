@@ -157,6 +157,10 @@ ROLE_DEPARTURE_EXTERNAL = "departure_external"
 ROLE_HOME_DAY_EXTERNAL = "home_day_external"
 # RA2 (R9): next-day solar forecast, required only when CONF_SOLAR_AVAILABLE.
 ROLE_SOLAR_FORECAST = "solar_forecast"
+# RA2 extension (R9, #1423): optional same-day solar forecast, absent by default (NF12) --
+# read for the reserved day only from midnight until the sun comes up, in place of
+# ROLE_SOLAR_FORECAST above (entity-catalog.md's own row).
+ROLE_SOLAR_FORECAST_TODAY = "solar_forecast_today"
 # Built unconditionally by the factory, no config_flow entry -- sun.sun is a
 # core Home Assistant entity, always present once the (auto-loaded) sun integration is set up.
 ROLE_SUN = "sun"
@@ -241,6 +245,8 @@ CONF_DEPARTURE_EXTERNAL_ENTITY = "departure_external_entity"
 CONF_HOME_DAY_EXTERNAL_ENTITY = "home_day_external_entity"
 # required only when CONF_SOLAR_AVAILABLE (R9 needs it)
 CONF_SOLAR_FORECAST_ENTITY = "solar_forecast_entity"
+# optional, absent by default -- no migration step (NF12); #1423's same-day forecast mapping
+CONF_SOLAR_FORECAST_TODAY_ENTITY = "solar_forecast_today_entity"
 # optional, new key -- catalog *`Solar` mode*, the
 # solar_power adapter role (NF3 optional-role); UC12 step 7. Wired for reading only (issue
 # #911); R10 AC2 reads this role raw and never smooths it, and its control-path use stays
