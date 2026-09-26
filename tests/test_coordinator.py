@@ -61,6 +61,7 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.coordinator_cycle import ActiveCooldown, CycleContext
+from custom_components.smart_charging.engines.signal_conditioning import HouseholdWindow
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
@@ -623,6 +624,74 @@ async def test_adr0007_write_adapter_fault_during_run_cycle_early_fault_return_d
     # Two zero-write attempts: the early return's own `self._write(0.0)` (which raised), then
     # the outer handler's `_safe_write_zero` retry (which also raised and was swallowed there).
     assert adapters[ROLE_CHARGER_CURRENT].written == [0.0, 0.0]
+
+
+async def test_should_clear_household_window_deferral_when_ev_soc_faults_after_a_command_step(
+    hass,
+):
+    """Issue #1329 follow-up: `HouseholdWindow.deferred_previous` must be cleared on every
+    early-return fault path, the same reasoning `_clear_baseline_deferral` already states for
+    `BaselineDebouncer` -- a fault cycle that forces a 0 A write is a real command step, but the
+    ev_soc-fault return sits BEFORE `smooth_household_baseline` ever runs this cycle (unlike the
+    baseline debounce call, which sits before this gate and so isn't affected by it), so a stale
+    `deferred_previous=True` left over from an earlier cycle would wrongly freeze the household
+    window on the very next (recovery) cycle instead of folding its genuine reading in."""
+    # Arrange
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._household_window = HouseholdWindow(samples=(100.0,), deferred_previous=True)
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._household_window.deferred_previous is False
+
+
+async def test_should_wire_command_stepped_into_household_window_smoothing(hass, monkeypatch):
+    """Issue #1329 follow-up: the closed-loop HA-harness tests already pin
+    `smooth_household_baseline`'s own freeze behaviour at the engine level (its unit tests do
+    too), but neither pins that the coordinator actually passes its *own* `self._command_stepped`
+    through as `command_changed` rather than some hard-coded value -- this spies on the real
+    call to prove the value passed tracks the write that ended the PREVIOUS cycle, per that
+    parameter's own contract (ADR-0039)."""
+    # Arrange
+    seen_command_changed = []
+    real_smooth_household_baseline = coordinator_module.smooth_household_baseline
+
+    def _spy(raw_baseline_w, state, size, *, command_changed):
+        seen_command_changed.append(command_changed)
+        return real_smooth_household_baseline(
+            raw_baseline_w, state, size, command_changed=command_changed
+        )
+
+    monkeypatch.setattr(coordinator_module, "smooth_household_baseline", _spy)
+
+    # Act -- cycle 1 (first ever command, nothing to have stepped from); cycle 2 (a different
+    # charger_w commands a different current, stepping the write cycle 2 itself makes); cycle 3
+    # (any reading) is the one whose OWN call should see that step.
+    adapters_1 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0)
+    coord, _ = await _run_mode(hass, adapters_1, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    adapters_2 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0)
+    coord, result_2 = await _run_mode(
+        hass, adapters_2, _config(), MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    adapters_3 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0)
+    coord, _ = await _run_mode(
+        hass, adapters_3, _config(), MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+
+    # Assert -- cycle 2's own write commanded a different current than cycle 1's (surplus drops
+    # to 0 W, below the solar start threshold), so cycle 3's call is the only one of the three
+    # that sees command_changed=True.
+    assert result_2.commanded_current != 12.0  # cycle 2 stepped away from cycle 1's 12 A
+    assert seen_command_changed == [False, False, True]
 
 
 async def test_nf4_grid_voltage_none_is_not_fault(hass):

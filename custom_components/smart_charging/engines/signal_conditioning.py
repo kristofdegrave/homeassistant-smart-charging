@@ -1,9 +1,11 @@
 """Signal-Conditioning engine (E7). Pure — no HA imports.
 
-NF4 supply-voltage resolution, plus R10 net-import smoothing. `smooth_net_power`
-smooths `net_w` only; `solar_power` smoothing is deferred to whichever later slice
-first consumes that role. `smooth_household_baseline` is R10's separate smoothing path for the
-solar modes' own surplus (issue #1329) -- see its own docstring.
+NF4 supply-voltage resolution, plus `smooth_net_power` -- a generic rolling-mean primitive with
+two distinct callers/windows, neither smoothing `solar_power` (deferred to whichever later slice
+first consumes that role, ADR-0036): the separately-sized 15-minute peak-demand window R21
+tracks (`engines/peak_demand_tracker.py`), reading raw `net_w` directly; and, internally,
+`smooth_household_baseline` below, R10's own control-path smoothing for the solar modes' surplus
+(issue #1329) -- see that function's own docstring for what it folds in and why.
 """
 
 from dataclasses import dataclass
@@ -19,11 +21,14 @@ def resolve_voltage(measured: float | None, nominal: float) -> float:
 def smooth_net_power(
     raw_w: float, window: tuple[float, ...], size: int
 ) -> tuple[float, tuple[float, ...]]:
-    """Fold `raw_w` into a rolling window and return (smoothed_mean, new_window) (R10).
+    """Fold `raw_w` into a rolling window and return (smoothed_mean, new_window).
 
     Averages over however many samples are collected so far when the window isn't
     yet full (start-up/restart edge case). The window is a plain parameter -- the
-    caller (M1) threads it across cycles; this function holds no state itself.
+    caller threads it across cycles; this function holds no state itself. A generic
+    primitive, not R10-specific: R21's peak-demand window (M1) and R10's own
+    `smooth_household_baseline` below both thread their own, separately-sized window
+    through it.
     """
     new_window = (*window, raw_w)[-size:]
     return sum(new_window) / len(new_window), new_window
@@ -49,15 +54,13 @@ def smooth_household_baseline(
     """Fold `net_w - charger_w` into the same rolling-window mean `smooth_net_power` computes,
     except on a cycle whose own command changed (issue #1329, R10's steady-input criterion).
 
-    The solar modes set their rate from `charger_w` netted against a mean of *net* import
-    (`_run_cycle`'s old `surplus_w = charger_w - smoothed_net_w`), and that mean is built from
-    `net_w` samples taken while the charger was drawing whatever it was set to on each of those
-    earlier cycles -- not what it draws now. Averaging `net_w` alone therefore always carries
-    some of the charger's own past actuation, at currents that keep drifting as the loop reacts
-    to its own output, and the set-point never settles (modelled in the issue against the real
-    `modes/solar.py`). Subtracting `charger_w` from each *sample* before it is averaged --
-    rather than from the average afterwards -- removes that history: `net_w - charger_w` is the
-    household's own load, independent of whatever the charger drew on the cycle it was read.
+    `net_w - charger_w` is the household's own load, independent of whatever the charger drew on
+    the cycle it was read -- unlike averaging `net_w` alone, which carries the charger's own past
+    actuation, at currents that keep drifting as the loop reacts to its own output, into every
+    mean the solar modes set their rate from: the set-point never settles under steady inputs
+    (modelled in the issue against the real `modes/solar.py`). Subtracting `charger_w` from each
+    *sample* before it is averaged, rather than from the average afterwards, is what removes that
+    history from the mean.
 
     That per-sample subtraction reads the same stale `charger_w` a step can leave behind for one
     cycle (ADR-0039's field condition, issue #990) -- and, unlike the raw R3 clamp, one that

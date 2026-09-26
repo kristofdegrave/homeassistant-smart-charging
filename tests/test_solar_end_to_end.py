@@ -162,17 +162,20 @@ async def test_uc01_closed_loop_holds_steady_once_charging_started(hass):
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_the_default_window(
     hass,
 ):
+    # Arrange -- pre-settle at a steady 2645 W; a precondition, not what's under test.
     coordinator, calls = await _setup(hass)  # CONF_SMOOTHING_WINDOW defaults to 4 (R10)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
-
     for _ in range(18):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
-    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+    assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    for _ in range(6):  # (N + 3) = 7th cycle after the step is the 7th call below
+    # Act -- step solar to 3400 W and run (N + 3) = 7 cycles, N = 4.
+    for _ in range(7):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+
+    # Assert -- settled at 15 A, and holds rather than resuming the hunt (the original defect).
     assert calls[-1]["value"] == 15.0
-    for _ in range(3):  # holds, rather than resuming the hunt (the original defect)
+    for _ in range(3):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
         assert calls[-1]["value"] == 15.0
 
@@ -180,20 +183,23 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_the_de
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagging_charger_reading_at_the_default_window(  # noqa: E501
     hass,
 ):
+    # Arrange -- pre-settle at a steady 2645 W; a precondition, not what's under test.
     coordinator, calls = await _setup(hass)  # CONF_SMOOTHING_WINDOW defaults to 4 (R10)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     prior_charger_w = 0.0
-
     for _ in range(18):
         prior_charger_w = await _cycle_from_feedback_with_lag(
             hass, coordinator, calls, prior_charger_w, solar_w=2645.0
         )
-    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+    assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    for _ in range(6):
+    # Act -- step solar to 3400 W and run (N + 3) = 7 cycles, N = 4.
+    for _ in range(7):
         prior_charger_w = await _cycle_from_feedback_with_lag(
             hass, coordinator, calls, prior_charger_w, solar_w=3400.0
         )
+
+    # Assert -- settled at 15 A, identically to the no-lag scenario, and holds.
     assert calls[-1]["value"] == 15.0
     for _ in range(3):
         prior_charger_w = await _cycle_from_feedback_with_lag(
@@ -203,15 +209,18 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagg
 
 
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_larger_window(hass):
+    # Arrange -- pre-settle at a steady 2645 W; a precondition, not what's under test.
     coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 6})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
-
     for _ in range(18):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
-    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+    assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    for _ in range(8):  # (N + 3) = 9th cycle after the step is the 9th call below
+    # Act -- step solar to 3400 W and run (N + 3) = 9 cycles, N = 6.
+    for _ in range(9):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+
+    # Assert -- settled at 15 A, and holds rather than resuming the hunt (the original defect).
     assert calls[-1]["value"] == 15.0
     for _ in range(3):
         await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
@@ -221,20 +230,23 @@ async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_larg
 async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagging_charger_reading_at_a_larger_window(  # noqa: E501
     hass,
 ):
+    # Arrange -- pre-settle at a steady 2645 W; a precondition, not what's under test.
     coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 6})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
     prior_charger_w = 0.0
-
     for _ in range(18):
         prior_charger_w = await _cycle_from_feedback_with_lag(
             hass, coordinator, calls, prior_charger_w, solar_w=2645.0
         )
-    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+    assert calls[-1]["value"] == 12.0  # precondition: pre-settled before the step under test
 
-    for _ in range(8):
+    # Act -- step solar to 3400 W and run (N + 3) = 9 cycles, N = 6.
+    for _ in range(9):
         prior_charger_w = await _cycle_from_feedback_with_lag(
             hass, coordinator, calls, prior_charger_w, solar_w=3400.0
         )
+
+    # Assert -- settled at 15 A, identically to the no-lag scenario, and holds.
     assert calls[-1]["value"] == 15.0
     for _ in range(3):
         prior_charger_w = await _cycle_from_feedback_with_lag(
