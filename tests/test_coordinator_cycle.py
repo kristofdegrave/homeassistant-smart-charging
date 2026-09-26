@@ -601,10 +601,10 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     """SocGateResolver.resolve (ADR-0012, T2.1) wraps engines/soc_target.py's
     resolve_active_soc_limit + the inline _last_active_soc_limit comparison it replaces: with
     no prior call there is no "last" value to compare against, so the very first resolve always
-    reports changed -- mirroring the old code's None-vs-float first-cycle behavior. It never
-    reports rose, though (#1378): there is equally no prior limit to have risen from."""
+    reports changed -- mirroring the old code's None-vs-float first-cycle behavior. Whether it
+    also reports `rose` is the sibling test below's own behaviour, not this one's."""
     resolver = SocGateResolver()
-    limit, changed, rose = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -612,6 +612,26 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     )
     assert limit == 80.0
     assert changed is True
+
+
+def test_should_not_report_rose_on_the_first_call():
+    """#1378: the very first resolve() call has no prior limit to have risen from, so it never
+    reports rose=True even though it always reports changed=True (the sibling test above) --
+    the case `SocGateResolver`'s own docstring calls out, since a rise clears Power's SOC-limit
+    stop on a missing-reading cycle and a false rise on the very first cycle would clear a stop
+    that was never made either."""
+    # Arrange
+    resolver = SocGateResolver()
+
+    # Act
+    _limit, _changed, rose = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
     assert rose is False
 
 
@@ -626,23 +646,20 @@ def test_soc_gate_resolver_reports_unchanged_when_limit_is_stable():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed, rose = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
     assert changed is False
-    assert rose is False
     assert limit == 80.0
 
 
 def test_soc_gate_resolver_reports_changed_when_limit_moves():
     """A resolve() call whose resulting limit differs from the previous one is reported as
     changed -- here the second call's solar_reserve_active=True flips the R7 row-1 solar-reserve
-    cap on, moving the effective limit from the override (80.0) to the reserve SOC (60.0). This
-    is a fall, not a rise (80.0 -> 60.0), so `rose` stays False -- #1378's own distinction,
-    proven the other way by the two tests below."""
+    cap on, moving the effective limit from the override (80.0) to the reserve SOC (60.0)."""
     resolver = SocGateResolver()
     resolver.resolve(
         80.0,
@@ -650,14 +667,13 @@ def test_soc_gate_resolver_reports_changed_when_limit_moves():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed, rose = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=True,
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
     assert changed is True
-    assert rose is False
     assert limit == 60.0
 
 
@@ -673,14 +689,13 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed, rose = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         50.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(stepped_pct=80.0),
     )
     assert changed is False
-    assert rose is False
     assert limit == 80.0
 
 

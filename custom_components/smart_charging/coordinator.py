@@ -1192,17 +1192,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         stop the *next* Power cycle never asked to leave. A present reading *below* the limit
         always clears, regardless of which mode is active: UC04/R7 AC5's resume condition 1
         (the limit effectively no longer met) is mode-agnostic, unlike the setting side. With
-        no reading at all, R7 AC5 as #1378 rewrites it names what can still end an
-        already-made stop -- a *rise*, never a fall: "a lowered limit never ends it", and "a
-        raised one ends it on a cycle without a reading even when the unread state of charge is
-        above the new limit". So `limit_rose` (the rising edge over this cycle's resolved
+        no reading at all, R7 AC5 as #1379 rewrites it names what can still end an
+        already-made stop -- a *rise*, never a fall: "a lowered limit never ends it", and "such
+        a rise ends it even when the unread state of charge is above the new limit". So
+        `limit_rose` (the rising edge over this cycle's resolved
         active limit, ADR-0012's `SocGateResolver` -- not only a literal `soc_limit_override`
         write; the solar-reserve cap lifting and a solar step-up can raise it too, R7/R8/R9)
         clears the stop on its own; a *lowered* limit (`SocGateResolver`'s `changed` without
         `rose`) leaves it exactly where it was, #1335's own shipped behaviour having conflated
         the two by reading `changed` alone. It can only ever CLEAR, never SET one there either:
-        UC04 line 63 is explicit that a missing reading gives the System nothing to judge the
-        limit by, so it "cannot itself stop there on that cycle" -- a rise witnessed without a
+        UC04's *State of charge unavailable* exception flow is explicit that a missing reading
+        gives the System nothing to judge the limit by, so it "cannot itself stop there on that
+        cycle" -- a rise witnessed without a
         reading is evidence of a *rise*, not evidence of where `ev_soc` now stands against it,
         let alone evidence that Power was the one charging when it happened."""
         if ev_soc is not None:

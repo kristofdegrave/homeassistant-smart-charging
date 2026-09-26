@@ -511,8 +511,8 @@ async def test_should_resume_power_charging_when_the_limit_rises_above_a_reading
     hass, freezer
 ):
     """Should resume even when the raised limit is still below the last-known ev_soc reading --
-    R7 AC5/#1378's own edge case: "a raised one ends it on a cycle without a reading even when
-    the unread state of charge is above the new limit". The sibling test above raises the limit
+    R7 AC5/#1378's own edge case: "such a rise ends it even when the unread state of charge is
+    above the new limit". The sibling test above raises the limit
     (80 -> 90) past the 85% last-known reading, so an implementation that wrongly compared that
     stale reading against the new limit (rather than reading `rose` alone) would also resume
     there -- it would take a second bug to slip through both. Here the limit only rises to 82,
