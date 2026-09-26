@@ -263,9 +263,9 @@ instruction above has no reachable state to describe. **Add a second, smaller ca
 CapTar-absent fixture: the rate is C1/C4 only, and its C4 bound is still smoothed.
 
 **Implementation.** *Amended after the forecast's baseline was decided (R5's third
-smoothed-baseline criterion): the bounds read R10's admitted joint mean, not a net-only mean.*
-**One** new `CycleContext` field, `smoothed_baseline_w` — the admitted mean `_run_cycle` already
-folds (`smoothed_household_w`). `_escalated_maximum_permitted_rate_a` takes only `ctx` and
+smoothed-baseline criterion): the bounds read R10's admitted mean in household sign, not a
+net-only mean.* **One** new `CycleContext` field, `smoothed_baseline_w` — the admitted mean in
+household sign `_run_cycle` already folds (`smoothed_household_w`). `_escalated_maximum_permitted_rate_a` takes only `ctx` and
 `peak_operand_kw` and fits both bounds to it: `peak_headroom_a(baseline_w=ctx.smoothed_baseline_w)`
 and `ceiling_headroom_a(net_w=ctx.smoothed_baseline_w, charger_w=0.0)`, the helper reading only
 their difference. A named field rather than `-ctx.surplus_w`: the two are the same value by
@@ -287,9 +287,12 @@ reader to infer it from the neighbour.
 **A second failing test**, for R5 `:92`'s testable consequence: with the household steady, run the
 cycle until the system has set the charger current on two cycles since the coordinator started
 and the window has turned over past every sample taken before that, then change the charger
-current once — the escalated rate stays identical on the step cycle and every cycle after. Run it
-twice: with the charger power reading tracking the draw, and with it lagging one cycle on the
-step only.
+current once through a lever that is neither a steady input nor a bound of the rate — state of
+charge reaching the active SOC limit, which drops the charger to 0 A, not C1's maximum, `Power`'s
+R17 opt-out, the voltage or the peak limit. Assert the rate on the cycle after the step and on
+every cycle through the window's turnover, while the spell lasts: identical to the rate before
+it. Run it twice: with every power reading tracking the draw, and with the charger power reading
+lagging one cycle on the step only.
 
 **Mutation checks**, three — point the peak bound back at `ctx.baseline_w`, then the C4 bound back
 at `ctx.net_w`/`ctx.charger_w`, then fold the lagged cycle's sample in, and confirm a test fails
@@ -364,15 +367,15 @@ notification acceptance criterion in `requirements.md` for the behaviour; `UC05`
 - **ADR-0006**'s call-order spy test passes **unchanged** — no step added, removed or reordered.
 - `grep` `custom_components/` for `urgency_latched`: none. (E3's `missed_deadline_hold` parameter
   is expected and is not urgency state — success criterion 1 says why.)
-- `grep` `_escalated_maximum_permitted_rate_a`'s body for `ctx.net_w` and `ctx.baseline_w`: neither
-  reaches it any more — the raw readings belong to the clamps and the readout.
+- `grep` `_escalated_maximum_permitted_rate_a`'s body for `ctx.net_w`, `ctx.charger_w` and
+  `ctx.baseline_w`: none reaches it any more — the raw readings belong to the clamps and the readout.
 - **The prose this slice falsifies is updated, not just the code.** `engines/deadline.py:121-123`
   and `:196-223` (the `urgency_latched` explanation, and "a missed-deadline hold clearing (issue
   #1006)"), `deadline.py:140-142` (the result field comments — `required_a`'s "None when no
   deadline is resolved" is false while held, and `urgent`'s "a latch not yet cleared"),
   `coordinator.py:731-738` (the latch comment block, which also states the fault-cycle rule the new
-  field inherits), `coordinator_cycle.py:62` (`net_w`'s "coordinator.py's separate `smoothed_net_w`"
-  — no longer separate), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
+  field inherits), `coordinator_cycle.py:62` (`net_w`'s "coordinator.py's separate, joint `smoothed_household_w`"
+  — now carried on ctx as `smoothed_baseline_w`, so it names that field), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
   a second at T5), and `project-plan.md`'s Phase-2 status row (`:102`) alongside its E4 and M1 status
   lines, all describe a model this slice replaces. A grep for `urgency_latched` catches none of them,
   which is why this bullet is a list and not a grep.

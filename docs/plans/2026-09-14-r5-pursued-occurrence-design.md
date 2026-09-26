@@ -146,15 +146,16 @@ here as test anchors rather than re-derived.** `requirements.md` R5:
   ceiling (C4) leaves. C1's maximum charging current depends on no reading and is unaffected, and
   the peak bound is a bound at all only where the peak clamp is composed — so not with the CapTar
   capability absent (R18), nor under `Power`'s R17 opt-out.
-- `:92` — that smoothed baseline is R10's admitted joint mean, negated, and carries **no** R3
+- `:92` — that smoothed baseline is the negation of R10's smoothed solar surplus — the admitted
+  mean in household sign, `smoothed_household_w` — and carries **no** R3
   deferral; under `:92`'s own qualifiers the rate then does not depend on the charger current.
 
 The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
 criteria.
 
-**Where it lands.** *Amended once `:92` named the baseline: R10's admitted joint mean, not a
+**Where it lands.** *Amended once `:92` named the baseline: R10's admitted mean in household sign, not a
 net-only mean minus raw `charger_w`, which would move the forecast by up to (N − 1)/N of every
-charger step.* `_run_cycle` already folds that mean (`smoothed_household_w`); it is carried on
+charger step.* `_run_cycle` already folds that mean (`smoothed_household_w`, household sign); it is carried on
 `CycleContext` as its own field, `smoothed_baseline_w`. `_escalated_maximum_permitted_rate_a` fits
 the peak bound to it directly and the C4 bound as `net_w=ctx.smoothed_baseline_w, charger_w=0.0`.
 `ctx.surplus_w` is that mean's negation by design now; the separate name keeps the forecast's
