@@ -14,12 +14,7 @@
 #   grep -rln 'profile\.yml' .github/ .claude/ docs/
 #
 # Every hit is a candidate: some name the file to say what it holds rather than to read it.
-# The CI workers are among the hits and are the case worth knowing. No step of _ai-review.yml
-# reads this file; what it does is tell its review worker to take the label vocabulary — the
-# `labels` section, and nothing else here — from the pull request's own copy. Routing it
-# resolves from CLAUDE.md's Model selection table, and the enumeration it carries its own copy
-# of is its diff enumeration, a different thing from `review.path_map` below. Which parts of
-# this file a given worker reads is that workflow's to state, not this header's.
+# Which parts of this file a given reader reads is that reader's to state, not this header's.
 
 repo:
   owner: kristofdegrave
@@ -69,7 +64,7 @@ labels:
   pretriage:
     - name: idea
       color: f2a101
-      description: "Not yet scoped — work it with the work-idea skill before adding needs-draft"
+      description: "Not yet scoped — work it with the work-idea skill into context-labelled issues"
   action:
     - name: needs-draft
       color: 0e8a16
@@ -107,10 +102,10 @@ labels:
       description: "Test-authoring work, one task of an epic's implementation spec"
     - name: workflow
       color: e99695
-      description: "CI/skill/agent-authoring change (review only — no auto-drafter)"
+      description: "Skill, agent, workflow or process-doc change (drafting directed by the maintainer)"
     - name: documentation
       color: ededed
-      description: "Design-doc change (docs/design/**); review only, not yet wired into the CI drafter's label set"
+      description: "Design-doc change (docs/design/**)"
   # Orthogonal to the context label, never a substitute. GitHub creates both by default with a
   # vaguer description; the script's --force rewrites it to the meaning Issue conventions gives
   # them. Colours are GitHub's own defaults, so re-running never recolours labels already on
@@ -184,7 +179,7 @@ review:
   # Review passes an interactive session may run per PR before the loop stops and escalates;
   # counted from the most recent reset event, as docs/reference/method/contribution-workflow.md's
   # **Rounds and the cap** defines. That section routes here for the number rather than
-  # stating it. CI's own loop cap is _ai-review.yml's and is not this key.
+  # stating it.
   interactive_cap: 2
   # Changed path → the work type whose review checklist judges it. This is the no-label row
   # of CLAUDE.md's Model selection table, and applies to every PR whatever its label. It is

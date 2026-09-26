@@ -1,20 +1,16 @@
 name: Use-case analysis
-description: Request a Smart Charging use-case document to be drafted by the CI runner
+description: Request a Smart Charging use-case document to be drafted
 title: "UCnn — <goal as an active verb phrase>"
 labels: ["uc"]
 body:
   - type: markdown
     attributes:
       value: |
-        This form applies the `uc` context label. Add `needs-draft` yourself afterwards
-        to trigger the AI documentation pipeline: the runner drafts
+        This form applies the `uc` context label. To draft it, run `/implement` on this
+        issue in a local session once it exists: the session drafts
         `docs/analysis/use-cases/<slug>.md` as the `uc` row of CLAUDE.md's Model selection
-        table prescribes, updates the entity-catalog, and opens a PR that Closes this issue
-        (`needs-review` then runs the fresh review; a human gives final manual approval and
-        merges). To draft it in a local session instead, run `/implement` on this issue once
-        it exists.
-
-        Leave `needs-draft` off if you just want to file the idea without drafting it yet.
+        table prescribes, updates the entity-catalog, and opens a PR that Closes this issue.
+        The PR then gets a fresh review; a human gives final manual approval and merges.
   - type: input
     id: uc-number
     attributes:
@@ -71,7 +67,7 @@ body:
     attributes:
       label: Key notes / scope
       description: >
-        Anything the drafter must capture: alternate/exception flows, «extend»/«include»
+        Anything the draft must capture: alternate/exception flows, «extend»/«include»
         relationships, thresholds, edge cases.
     validations:
       required: true
@@ -79,7 +75,7 @@ body:
     attributes:
       value: |
         ---
-        **Authoring contract (for the runner):**
+        **Authoring contract (for the drafting session):**
         - Write it as the `uc` row of CLAUDE.md's Model selection table prescribes — that
           row's work file owns the template and the rules, and its completion bar owns what
           a finished use-case must satisfy.

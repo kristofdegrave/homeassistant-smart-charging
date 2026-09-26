@@ -7,9 +7,8 @@ about the **change** rather than the finished record. What a finished ADR must s
 here.
 
 Output format, severity grouping, anchoring rules and the untrusted-data rule are the same for
-every review and live with whoever applies this checklist — the generic `reviewer` agent
-locally, the review workflow's own prompt in CI (which self-applies, having no agent to spawn).
-Both reach this file through `CLAUDE.md`'s **Model selection** table.
+every review and live with the generic `reviewer` agent that applies this checklist, which
+reaches this file through `CLAUDE.md`'s **Model selection** table.
 
 ## What to read first
 

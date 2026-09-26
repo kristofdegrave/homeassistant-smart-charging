@@ -6,10 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        This form applies the `requirement` context label. Add `needs-draft` yourself
-        afterwards to trigger the AI documentation pipeline, which resolves how a
-        requirement is written from CLAUDE.md's Model selection table. To draft it in a
-        local session instead, run `/implement` on this issue once it exists. Skip the
+        This form applies the `requirement` context label. To draft it, run `/implement` on
+        this issue in a local session once it exists; how a requirement is written resolves
+        from CLAUDE.md's Model selection table. Skip the
         issue-first step entirely only for typo-level/pure-wording edits — this form is
         for anything that changes behavior or acceptance criteria.
   - type: dropdown
@@ -28,7 +27,7 @@ body:
     id: identifier
     attributes:
       label: Identifier (if known)
-      description: e.g. R12, NF3, C4, or the existing ID being changed. Leave blank for a new ID — the drafter assigns the next sequential one.
+      description: e.g. R12, NF3, C4, or the existing ID being changed. Leave blank for a new ID — the author assigns the next sequential one.
       placeholder: "R12"
   - type: input
     id: title

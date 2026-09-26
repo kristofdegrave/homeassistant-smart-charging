@@ -18,10 +18,8 @@ rule, so a pointer reaches any of them through that section.
 
 **Reviewers always run on Opus**, regardless of the artifact type being reviewed — which is
 why the review-model column reads opus in every row today. The column exists anyway: it makes
-a row self-contained, and a row that ever deviates has to argue for it here. Three places must
-keep matching: this column, every reviewer agent definition's frontmatter `model: opus`, and
-CI's `_ai-review.yml` `model` input default — because CI self-applies the reviewer prompt and
-never reads that frontmatter.
+a row self-contained, and a row that ever deviates has to argue for it here. Two places must
+keep matching: this column and every reviewer agent definition's frontmatter `model: opus`.
 
 ## The cell grammar
 
@@ -36,7 +34,7 @@ read the change, and the checks about the change rather than the artifact.
 
 **No row names an entry point.** How a run reaches the work file is the same for every work
 type, so it is not a per-row fact — `CLAUDE.md`'s **Contribution workflow** topic routes to
-both actors' entries, an interactive session's and CI's, and each resolves the row itself. That
+the step that takes the work, and that step resolves the row itself. That
 leaves the row self-contained in the only sense that matters: it says what to follow, and is
 read by whatever followed it there.
 
@@ -53,17 +51,14 @@ named file's scope, as `development`'s work column does for its bar. (`work-type
 describes that tree's shape. Nothing in this table resolves through it: a row names its files
 literally, and this pointer is for a reader wanting the shape, never a step in reaching a file.)
 
-### The checklist is a file; who applies it varies
+### The checklist is a file; the reviewer is generic
 
-**The checklist is a file; who applies it varies — `.claude/agents/reviewer.md` locally, CI's
-own review worker there.** That agent holds
-nothing type-specific — only the untrusted-data rule, how to resolve a checklist and a bar from
+**The checklist is a file; the reviewer is generic — `.claude/agents/reviewer.md`.** That agent
+holds nothing type-specific — only the untrusted-data rule, how to resolve a checklist and a bar from
 this table, what to do when one cannot be read, and the output and anchoring contract every
 review shares. So a row names a `docs/reference/work-types/<label>/review.md` and the generic
 agent is spawned against it. The column names the file, and whoever dispatches follows what
-it says rather than a reviewer they know of from elsewhere. Locally that agent is spawned
-against the file; CI has no agent to spawn and its own worker self-applies the same file, so
-"who applies it" varies while the file does not.
+it says rather than a reviewer they know of from elsewhere.
 
 ### A row is self-contained
 
@@ -101,7 +96,7 @@ judged on disjoint criteria — is settled inside its own completion bar and nev
 
 The rule itself — the union, the tree qualifier, how the two halves are scoped, and what a
 tree's own reviewer rule may and may not do — is stated in `CLAUDE.md`'s **Model selection**
-section, where the review worker applies it. What follows is why it is shaped that way.
+section, where a review dispatch applies it. What follows is why it is shaped that way.
 
 ### Label and path answer different questions
 
@@ -118,8 +113,8 @@ Adding a file must never subtract a reviewer, which a whole-change suppression w
 
 Path routing is the half `CLAUDE.md`'s section never lets a run skip because it is what
 guarantees no changed tree goes unreviewed, and it is also the half that cannot be steered: the label is resolved from the
-PR body, which on a fork PR is written by whoever opened it, so the worst a crafted body can do
-is add a reviewer, never remove one. The label
+PR body, which whoever opened the PR wrote, so the worst a crafted body can do is add a
+reviewer, never remove one. The label
 row is the addition: it brings the checklist written for this kind of work even when the change
 landed somewhere else. A `documentation` PR editing `docs/design/**` therefore gets the
 `documentation` checklist for the file and its label's checklist for the subject, and a `development` PR
@@ -140,12 +135,10 @@ repeats a rule those files own.
 
 ### The `workflow` row has no work file on purpose
 
-**The `workflow` row has no work file on purpose.** A drafted label is contained by the tree
-its drafts write, and `workflow` changes land in the files that instruct future runs, so there
-is no tree to contain one in — CI therefore refuses to draft `workflow` issues and a local
-session hands the drafting to the human partner. The containment rule and the tree each label
-gets are [ci-pipeline.md](ci-pipeline.md)'s; they narrow as work types migrate,
-so they are routed from here rather than restated. Its review is still automated, and its
+**The `workflow` row has no work file on purpose.** A `workflow` change rewrites the files that
+instruct every future run — the skills, the agents, the method and the profile — so its drafting
+is directed by the human partner rather than taken from an issue by a work file. Its review is
+still automated, and its
 checklist is the one file in its `docs/reference/work-types/workflow/` directory: with no bar
 beside it, that file carries the whole of the criteria rather than only what a bar cannot.
 What a `workflow` author reads instead is in `CLAUDE.md`'s **Authoring AI artifacts** topic.

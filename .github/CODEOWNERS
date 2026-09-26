@@ -2,8 +2,7 @@
 # Enforced only when the `main` branch protection rule has
 # "Require review from Code Owners" enabled (see repo Settings → Branches).
 #
-# Because CI-drafted PRs are opened by github-actions[bot], you (a different user)
-# can approve them; the bot cannot self-approve.
+# This is the manual merge gate: nothing reaches `main` without the owner's approval.
 
 *                       @kristofdegrave
 
