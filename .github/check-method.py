@@ -37,8 +37,8 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         declared stack, no label without a slot has an overlays/ directory,
                         no overlay is named for an undeclared stack, and every stack a
                         dependency declares has a `stacks` entry; every dependency declared
-                        `installed: repo` or `vendor` is present, and every copy under
-                        .claude/vendor/ is declared; every `layer:` frontmatter, where a
+                        `installed: repo` or `vendor` is present, and every file under
+                        .claude/vendor/ sits in a declared copy; every `layer:` frontmatter, where a
                         file carries one, names a known layer; no overlays/ directory sits
                         under a label that is not enabled or under a branch directory
   5  no profile values  no value from profile.yml (owner, repository name, board name, node
@@ -185,15 +185,6 @@ VERBATIM_KEY = "verbatim"
 # skill may start, read there by path. It is keyed by the source's owner, so two sources can
 # ship a skill of the same name. `user` has no copy in this repository.
 VENDOR_TREE = ".claude/vendor"
-
-
-def copy_dir(name: str, entry: dict) -> str | None:
-    """The repo-relative directory holding a dependency's copy, with a trailing slash."""
-    if entry.get("installed") == "repo":
-        return f".claude/skills/{name}/"
-    if entry.get("installed") == "vendor":
-        return f"{VENDOR_TREE}/{str(entry.get('source', '')).split('/')[0]}/{name}/"
-    return None
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
 POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
@@ -656,6 +647,15 @@ def declared_dependencies(profile: dict) -> dict[str, dict]:
     return out
 
 
+def copy_dir(name: str, entry: dict) -> str | None:
+    """The repo-relative directory holding a dependency's copy, with a trailing slash."""
+    if entry.get("installed") == "repo":
+        return f".claude/skills/{name}/"
+    if entry.get("installed") == "vendor":
+        return f"{VENDOR_TREE}/{str(entry.get('source', '')).split('/')[0]}/{name}/"
+    return None
+
+
 def stack_dependencies(deps: dict[str, dict]) -> dict[str, dict]:
     return {name: e for name, e in deps.items() if e.get("_group") == STACK_GROUP}
 
@@ -840,13 +840,12 @@ def check_completeness(
                 where,
                 f"declared dependency `{name}` is installed: {entry['installed']} but absent",
             )
-    declared = {copy_dir(name, entry) for name, entry in deps.items()}
+    declared = [d for d in (copy_dir(n, e) for n, e in deps.items()) if d]
     vendor = root / VENDOR_TREE
-    for directory in sorted(vendor.glob("*/*")) if vendor.is_dir() else []:
-        if directory.is_dir() and rel(root, directory) + "/" not in declared:
-            findings.add(
-                4, rel(root, directory) + "/", "vendored copy declared by no `installed: vendor` row"
-            )
+    for path in sorted(vendor.rglob("*")) if vendor.is_dir() else []:
+        where = rel(root, path)
+        if path.is_file() and not any(where.startswith(d) for d in declared):
+            findings.add(4, where, "sits in no copy an `installed: vendor` row declares")
     skills = root / ".claude/skills"
     if skills.is_dir():
         for directory in sorted(p for p in skills.iterdir() if p.is_dir()):

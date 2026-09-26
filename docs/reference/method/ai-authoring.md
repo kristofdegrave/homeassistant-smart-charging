@@ -360,10 +360,10 @@ every pointer under `.claude/**`, `docs/**` and `.github/workflows/**` resolves 
 never revised cannot be the thing a blocking gate asks to edit). **2, anchors inward:** every
 link and every repo-rooted backticked path resolves — in `CLAUDE.md` and in every file check 1
 walks, minus the snapshot trees (the two frozen ones plus `docs/adl/**` and `docs/plans/**`,
-dated records whose paths state what was true at their date, not what the tree holds now),
-and in a copy declared `verbatim: true` links only — a link against the directory it is
-written in and an anchored one to a heading of its target, a backticked path at the repository root and only when its first segment names
-something there; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
+dated records whose paths state what was true at their date, not what the tree holds now) —
+a link against the directory it is written in and an anchored one to a heading of its
+target, a backticked path at the repository root and only when its first segment names
+something there, and in a copy declared `verbatim: true` links only; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
 no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
 agreement:** the Model selection table agrees with the profile's `work_types.enabled` and
 `labels.context`; the commit-prefix table of the
@@ -473,18 +473,18 @@ apply to an async Home Assistant custom integration, and cross-linked so no rule
 `ha-integration-knowledge` carries one local note (the custom-integration path mapping);
 `domain-driven-design` is upstream-intact. A `verbatim: true` row is a byte-identical
 copy instead: never edited, wrapped by a project skill, re-copied on a pin bump; declining an
-upstream change drops the key.
+upstream change drops the key, and its paths get checked.
 
 Two consequences:
 
-- **`.claude/skills/` is the only tree Claude Code loads.** The installer's duplicate under
-  `.agents/skills/` was removed; don't reintroduce it. A `vendor` copy sits outside it, so
+- **`.claude/skills/` is the only tree Claude Code loads.** The installer's `.agents/skills/`
+  duplicate was removed; don't reintroduce it. A `vendor` copy sits outside it, so
   only its wrapper starts it.
 - **A re-sync from upstream would revert that work.** The `computedHash` entries in
   `skills-lock.json` record where a skill came from, not what it must still contain — and
   the same hashes are declared as `sha256:` pins in `.claude/profile.yml`'s `dependencies`, the
   copy the method reads; the two move together, in the same PR. Before
-  re-pulling one, check whether the local copy has diverged — for the two rewritten
+  re-pulling one, check whether its local copy diverged — for the two rewritten
   ones, re-apply the trim rather than accepting the upstream text.
 
 Two obligations follow:

@@ -349,6 +349,8 @@ case_run "2: a dangling link whose text wraps across a line fails" 1 "docs/refer
   "printf 'See [the missing\ndocument](gone.md).\n' >> docs/reference/wf.md"
 case_run "2: a dangling backticked path in a declared dependency skill fails" 1 "dep-skill/SKILL.md:7: names docs/reference/gone.md, which does not exist" \
   "printf 'Read \`docs/reference/gone.md\` first.\n' >> .claude/skills/dep-skill/SKILL.md"
+case_run "2: a dangling backticked path in a vendored copy fails" 1 ".claude/vendor/example/ven-skill/SKILL.md:6: names docs/reference/gone.md" \
+  "sed -i 's/^  method:$/  method:\n    - name: ven-skill\n      source: example\/skills\n      path: skills\/ven-skill\n      pin: commit:0000000\n      installed: vendor/' .claude/profile.yml && mkdir -p .claude/vendor/example/ven-skill && printf -- '---\nname: ven-skill\n---\n\nUpstream text by acme.\n' > .claude/vendor/example/ven-skill/SKILL.md && printf 'Read \`docs/reference/gone.md\`.\n' >> .claude/vendor/example/ven-skill/SKILL.md"
 case_run "2: a dangling link in a skill declared verbatim still fails" 1 "dep-skill/SKILL.md:7: link target notes.md does not exist" \
   "sed -i '/^      path: skills\/dep-skill$/{n;n;s/$/\n      verbatim: true/}' .claude/profile.yml && grep -q '^      verbatim: true$' .claude/profile.yml && printf 'See [the notes](notes.md).\n' >> .claude/skills/dep-skill/SKILL.md"
 
@@ -385,8 +387,10 @@ case_run "4/5: an undeclared skill defaults to method and is scanned" 1 ".claude
   "mkdir .claude/skills/rogue && printf -- '---\nname: rogue\n---\n\nby acme\n' > .claude/skills/rogue/SKILL.md"
 case_run "4: an installed: vendor dependency that is absent fails" 1 "declared dependency \`ven-skill\` is installed: vendor but absent" \
   "sed -i 's/^  method:$/  method:\n    - name: ven-skill\n      source: example\/skills\n      path: skills\/ven-skill\n      pin: commit:0000000\n      installed: vendor/' .claude/profile.yml"
-case_run "4: a copy under .claude/vendor/ that no row declares fails" 1 ".claude/vendor/example/ven-skill/: vendored copy declared by no" \
+case_run "4: a copy under .claude/vendor/ that no row declares fails" 1 ".claude/vendor/example/ven-skill/SKILL.md: sits in no copy" \
   "mkdir -p .claude/vendor/example/ven-skill && printf -- '---\nname: ven-skill\n---\n\nUpstream text by acme.\n' > .claude/vendor/example/ven-skill/SKILL.md"
+case_run "4: a stray file under .claude/vendor/ outside any copy fails" 1 ".claude/vendor/stray.md: sits in no copy" \
+  "mkdir -p .claude/vendor && printf 'notes by acme\n' > .claude/vendor/stray.md"
 case_run "4: a skill directory without SKILL.md fails" 1 "skill directory has no SKILL.md" \
   "mkdir .claude/skills/empty && printf 'notes\n' > .claude/skills/empty/notes.md"
 case_run "4/5: an authored skill's reference file is a method file too" 1 ".claude/skills/step/notes.md:1: method file spells profile value repo.owner" \
@@ -456,7 +460,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=102
+EXPECTED=104
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \
