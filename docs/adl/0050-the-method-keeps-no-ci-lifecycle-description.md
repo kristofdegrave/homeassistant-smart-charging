@@ -24,6 +24,11 @@ git history and the local rules alone.
   they would apply to jobs.
 - **Nothing tests it.** No check reads it, and every `workflow` change has to keep it consistent
   with the rules it repeats.
+- **One reason lives only in it.** ADR-0048 also held that the description explains why each
+  step does one task and why the review loop has a cap. The first is **Rule A**'s author/reviewer
+  separation, which `contribution-workflow.md` states. The second, that a loop no one watches
+  needs a bound, is written only in the description, although **Rule B** runs the local chain
+  unattended too.
 
 ## Considered options
 
@@ -47,16 +52,17 @@ State only that the lifecycle's steps are separable, one task each, and point at
 
 - Pro: each rule lives in one place, and `workflow` reviews stop checking a description of
   something that is not built.
-- Pro: the regular-CI sections of the same document, which have live consumers, are untouched.
 - Con: adopting CI again starts from git history and the local rules alone, with no shape
   written down.
+- Con: the one written reason for a review cap goes with the description unless it is moved.
 
 ## Decision
 
 **Option C.** A's Con is the cost this record removes, and A's Pro serves a project this
 repository does not plan to be. B keeps a smaller copy of the same kind: it still describes a CI
-that does not exist. C's Con is accepted because a rebuild would start from the deleted
-workflows in history and from rules that are already written, not from a summary of them.
+that does not exist. C's first Con is accepted because a rebuild would start from the deleted
+workflows in history and from rules that are already written, not from a summary of them. Its
+second is met by moving the reason, not by keeping the description.
 
 This narrows ADR-0048 in one place: of its Option C, the retirement stands and the kept
 description goes. ADR-0048's Status is unchanged.
@@ -67,8 +73,15 @@ description goes. ADR-0048's Status is unchanged.
   keeps **Label vocabulary sync**, **The docs-only close guard** and **The upstream-pin drift
   check**, whose headings the files that point into them depend on. Whether the file keeps its
   name is left to the change that removes the section.
+- **The cap's reason moves** to `contribution-workflow.md`'s **Rounds and the cap**: the chain
+  runs unattended, so the loop needs a bound.
 - **Every route to the description goes:** `CLAUDE.md`'s **Contribution workflow** routing cell
-  and `contribution-workflow.md`'s intro keep only the regular-CI half.
+  keeps only its regular-CI half, and `contribution-workflow.md`'s intro sentence goes.
+- **A kept section loses its trigger-label reasoning:** the upstream-pin drift check's reason for
+  applying `workflow` alone, in `ci-pipeline.md` and in `upstream-drift.yml`, no longer argues
+  from a label that starts work.
+- **`docs/design/system-design.md` §8.3**, which accounts for every ADR after 0019, gives this
+  record a process row and notes ADR-0048's row as narrowed by it.
 - **Easier:** a `workflow` change is checked against the rules, not also against a description
   of them. **Harder:** nothing records how the lifecycle would split into CI jobs.
 
@@ -78,22 +91,28 @@ description goes. ADR-0048's Status is unchanged.
 rg -n -i --hidden --glob '!.git/' \
   --glob '!docs/adl/**' --glob '!docs/postmortems/**' --glob '!docs/archive/**' \
   --glob '!docs/plans/**' --glob '!CHANGELOG.md' \
-  -e 'ci-pipeline\.md|as CI jobs|into CI jobs|lifecycle as jobs|is the actor' .
+  -e 'ci-pipeline\.md|as CI jobs|into CI jobs|lifecycle as jobs|is the actor' \
+  -e 'starts? (the )?(job|work)' .
 ```
 
-Wide enough because the description lives in one file, so every route to it names
-`ci-pipeline.md`, and the description names itself by its role (jobs, CI as the actor). Keying
-on the section heading alone would miss the intro and the routing cell. `--hidden` keeps
-`.claude/` and `.github/` in. It returns **22** hits on `origin/main`.
+Wide enough because the description lives in one file: a route to it names `ci-pipeline.md`, or
+reaches it through `CLAUDE.md`'s routing cell, which is a hit. The description names itself by
+its role (jobs, CI as the actor), and its reasoning survives elsewhere as a label or job that
+*starts* work. Keying on the section heading alone would miss the intro, the routing cell and
+that reasoning. `--hidden` keeps `.claude/` and `.github/` in. It returns **28** hits on
+`origin/main`.
 
 | Site | Today | Follow-up |
 |---|---|---|
 | `docs/reference/method/ci-pipeline.md:1`, `:4` | The title and intro name the lifecycle as jobs, and CI as the actor | Reworded to the regular-CI checks alone |
-| `docs/reference/method/ci-pipeline.md:9` | Heads the section The lifecycle as CI jobs | The section is removed |
+| `docs/reference/method/ci-pipeline.md:9`, `:15`, `:16`, `:17` | Head the section The lifecycle as CI jobs and list the labels that start each job | The section is removed, its cap reason moved |
+| `docs/reference/method/ci-pipeline.md:252` | Justifies the drift check's `workflow`-only label by a label that would start work | Reworded without a starting label |
+| `.github/workflows/upstream-drift.yml:15` | The same invariant, "least of all one that starts work" | Reworded the same way |
 | `docs/reference/method/contribution-workflow.md:9`, `:10` | Say how the lifecycle would split into CI jobs is described in `ci-pipeline.md` | The sentence is removed |
 | `CLAUDE.md:112` | The **Contribution workflow** cell routes to `ci-pipeline.md` for how the lifecycle would run as CI jobs | Keeps only "the repository's own CI checks" |
 
-13 hits conform: they point at `ci-pipeline.md`'s regular-CI sections, which stay. Out of scope:
+14 hits conform: 13 point at `ci-pipeline.md`'s regular-CI sections, which stay, and
+`.claude/skills/implement/SKILL.md:12` quotes a user's "start work on #N". Out of scope:
 the 3 hits in `.github/test-check-authoring-rules.sh` are synthetic link fixtures that test a
 pattern, not the description, and keep doing so. The excluded trees keep their dated text, and
 this record and its ADL row fall in that exclusion.
