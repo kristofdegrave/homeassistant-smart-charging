@@ -79,9 +79,9 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   - **One found:** the PR goes on hold instead, per
     [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels);
     at the cap, its one escalation comment also names the sibling.
-  - **How the hold ends:** once the lower ADR merges, the human partner grants a round. Its fix
-    merges `origin/main` in, where a conflict on the ADL row is expected, and the next pass
-    reads the complete log.
+  - **How the hold ends:** once the lower ADR merges, the human partner grants a round. The next
+    pass first merges `origin/main` in, where an ADL-row conflict is expected, and reads the
+    complete log.
 - **Abandoned, not deleted.** An ADR the human partner drops before it merges keeps its number
   and its full draft: it merges with `Status: Abandoned — <why, in one sentence>`, and its ADL
   row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log, and the
