@@ -97,10 +97,9 @@ ADR-0045 mention it in their reasoning or their conformance tables, but none of 
 depends on it.
 
 **What stays.** The local lifecycle and its step skills. `needs-approval`, `needs-decision` and
-the rules on who applies them. The `workflow` row's *none — human-authored*, now for a new
-reason: a `workflow` change rewrites the files that instruct every future run, so the human
-partner directs its drafting. `CLAUDE.md`'s no-label path-map paragraph, which becomes the path
-map's only copy.
+the rules on who applies them. The `workflow` row's *none — human-authored*, though its reason,
+the CI drafter's containment, lapses with the drafter. `CLAUDE.md`'s no-label path-map
+paragraph, which becomes the path map's only copy.
 
 **What goes with the labels.** The rule against self-applying the three trigger labels. The path
 map's other copies and the check that holds them together. The CI branch of every skill and
@@ -150,11 +149,18 @@ files the first already hits.
 | **Retained checks, hooks and scripts** (7): `.github/workflows/ci.yml`, `.github/hooks/pre-commit`, `.github/check-method.py`, `.github/test-check-method.sh`, `.github/check-word-budget.sh`, `.github/setup-labels.sh`, `.gitignore` — 12 + 2 | Run or cite the path-map check, name the CI worker, describe the labels as the pipeline's, or justify an ignore rule by the action the pipeline runs | Path-map steps and citations removed with the path map; the comments reworded for regular CI |
 | **The CI lifecycle document and a workflow pointing into it** (2): `docs/reference/method/ci-pipeline.md`, `.github/workflows/upstream-drift.yml` — 53 + 5 | Describe the pipeline in full; point at "the CI lifecycle" and keep a `needs-*` invariant | Rewritten as the abstract description plus its three regular-CI sections; the watched-path section removed with the path map; the pointer and invariant reworded |
 | **Skills** (13) under `.claude/skills/`: `address-review-remarks`, `cleanup`, `diagnosing-bugs`, `file-task-issue`, `fix`, `grilling`, `handoff`, `implement`, `research`, `resolve-review-thread`, `review`, `submit-pr-review`, `work-idea` — 33 + 2 | Carry a CI branch, the self-apply rule or CI's fix entry | CI branches removed; `address-review-remarks` folded into `fix` |
-| **Routing and profile** (6): `CLAUDE.md`, `.claude/profile.yml`, `docs/reference/method/model-selection.md`, `docs/reference/work-types/workflow/review.md`, `docs/reference/profile.md`, `.github/CODEOWNERS` — 42 + 4 | State the self-apply rule, the path map's copies, the three labels, the `workflow` row's CI reason and the checklist's CI-worker checks | Rewritten for the local case; the labels and `path_map` removed from the profile; the secrets checks reworded for any workflow that holds secrets |
+| **Routing and profile** (6): `CLAUDE.md`, `.claude/profile.yml`, `docs/reference/method/model-selection.md`, `docs/reference/work-types/workflow/review.md`, `docs/reference/profile.md`, `.github/CODEOWNERS` — 42 + 4 | State the self-apply rule, the path map's copies, the three labels, the `workflow` row's CI reason and the checklist's CI-worker checks, or justify code-owner review by bot-opened PRs | Rewritten for the local case; the labels and `path_map` removed from the profile; the secrets checks reworded for any workflow that holds secrets; `CODEOWNERS` keeps covering every tree, justified by the manual merge gate alone |
 | **Other method and work-type documents, and the issue forms** (18): under `docs/reference/method/`, `ai-authoring.md`, `contribution-workflow.md`, `decomposition-checklist.md`, `definition-of-done.md`, `idea-to-product.md`, `tracker-mechanics.md`; under `docs/reference/work-types/`, `README.md`, `adr/implement.md`, `adr/review.md`, `development/review.md`, `development/done.md`, `documentation/review.md`, `testing/review.md`, `uc/done.md`, `uc/review.md`; `.github/ISSUE_TEMPLATE/adr.yml`, `requirement.yml`, `use-case.yml` — 51 + 9 | Carry an "in CI…" branch, the review prompt's self-apply sentence, the bot-PR exception to the Runtime check, or a form's prompt to trigger the drafter | "In CI" branches removed or rewritten for the local case |
 | **The design document's ADR index** (1): `docs/design/system-design.md` — 0 + 3 | Lists ADR-0020 and ADR-0041 as standing, and counts the records after ADR-0019 without this one | Both rows marked deprecated by this record, and this record given its row |
 
 No hit conforms: 398 + 62 hits are in the rows above.
+
+Neither search keys on a bare "CI", which the documents also use for the pipeline as an actor
+("CI therefore refuses to draft…"). Over the same scope, `rg -n -e '\bCI\b'` returns 171 hits:
+155 in files the rows above already hold, and 16 in seven other files, all of them regular CI —
+the release workflow, the benchmarks, the authoring and drift checks, and the ADR bar's own
+carve-out — which keep describing it. The pipeline lines among the 155 are removed or rewritten
+by a final sweep, once the pipeline's files are gone.
 
 Out of scope: `.github/workflows/upstream-drift.yml:112` and `:114`, two of the second search's
 hits, name `github-actions[bot]` for regular CI's own issue lookup and keep doing so. The
