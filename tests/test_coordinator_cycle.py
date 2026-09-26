@@ -601,9 +601,10 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     """SocGateResolver.resolve (ADR-0012, T2.1) wraps engines/soc_target.py's
     resolve_active_soc_limit + the inline _last_active_soc_limit comparison it replaces: with
     no prior call there is no "last" value to compare against, so the very first resolve always
-    reports changed -- mirroring the old code's None-vs-float first-cycle behavior."""
+    reports changed -- mirroring the old code's None-vs-float first-cycle behavior. Whether it
+    also reports `rose` is the sibling test below's own behaviour, not this one's."""
     resolver = SocGateResolver()
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -611,6 +612,27 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     )
     assert limit == 80.0
     assert changed is True
+
+
+def test_should_not_report_rose_on_the_first_call():
+    """#1378: the very first resolve() call has no prior limit to have risen from, so it never
+    reports rose=True even though it always reports changed=True (the sibling test above) --
+    the case `SocGateResolver`'s own docstring calls out, since a rise clears Power's SOC-limit
+    stop on a missing-reading cycle and a false rise on the very first cycle would clear a stop
+    that was never made either."""
+    # Arrange
+    resolver = SocGateResolver()
+
+    # Act
+    _limit, _changed, rose = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
+    assert rose is False
 
 
 def test_soc_gate_resolver_reports_unchanged_when_limit_is_stable():
@@ -624,7 +646,7 @@ def test_soc_gate_resolver_reports_unchanged_when_limit_is_stable():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -645,7 +667,7 @@ def test_soc_gate_resolver_reports_changed_when_limit_moves():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         80.0,
         solar_reserve_active=True,
         solar_reserve_soc=60.0,
@@ -667,7 +689,7 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
-    limit, changed = resolver.resolve(
+    limit, changed, _rose = resolver.resolve(
         50.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
@@ -675,6 +697,60 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
     )
     assert changed is False
     assert limit == 80.0
+
+
+def test_should_report_rose_when_the_resolved_limit_rises():
+    """#1378: a resolve() call whose resulting limit is *higher* than the previous one
+    reports rose=True as well as changed=True -- the R7 AC5 distinction `changed` alone cannot
+    draw (a fall changes the limit too, but must never report rose)."""
+    # Arrange
+    resolver = SocGateResolver()
+    resolver.resolve(
+        60.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Act
+    limit, changed, rose = resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
+    assert changed is True
+    assert rose is True
+    assert limit == 80.0
+
+
+def test_should_report_changed_but_not_rose_when_the_resolved_limit_falls():
+    """#1378: a resolve() call whose resulting limit is *lower* than the previous one reports
+    changed=True but rose=False -- R7 AC5's "a lowered limit never ends it" needs this bit kept
+    apart from a plain `changed`, which #1335's own bug conflated with a rise."""
+    # Arrange
+    resolver = SocGateResolver()
+    resolver.resolve(
+        80.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Act
+    limit, changed, rose = resolver.resolve(
+        60.0,
+        solar_reserve_active=False,
+        solar_reserve_soc=60.0,
+        step_up_state=SolarStepUpState(),
+    )
+
+    # Assert
+    assert changed is True
+    assert rose is False
+    assert limit == 60.0
 
 
 # --- DeadlineUnreachableEdge (ADR-0024: pure True->False edge detection for the paired
