@@ -21,6 +21,7 @@ from ..const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_FORECAST_TODAY_ENTITY,
     CONF_SOLAR_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
@@ -38,6 +39,7 @@ from ..const import (
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_FORECAST_TODAY,
     ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -62,9 +64,9 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
     """Build the control-cycle adapter set from config-entry data.
 
     grid_voltage, solar_power, ev_soc, ev_battery_capacity, departure_external,
-    home_day_external, solar_forecast, low_tariff, car_home, vehicle_charge_limit,
-    notification_target, and monthly_peak_external are all optional at the factory level
-    (NF4 / RA1 / RA1-VL / RA2 / RA4 / ADR-0030 extensions);
+    home_day_external, solar_forecast, solar_forecast_today, low_tariff, car_home,
+    vehicle_charge_limit, notification_target, and monthly_peak_external are all optional at
+    the factory level (NF4 / RA1 / RA1-VL / RA2 / RA4 / ADR-0030 extensions);
     sun is built unconditionally with
     no entity mapping at all (`sun.sun` is a core Home Assistant entity, not
     something the user maps); every other role is required. An optional role's absence is
@@ -100,6 +102,10 @@ def build_adapters(hass: HomeAssistant, data: Mapping[str, Any]) -> dict[str, Ad
         )
     if data.get(CONF_SOLAR_FORECAST_ENTITY):
         adapters[ROLE_SOLAR_FORECAST] = NumericReadAdapter(hass, data[CONF_SOLAR_FORECAST_ENTITY])
+    if data.get(CONF_SOLAR_FORECAST_TODAY_ENTITY):
+        adapters[ROLE_SOLAR_FORECAST_TODAY] = NumericReadAdapter(
+            hass, data[CONF_SOLAR_FORECAST_TODAY_ENTITY]
+        )
     if data.get(CONF_LOW_TARIFF_ENTITY):
         adapters[ROLE_LOW_TARIFF] = LowTariffReadAdapter(
             hass, data[CONF_LOW_TARIFF_ENTITY], data.get(CONF_LOW_TARIFF_STATES, "")

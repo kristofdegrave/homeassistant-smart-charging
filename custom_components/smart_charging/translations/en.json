@@ -123,6 +123,7 @@
         "data": {
           "solar_power_entity": "Solar production entity (optional)",
           "solar_forecast_entity": "Solar forecast entity",
+          "solar_forecast_today_entity": "Same-day solar forecast entity (optional)",
           "solar_start_threshold_w": "Solar start threshold (W)",
           "solar_only_start_threshold_w": "SolarOnly start threshold (W)",
           "solar_only_strategy": "SolarOnly amp-step rounding strategy",
@@ -139,7 +140,8 @@
         },
         "data_description": {
           "solar_power_entity": "The sensor reporting the solar installation's own production power, used by dashboard tiles. Optional.",
-          "solar_forecast_entity": "The sensor providing a solar production forecast, used to decide whether the overnight solar-reserve SOC cap applies.",
+          "solar_forecast_entity": "The sensor providing a next-day solar production forecast, used to decide whether the overnight solar-reserve SOC cap applies.",
+          "solar_forecast_today_entity": "Optional sensor providing a same-day solar production forecast (today's total, or today's remaining yield). While mapped, the solar-reserve SOC cap reads it from midnight until sunrise instead of the next-day forecast above; while unmapped, the cap lifts at midnight. Leave blank to keep that default.",
           "solar_start_threshold_w": "Solar surplus power (W) that must reach or exceed this value before Solar mode starts charging. Default 150.",
           "solar_only_start_threshold_w": "Solar surplus power (W) that must reach or exceed this value before SolarOnly mode starts charging. Default 1300.",
           "solar_only_strategy": "How SolarOnly rounds its computed amp step to a whole ampere: round up, round down, or round to nearest using the midpoint fraction below. Default round down.",
