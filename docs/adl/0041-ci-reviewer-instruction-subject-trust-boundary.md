@@ -1,7 +1,7 @@
 # ADR-0041: The CI reviewer reads its instructions from the base branch and its subject from the PR
 
 Date: 2026-09-14
-Status: Accepted
+Status: Deprecated
 
 ## Context
 
