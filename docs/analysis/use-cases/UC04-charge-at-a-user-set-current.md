@@ -54,7 +54,7 @@ Then the coordinator reduces the charger current — or, on a sustained R3 breac
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Power` mode
 When state of charge reaches the active SOC limit — the plain default, or a leftover solar step-up or solar-reserve cap (R9) from before `Power` was selected (see Relationships: `Power`'s own logic never puts either in effect, whether selected under `Manual` or via `Auto`'s deadline-urgency exception)
-Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit rises, a reading shows state of charge below it, or the car is unplugged and replugged; a lowered limit never ends the stop (R7).
+Then the System stops charging (0 A) and does not resume above that limit until a reading shows state of charge below it, the active SOC limit rises on a cycle without a reading, or the car is unplugged and replugged; a lowered limit never ends the stop, and on a cycle with a reading the reading decides (R7).
 
 **State of charge unavailable.**
 Given `Power` mode is active and the car is connected at home
@@ -126,17 +126,16 @@ that need no reading is taken — the active SOC limit rising, or unplug/replug 
 or a reload clears it and the car starts in Idle as on a fresh connection (NF14). A lowered limit
 is neither, so it leaves SocReached in place; a raised one takes the car to Idle, and from there
 to Charging, even when the unread state of charge is above the new limit. Only a stop made at
-the limit is held this way: a car resting in Idle or
-Cooldown at or above the limit has no such stop behind it, so it starts charging on such a cycle
-once no cooldown runs, until the vehicle's own charge limit (R6) or the first cycle with a reading
-stops it.
+the limit is held this way: a car resting in Idle or Cooldown at or above the limit has no such
+stop behind it, so it starts charging on such a cycle once no cooldown runs, until the vehicle's
+own charge limit (R6) or the first cycle with a reading stops it.
 
 | State | Set-point | Leaves when |
 | --- | --- | --- |
 | Idle | 0 A | (SOC < active SOC limit or SOC unavailable, R17) & no cooldown → Charging |
 | Charging | configured Power target current requested; if the CapTar capability is present *and* `power_respect_peak` is on, the R3 clamp first fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin; without the capability the R3 clamp does not run whatever the option holds (3a′); either way, the C4 clamp then fits whatever remains (raw) so net import stays below the grid supply ceiling minus the grid safety offset, every cycle; floored at the minimum and capped at the maximum charging current (C1) in every case — the clamps never raise the request above the configured target | sustained R3 breach at the minimum charging current, only while the CapTar capability is present and respecting peak — inapplicable without the capability, where R3 never runs (3a′) (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Power`-mode cooldown (10 min) elapsed → Charging if charging conditions hold (SOC unavailable counts as met, R17), else Idle |
-| SocReached | 0 A | active SOC limit rises, a reading shows SOC below it, or car unplugged/replugged → Idle (R7; a lowered limit never ends the stop) |
+| SocReached | 0 A | a reading shows SOC below the active SOC limit, the active SOC limit rises on a cycle without a reading, or car unplugged/replugged → Idle (R7; a lowered limit never ends the stop) |
 
 **A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
 entry point: `Power` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as the
@@ -149,7 +148,7 @@ question arises here the way it does for the solar modes.
 
 - `PowerChargingStarted` — the System began charging in `Power` mode at the configured target current (Idle/Cooldown → Charging).
 - `PowerChargingStopped` — a sustained R3 breach at the minimum charging current forced a stop (only while the CapTar capability is present and respecting peak — never on a non-CapTar installation, where R3 does not run, 3a′); the System stopped charging (0 A) and started the `Power`-mode cooldown (R11).
-- `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit (R7).
+- `ActiveSocLimitReached` — state of charge reached the active SOC limit; charging stopped and will not resume above the limit on a cycle with a reading (R7).
 
 ## Diagram
 
@@ -161,7 +160,7 @@ stateDiagram-v2
     Charging --> SocReached: SOC ≥ active SOC limit
     Cooldown --> Charging: cooldown elapsed<br/>& charging conditions hold
     Cooldown --> Idle: cooldown elapsed<br/>& charging conditions not held
-    SocReached --> Idle: limit rises, SOC reading below it,<br/>or unplug/replug (never a lowered limit)
+    SocReached --> Idle: SOC reading below the limit,<br/>limit rises with no reading,<br/>or unplug/replug (never a lowered limit)
     note right of Charging
         Set-point: request the configured Power
         target current (default 10 A). CapTar capability
