@@ -398,7 +398,7 @@ gh api repos/$REPO/pulls/<n>/comments \
 ```
 
 The third stream is the inline review-thread replies — where a maintainer most often disputes
-mid-loop, and where the session's own `ai-fix-ack` replies live, so the marker test applies to
+mid-loop, and where the session's own `ai-fix-` replies live, so the marker test applies to
 it as to the other two. `--paginate` is mandatory for the reason *Commenting* above gives, and the filter must stream
 (`.[] | …`) rather than index into one page. A bot's login ends in `[bot]`; timestamps are
 ISO 8601 in UTC and compare correctly as strings.
