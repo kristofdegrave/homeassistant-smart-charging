@@ -8,7 +8,7 @@ description: Use in an interactive session to run this project's contribution wo
 The fix step of the interactive lifecycle, type-agnostic. Model-invocable on purpose, so "/fix #N"
 and "address the review" both reach it. `CLAUDE.md`'s **Contribution workflow**
 section routes to the doc that owns the step. This skill is the single source for which
-comments are findings, the fix policy, the reply marker and the summary.
+comments are findings, the fix policy, the reply markers and the summary.
 
 ## 1. Before any fix: stale exit labels
 
@@ -89,13 +89,11 @@ Fixing is re-authoring — work with the same context the original author had:
 1. Apply §3, re-authoring per §4 rather than patching around the work file.
 2. Reply in its thread via `resolve-review-thread` §1: what changed (with file references),
    which issue was filed, or why not — one or two sentences. The body starts with
-   `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. Any other PR
-   comment or thread reply the session posts, in any step, that carries none of its markers
-   starts with `<!-- ai-fix-note -->`, which marks nothing handled. Either marker keeps the
-   round count's human-item test from counting the session's post as the human partner's
-   under the one account; only the hold-reason review (the contribution workflow's **Exit
-   labels**) stays unmarked. A review body has no thread — account for it in the summary
-   instead, mentioning the reviewer by `@login`.
+   `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. A thread reply
+   or PR comment the session posts in any step, and that no other marker of the session's
+   fits, starts with `<!-- ai-fix-note -->`, which marks nothing handled. Which posts carry a
+   marker is the contribution workflow's **Rounds and the cap** rule. A review body has no
+   thread — account for it in the summary instead, mentioning the reviewer by `@login`.
 
 ## 6. Then once, for the run
 
