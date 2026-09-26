@@ -105,10 +105,10 @@ against a statement that turns out to be premature.
   itself the reset event. A grant is an instruction given to the session, never inferred from
   a thread.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
-  kinds: the escalation comment posted at the cap, and a **human item** — a review, PR
-  comment or review-thread reply by an author whose login does not end in `[bot]`, whose body
-  carries none of the
-  session's own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
+  kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
+  (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
+  by an author whose login does not end in `[bot]`, whose body carries none of the session's
+  own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
   a marked item is the session's footprint under the developer's own account, **Git
   identity** below), posted while an exit label was on: after its `labeled` event and before
   any later `unlabeled` one. Nothing else resets the count; no reset event means counting from
@@ -125,8 +125,8 @@ just posted. After a clean pass it applies `needs-approval` alone, removing a st
 still open, it applies `needs-decision` **alongside** `needs-approval` and posts the one
 escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
-skill applies either label, and neither replaces manual merge approval (**Merge and issue
-closing** below).
+skill applies either label; the one exception is the session putting a PR on hold (below).
+Neither label replaces manual merge approval (**Merge and issue closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a granted round: both labels come off no later than the review step's
@@ -136,14 +136,21 @@ and a label is still on (a grant given in-session posts nothing, so only the rev
 it; a human item may reach the review step directly) — and that pass's exit re-applies
 whichever is then correct.
 
-A reason found **after** the exit makes it false too. A session that learns, before the merge,
-that a PR should not merge as it stands takes `needs-approval` off first, then says why on the
-PR. The reason might come from reading an agent's report critically, from a sibling PR's
-finding, or from a spec amendment. A concern that does not block the merge is filed as a
-follow-up instead, and the PR stays mergeable. What the session never does is ask the human
-partner to hold a PR that still carries the label, because the label is itself the signal
-that a human may decide now. The label goes back on only through the review step's exit, as
-above.
+**A blocking reason found after the exit puts the PR on hold.** When the session learns, before
+the merge, that a PR carrying `needs-approval` should not merge as it stands:
+
+- It takes `needs-approval` off, and puts `needs-decision` on alone. `needs-decision` alone
+  means the PR is **on hold**: no automated work is running on it, and a human decides.
+- It posts the reason on the PR as an escalation comment ending in the escalation marker. That
+  comment is a reset event (**Rounds and the cap** above), so a round the human partner grants
+  starts a fresh count.
+- It does no further work on the PR. The human partner either merges as is, or grants a round.
+  A granted round re-enters at **Fix** with the reason as its finding, and the review step's
+  next pass decides the exit as usual. The session's reason is never the verdict (**Rule A**).
+- A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
+  `needs-approval`.
+
+The session never asks the human partner to hold a PR that still carries `needs-approval`.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).
