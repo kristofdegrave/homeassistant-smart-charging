@@ -148,7 +148,7 @@ here as test anchors rather than re-derived.** `requirements.md` R5:
   capability absent (R18), nor under `Power`'s R17 opt-out.
 - `:92` — that smoothed baseline is the negation of R10's smoothed solar surplus — the admitted
   mean in household sign, `smoothed_household_w` — and carries **no** R3
-  deferral; under `:92`'s own qualifiers the rate then does not depend on the charger current.
+  deferral.
 
 The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
 criteria.

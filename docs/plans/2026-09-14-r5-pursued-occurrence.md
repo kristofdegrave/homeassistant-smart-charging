@@ -284,7 +284,8 @@ placeholder is sound there **only** because that ctx never reaches `_apply_peak_
 `_escalated_maximum_permitted_rate_a`. State the guarantee at the site rather than leaving the
 reader to infer it from the neighbour.
 
-**A second failing test**, for R5 `:92`'s testable consequence: with the household steady, run the
+**A second failing test**, for R5 `:92`'s baseline together with R10's admission rule (its
+first criterion) and ADR-0049: with the household steady, run the
 cycle until the one after the system's second charger-current set since the coordinator started,
 and until the window has turned over past every sample taken before that, then change the charger
 current once through a lever that is neither a steady input nor a bound of the rate — state of
