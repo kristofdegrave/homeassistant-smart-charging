@@ -381,8 +381,8 @@ it was before the flow started.
   required when solar is declared; the car-at-home presence mapping required when a vehicle
   charge-limit is mapped or deadlines are managed) is, after this use-case, a plain required field
   local to the one step that needs it — the first two unconditionally required on their own step,
-  the third by the field-level rule 4a. The same-day solar-forecast mapping R9 adds is optional
-  and unmapped by default (NF12).
+  the third by the field-level rule 4a. The same-day solar-forecast mapping (R9) is optional and
+  unmapped by default (NF12).
 - Two gaps the previous step model named as out of scope are closed by **this** step model: the
   solar-production mapping is now presented on the `solar` step, and the `Power`-mode cooldown on
   the `power` step, so every catalogued adapter role and `config-options` key the flow is

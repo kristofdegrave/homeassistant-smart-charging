@@ -257,7 +257,7 @@ Also uses `solar_cooldown_min` and `solar_restart_debounce_min` (see `Solar` mod
 | `solar_forecast_threshold_kwh` | config-options | options | kWh | 12 | solar-reserve forecast threshold (R9) | resolution-rules, UC07, UC08 | user (anytime), UC12 |
 | `sensor.smart_charging_solar_forecast_threshold_kwh` | state | — | kWh | mirrors `solar_forecast_threshold_kwh` (config-options); disabled by default (ADR-0031) | solar-reserve forecast threshold (R9) | user | — |
 | `solar_forecast` | adapter role | — | kWh | mapped to a next-day forecast source (NF3); read for the [reserved day](system-overview.md#ubiquitous-language) until midnight (R9) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07, UC08, (UC11) | — |
-| `solar_forecast_today` | adapter role | — | kWh | mapped to a same-day forecast source (NF3; optional — absent by default, NF12) — today's total yield, or the yield remaining today, which is the same before sun-up; read for the [reserved day](system-overview.md#ubiquitous-language) from midnight until the sun comes up; while not mapped, the forecast condition does not hold from midnight, so the cap lifts then (R9) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07 | — |
+| `solar_forecast_today` | adapter role | — | kWh | mapped to a same-day forecast source (NF3; optional — absent by default, NF12) — today's total yield, or the yield remaining today, which is the same before sun-up; read for the [reserved day](system-overview.md#ubiquitous-language) from midnight until the sun comes up (R9) | [solar forecast](system-overview.md#ubiquitous-language) | resolution-rules, UC07 | — |
 
 ---
 
