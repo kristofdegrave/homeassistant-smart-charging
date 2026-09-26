@@ -365,6 +365,6 @@ By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
 inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
-actually touches (the `workflow` checklist when it also edits `CLAUDE.md` or a CI workflow).
+actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
 No reviewer checklist is applied to the post-mortem itself: the checklists are all written
 against artifacts that assert behaviour, and none fits a narrative document.

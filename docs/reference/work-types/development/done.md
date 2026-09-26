@@ -60,7 +60,7 @@ heading.
 A change with no PR yet is not a finding and must not be reported as one: state what the
 Runtime check will have to record and leave it there.
 
-A third case is **judged, not excused**: a section in the honest cannot-be-driven-yet form. That
+A second case is **judged, not excused**: a section in the honest cannot-be-driven-yet form. That
 the behaviour could not be driven is not itself the finding — judge the substitute it names, say
 so in the review either way, and report an inadequate substitute at this item's severity. What
 is excused is the absence of drivable evidence, never the content of the section standing in

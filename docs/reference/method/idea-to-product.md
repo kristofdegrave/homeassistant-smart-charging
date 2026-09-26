@@ -28,7 +28,7 @@ that one alone. The stages that carry no work type — Capture, Brainstorm,
 Route, Decompose, Verify live, Close — are the flow's spine: a project that wants them changed
 changes the method, since a deviation has no work type to name. One enabled work type has no
 stage the other way round: `workflow` work changes the method's own tooling — a skill, a
-reference document, a CI workflow — so it is not a step an idea passes through; a `workflow`
+reference document — so it is not a step an idea passes through; a `workflow`
 issue is filed at **Decompose** like any other child and runs the chain, outside the artifact
 chain.
 
@@ -183,7 +183,7 @@ re-argued:
 Everything already decidable is filed now: the `adr` issue if a structural decision surfaced,
 and any already-scoped `uc`, `requirement`, `documentation` or `workflow` issue. Anything that
 surfaces later and belongs to the strand — a bug found mid-implementation, a follow-up — is
-attached as a sub-issue too; belonging to an epic does not require any particular context
+attached as a sub-issue too; belonging to an epic does not require a context
 label, and `file-task-issue` covers which label such a child takes.
 
 **Epic membership and ordering are native GitHub relationships, not body text** — sub-issues

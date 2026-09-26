@@ -18,7 +18,7 @@ same list.
 own reach there. One Principle, *Write rules as items*, guides further still, as guidance
 rather than a rule.
 
-**The harness configuration is a fourth artifact under `.claude/`, and this reference does not
+**The harness configuration is another artifact under `.claude/`, and this reference does not
 govern it.** `.claude/settings.json` and the hooks it wires (`.claude/hooks/`) drive Claude
 runs as surely as a skill does — a `PreToolUse` guard decides whether a tool call happens at
 all — but they are executable configuration, not text a run reads as instruction, so the rules
@@ -290,7 +290,7 @@ because there is no procedure underneath that was ever independent of the tracke
 them freely, and that is permanent, not pending.
 
 **The carve-out is per command, not per artifact** — the project rule's test is applied per
-path, not per tree, and this is the same move. What is carved out of one of those three is its
+path, not per tree, and this is the same move. What is carved out of one of those two is its
 *review-API* calls; a tracker command it issues in passing on the way to or from a review —
 applying a label, filing or reading a work item — is not its subject and routes like any
 other. A carved-out artifact is therefore not a carved-out *file*, and "it drives the tracker"
@@ -420,8 +420,7 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
   churn.
 - **Bound the loop, not the turn.** Prefer capping *how many times* a run repeats
   (rounds, retries) over shrinking a single run's turn budget. A run cut off mid-work is
-  re-run, which costs more than it saved — which is why the review↔fix cap counts *rounds*,
-  not the turns inside one.
+  re-run, which costs more than it saved.
 
 ## Checklist — authoring a skill (`.claude/skills/`)
 
@@ -504,10 +503,10 @@ Two obligations follow, and both are cheap only if they are met at the time:
 
 Decide whether a change actually helped from measured numbers, not estimates:
 
-- **Rounds per PR** — the review passes a PR took, which the local round marker counts. This is
-  the dominant cost driver; watch it first.
-- **Cache-read ratio** — cache-read input tokens ÷ total input tokens, from a session's token
-  usage. A drop after an edit to `CLAUDE.md`, or to a skill's or agent's *frontmatter*, means
+- **Rounds per PR** — the review passes a PR took, which the local round marker counts. It is
+  what the fixed overhead above is multiplied by; watch it first.
+- **Cache-read ratio** — cache-read input tokens ÷ total input tokens, from the `usage` fields a
+  session's transcript records. A drop after an edit to `CLAUDE.md`, or to a skill's or agent's *frontmatter*, means
   that edit invalidated the cached prefix. Editing a **body** cannot move this number: the body
   was never in the prefix. The comparison is only meaningful between sessions sharing a warm
   cache.

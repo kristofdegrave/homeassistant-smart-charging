@@ -81,9 +81,10 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   Nothing else is changed in that record. A change of mind is a new ADR that supersedes it;
   a better write-up, a Summary, a sturdier link are left as the record stands. Two guards:
   - **Read existence from the base, not the working tree:** `git show <base>:<path>`, `<base>`
-    the PR's base commit — a bare branch name may not resolve in a fresh checkout. The Status line decides nothing: under the
-    bar's item 10 every draft reads `Accepted` in the working tree, and a record that is on the
-    base was merged as a decision taken, whichever Status it carries now.
+    the PR's base commit — a bare branch name may not resolve in a fresh checkout. The Status
+    line decides nothing: under the bar's item 10 every draft reads `Accepted` in the working
+    tree, and a record that is on the base was merged as a decision taken, whichever Status it
+    carries now.
     - Not on the base → a draft; fix normally.
     - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
       tree. Treat the record as merged and say in the summary that the base read failed. A
