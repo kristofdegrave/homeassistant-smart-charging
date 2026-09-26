@@ -476,7 +476,7 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
       `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd).
 - [ ] The checklist is self-contained for its artifact type, so a review needs to load only
       *this* agent def plus the payload skill — not several agent defs.
-- [ ] Shared review mechanics (payload shape, anchoring, verdict marker) are referenced from
+- [ ] Shared review mechanics (payload shape, anchoring, round marker) are referenced from
       `submit-pr-review`, not copied.
 - [ ] Tool grants are the minimum the checklist actually uses (a read-only reviewer needs no
       write/edit tools).

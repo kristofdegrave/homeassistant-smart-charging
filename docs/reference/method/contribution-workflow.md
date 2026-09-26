@@ -152,7 +152,7 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   ([ci-pipeline.md](ci-pipeline.md)).
 - On a granted round, the session's first act posts the hold reason as a PR review of its own:
   a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
-  [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, whose local mode
+  [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
   since the review step never reads human review bodies as findings. The fix step then reads it
   as it reads any human review body, and the chain runs on from **Fix**. Without a marker it

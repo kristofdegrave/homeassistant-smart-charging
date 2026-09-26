@@ -33,13 +33,14 @@ as comments by a login that does not end in `[bot]`:
   same thread (a reply's `in_reply_to_id` is the thread's first comment). Such a reply means
   an earlier run already handled it.
 - **Review bodies** — list the PR's reviews (`gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"
-  --paginate`) and keep every non-empty body by such a login that no earlier
-  `<!-- ai-fix-summary -->` comment accounts for. A local review's body holds the findings
-  that anchor to no changed line.
+  --paginate`) and keep every non-empty body by such a login posted after the most recent
+  `<!-- ai-fix-summary -->` comment (all of them when there is none). A local review's body
+  holds the findings that anchor to no changed line; a finding in both a body and an inline
+  comment counts once.
 
 A finding keeps the severity its comment states — the local review's findings state one, in
 the shape `submit-pr-review` gives them; a comment that states none is at least **Major**.
-Human input is never skipped silently. If nothing unaddressed is found, post the summary (§6)
+None is skipped silently. If nothing unaddressed is found, post the summary (§6)
 saying so and stop — do not invent work.
 
 ## 3. Fix policy

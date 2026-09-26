@@ -13,10 +13,7 @@ the run**, after the fixes are committed and pushed.
 ## 1. Reply in the thread
 
 `fix` §5 owns what the reply says and the `ai-fix-ack` marker it starts with; `CLAUDE.md`'s
-**Tracker mechanics** section routes to the REST call. Use both as written. The marker goes on
-**every** reply, a reply to a local review's finding included: that review is posted under the
-human partner's own account, so without the marker the next fix run re-fixes the finding and
-the round count reads the reply as a human item.
+**Tracker mechanics** section routes to the REST call. Use both as written.
 
 ## 2. Resolve — only what was actually fixed, and only after the push
 

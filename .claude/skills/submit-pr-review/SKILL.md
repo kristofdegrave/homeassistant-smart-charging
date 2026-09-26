@@ -47,8 +47,6 @@ file):
 
 - Findings grouped by severity (Critical / Major / Minor / Nit), each with a file/line
 reference.
-- Include a **Human review comments** section for any unaddressed human comments the caller
-  identified (quote each with its file), treated as at least Major.
 - End with a ready-to-merge recommendation.
 
 ## 4. Round marker

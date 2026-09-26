@@ -407,7 +407,7 @@ ISO 8601 in UTC and compare correctly as strings.
 ## Posting a review with inline anchors
 
 The review **payload** — what goes in the body, how findings are grouped, the anchoring rules
-and the CI verdict marker — is owned by the `submit-pr-review` skill and is not restated here.
+and the round marker — is owned by the `submit-pr-review` skill and is not restated here.
 The transport is:
 
 ```sh
@@ -506,6 +506,6 @@ of their own. Which of their commands may be written out rather than routed, and
 wins where both spell the same one out, is
 settled by [ai-authoring.md](ai-authoring.md)'s **Tracker-dependent mechanics route through
 `CLAUDE.md`** and is not re-argued here. What this file never covers is *what a review says* —
-payload shape, severity grouping, verdict marker, and — `resolve-review-thread`'s alone —
+payload shape, severity grouping, round marker, and — `resolve-review-thread`'s alone —
 which threads may be resolved. Those four stay with the skills, and this file defers to them
 on each.
