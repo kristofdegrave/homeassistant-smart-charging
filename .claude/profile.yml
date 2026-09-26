@@ -215,6 +215,9 @@ word_budgets:
 #              above gives.
 #   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
 #              the developer's machine by the plugin named, and not part of this repository
+#   verbatim   optional; `true` — the copy is byte-identical to upstream at `pin`. What that
+#              obliges is the reference routed to above; the method check then leaves the
+#              copy's backticked paths unresolved, since they name upstream's tree, not this one
 dependencies:
   method:
     # Skills the method's own work files name per step, from the superpowers plugin.
@@ -279,6 +282,27 @@ dependencies:
       path: skills/engineering/resolving-merge-conflicts
       pin: commit:321658273cb1
       installed: repo
+    # Upstream-intact copies; improve-architecture routes their outputs into this
+    # repository's process instead of editing them. The last two stay model-invocable, so
+    # outside that skill nothing translates them: an open risk.
+    - name: improve-codebase-architecture
+      source: mattpocock/skills
+      path: skills/engineering/improve-codebase-architecture
+      pin: commit:321658273cb1
+      installed: repo
+      verbatim: true
+    - name: codebase-design
+      source: mattpocock/skills
+      path: skills/engineering/codebase-design
+      pin: commit:321658273cb1
+      installed: repo
+      verbatim: true
+    - name: domain-modeling
+      source: mattpocock/skills
+      path: skills/engineering/domain-modeling
+      pin: commit:321658273cb1
+      installed: repo
+      verbatim: true
     # Upstream-intact marketplace install; used by the design documents, not by a stack.
     - name: domain-driven-design
       source: wondelai/skills

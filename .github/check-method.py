@@ -16,8 +16,9 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         the file it is written in, to an existing path and, where it carries a
                         #fragment, to a heading of that markdown file; every repo-rooted path
                         named in backticks -- a file, or a directory written with its trailing
-                        slash -- exists. A link is resolved whether or not its text wraps onto
-                        a second line. Plus, in CLAUDE.md alone: every routing-table entry
+                        slash -- exists, outside a skill declared `verbatim: true`. A
+                        link is resolved whether or not its text wraps onto a second
+                        line. Plus, in CLAUDE.md alone: every routing-table entry
                         links to a document, and no `###` heading in CLAUDE.md or
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
@@ -170,6 +171,14 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # than trusting a list here. The deletion trigger itself is the cleanup skill's transition-period
 # rule, which is one of those hits.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
+# The exclusion the vendored-skill paragraph above leaves open is a dependency row's
+# `verbatim: true`: that copy is byte-identical to upstream at its pin, so its backticked paths
+# describe upstream's layout rather than this tree, and a project skill wrapping it translates
+# them. Such a skill's backticked paths are not resolved; its links still are, since they point
+# inside the copy itself. An adapted port never carries the key, so the `tests/` references
+# above stay checked. The key is trusted, not verified: nothing here compares the copy with
+# upstream.
+VERBATIM_KEY = "verbatim"
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
 POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
@@ -375,7 +384,9 @@ def top_level(root: Path) -> set[str]:
     return {entry.name for entry in root.iterdir()}
 
 
-def resolve_references(root: Path, path: Path, top: set[str], findings: Findings) -> None:
+def resolve_references(
+    root: Path, path: Path, top: set[str], findings: Findings, skip_paths: bool = False
+) -> None:
     """Check 2's target resolution for one file: its links and its backticked repo paths.
 
     A markdown link is resolved the way a renderer resolves it -- against the directory of the
@@ -406,7 +417,9 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
     states the intent; and a backticked path with no `/` at all -- a root-level file such as
     `skills-lock.json` -- is not matched, since one bare word in backticks is far more often a
     name than a path. A backticked path needs no glob guard: BACKTICK_PATH_RE cannot capture a
-    `*` in the first place.
+    `*` in the first place. The last skip is by file, not by shape: `skip_paths` is set for a
+    skill its dependency row declares `verbatim: true` (VERBATIM_KEY, above), and then no
+    backticked path in it is resolved.
 
     Every skip named here, and the snapshot trees above, has a fixture that pins it, and, where
     a covered spelling of the same defect exists, one that fails on it. The known limit that is
@@ -450,6 +463,8 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
                     f"{where}:{number}",
                     f"link {target}: no heading in {file_part} has that anchor",
                 )
+    if skip_paths:
+        return
     for m in BACKTICK_PATH_RE.finditer(text):
         target = m.group(1)
         if target in seen:
@@ -463,7 +478,7 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
             )
 
 
-def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
+def check_inward(root: Path, guide: Guide, profile: dict, findings: Findings) -> None:
     for topic, owner in guide.topics:
         if not LINK_RE.search(owner):
             findings.add(2, "CLAUDE.md", f"routing-table entry **{topic}** links to no document")
@@ -474,8 +489,15 @@ def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
             if any(rel(root, path).startswith(snapshot + "/") for snapshot in SNAPSHOT_TREES):
                 continue
             files.append(path)
+    verbatim = {
+        f".claude/skills/{name}/"
+        for name, entry in declared_dependencies(profile).items()
+        if entry.get(VERBATIM_KEY) is True
+    }
     for path in files:
-        resolve_references(root, path, top, findings)
+        where = rel(root, path)
+        skip = any(where.startswith(prefix) for prefix in verbatim)
+        resolve_references(root, path, top, findings, skip_paths=skip)
     docs = [root / "CLAUDE.md"] + walk(root, "docs/reference", (".md",))
     for path in docs:
         under_h2 = False
@@ -938,7 +960,7 @@ def main(argv: list[str]) -> int:
     guide = Guide(read_text(guide_path))
     findings = Findings()
     check_outward(root, guide, findings)
-    check_inward(root, guide, findings)
+    check_inward(root, guide, profile, findings)
     check_profile_agreement(root, guide, profile, findings)
     layers = check_completeness(root, guide, profile, findings)
     check_profile_values(root, profile, layers, findings)
