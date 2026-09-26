@@ -27,11 +27,14 @@ differ:
    A single decision is settled by its reply; `grilling`'s closing confirmation of a shared
    understanding is for a tree of several.
 2. **The recommendation is never the human partner's answer.** Only their reply settles a
-   question; no reply leaves it open.
+   question; no reply leaves it open, and a question `grilling`'s no-human fallback defaults is
+   recorded open, never settled.
 3. **A merge or a grant is never defaulted.** With no human able to answer, that question stays
    open and the session stops there. This overrides `grilling`'s no-human fallback, which still
    governs every other question.
 
 A skill or stage that names `grilling` for a dialogue with the human partner gets it through
-this skill. Where one names `brainstorming` instead — `CLAUDE.md`'s **Idea-to-product flow**
-does, for a narrow idea — use that one.
+this skill; a user who invokes `grill-me` asked for `grilling` itself, and gets it unwrapped.
+Where a stage names `brainstorming` instead — `CLAUDE.md`'s **Idea-to-product flow** does, for
+a narrow idea — that skill runs the dialogue, still entered here and still under deviations 2
+and 3.
