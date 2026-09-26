@@ -25,12 +25,16 @@ interactive-only wording precisely because it sits in every run's index.
      with author and time, as a stream rather than a post read-back.
    - Find the most recent reset event as the rule defines it. The markers it excludes are the
      session's own: the round marker (`submit-pr-review`'s §4), the `<!-- ai-fix-` family
-     (`fix`'s §5 and §6), and the escalation marker `<!-- local-review-escalated -->`.
+     (`fix`'s §5 and §6), the escalation marker `<!-- local-review-escalated -->` and the
+     self-grant marker `<!-- local-review-self-granted -->`.
    - Rounds so far = marker-carrying reviews posted after that event (all of them when there
-     is none); the cap is **read from the doc routed above**, never from memory. If an exit
-     label is still on and the count was reset — by either kind of reset event — take both
-     exit labels off before the pass (**Exit labels** names this as the review step's first
-     act after a reset; commands and read-back per **Tracker mechanics**).
+     is none). Count self-grant comments since that event apart — only those by the login
+     the session posts under, so a marker pasted by anyone else raises nothing: each raises
+     the cap, not the rounds. The cap, what raises it and its ceiling are **read from the doc
+     routed above**, never from memory. If an exit label is still on and the count was reset
+     — by either kind of reset event — take both exit labels off before the pass (**Exit
+     labels** names this as the review step's first act after a reset; commands and
+     read-back per **Tracker mechanics**).
    This pass is therefore either round N of the cap with passes to spare, or the **last pass
    the cap allows** — the exit below depends on which.
 2. **Check the branch isn't behind `origin/main`** per the review step, and merge it in first if it is
@@ -95,13 +99,19 @@ exactly one of these, from the pass's own result and the count above:
   as the `cleanup` skill's step 2 does. Board **Status** stays *in review*; the label is a
   signal for the human's decision, never a self-approval. Report: clean, `needs-approval`
   applied.
-- **Critical or Major open, and this was the last pass the cap allows**: apply both exit
+- **Critical or Major open, the last pass the cap allows, every self-grant condition of the
+  routed doc holds, and raising the cap by one would not take it past the ceiling**: no
+  label. Post the self-grant comment, body via a file per **Tracker mechanics**: why each
+  condition holds, then the self-grant marker as its last line. Report: round self-granted, and the count so far.
+- **Critical or Major open, the last pass the cap allows, no self-grant**: apply both exit
   labels, then post one escalation comment, body via a file per **Tracker mechanics**: the
   open Critical and Major findings by thread, what each round tried, where author and
   reviewer disagree, and the human's two decisions — merge as is, or grant another round.
   Its last line is the escalation marker `<!-- local-review-escalated -->`, which the count
-  above reads as a reset event. Report: cap reached. A grant is an instruction from the human,
-  never inferred from a thread.
+  above reads as a reset event. Then ask the two decisions through `grilling`; its
+  recommended answer is never taken as the reply, so with no reply the session stops here.
+  Report: cap reached. A grant is an instruction from the human, never inferred from a
+  thread.
 - **Critical or Major open, passes left**: no label. Report the findings by severity and the
   round count so far.
 

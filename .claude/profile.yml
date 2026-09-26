@@ -172,6 +172,10 @@ review:
   # **Rounds and the cap** defines. That section routes here for the number rather than
   # stating it.
   interactive_cap: 2
+  # The most review passes self-granted rounds may raise the cap to, counted from the most
+  # recent reset event as interactive_cap is. The same section defines the self-grant and
+  # routes here for this number rather than stating it.
+  interactive_ceiling: 5
 
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
