@@ -828,9 +828,9 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 
 ### 8.3 ADRs written after 0019
 
-This section accounts for every ADR in `docs/adl/` numbered after 0019 — 28 records, ADR-0020
-through ADR-0046 and ADR-0048 at the time of writing. Each is in exactly one of two tables. The first holds
-the 18 that decide something about the product, reconciled the way
+This section accounts for every ADR in `docs/adl/` numbered after 0019 — 29 records, ADR-0020
+through ADR-0048 at the time of writing. Each is in exactly one of two tables. The first holds
+the 19 that decide something about the product, reconciled the way
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
 this design's boundary, narrow it, or extend it? The second holds the 10 that decide how the
 project works or how it verifies behaviour, which this design has no service for, each with its
@@ -869,6 +869,7 @@ which roles fault when unavailable, which several rows below cite.
 | 0039 | The peak clamp discards a baseline reading taken during its own actuation | **Narrows an input to V6; consistent** | The Coordinator tells the Billing-Protection Engine's baseline debounce whether this cycle's reading was taken during its own actuation; the Engine keeps the decision. It gains a parameter, not a dependency, so it stays free of I/O and remains a stateful Engine under [§3](#3-service-catalog)'s signature test. |
 | 0042 | A state-of-charge-unavailable cycle holds the deadline-unreachable clear | **Narrows ADR-0024; consistent** | A cycle that establishes nothing about the deadline — state of charge unavailable while the car stays connected — holds the unreachable edge's prior flag and publishes no `DeadlineUnreachableCleared`; a disconnect still clears it. `Off` and `Power` run such a cycle without faulting ([C5](../analysis/requirements.md#constraints)'s role table). The edge is a unit inside the Coordinator, so no service or event edge changes. |
 | 0046 | The control cycle's composition rules, held by a complexity guard | **Below this design's altitude; supersedes ADR-0023** | Like ADR-0012, it organizes code inside the Charging Coordinator Manager and moves no boundary. It keeps ADR-0006's step order literal in the cycle's body, so the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence — the order — is unchanged, and keeps the R3 and C4 clamps two distinct calls (V6 and V7 stay split). Events fire from the Coordinator method that calls the resolution they report, never from a pure unit, which is this design's Manager-does-the-I/O rule. The complexity guard is a build check, not a service. The account of how the cycle is composed, which the ADR asks of this design, is [§5.1.1](#511-how-the-cycle-is-composed). |
+| 0047 | A user's own enable of a capability-gated entity is recorded in its registry options | **Narrows ADR-0028; consistent** | The enable lives in the entity's own registry row, under this integration's key, and `sync_disabled_by` reads it at setup before ADR-0028's flip — the same setup-time shape, not a runtime Client→Engine call. No service, edge or event is added, and it delivers the 0028 row's rule that a user's own enable or disable is never overridden by a capability change. |
 
 **Out of scope: process and test method.** These decide how the project works or how behaviour is
 verified. None adds, moves or relies on a service boundary, so there is nothing for this design to
@@ -882,7 +883,7 @@ reconcile — the same reasoning [§8.1](#81-adrs-that-predate-this-design-0001-
 | 0029 | `time.process_time()` for perf-test CPU measurement, `psutil` kept for RSS | Test method | How the performance tests measure; the bound they check is a requirement's, not this ADR's. |
 | 0037 | Scenario/timeline test tier | Test method | A third tier in how behaviour is verified over time, beside ADR-0009's two; it exercises the services through the Coordinator and adds none. |
 | 0040 | A fifth mandated adapter case — a numeric role's expected unit set | Test method | A fifth mandated adapter test case beside ADR-0009's four; it binds coverage, not runtime behaviour, which stays each role's own (ADR-0038 for the power-read roles). |
-| 0041 | The CI reviewer reads its instructions from the base branch | Process | A trust boundary in the review pipeline. Deprecated by ADR-0048. |
+| 0041 | The CI reviewer reads its instructions from the base branch | Process | Set a trust boundary in the since-retired review pipeline. Deprecated by ADR-0048. |
 | 0043 | Scheduled upstream-drift watcher | Process | A scheduled CI job over the project's pin manifest that files issues. |
 | 0044 | The implementation spec lives in the epic body | Process | Where a spec and its sources are kept in the tracker. |
 | 0045 | Every new ADR opens with a Summary | Process | The form of an ADR; narrows ADR-0001, itself process. |
