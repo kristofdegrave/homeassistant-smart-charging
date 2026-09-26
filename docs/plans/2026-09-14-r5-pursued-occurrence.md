@@ -272,7 +272,7 @@ their difference. A named field rather than `-ctx.surplus_w`: the two are the sa
 design, and the name keeps the forecast's operand visible at the call site (D-3).
 
 **Both construction sites, and no default.** `CycleContext` is built twice in
-`custom_components/`: `coordinator.py:579` and `:1382`, the baseline dry-run, whose docstring warns
+`custom_components/`: `coordinator.py:667` and `:1698`, the baseline dry-run, whose docstring warns
 that a placeholder there is the `#990` hazard. `smoothed_baseline_w` is added as a **required** field —
 no default — for the reason that docstring gives: a permissive default lets a forgotten construction
 site fail open silently, and this field decides a forecast. That makes the test constructions in
@@ -285,14 +285,15 @@ placeholder is sound there **only** because that ctx never reaches `_apply_peak_
 reader to infer it from the neighbour.
 
 **A second failing test**, for R5 `:92`'s testable consequence: with the household steady, run the
-cycle until the system has set the charger current on two cycles since the coordinator started
-and the window has turned over past every sample taken before that, then change the charger
+cycle until the one after the system's second charger-current set since the coordinator started,
+and until the window has turned over past every sample taken before that, then change the charger
 current once through a lever that is neither a steady input nor a bound of the rate — state of
 charge reaching the active SOC limit, which drops the charger to 0 A, not C1's maximum, `Power`'s
 R17 opt-out, the voltage or the peak limit. Assert the rate on the cycle after the step and on
 every cycle through the window's turnover, while the spell lasts: identical to the rate before
-it. Run it twice: with every power reading tracking the draw, and with the charger power reading
-lagging one cycle on the step only.
+it. Run it three times: with every power reading tracking the draw, with the charger power
+reading lagging one cycle on the step only, and with net import lagging one cycle on the step
+only.
 
 **Mutation checks**, three — point the peak bound back at `ctx.baseline_w`, then the C4 bound back
 at `ctx.net_w`/`ctx.charger_w`, then fold the lagged cycle's sample in, and confirm a test fails
@@ -374,7 +375,7 @@ notification acceptance criterion in `requirements.md` for the behaviour; `UC05`
   #1006)"), `deadline.py:140-142` (the result field comments — `required_a`'s "None when no
   deadline is resolved" is false while held, and `urgent`'s "a latch not yet cleared"),
   `coordinator.py:731-738` (the latch comment block, which also states the fault-cycle rule the new
-  field inherits), `coordinator_cycle.py:62` (`net_w`'s "coordinator.py's separate, joint `smoothed_household_w`"
+  field inherits), `coordinator_cycle.py:64` (`net_w`'s "coordinator.py's separate, joint `smoothed_household_w`"
   — now carried on ctx as `smoothed_baseline_w`, so it names that field), `const.py:22-26` (which enumerates one saturated-and-capped case and gains
   a second at T5), and `project-plan.md`'s Phase-2 status row (`:102`) alongside its E4 and M1 status
   lines, all describe a model this slice replaces. A grep for `urgency_latched` catches none of them,
