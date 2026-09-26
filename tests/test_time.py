@@ -27,6 +27,8 @@ from custom_components.smart_charging.const import (
     DEPARTURE_OVERRIDE_HOME_DAY,
     DOMAIN,
     LABEL_SC_RUNTIME,
+    OPTION_DISABLED_SEEN,
+    OPTION_USER_ENABLED,
 )
 from custom_components.smart_charging.time import (
     DAY_OF_WEEK_DEFAULTS,
@@ -313,7 +315,7 @@ async def test_departure_time_user_disable_survives_capability_toggle(hass):
     """ADR-0028: a user's own disabled_by=USER on one departure-time entity must survive a
     deadline_available toggle in either direction, while its label keeps tracking the
     capability correctly regardless -- the two mechanisms are independent, since the entity
-    being force-enabled by the user doesn't mean the capability is present."""
+    being enabled by the user doesn't mean the capability is present."""
     seed_charger_states(hass, status="Charging")
     data = entry_data_base()
     data[CONF_DEADLINE_AVAILABLE] = True
@@ -344,6 +346,131 @@ async def test_departure_time_user_disable_survives_capability_toggle(hass):
 
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.USER
     assert registry.async_get(entity_id).labels == {LABEL_SC_RUNTIME}
+
+
+async def test_should_mark_disabled_seen_when_a_fresh_install_registers_it_disabled(hass):
+    """ADR-0047 point 3: a fresh install with deadline_available=False registers every
+    departure-time entity disabled and marks it disabled_seen -- all nine, mirroring the
+    ADR-0028 sibling test's own loop over _ALL_DEPARTURE_SUFFIXES rather than pinning DAY_MON
+    alone."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+
+    # Act
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    registry = er.async_get(hass)
+    for suffix in _ALL_DEPARTURE_SUFFIXES:
+        entity_id = registry.async_get_entity_id(
+            Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{suffix}"
+        )
+        entry_reg = registry.async_get(entity_id)
+        assert entry_reg.disabled_by is er.RegistryEntryDisabler.INTEGRATION, suffix
+        assert entry_reg.options.get(DOMAIN, {}).get(OPTION_DISABLED_SEEN) is True, suffix
+
+
+async def test_should_keep_a_user_enable_live_when_reloaded_with_the_capability_still_absent(
+    hass,
+):
+    """R18/ADR-0047: a user's own enable of a departure-time entity, made while
+    deadline_available is False, survives a reload that leaves the capability still absent."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    registry.async_update_entity(entity_id, disabled_by=None)
+
+    # Act -- forced explicitly: async_update_entry only fires the reload listener on an actual
+    # data change, and this reload changes nothing else.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+
+
+async def test_should_keep_an_enable_made_while_unloaded_when_the_entry_is_set_up_again(hass):
+    """R18/ADR-0047: an enable made while the config entry isn't loaded at all still sticks on
+    the next setup, since the record lives on the row rather than on a listener."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    registry.async_update_entity(entity_id, disabled_by=None)
+
+    # Act
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
+
+
+async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(hass):
+    """R18/ADR-0047: once recognized, the user's enable survives a capability that then
+    returns and goes absent again. One action in Act: building the recognized-enable state,
+    and the capability's own return that precedes this test's own scenario, are both Arrange;
+    the single absent-again reload is the Act, so a failure here points at exactly that
+    transition."""
+    # Arrange
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_DEADLINE_AVAILABLE] = False
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=entry_options_base())
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    registry = er.async_get(hass)
+    entity_id = registry.async_get_entity_id(
+        Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
+    )
+    registry.async_update_entity(entity_id, disabled_by=None)
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    on_data = entry_data_base()
+    on_data[CONF_DEADLINE_AVAILABLE] = True
+    hass.config_entries.async_update_entry(entry, data=on_data)
+    await hass.async_block_till_done()
+    assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
+    assert registry.async_get(entity_id).options.get(DOMAIN, {}) == {
+        OPTION_USER_ENABLED: True
+    }  # pre-Act
+
+    # Act
+    hass.config_entries.async_update_entry(entry, data=data)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
 
 
 async def test_departure_time_restored_value_survives_disable_cycle(hass):
