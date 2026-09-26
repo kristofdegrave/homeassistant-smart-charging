@@ -1126,7 +1126,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         `_dispatch_mode`'s own docstring warns against for the identical pair. Named and
         called as one step from `_run_cycle` (ADR-0046) rather than left inline, the same
         reason `_resolve_deadline_and_reserve` beside it already is one."""
-        active_soc_limit, soc_limit_changed = self._soc_gate.resolve(
+        active_soc_limit, soc_limit_changed, soc_limit_rose = self._soc_gate.resolve(
             self.soc_limit_override,
             solar_reserve_active=ctx.solar_reserve_active,
             solar_reserve_soc=self._config.solar_reserve_soc,
@@ -1153,7 +1153,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self._refresh_power_soc_limit_reached(
             ctx.ev_soc,
             active_soc_limit,
-            limit_changed=soc_limit_changed,
+            limit_rose=soc_limit_rose,
             power_in_charging=power_in_charging,
         )
         return active_soc_limit
@@ -1163,10 +1163,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ev_soc: float | None,
         active_soc_limit: float,
         *,
-        limit_changed: bool,
+        limit_rose: bool,
         power_in_charging: bool,
     ) -> None:
-        """R17 AC4/R7 (#1335), UC04's *State of charge unavailable* exception flow: refreshes
+        """R17 AC4/R7 (#1335, narrowed to a rise by I0h/#1378), UC04's *State of charge
+        unavailable* exception flow: refreshes
         `self._power_soc_limit_reached` -- Power's own stop at the active SOC limit, kept
         separate from `_PowerModeHandler.is_soc_gated` (ADR-0042 keeps that flag `False` so
         Power never *needs* a reading, and a missing one stays a non-fault in Power while
@@ -1191,22 +1192,26 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         stop the *next* Power cycle never asked to leave. A present reading *below* the limit
         always clears, regardless of which mode is active: UC04/R7 AC5's resume condition 1
         (the limit effectively no longer met) is mode-agnostic, unlike the setting side. With
-        no reading at all, UC04 line 64/R7 AC5 name what can still end an already-made stop:
-        "the active SOC limit changes ... not a reading" -- so `limit_changed` (the edge over
-        this cycle's resolved active limit, ADR-0012's `SocGateResolver` -- not only a literal
-        `soc_limit_override` write; the solar-reserve cap and step-up gate can move it too)
-        clears the stop on its own. It can only ever CLEAR, never SET one there either: UC04
-        line 63 is explicit that a missing reading gives the System nothing to judge the limit
-        by, so it "cannot itself stop there on that cycle" -- a limit change witnessed without
-        a reading is evidence of a *change*, not evidence of where `ev_soc` now stands
-        against it, let alone evidence that Power was the one charging when it happened."""
+        no reading at all, R7 AC5 as I0h/#1378 rewrites it names what can still end an
+        already-made stop -- a *rise*, never a fall: "a lowered limit never ends it", and "a
+        raised one ends it on a cycle without a reading even when the unread state of charge is
+        above the new limit". So `limit_rose` (the rising edge over this cycle's resolved
+        active limit, ADR-0012's `SocGateResolver` -- not only a literal `soc_limit_override`
+        write; the solar-reserve cap lifting and a solar step-up can raise it too, R7/R8/R9)
+        clears the stop on its own; a *lowered* limit (`SocGateResolver`'s `changed` without
+        `rose`) leaves it exactly where it was, #1335's own shipped behaviour having conflated
+        the two by reading `changed` alone. It can only ever CLEAR, never SET one there either:
+        UC04 line 63 is explicit that a missing reading gives the System nothing to judge the
+        limit by, so it "cannot itself stop there on that cycle" -- a rise witnessed without a
+        reading is evidence of a *rise*, not evidence of where `ev_soc` now stands against it,
+        let alone evidence that Power was the one charging when it happened."""
         if ev_soc is not None:
             if ev_soc >= active_soc_limit:
                 if power_in_charging:
                     self._power_soc_limit_reached = True
             else:
                 self._power_soc_limit_reached = False
-        elif limit_changed:
+        elif limit_rose:
             self._power_soc_limit_reached = False
 
     def _dispatch_power(self, ctx: CycleContext) -> float:
