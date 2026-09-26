@@ -490,9 +490,11 @@ argument says nobody watches.
   interactive flow: no automated work pending, human approval to merge still required. The
   two `remarks` exits — the cap and the non-docs hand-off — also add `needs-decision`; the
   clean verdict never does. `needs-approval` answers *does this need a human*,
-  `needs-decision` answers *did the review leave findings open* — the two states a maintainer
-  scanning the PR list most needs to tell apart, and indistinguishable from the first label
-  alone. Every run that reaches the routing step clears a stale `needs-approval` before any
+  `needs-decision` answers *is a reason not to merge still open* — findings the review left
+  open, or an interactive session's hold ([contribution-workflow.md](contribution-workflow.md)'s
+  **Exit labels**) — the two states a maintainer scanning the PR list most needs to tell apart,
+  and indistinguishable from the first label alone. Every run that reaches the routing step
+  clears a stale `needs-approval` before any
   verdict is applied — the removal there is unconditional; a stale
   `needs-decision` is cleared only by a `clean` verdict, so a granted extra cycle that comes
   back clean drops it, while a run that produced no verdict at all leaves the findings-open

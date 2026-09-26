@@ -143,14 +143,17 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   means the PR is **on hold**: no automated work is running on it, and a human decides.
 - It posts the reason on the PR as an escalation comment ending in the escalation marker. That
   comment is a reset event (**Rounds and the cap** above), so a round the human partner grants
-  starts a fresh count.
+  starts a fresh count. The label operations and the comment follow
+  [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
 - It does no further work on the PR. The human partner either merges as is, or grants a round.
-  A granted round re-enters at **Fix** with the reason as its finding, and the review step's
-  next pass decides the exit as usual. The session's reason is never the verdict (**Rule A**).
+  A granted round re-enters at **Review**: the review step hands the hold reason to its
+  reviewers as context, their findings reach **Fix** as usual, and a pass's exit decides the
+  labels. The session's reason is never the verdict (**Rule A**).
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
   `needs-approval`.
 
-The session never asks the human partner to hold a PR that still carries `needs-approval`.
+The session applies the hold itself, rather than asking the human partner to hold a PR that
+still carries `needs-approval`.
 
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).

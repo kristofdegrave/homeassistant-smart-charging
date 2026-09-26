@@ -85,7 +85,7 @@ labels:
       description: "PR: no automated review/fix work is pending — a maintainer must decide"
     - name: needs-decision
       color: e4e669
-      description: "PR: review left findings open and no automatic fix follows — a maintainer decides how to proceed"
+      description: "PR: review left findings open, or the PR is on hold — a maintainer decides how to proceed"
   # One per enabled work type — `work_types.enabled` below is this list's names, kept as a
   # separate key because a label is a tracker fact and a work type a method fact. The method
   # check (.github/check-method.py) fails when the two sets differ.
