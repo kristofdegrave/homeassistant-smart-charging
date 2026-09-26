@@ -59,5 +59,6 @@ taken, kept so the log has every number.
 | [0049](0049-solar-surplus-smooths-net-and-charger-power-together.md) | Step 6's solar surplus is smoothed from net import and charger power together (narrows [ADR-0006](0006-coordinator-and-data-flow.md) and [ADR-0036](0036-step-2-smooths-net-power-only.md)) | Accepted |
 | [0050](0050-the-method-keeps-no-ci-lifecycle-description.md) | The method keeps no description of CI's lifecycle (narrows [ADR-0048](0048-retire-the-ai-label-pipeline.md)) | Accepted |
 | [0051](0051-r5-forecast-reads-the-admitted-joint-mean.md) | R5's escalated-rate forecast reads R10's admitted joint mean (narrows [ADR-0006](0006-coordinator-and-data-flow.md) and [ADR-0036](0036-step-2-smooths-net-power-only.md)) | Accepted |
+| [0052](0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md) | An autopilot's controls — three human gates replace Rule B's chaining stop, auto-merge by tree behind a local guard, milestones as ordered priority | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
