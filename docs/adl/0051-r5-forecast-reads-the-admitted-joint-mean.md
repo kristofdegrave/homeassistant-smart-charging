@@ -74,8 +74,9 @@ second Pro against A's and B's second Cons). Its one-cycle delay is accepted.
 This narrows **one clause** a second time: ADR-0006's step 2 "charger power is used raw",
 restated in ADR-0036's Decision and already narrowed by ADR-0049 for step 6. For R5's
 escalated-rate forecast, charger power now enters smoothed, jointly with net import: both of the
-forecast's household-dependent bounds read the window ADR-0049 defines, its admitted mean
-negated. This record answers ADR-0049's out-of-scope note.
+forecast's household-dependent bounds read the window ADR-0049 defines: the admitted mean of
+`net_w − charger_w`, which is R10's smoothed solar surplus negated. This record answers
+ADR-0049's out-of-scope note.
 
 Unchanged:
 
@@ -106,7 +107,7 @@ Unchanged:
 
 `rg -n -i 'smoothed_net_w|smoothed_baseline_w|smoothed_household_w|smoothed (household )?baseline|undeferred|used raw|raw .?charger(_w| power)|_escalated_maximum_permitted_rate_a|_escalated_rate\(|ceiling_headroom_a\(|peak_headroom_a\(|unadmitted|(escalated|forecast).{0,80}(smooth|raw)|(smooth|raw).{0,80}(escalated|forecast)' custom_components/ tests/ docs/ .claude/ .github/ CLAUDE.md`
 
-— 112 hits, 14 of them in this record. It is wide enough because it is keyed on:
+— 113 hits, 15 of them in this record. It is wide enough because it is keyed on:
 - the raw-charger clause, in each record and ADL row that states it;
 - the function that composes the forecast, its test helper, its two bound calls and their
   helpers, and the joint window's output;
@@ -119,7 +120,7 @@ The dot-directories are named, because a root sweep skips them.
 |---|---|---|
 | `custom_components/smart_charging/coordinator.py:1532` | C4 headroom bound on raw `net_w`, `charger_w` | Read the admitted mean (code) |
 | `custom_components/smart_charging/coordinator.py:1548` | Peak headroom bound on `baseline_w`, raw and R3-debounced | Same |
-| `custom_components/smart_charging/coordinator_cycle.py:65` | Comment names the joint mean only beside raw `net_w` | Name the new field (code) |
+| `custom_components/smart_charging/coordinator_cycle.py:65` | Comment names the joint mean only beside raw `net_w` | Name what the forecast reads (code) |
 | `tests/test_coordinator.py:4491` | Test helper builds the ctx from raw `baseline_w`, `net_w`, `charger_w` | Feed the forecast the admitted mean (code) |
 | `docs/design/system-design.md:165` | Signal-Conditioning row hedges on a second, unadmitted output | Drop it (design) |
 | `docs/design/system-design.md:874` | ADR-0049 row: "until R5 settles" | Drop it; add this record (design) |
@@ -131,8 +132,9 @@ The dot-directories are named, because a root sweep skips them.
   `:781`, `:1470` and `:1489`, the forecast's call, a mention and its definition.
 - `coordinator.py:866`, the raw peak-headroom readout; the two helpers' definitions and calls in
   `engines/grid_safety.py` and `engines/billing_protection.py`, and `peak_headroom_a`'s four tests.
-- The test helper's call, its five uses and a docstring mention in `test_coordinator.py` (`:4513`–`:4592`), which hold
-  once the helper feeds the new field, and `test_deadline.py:227`, which takes the rate as given.
+- The test helper's call, its five uses and a docstring mention in `test_coordinator.py`
+  (`:4513`–`:4592`), which hold once the helper feeds the forecast the admitted mean, and
+  `test_deadline.py:227`, which takes the rate as given.
 - The nine in `requirements.md` R5, `system-overview.md`, `resolution-rules.md` and
   `control-cycle.md`, already stating this baseline.
 - The eight other design hits: `system-design.md`'s sequence (four) and `project-plan.md` (four),
@@ -144,4 +146,4 @@ Out of scope:
 - ADR-0006's line 90, ADR-0036's line 193, ADR-0046's line 181 and ADR-0049's nine are
   immutable; the first two are the clause this record narrows.
 - The five in `docs/archive/` record what was planned at their date.
-- This record's own 14, which cite the sites above.
+- This record's own 15, which cite the sites above.
