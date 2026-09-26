@@ -9,13 +9,10 @@ replace it. How the
 same lifecycle would split into CI jobs is described, abstractly, in
 [ci-pipeline.md](ci-pipeline.md).
 
-Two related references cover the phases just outside this lifecycle: the stages either side of
-it ([idea-to-product.md](idea-to-product.md) — the default flow from a captured idea, through
-the artifact chain, to a slice verified on the real installation) and the **Definition of
-Done** an author checks inside step 1, before the PR
-([definition-of-done.md](definition-of-done.md), also covering commit message conventions) —
-the project-wide floor, distinct from a row's per-type *completion bar*, which that document
-routes to.
+Just outside this lifecycle: the stages either side of it are
+[idea-to-product.md](idea-to-product.md)'s, and the **Definition of Done** an author checks in
+step 1 is [definition-of-done.md](definition-of-done.md)'s — the project-wide floor, with commit
+message conventions and the route to a row's per-type *completion bar*.
 
 ## The chain
 
@@ -86,10 +83,10 @@ exception: `cleanup` is triggered by the human stating that the merge happened, 
 session does not watch for the merge — no step dispatches it, and the skill itself guards
 against a statement that turns out to be premature.
 
-## Rule C — decisions go to the human partner through `grilling`
+## Rule C — decisions go through `grilling`
 
-In an interactive session, every decision put to the human partner is asked through the
-`grilling` skill, never as a loose question inside a status report; the skill says what counts.
+In an interactive session, a decision put to the human partner is asked through `grilling`,
+never as a loose question in a status report.
 
 ## Rounds and the cap
 
