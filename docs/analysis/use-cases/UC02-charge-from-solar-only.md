@@ -34,7 +34,7 @@ When smoothed solar surplus reaches the start threshold
 Then the System does not start charging until the cooldown has fully elapsed, then proceeds to step 2 or 2b depending on whether surplus is still at or above the start threshold once it does.
 
 **2b — Restart debounce (a threshold crossing while waiting in Idle)** — branches from step 2.
-Given the [has-charged flag](../system-overview.md#ubiquitous-language) is already set for this connection (i.e. this is not the very first time `Solar` or `SolarOnly` has started charging since the car connected) and the System is `Idle` with surplus currently below the start threshold — whether `Idle` was entered because a cooldown elapsed with surplus still below the threshold, or because the active SOC limit changed while surplus was already below it
+Given the [has-charged flag](../system-overview.md#ubiquitous-language) is already set for this connection (i.e. this is not the very first time `Solar` or `SolarOnly` has started charging since the car connected) and the System is `Idle` with surplus currently below the start threshold — whether `Idle` was entered because a cooldown elapsed with surplus still below the threshold, or because the stop at the active SOC limit ended (R7) while surplus was already below it
 When smoothed solar surplus reaches the start threshold
 Then the System does not start charging immediately; the start threshold must hold continuously for the [restart debounce](../system-overview.md#ubiquitous-language) period (default 1 minute, shared with sibling UC01) before charging actually resumes — a single-cycle blip does not restart charging only to immediately need to stop again
 And if surplus drops back below the start threshold before the debounce period elapses, the System remains `Idle` and the debounce timer resets; it starts again once surplus next reaches the threshold
@@ -71,7 +71,7 @@ And when the CapTar capability is absent, the R3 clamp does not run at all — i
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `SolarOnly` mode
 When state of charge reaches the active SOC limit
-Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit rises, a reading shows state of charge below it, or the car is unplugged and replugged; a lowered limit never ends the stop (R7).
 
 **Fault stop.**
 Given the System is charging in `SolarOnly` mode
@@ -142,7 +142,7 @@ immediately when the threshold is met the moment cooldown elapses, without ever 
 | Charging | whole ampere from configured amp-step rounding strategy (default: highest ampere keeping smoothed net import ≤ 0 W; no ongoing grid fallback) | surplus < start threshold → Hold · SOC ≥ active SOC limit → SocReached |
 | Hold | minimum charging current (grid-drawn shortfall accepted, bounded to this period) | surplus ≥ start threshold → Charging · hold period (1 min) elapsed → Cooldown · sustained R3 breach at the minimum current, only while the CapTar capability is present (stop → R11 solar-mode cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | cooldown (2 min) elapsed → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) |
-| SocReached | 0 A | active SOC limit changes → Charging, immediately, if surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) · car unplugged/replugged → Idle (disconnect clears the has-charged flag) |
+| SocReached | 0 A | active SOC limit rises, or a reading shows SOC below it (R7; a lowered limit never ends the stop) → Charging, immediately, if SOC < active SOC limit and surplus ≥ start threshold; else → Idle (has-charged flag already set, so the restart debounce above applies to the next start) · car unplugged/replugged → Idle (disconnect clears the has-charged flag) |
 
 **A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
 entry point: `SolarOnly` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as
@@ -173,8 +173,8 @@ stateDiagram-v2
     Hold --> SocReached: SOC ≥ active SOC limit<br/>(minimum current draws from grid)
     Cooldown --> Charging: cooldown elapsed (2 min)<br/>& surplus ≥ start threshold<br/>(immediate, no debounce — never entered Idle)
     Cooldown --> Idle: cooldown elapsed<br/>& surplus < start threshold
-    SocReached --> Charging: active SOC limit changes<br/>& surplus ≥ start threshold<br/>(immediate, no debounce — never entered Idle)
-    SocReached --> Idle: active SOC limit changes<br/>& surplus < start threshold,<br/>or unplug/replug
+    SocReached --> Charging: limit rises or SOC reading below it,<br/>& SOC < limit & surplus ≥ start threshold<br/>(immediate, no debounce — never entered Idle)
+    SocReached --> Idle: limit rises or SOC reading below it,<br/>& (SOC ≥ limit or surplus < start threshold),<br/>or unplug/replug
     note right of Charging
         Set-point: configured amp-step rounding
         strategy (default: highest whole ampere

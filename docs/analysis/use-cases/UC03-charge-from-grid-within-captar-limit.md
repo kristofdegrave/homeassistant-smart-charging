@@ -44,7 +44,7 @@ R3's own grace period (default 2 minutes, held at the minimum charging current b
 **State of charge reaches the active SOC limit.**
 Given the System is charging in `Captar` mode
 When state of charge reaches the active SOC limit — whether the plain default, a stepped-up value, or a value `Auto` has lowered via the solar-reserve cap (R9) — the resolution is the same to `Captar`
-Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit changes or the car is unplugged and replugged (R7).
+Then the System stops charging (0 A) and does not resume above that limit until the active SOC limit rises, a reading shows state of charge below it, or the car is unplugged and replugged; a lowered limit never ends the stop (R7).
 
 **Fault stop.**
 Given the System is charging in `Captar` mode
@@ -98,7 +98,7 @@ which is why the diagram does not draw it either.
 | Idle | 0 A | SOC < active SOC limit & no cooldown → Charging |
 | Charging | maximum current requested; R3 clamp fits it (raw) to the peak headroom — net import ≤ effective peak limit − safety margin | sustained R3 breach at the minimum charging current (stop → R11 cooldown, `control-cycle.md`) → Cooldown · SOC ≥ active SOC limit → SocReached |
 | Cooldown | 0 A | `Captar` cooldown (10 min) elapsed → Charging if charging conditions hold, else Idle |
-| SocReached | 0 A | active SOC limit changes, or car unplugged/replugged → Idle |
+| SocReached | 0 A | active SOC limit rises, a reading shows SOC below it, or car unplugged/replugged → Idle (R7; a lowered limit never ends the stop) |
 
 **A cooldown carried in from a stop in another mode** (R11, `control-cycle.md`) is not a distinct
 entry point: `Captar` is dispatched directly into `Cooldown`, not `Idle`, for exactly as long as
@@ -123,7 +123,7 @@ stateDiagram-v2
     Charging --> SocReached: SOC ≥ active SOC limit
     Cooldown --> Charging: cooldown elapsed (10 min)<br/>& charging conditions hold
     Cooldown --> Idle: cooldown elapsed<br/>& charging conditions not held
-    SocReached --> Idle: active SOC limit changes,<br/>or unplug/replug
+    SocReached --> Idle: limit rises, SOC reading below it,<br/>or unplug/replug (never a lowered limit)
     note right of Charging
         Set-point: request maximum current; the R3 peak
         clamp fits it (raw) to the peak headroom — net
