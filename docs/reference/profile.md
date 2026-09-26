@@ -21,9 +21,8 @@ out of the core work-type files.
 ## Repository and git identity
 
 Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
-separate bot account for the interactive session. The CI pipeline acts as
-`github-actions[bot]` instead ([ci-pipeline.md](method/ci-pipeline.md)). **Why it matters:** a human
-item and the session's own footprint are posted under the same login, so
+separate bot account for the interactive session. **Why it matters:** a human item and the
+session's own footprint are posted under the same login, so
 [contribution-workflow.md](method/contribution-workflow.md)'s **Rounds and the cap** tells them apart
 by the session's markers, never by author.
 
@@ -34,10 +33,9 @@ threads and labels on it, driven with the recipes in
 ## Merge strategy
 
 Every PR is **squash-merged, manually**, by the maintainer — `CODEOWNERS` covers every tree and
-branch protection on `main` requires that approval, so neither the interactive session nor CI
-can merge. **Why the squash matters:** it rewrites the merged branch into one commit, which
-orphans any branch stacked on it. That is the reason
-[contribution-workflow.md](method/contribution-workflow.md)'s **Base `main` and stacking** has every
+branch protection on `main` requires that approval, so no Claude session can merge. **Why the
+squash matters:** it rewrites the merged branch into one commit, which orphans any branch
+stacked on it. That is the reason [contribution-workflow.md](method/contribution-workflow.md)'s **Base `main` and stacking** has every
 PR base `main` directly, however the work was branched locally.
 
 ## Project board
@@ -70,8 +68,8 @@ them — sizing sweeps up a tier, epics carrying Size only — are
 The label set — names, colours, descriptions — is `profile.yml`'s `labels`, in four groups
 (pre-triage, action, context, kind), and `.github/setup-labels.sh` writes exactly that set to
 the repository. What a group means and when an issue carries a label from it is
-[contribution-workflow.md](method/contribution-workflow.md)'s **Issue conventions**; the CI-side places
-the context vocabulary is also baked into are [ci-pipeline.md](method/ci-pipeline.md)'s **Label
+[contribution-workflow.md](method/contribution-workflow.md)'s **Issue conventions**; the other places
+the context vocabulary is baked into are [ci-pipeline.md](method/ci-pipeline.md)'s **Label
 vocabulary sync**. The enabled context labels are also the enabled work types
 (`work_types.enabled`) — one directory each under `docs/reference/work-types/` and one row each
 in `CLAUDE.md`'s **Model selection** table.

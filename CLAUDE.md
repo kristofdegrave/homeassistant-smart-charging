@@ -15,9 +15,6 @@ table plus the few rules that must be known before any skill or document is chos
   documents, and in what order: the **Document structure** and **Writing order** topics.
 - **Every unit of work has an issue before work starts** — no exception for small or
   typo-level changes. From that issue to the merge: the **Contribution workflow** topic.
-- **Never self-apply `needs-draft`, `needs-review` or `needs-work`.** They are CI's triggers
-  and the human partner's go-signal; an interactive session runs review and fix locally. The
-  rule and its reasons are the exit-labels rule under **Contribution workflow**.
 - **Destructive git is refused mechanically.** Committing and pushing on a task branch is
   standing-authorized; what that excludes is refused by a `PreToolUse` guard
   (`.claude/hooks/block-destructive-git.sh`, wired in `.claude/settings.json`). The
@@ -68,7 +65,8 @@ PR naming each enumeration still missing it. Why the three are verified rather t
 and how each omission would fail if one ever shipped, are in the document this section routes
 to and the CI document it routes onward to. `docs/postmortems/**` keeps its
 own rule from the **Post-mortems** topic: a plain fresh-agent pass weighted to quotation
-accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md` or the pipeline.
+accuracy, the `workflow` checklist only when the PR also edits `CLAUDE.md` or another file the
+list routes to it.
 
 **Label and path both route, and neither overrides the other.** So a
 PR gets the union: every tree's checklist from the no-label row's path map, **plus** the label
@@ -78,14 +76,13 @@ row's where it names one those paths did not already select. A row that names a 
 `development` PR resolves the `development` checklist and no more, and a tests-only one
 resolves the `testing` checklist and no code bar. Only a row whose checklist carries no tree
 qualifier adds one this way. An issue carrying more than one context label — which the filing
-conventions assume against and CI's drafter refuses — contributes each of those rows rather
-than forcing a choice between them. A reference that cannot be resolved — a deleted or
+conventions assume against — contributes each of those rows rather than forcing a choice between them. A reference that cannot be resolved — a deleted or
 transferred issue, a number that never existed, a failed lookup — is treated exactly like no
 reference at all, so the path half still stands alone rather than the run aborting.
 
 **A review column may name more than one checklist.** Each is applied to the changed files
-under its own tree — the rule CI already uses: a PR can touch more than one tree, so apply each
-checklist to its matching files. A `development` PR therefore gets both the `development`
+under its own tree: a PR can touch more than one tree, so apply each checklist to its
+matching files. A `development` PR therefore gets both the `development`
 checklist, over its code, and the `testing` one, over its tests.
 
 **Where a review is scoped to a tree's files, the criteria come from that tree.** The
@@ -120,7 +117,7 @@ artifacts** document.
 | Topic | Owner |
 |---|---|
 | **Idea-to-product flow** | [idea-to-product.md](docs/reference/method/idea-to-product.md) — the method's default flow from a captured idea to its closed epic: the stages, each with its artifact, its gate and its skills, and how a stage is skipped or deviated from; this project's deviations are `profile.md`'s **Flow**. |
-| **Contribution workflow** | [contribution-workflow.md](docs/reference/method/contribution-workflow.md) — the chain (file the issue → implement → review → fix → clean up) and its rulebook, for an interactive session; it runs unattended from the step it is entered at until a clean pass or the review cap; only **Clean up** is never reached by the chain running onward — it starts from the human stating that the merge happened. [ci-pipeline.md](docs/reference/method/ci-pipeline.md) — the same lifecycle run by CI. The stages either side of it are the **Idea-to-product flow** topic; the floor before the PR is the **Definition of Done** topic. |
+| **Contribution workflow** | [contribution-workflow.md](docs/reference/method/contribution-workflow.md) — the chain (file the issue → implement → review → fix → clean up) and its rulebook, for an interactive session; it runs unattended from the step it is entered at until a clean pass or the review cap; only **Clean up** is never reached by the chain running onward — it starts from the human stating that the merge happened. [ci-pipeline.md](docs/reference/method/ci-pipeline.md) — how the same lifecycle would run as CI jobs, and the repository's own CI checks. The stages either side of it are the **Idea-to-product flow** topic; the floor before the PR is the **Definition of Done** topic. |
 | **Issue conventions** | [contribution-workflow.md#issue-conventions](docs/reference/method/contribution-workflow.md#issue-conventions) — context and kind labels, board Size/Estimate, epics as native sub-issues, branch naming. |
 | **Decomposition checklist** | [decomposition-checklist.md](docs/reference/method/decomposition-checklist.md) — the criteria a fresh agent applies to an epic body in the one pass the **Idea-to-product flow**'s closing step runs before any child is filed; that step owns when the pass runs and what the body must contain. |
 | **Definition of Done** | [definition-of-done.md](docs/reference/method/definition-of-done.md) — the project-wide floor an author self-checks before opening the PR, and commit message conventions; it routes to a row's per-type completion bar. |
@@ -135,4 +132,4 @@ artifacts** document.
 | **Flow document standard** | [idea-to-product.md#section-order-and-mermaid-types](docs/reference/method/idea-to-product.md#section-order-and-mermaid-types) — a rule of the **Analysis** stage. |
 | **Architecture Decision Records (ADRs)** | [work-types/adr/done.md#architecture-decision-records-adrs](docs/reference/work-types/adr/done.md#architecture-decision-records-adrs) — every architectural decision is captured as an ADR before the work that depends on it is committed; the worthiness test and its two carve-outs. |
 | **Post-mortems** | [contribution-workflow.md#post-mortems](docs/reference/method/contribution-workflow.md#post-mortems) — a dated snapshot of reasoning, never a source of truth; how it is reviewed. |
-| **Authoring AI artifacts** | [ai-authoring.md](docs/reference/method/ai-authoring.md) — how a skill, agent definition or CI worker prompt is written; quality and review-integrity rules always win over any token saving. |
+| **Authoring AI artifacts** | [ai-authoring.md](docs/reference/method/ai-authoring.md) — how a skill or agent definition is written; quality and review-integrity rules always win over any token saving. |
