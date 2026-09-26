@@ -45,9 +45,9 @@ routes to.
    - All findings go to the PR as one native review before anything is fixed.
    - Then the pass's exit, this step's alone (**Exit labels** below): a clean pass →
      `needs-approval`, with the PR confirmed to be based on `main`; Critical or Major still
-     open on the last pass the cap allows → both exit labels and one escalation comment
-     handing the disagreement to the human partner; Critical or Major open with passes left →
-     no label, the findings are the fix step's.
+     open on the last pass the cap allows, no round self-granted → both exit labels and one
+     escalation comment handing the disagreement to the human partner; Critical or Major open
+     with passes left, or a round self-granted → no label, the findings are the fix step's.
    - Board **Status** stays *in review*. Merge is the human's, always (**Merge and issue
      closing** below).
 3. **Fix** (`fix`, then `review` again).
@@ -75,8 +75,8 @@ is gone. A fresh **agent**, not a fresh session.
 
 The chain runs **unattended** from the step it is entered at: implement → review → fix →
 review … → a clean pass or the cap, with no check-in between steps. The session stops at exactly
-two points — a clean pass, or the cap with Critical or Major findings still open — both found
-by step 2 at the end of its pass, and reports.
+two points — a clean pass, or the cap with Critical or Major findings still open and no round
+self-granted — both found by step 2 at the end of its pass, and reports.
 It never starts the next issue off the back of the one that just finished; that is the control
 on autonomous artifact-chaining, and it is per issue, not per step.
 
@@ -90,31 +90,44 @@ against a statement that turns out to be premature.
 
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
-- **The cap is `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted from the most
-  recent reset event (see below). That key is the **only** statement of the cap's number and
-  this line the only statement of what it counts — everything that needs either routes here
-  instead of repeating it.
+- **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
+  from the most recent reset event. That key is the **only** statement of that number and this
+  line the only statement of what it counts — everything that needs either routes here instead
+  of repeating it.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed,
   so the final round needs no further pass to confirm it.
 - **At the cap** — the last pass the count allows still has a Critical or Major finding open —
-  the loop stops instead of fixing again: the review step, at the end of that pass, puts the
-  exit labels on (**Exit labels** below) and posts one escalation comment handing the
-  disagreement to the human, who has **two decisions**: merge as is, accepting the open
-  findings, or **grant another round** — a fresh count, since the escalation comment is
-  itself the reset event. A grant is an instruction given to the session, never inferred from
-  a thread.
+  the session **grants itself one more round** only when all three hold:
+  - (i) the author agrees with every open Critical or Major finding;
+  - (ii) no fix needs a decision that is the human partner's — a product choice, or a
+    trade-off the spec does not settle;
+  - (iii) each such finding comes from the original work, not from the previous round's own
+    fix.
+
+  The review step posts the grant as a PR comment giving why each condition holds, ending in
+  the self-grant marker `<!-- local-review-self-granted -->`. Each such comment since the
+  reset event raises the cap by one pass, never past `.claude/profile.yml`'s
+  `review.interactive_ceiling` passes — that key is the ceiling's only statement.
+- **Otherwise** — a condition fails, or the ceiling is reached — the loop stops instead of
+  fixing again: the review step, at the end of that pass, puts the exit labels on (**Exit
+  labels** below) and posts one escalation comment handing the disagreement to the human,
+  who has **two decisions**: merge as is, accepting the open findings, or **grant another
+  round** — a fresh count, since the escalation comment is itself the reset event. In-session
+  they are asked through `grilling`. A grant is an instruction given to the session, never
+  inferred from a thread or a default answer.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
-  own markers (the local round marker, an `ai-fix-` marker, the escalation marker —
-  a marked item is the session's footprint under the developer's own account, **Git
-  identity** below), posted while an exit label was on: after its `labeled` event and before
-  any later `unlabeled` one. Nothing else resets the count; no reset event means counting from
-  the PR's first review. This is the rule's only statement — the `review` skill's *Count the
-  rounds* item is its one procedure. A granted round or a human review therefore never gets
-  refused by a cap it did not ask for.
+  own markers (the local round marker, an `ai-fix-` marker, the escalation marker, the
+  self-grant marker — a marked item is the session's footprint under the developer's own
+  account, **Git identity** below), posted while an exit label was on: after its `labeled`
+  event and before any later `unlabeled` one. Nothing else resets the count, a self-grant
+  comment included; no reset event means counting from the PR's first review. This is the
+  rule's only statement — the `review` skill's *Count the rounds* item is its one procedure.
+  A round the human grants, or a human review, therefore never gets refused by a cap it did
+  not ask for.
 
 ## Exit labels
 
@@ -123,14 +136,14 @@ human decides**. `needs-approval` adds that a human may merge the PR **as it sta
 why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both exits have one actor: the **review step**, at the end of the pass it
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision` if one is present. After the last pass the cap allows, with Critical or Major
-still open, it applies `needs-decision` **alongside** `needs-approval` and posts the one
-escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
+still open and no round self-granted, it applies `needs-decision` **alongside**
+`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
 skill applies either label; the one exception is the session putting a PR on hold (below).
 Neither label replaces manual merge approval (**Merge and issue closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
-false, and so does a granted round: both labels come off no later than the review step's
+false, and so does a round the human grants: both labels come off no later than the review step's
 next pass — the `fix` skill's first step removes them when a human item precedes it, and the
 review step's first act removes them whenever a reset event of either kind precedes its pass
 and a label is still on (a grant given in-session posts nothing, so only the review step sees
@@ -199,10 +212,8 @@ the `Closes` reference is the one that names it.
 ## Merge and issue closing
 
 **Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
-**Merge strategy**) — never auto-merged or
-self-approved; `needs-approval` only signals that no automated work is pending. Merging
-auto-closes the linked issue via the PR's `Closes #N` reference, or leaves it open if the PR
-only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
+**Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue
+via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
 fully clean verification-only task — closing is left to that reference, which fires on merge.
 
 **An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
@@ -219,8 +230,7 @@ closes. Nothing watches for the moment otherwise: GitHub does not close a parent
 sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
 cannot.
 
-Once merged, the task's worktree is removed as part of step 4 — the reason the step exists is
-that a worktree left behind is a stale checkout waiting for a bulk sweep nobody schedules.
+Step 4 removes the task's worktree because one left behind is a stale checkout nobody sweeps.
 
 ## Commit & push authorization
 
@@ -229,8 +239,7 @@ needed. This is a standing authorization the project makes in this document; it 
 extend to anything destructive or hard to reverse (force-push, rewriting published history,
 `git reset --hard`, etc.), which still follow the general ask-before-acting default. A
 `PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/block-destructive-git.sh`) refuses
-the most common of those before they run — a backstop for this text, not a replacement for
-it.
+the most common of those before they run.
 
 ## Project board
 
@@ -270,8 +279,7 @@ session's own footprint by the session's markers, never by author.
 ## Issue conventions
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
-  `development`/`testing`
-  (implementation tasks, each one child of an epic whose body carries the spec), `workflow` (CI/skill/agent-authoring
+  `development`/`testing` (implementation tasks, **Task issues** below), `workflow` (CI/skill/agent-authoring
   changes), `documentation` (design-doc changes, `docs/design/**`). The label set itself — every name, colour and description,
   and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
   `work_types`, and `.github/setup-labels.sh` writes it to the repository from there. Adding or
@@ -319,9 +327,8 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment, matching the `bug/<n>` branches such work already uses. Earlier branches for
-*this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
-alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
+defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those
+two spellings are historical, not alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
@@ -347,8 +354,6 @@ it recommends can be argued from evidence. Once those changes land, it stays as 
 why and is not revised.
 
 ### Two rules that apply elsewhere do not apply here
-
-Two rules that apply elsewhere deliberately do **not** apply here:
 
 - **Tracking refs are required, not forbidden.** `CLAUDE.md`'s *Review protocol for analysis
   documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies, because
