@@ -4,15 +4,15 @@ name: Upstream drift
 # The pins are .claude/profile.yml's `dependencies`, the provenance manifest; the comparison
 # and every verdict it can reach are .github/check-upstream-drift.py's, and this workflow only
 # carries the answer to a human. Why it exists, why it may never edit a skill or the manifest,
-# and how a report is closed, are in the document `CLAUDE.md`'s **Contribution workflow** topic
-# routes to for the CI lifecycle -- the single source for that argument; this header does not
-# restate it.
+# and how a report is closed, are in the CI document `CLAUDE.md`'s **Contribution workflow**
+# topic routes to, under "The upstream-pin drift check" -- the single source for that argument;
+# this header does not restate it.
 #
 # Three invariants this file must keep. Why each one holds is in the routed document; what
 # they are is this file's own subject, and every step below is written to one of them:
 #
 #   1. It writes nothing to the repository -- no commit, no branch, no edit to a skill.
-#   2. It applies `workflow` and no other label, `needs-*` least of all.
+#   2. It applies `workflow` and no other label -- least of all one that starts work.
 #   3. One open report at a time, updated in place and only when its content actually changed.
 
 on:

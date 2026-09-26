@@ -3,10 +3,10 @@ name: Close guard
 # The one hard gate on the documentation-to-code link: a PR whose changed files are all under
 # `docs/` may not close a `development`/`testing` issue, because a documentation-only diff cannot
 # implement code and closing a code task with one marks the work done while it is still
-# outstanding. Why it is a status check rather than a review-prompt checklist item, why it is its
-# own workflow rather than a job in ci.yml, and the branch-protection step it still needs, are in
-# docs/reference/method/ci-pipeline.md's "The docs-only close guard" -- the single source for that
-# argument; this header does not restate it.
+# outstanding. Why it is a status check rather than a review checklist item, why it is its own
+# workflow rather than a job in ci.yml, and the branch-protection step it still needs, are in
+# docs/reference/method/ci-pipeline.md's "The docs-only close guard" -- the single source for
+# that argument; this header does not restate it.
 
 on:
   pull_request:
