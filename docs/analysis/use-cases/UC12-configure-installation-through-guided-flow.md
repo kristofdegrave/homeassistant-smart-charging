@@ -131,7 +131,8 @@ variants.
    at all while this capability is absent (R3 AC1) — 6a gives the mapping's own rationale for why
    it is left unmapped by default.
 7. **Given** solar was declared installed, **when** the System shows the `solar` step, **then** it
-   presents the solar-production and solar-forecast mappings and solar's own thresholds: the
+   presents the solar-production mapping, the next-day solar-forecast mapping and the optional
+   same-day one (R9), and solar's own thresholds: the
    `Solar` and `SolarOnly` start thresholds, the `SolarOnly` rounding strategy and midpoint, the
    `Solar` and `SolarOnly` post-surplus hold durations, the solar-mode cooldown duration, the
    restart debounce duration, the solar step-up size, trigger gap, and ceiling, and the
@@ -178,8 +179,8 @@ capability declarations; `grid`'s net-power, grid-voltage, and low-tariff mappin
 charger-current, charger-status, and charger-power mappings; `vehicle`'s EV state-of-charge,
 EV-battery-capacity-sensor, vehicle-charge-limit, and car-at-home mappings — unconditionally, since
 the `vehicle` step is ungated; `captar`'s optional external monthly-peak mapping when CapTar is
-declared present (6a); `solar`'s solar-production and solar-forecast mappings when solar is
-declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
+declared present (6a); `solar`'s solar-production mapping, next-day solar-forecast
+mapping and optional same-day one when solar is declared present; `deadline`'s external departure-time and home-day mappings when deadlines are
 managed; and `notifications`' notification-target mapping when notifications are wanted. Only the
 `core`, `grid`, `ev_charger`, and `vehicle` mapping halves are shown unconditionally; `captar`,
 `solar`, `deadline`, and `notifications` each appear only while their own capability is declared
@@ -380,7 +381,8 @@ it was before the flow started.
   required when solar is declared; the car-at-home presence mapping required when a vehicle
   charge-limit is mapped or deadlines are managed) is, after this use-case, a plain required field
   local to the one step that needs it — the first two unconditionally required on their own step,
-  the third by the field-level rule 4a.
+  the third by the field-level rule 4a. The same-day solar-forecast mapping (R9) is optional and
+  unmapped by default (NF12).
 - Two gaps the previous step model named as out of scope are closed by **this** step model: the
   solar-production mapping is now presented on the `solar` step, and the `Power`-mode cooldown on
   the `power` step, so every catalogued adapter role and `config-options` key the flow is
