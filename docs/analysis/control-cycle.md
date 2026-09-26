@@ -112,8 +112,8 @@ flowchart TD
    admit, because the charger current was just changed, the window keeps its earlier samples and
    their smoothed value stands; R10 is authoritative for when that applies and for its
    one-cycle bound. The smoothed value feeds charging-rate decisions; the raw readings are
-   retained for peak protection. A spike lasting a single cycle does not move the smoothed value;
-   a change sustained across the full window does, within the following cycle. `solar_w` is
+   retained for peak protection. A spike lasting a single cycle does not change the set-point it
+   feeds; a change sustained across the full window does, within the following cycle. `solar_w` is
    deliberately not smoothed: no charging-rate step of this cycle consumes it, since solar surplus
    is formed from net import and charger power alone (R10). Step 1 reads it every cycle solely to surface it as an attribute of
    `sensor.smart_charging_adapter_readings` (ADR-0021), so it stays a raw reading throughout.

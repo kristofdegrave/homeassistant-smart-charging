@@ -173,7 +173,7 @@ Requirements written fresh from the idea. Each requirement describes *what* the 
 ### R10 — Sensor smoothing
 
 **Priority:** Must
-**What:** The system bases charging-rate decisions on a smoothed [solar surplus](system-overview.md#ubiquitous-language) — the operand the solar modes set their rate from, smoothed from each control cycle's net grid power and charger power together, with a reading taken just after the system changed the charger current not admitted, never two cycles running — so that momentary fluctuations do not cause the charging rate to change, and under steady inputs the charging rate settles and holds, with no charging-rate decision consuming the solar power reading itself.
+**What:** The system bases charging-rate decisions on a smoothed [solar surplus](system-overview.md#ubiquitous-language) — the operand the solar modes set their rate from, smoothed from each control cycle's net grid power and charger power together — so that momentary fluctuations do not cause the charging rate to change, and under steady inputs the charging rate settles and holds, with no charging-rate decision consuming the solar power reading itself.
 
 **Acceptance criteria:**
 

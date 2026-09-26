@@ -78,7 +78,7 @@ available [peak headroom](../system-overview.md#ubiquitous-language) — the hig
 that keeps net import at or below the effective peak limit minus the safety margin, floored at the
 minimum and capped at the maximum charging current (C1). Realising the absolute-headroom bound in
 the raw-reading clamp rather than in the mode is what makes `Captar`'s effective control law
-raw-based, unlike the solar modes' smoothed convergence toward 0 W (UC01/UC02). Because the clamp
+raw-based, unlike the solar modes' set-point from the smoothed solar surplus (UC01/UC02). Because the clamp
 acts on net import, any solar production is netted off first and self-consumed, with the grid
 supplying only the remainder. The `stateDiagram-v2` below is authoritative for the state set. All
 thresholds/timers are configurable (defaults shown). The peak-protection (R3) and

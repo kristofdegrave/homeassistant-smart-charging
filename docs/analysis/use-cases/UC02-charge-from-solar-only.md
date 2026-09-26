@@ -18,13 +18,13 @@
 
 ## Trigger
 
-A [control cycle](../system-overview.md#ubiquitous-language) observes that smoothed [solar surplus](../system-overview.md#ubiquitous-language) has reached at least the [solar start threshold](../system-overview.md#ubiquitous-language) (default 1300 W for `SolarOnly`, chosen so the [minimum charging current](../system-overview.md#ubiquitous-language) can be met from solar alone). Here *smoothed* solar surplus is the rolling mean of per-cycle `charger_w − net_w` samples, the `solar surplus` formula applied to each cycle's own [net import](../system-overview.md#ubiquitous-language) and charger power (`control-cycle.md` step 2, R10).
+A [control cycle](../system-overview.md#ubiquitous-language) observes that smoothed [solar surplus](../system-overview.md#ubiquitous-language) has reached at least the [solar start threshold](../system-overview.md#ubiquitous-language) (default 1300 W for `SolarOnly`, chosen so the [minimum charging current](../system-overview.md#ubiquitous-language) can be met from solar alone). Here *smoothed* solar surplus is smoothed from each cycle's own [net import](../system-overview.md#ubiquitous-language) and charger power together (`control-cycle.md` step 2; R10 is authoritative).
 
 ## Main success scenario
 
 1. **Given** `SolarOnly` mode is active, the car is connected at home, state of charge is below the active SOC limit, and no rapid-cycling cooldown is in effect (R11 — whether started by a solar stop or carried in from a stop in another mode).
 2. **When** smoothed solar surplus reaches at least the solar start threshold (default 1300 W), **then** the System starts charging within one control cycle — immediately, whether this is the connection's first start or the threshold is already met the moment `Idle` is entered (2b covers a threshold crossing while already waiting in `Idle`, once the has-charged flag is set).
-3. **And** the System converts the smoothed solar surplus into a whole-ampere set-point using the configured [amp-step rounding](../system-overview.md#ubiquitous-language) strategy — default `round down` (the highest whole ampere the smoothed solar surplus covers, solar-only, never importing) — recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
+3. **And** the System converts the smoothed solar surplus into a whole-ampere set-point using the configured [amp-step rounding](../system-overview.md#ubiquitous-language) strategy — default `round down` (the highest whole ampere the smoothed solar surplus covers, so net grid import stays at or below 0 W) — recomputing this set-point each following control cycle so it re-tracks the available surplus, bounded by the minimum and [maximum charging current](../system-overview.md#ubiquitous-language) (C1).
 
 ## Alternate flows
 
