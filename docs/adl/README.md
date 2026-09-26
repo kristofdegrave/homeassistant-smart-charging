@@ -1,9 +1,10 @@
 # Architecture Decision Log (ADL)
 
 The Architecture Decision Log is the index of every Architecture Decision Record (ADR)
-in this project. Each row is one immutable decision; see `template.md` for the format
+in this project. Each row is one immutable record; see `template.md` for the format
 and `0001-use-architecture-decision-records.md` for why this project uses ADRs and this
-template.
+template. An ADR dropped before it merges is not deleted: it merges in full with Status
+`Abandoned`, so the log keeps every number and the record of what was considered.
 
 | ADR | Title | Status |
 | --- | --- | --- |

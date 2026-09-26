@@ -22,8 +22,8 @@ fixer may not act on is not raised.
   under those exact names, per `docs/adl/template.md`. Summary is required from ADR-0045 on; a
   record before it conforms with the other five. A section missing, renamed or out of order →
   **Major**.
-- Filename `NNNN-kebab-case-title.md`, `NNNN` the next 4-digit integer after the highest
-  existing `docs/adl/NNNN-*`.
+- Filename `NNNN-kebab-case-title.md`, `NNNN` above `main`'s highest `docs/adl/NNNN-*` with
+  every number between held by a remote `adr/NNNN` branch (`implement.md`'s *Number*).
 - `docs/adl/README.md` (the ADL) has a row for it whose title and Status match the record.
   Missing or mismatched → **Major**: the row is how the log stays readable.
 
@@ -78,10 +78,10 @@ contradiction with no supersession → **Critical**.
 other ADRs. A term that departs from them → **Minor**.
 
 **(10) Status is `Accepted` before `needs-approval`.** The only home of this convention: **an
-ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it. A round that
-left it otherwise is corrected once the pass is clean, before `needs-approval`. Handed to the
-human partner with any other Status → **Major**: the ADL row (item 2) would record a decision
-the log says was never taken.
+ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it unless
+abandoned (`implement.md`'s *Abandoned, not deleted*). A round that left it otherwise is
+corrected once the pass is clean. Handed over with any other Status → **Major**: the ADL row
+(item 2) would record a decision the log says was never taken.
 
 **(11) Links point only at targets that outlive the record.** A merged record's link is touched
 only once it has actually broken, so every link that can break is a future edit to an immutable
@@ -98,12 +98,11 @@ record — a defect when written. A markdown link to a target the table does not
 | Any other issue or PR | Neither linked nor cited by number: state the fact itself; `git log` reaches the PR from the record (the tracking-refs rule below). |
 | Anything else — code paths, `.claude/**`, `.github/**`, any tree that can be retired | Named in prose, not linked. |
 
-Links only, not mentions: a path written in prose doesn't break. Applies to links the change
-writes in an ADR it **adds**. A link already in a merged record is out of scope: it stays
-until it actually breaks, and is then repaired under `implement.md`'s *Immutable once
-merged*.
+Links only, not mentions: a path written in prose doesn't break. A link already in a merged
+record is out of scope: it stays until it actually breaks, and is then repaired under
+`implement.md`'s *Immutable once merged*.
 
-**(12) The Summary matches the record.** Applies to an ADR the change adds.
+**(12) The Summary matches the record.**
 - It names the chosen option as Considered options names it and accepts one of that option's
   stated Cons. A mismatch → **Major**: a summary that contradicts its record misleads worse
   than none.

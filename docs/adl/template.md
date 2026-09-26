@@ -1,7 +1,7 @@
 # ADR-NNNN: <Short noun phrase naming the decision>
 
 Date: YYYY-MM-DD <!-- the date this ADR was created; never changes, even if Status later does -->
-Status: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN
+Status: Proposed | Accepted | Deprecated | Superseded by ADR-NNNN | Abandoned — <why, in one sentence>
 
 ## Summary
 

@@ -11,16 +11,22 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 
 ## Before the branch exists
 
-- **Number.** The bar's item 2, *Template conformance*, defines it and judges it. Resolve it
-  against a fetched `origin/main` before the branch exists, since the branch is named after
-  it. Never reuse or renumber: a superseded ADR keeps its number, so counting from the highest
-  existing one is the only safe count.
+- **Number: one above the highest held.** Several ADRs may be in flight at once, and an open
+  `adr/NNNN` branch reserves its number. Re-run the count, never remember it, just before the
+  branch is cut:
+  1. `git fetch --prune origin`;
+  2. take the highest `NNNN` in `git ls-tree --name-only origin/main docs/adl/` and
+     `git branch -r --list 'origin/adr/[0-9][0-9][0-9][0-9]'`;
+  3. add one.
+
+  A merged ADR's leftover branch never exceeds `main`'s highest, so it changes nothing. Never
+  reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
+  *Template conformance*, judges the result.
 - **Branch `adr/<adr-number>`**, zero-padded — not the issue number. The contribution workflow
   lets a work file override the number segment when it states the exception and why; this is
-  that statement: the record's own number is its identity. Because that number comes from
-  `main`, it can collide: **only one ADR may be in flight (drafted, not merged) at a time.** A
-  branch of that name already on the remote means another ADR holds the number: stop and
-  report rather than clobbering it.
+  that statement: the record's own number is its identity, and the branch is what reserves it.
+  A branch of that name already on the remote means the number was taken since the count:
+  re-count rather than clobbering it.
 
 ## Drafting
 
@@ -61,14 +67,24 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   genuine follow-up on the same ADR uses the workflow's multi-PR convention for its issue.
 - **Status `Accepted` from the first draft** — the bar's item 10, *Status is `Accepted` before
   `needs-approval`*, is the rule's only home.
+- **Merge in number order**, so `main` never holds a number above one still open. An
+  `Abandoned` ADR counts as merged. A clean pass still exits on `needs-approval`; a
+  lower-numbered `adr/` PR not yet merged is then a blocking reason found after the exit, and
+  the PR goes on hold per
+  [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels).
+- **Abandoned, not deleted.** An ADR the human partner drops before it merges keeps its number
+  and its full draft: it merges with `Status: Abandoned — <why, in one sentence>`, and its ADL
+  row reads `Abandoned`. Deleted, it would leave a gap in the log, and the count could hand its
+  number out again.
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
 - **Immutable once merged.** An ADR that exists on the base is edited in exactly three ways,
-  whatever its Status there — `Superseded` and `Deprecated` records included — and this list is
+  whatever its Status there — `Superseded`, `Deprecated` and `Abandoned` records included — and this list is
   the rule's only home, for author, fixer and reviewer alike:
   - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation, or
-    to correct one merged as anything but `Accepted` — the bar's item 10 — to `Accepted`;
+    to correct one merged as anything but `Accepted` or `Abandoned` — the bar's item 10 — to
+    `Accepted`;
   - a typo fix that changes no meaning;
   - a repair of something that directs the reader to act and is **actually broken**:
     - a link that no longer resolves: re-point it at the same content's new path; where that
@@ -83,8 +99,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   - **Read existence from the base, not the working tree:** `git show <base>:<path>`, `<base>`
     the PR's base commit — a bare branch name may not resolve in a fresh checkout. The Status
     line decides nothing: under the bar's item 10 every draft reads `Accepted` in the working
-    tree, and a record that is on the base was merged as a decision taken, whichever Status it
-    carries now.
+    tree, and a record that is on the base was merged, whichever Status it carries now.
     - Not on the base → a draft; fix normally.
     - Base cannot be read (no ref fetched, command unavailable) → don't fall back to the working
       tree. Treat the record as merged and say in the summary that the base read failed. A
