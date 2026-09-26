@@ -51,6 +51,7 @@ from .const import (
     ROLE_MONTHLY_PEAK_EXTERNAL,
     ROLE_NET_POWER,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_FORECAST_TODAY,
     ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLES_ADAPTER_READINGS_EXCLUDED,
@@ -432,9 +433,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
         table never matches. Each optional-role read here goes through `_read_role` (issue
         #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
-        read -- so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/ROLE_SOLAR_FORECAST keep
-        reporting their real reads in `sensor.smart_charging_adapter_readings` instead of a
-        stale/None value forever.
+        read -- so ROLE_DEPARTURE_EXTERNAL/ROLE_SUN/ROLE_LOW_TARIFF/ROLE_SOLAR_FORECAST/
+        ROLE_SOLAR_FORECAST_TODAY keep reporting their real reads in
+        `sensor.smart_charging_adapter_readings` instead of a stale/None value forever.
 
         NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
         bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
@@ -487,12 +488,29 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # above becomes once midnight has passed.
         reserved_day = resolve_reserved_day(now_dt)
         deadline_reserved_day = resolve_deadline_for(reserved_day)
+
+        # R9's forecast condition (#1423): until midnight the reserved day's forecast is
+        # `solar_forecast` (the next-day sensor). From midnight until the sun comes up it is
+        # the optional `solar_forecast_today` (same-day) one instead, while that role is
+        # mapped. While it is unmapped, or its reading is unavailable, the condition does not
+        # hold from midnight -- via resolve_solar_reserve_gate's own None short-circuit, never
+        # a 0.0 default (the deliberate midnight-lift fallback, R9's third acceptance
+        # criterion / UC07 2a). Both roles are read every cycle regardless of which one feeds
+        # the gate, like every other optional role here (issue #717/#911) -- so
+        # ROLE_SOLAR_FORECAST_TODAY keeps reporting its real reads in
+        # `sensor.smart_charging_adapter_readings` too. Midnight has passed for the current
+        # reserved-day night exactly when today's calendar date already equals reserved_day
+        # (resolve_reserved_day's own docstring).
         forecast_kwh = await self._read_role(ROLE_SOLAR_FORECAST)
+        forecast_today_kwh = await self._read_role(ROLE_SOLAR_FORECAST_TODAY)
+        reserved_day_forecast_kwh = (
+            forecast_today_kwh if now_dt.date() == reserved_day else forecast_kwh
+        )
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=reserved_day in self.home_day_dates,
             sun_is_down=ctx.sun_is_down,
-            forecast_kwh=forecast_kwh,
+            forecast_kwh=reserved_day_forecast_kwh,
             forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
             deadline_tomorrow_resolved=deadline_reserved_day is not None,
         )

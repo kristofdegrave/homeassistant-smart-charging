@@ -566,14 +566,23 @@ def resolve_solar_reserve_gate(
     deadline_tomorrow_resolved: bool,
 ) -> bool:
     """R9 solar-reserve-cap gating (ADR-0023) -- a thin wrapper over
-    engines/soc_target.py::resolve_solar_reserve_active, folding the forecast reading's
-    None-to-0.0 default in the one place that needs it. A plain function, not a class, because
-    unlike SolarStepUpGate it is stateless -- nothing is threaded across cycles."""
+    engines/soc_target.py::resolve_solar_reserve_active. A plain function, not a class,
+    because unlike SolarStepUpGate it is stateless -- nothing is threaded across cycles.
+
+    `forecast_kwh=None` short-circuits to False rather than folding through a 0.0 default
+    compared against `forecast_threshold_kwh` (#1423): the coordinator passes None both for
+    an unmapped/unavailable ROLE_SOLAR_FORECAST and, from midnight, for an unmapped/
+    unavailable ROLE_SOLAR_FORECAST_TODAY -- either way the forecast condition must not hold,
+    whatever the configured threshold happens to be (a negative threshold would wrongly
+    activate the cap otherwise -- the engine's own comparison is strict, so 0.0 was never a
+    problem)."""
+    if forecast_kwh is None:
+        return False
     return resolve_solar_reserve_active(
         profile=profile,
         home_day_flag=home_day_flag,
         sun_is_down=sun_is_down,
-        forecast_kwh=forecast_kwh if forecast_kwh is not None else 0.0,
+        forecast_kwh=forecast_kwh,
         forecast_threshold_kwh=forecast_threshold_kwh,
         deadline_tomorrow_resolved=deadline_tomorrow_resolved,
     )

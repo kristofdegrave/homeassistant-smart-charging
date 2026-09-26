@@ -32,6 +32,7 @@ from custom_components.smart_charging.const import (
     CONF_NET_POWER_ENTITY,
     CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_SOLAR_FORECAST_ENTITY,
+    CONF_SOLAR_FORECAST_TODAY_ENTITY,
     CONF_SOLAR_POWER_ENTITY,
     CONF_STATUS_TRANSLATION,
     CONF_VEHICLE_CHARGE_LIMIT_ENTITY,
@@ -49,6 +50,7 @@ from custom_components.smart_charging.const import (
     ROLE_NET_POWER,
     ROLE_NOTIFICATION_TARGET,
     ROLE_SOLAR_FORECAST,
+    ROLE_SOLAR_FORECAST_TODAY,
     ROLE_SOLAR_POWER,
     ROLE_SUN,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -276,6 +278,39 @@ async def test_solar_forecast_empty_string_treated_as_absent(hass):
     data[CONF_SOLAR_FORECAST_ENTITY] = ""
     adapters = build_adapters(hass, data)
     assert ROLE_SOLAR_FORECAST not in adapters
+
+
+async def test_should_build_a_numeric_read_adapter_when_solar_forecast_today_is_mapped(hass):
+    """entity-catalog.md's `solar_forecast_today` row: kWh, like `solar_forecast` -- the
+    expected unit set ADR-0040's fifth mandated case requires be stated for a numeric role
+    reading through `NumericReadAdapter`."""
+    # Arrange
+    data = _data()
+    data[CONF_SOLAR_FORECAST_TODAY_ENTITY] = "sensor.solar_forecast_today"
+    # Act
+    adapters = build_adapters(hass, data)
+    # Assert
+    assert isinstance(adapters[ROLE_SOLAR_FORECAST_TODAY], NumericReadAdapter)
+    assert adapters[ROLE_SOLAR_FORECAST_TODAY]._entity_id == "sensor.solar_forecast_today"
+
+
+async def test_should_omit_the_role_when_solar_forecast_today_is_not_configured(hass):
+    """NF12: unmapped by default, no migration -- an existing entry loads and builds without
+    this role at all."""
+    # Arrange / Act
+    adapters = build_adapters(hass, _data())
+    # Assert
+    assert ROLE_SOLAR_FORECAST_TODAY not in adapters
+
+
+async def test_should_treat_an_empty_string_as_absent_when_solar_forecast_today_is_blank(hass):
+    # Arrange
+    data = _data()
+    data[CONF_SOLAR_FORECAST_TODAY_ENTITY] = ""
+    # Act
+    adapters = build_adapters(hass, data)
+    # Assert
+    assert ROLE_SOLAR_FORECAST_TODAY not in adapters
 
 
 async def test_factory_builds_low_tariff_role_when_configured(hass):

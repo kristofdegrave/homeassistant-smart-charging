@@ -123,6 +123,7 @@
         "data": {
           "solar_power_entity": "Zonneproductie-entiteit (optioneel)",
           "solar_forecast_entity": "Zonneprognose-entiteit",
+          "solar_forecast_today_entity": "Zonneprognose-entiteit voor vandaag (optioneel)",
           "solar_start_threshold_w": "Startdrempel Zon (W)",
           "solar_only_start_threshold_w": "Startdrempel Alleen-zon (W)",
           "solar_only_strategy": "Afrondingsstrategie stroomstap Alleen-zon",
@@ -139,7 +140,8 @@
         },
         "data_description": {
           "solar_power_entity": "De sensor die het eigen productievermogen van de zonne-installatie rapporteert, gebruikt door dashboardtegels. Optioneel.",
-          "solar_forecast_entity": "De sensor die een zonneprognose levert, gebruikt om te bepalen of het nachtelijke zonnereserveplafond van toepassing is.",
+          "solar_forecast_entity": "De sensor die een prognose voor de volgende dag levert, gebruikt om te bepalen of het nachtelijke zonnereserveplafond van toepassing is.",
+          "solar_forecast_today_entity": "Optionele sensor die een zonneprognose voor vandaag levert (de totale opbrengst van vandaag, of de nog te verwachten opbrengst vandaag). Terwijl gekoppeld, leest het zonnereserveplafond deze vanaf middernacht tot zonsopgang in plaats van de prognose voor de volgende dag hierboven; terwijl niet gekoppeld, vervalt het plafond om middernacht. Laat leeg om die standaardinstelling aan te houden.",
           "solar_start_threshold_w": "Zonneoverschot (W) dat deze waarde moet bereiken of overschrijden voordat Zon-modus begint met laden. Standaard 150.",
           "solar_only_start_threshold_w": "Zonneoverschot (W) dat deze waarde moet bereiken of overschrijden voordat Alleen-zon-modus begint met laden. Standaard 1300.",
           "solar_only_strategy": "Hoe Alleen-zon de berekende stroomstap afrondt naar een heel ampère: naar boven, naar beneden, of naar dichtstbijzijnde met de middelpuntfractie hieronder. Standaard naar beneden.",
