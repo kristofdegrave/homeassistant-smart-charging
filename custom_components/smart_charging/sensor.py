@@ -69,7 +69,7 @@ from .const import (
     STATUS_FAULT,
     STATUS_OK,
 )
-from .entity import SmartChargingEntity, sync_disabled_by
+from .entity import SmartChargingEntity, mark_disabled_seen, sync_disabled_by
 
 
 class _CoordinatorPushMixin(SmartChargingEntity, CoordinatorEntity):
@@ -406,6 +406,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data.coordinator
     config = entry.runtime_data.config
+    registry = er.async_get(hass)
     # Reads entry.data directly (not config.solar_available, which holds the same value) --
     # predates T0/#888's runtime_data.config and a regression test now pins this exact read
     # path (test_solar_surplus_sensor_config_read_matches_other_platforms); left as-is rather
@@ -416,7 +417,7 @@ async def async_setup_entry(
         entry.entry_id, coordinator, solar_available=solar_available
     )
     sync_disabled_by(
-        er.async_get(hass),
+        registry,
         Platform.SENSOR,
         solar_surplus_sensor.unique_id,
         capability_met=solar_available,
@@ -591,3 +592,4 @@ async def async_setup_entry(
             *(_ConfigMirrorSensor(entry.entry_id, spec) for spec in mirror_specs),
         ]
     )
+    mark_disabled_seen(registry, Platform.SENSOR, solar_surplus_sensor.unique_id)

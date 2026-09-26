@@ -427,7 +427,7 @@ def build_mode_handlers(
 
 
 class SocGateResolver:
-    """Owns SOC-limit resolution + change detection (ADR-0012), replacing the inline
+    """Owns SOC-limit resolution + change/rise detection (ADR-0012), replacing the inline
     resolve_active_soc_limit call + _last_active_soc_limit comparison. Pure -- no hass.bus
     access; the coordinator still fires ActiveSocLimitChanged itself on a reported change
     (ADR-0009/0010 boundary: HA I/O stays coordinator-side)."""
@@ -442,12 +442,16 @@ class SocGateResolver:
         solar_reserve_active: bool,
         solar_reserve_soc: float,
         step_up_state: SolarStepUpState,
-    ) -> tuple[float, bool]:
-        """Return (this cycle's active SOC limit, whether it changed from the last resolve()).
+    ) -> tuple[float, bool, bool]:
+        """Return (this cycle's active SOC limit, whether it changed from the last resolve(),
+        whether it rose from the last resolve()).
 
         The first call always reports changed=True -- there is no prior resolve() to compare
-        against, mirroring the old code's None-vs-float first-cycle behavior.
-        """
+        against, mirroring the old code's None-vs-float first-cycle behavior -- but never
+        reports rose=True: there is no prior limit to have risen from either (R7 AC5, #1378
+        -- a lowered limit never ends Power's stop, so the caller must be able to tell "the
+        limit changed" apart from "the limit rose"; `changed` alone conflated a lowered limit
+        with a raised one)."""
         limit = resolve_active_soc_limit(
             override,
             solar_reserve_active=solar_reserve_active,
@@ -455,8 +459,9 @@ class SocGateResolver:
             step_up_state=step_up_state,
         )
         changed = limit != self._last_limit
+        rose = self._last_limit is not None and limit > self._last_limit
         self._last_limit = limit
-        return limit, changed
+        return limit, changed, rose
 
 
 class DeadlineUnreachableEdge:
