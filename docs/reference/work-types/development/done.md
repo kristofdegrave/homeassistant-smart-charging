@@ -57,11 +57,10 @@ and the honest cannot-be-driven-yet form; read it there rather than from a summa
 reviewer-read rather than CI-gated: a mechanical presence check is satisfied by an empty
 heading.
 
-Two cases are not a finding and must not be reported as one: a change with no PR yet, and a PR
-opened by the CI pipeline's bot account — that document states the second and why no fix cycle
-can produce it. In both, state what the Runtime check will have to record and leave it there.
+A change with no PR yet is not a finding and must not be reported as one: state what the
+Runtime check will have to record and leave it there.
 
-A third case is **judged, not excused**: a section in the honest cannot-be-driven-yet form. That
+A second case is **judged, not excused**: a section in the honest cannot-be-driven-yet form. That
 the behaviour could not be driven is not itself the finding — judge the substitute it names, say
 so in the review either way, and report an inadequate substitute at this item's severity. What
 is excused is the absence of drivable evidence, never the content of the section standing in

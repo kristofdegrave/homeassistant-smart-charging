@@ -130,14 +130,6 @@ same session so the body can reference it. `CLAUDE.md`'s **Tracker mechanics** s
 to the filing commands. This is the one piece of drafting order the bar carries, because both
 work files would otherwise hold the same copy of it.
 
-**On the CI drafting path**, neither item is dischargeable as written, and that is a property
-of the path rather than a lapse: the pipeline's drafter has no shell, so it cannot file an
-issue, and it does not write the PR body — the workflow supplies that from a fixed template.
-There, the item is discharged by recording the finding **in the draft itself**, as an open
-question for the reviewer, which is the substitution that path already makes for any step
-needing a human. The obligation is not waived; it transfers to whoever takes the draft
-forward, and an open question of that shape reads as the item discharged rather than missed.
-
 **Scope of that Major.** It is assertable only against evidence the judge actually holds. The
 author always holds the PR body, so it binds the self-check unconditionally. A reviewer may
 not, and the reviewer's own checklist — the one this row's *How it is reviewed* column names

@@ -6,10 +6,9 @@ body:
   - type: markdown
     attributes:
       value: |
-        This form applies the `adr` context label. Add `needs-draft` yourself afterwards
-        to trigger the AI documentation pipeline, which resolves how an ADR is written from
-        CLAUDE.md's Model selection table. To draft it in a local session instead, run
-        `/implement` on this issue once it exists.
+        This form applies the `adr` context label. To draft it, run `/implement` on this
+        issue in a local session once it exists; how an ADR is written resolves from
+        CLAUDE.md's Model selection table.
 
         Before filing: is this decision ADR-worthy? Write one when the choice is about
         structure that would be expensive to reverse or materially constrains future
@@ -18,8 +17,8 @@ body:
         [the ADR worthiness test](https://github.com/kristofdegrave/homeassistant-smart-charging/blob/main/docs/reference/work-types/adr/done.md#architecture-decision-records-adrs)
         for the full worthiness test, its calibration test for borderline cases, and its
         carve-outs (test/CI/dev-tooling choices; domain/business rules) — an issue that
-        fails it will still get caught by the ADR review checklist if you add `needs-draft`, but
-        only after a draft run has already been spent.
+        fails it will still get caught by the ADR review checklist, but only after a draft
+        has already been written.
   - type: input
     id: title
     attributes:
@@ -55,8 +54,8 @@ body:
       label: Options to consider
       description: >
         Every option seriously evaluated, not just the one you expect to be chosen — the
-        drafter needs at least one genuine Pro and Con per option. List as many as you
-        already know about; the drafter/reviewer will add more if needed.
+        draft needs at least one genuine Pro and Con per option. List as many as you
+        already know about; the author or reviewer will add more if needed.
       placeholder: |
         1. Option A — ...
         2. Option B — ...
@@ -67,7 +66,7 @@ body:
     id: leaning
     attributes:
       label: Leaning / recommendation (optional)
-      description: If you already have a preferred option and why, note it here — the drafter still writes up all options fairly.
+      description: If you already have a preferred option and why, note it here — the draft still writes up all options fairly.
   - type: textarea
     id: consequences
     attributes:

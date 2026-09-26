@@ -44,7 +44,7 @@ and this line is the copy that shrinks.
 
 | File | What it holds | Who reads it |
 |---|---|---|
-| `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author, and a CI drafting run. |
+| `implement.md` | How the artifact is written — the drafting order, the template, the rules, the mistakes. | The author. |
 | `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — the document `CLAUDE.md`'s **Model selection** section routes to says why one file serves both. |
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
@@ -53,9 +53,7 @@ and this line is the copy that shrinks.
 that has a directory, `requirement/review.md` being a pointer to `uc/`'s the way its `done.md`
 is. A label whose directory holds `review.md` and nothing else is migrated, not half-built —
 see the paragraph above. What a generic reviewer holds instead — the output contract, the anchoring rules and how
-a checklist is resolved — sits with whoever applies the checklist: `.claude/agents/reviewer.md`
-locally, and CI's own review-workflow prompt, which has no agent to spawn and self-applies the
-file instead.
+a checklist is resolved — sits with the agent that applies the checklist, `.claude/agents/reviewer.md`.
 
 ## When a label branches
 
@@ -182,5 +180,5 @@ Two rules bind every file in this tree, in full, this README included:
 - **One source of truth per fact.** A rule stated in the bar is not restated in the work file;
   the work file points at the bar's item by number and title and says what it means while
   drafting. The same goes the other way, and for anything `CLAUDE.md` already owns.
-- **The content is instructions to future runs**, CI runs included. Write it as instruction,
-  with completion criteria a run can decide, not as commentary about the work type.
+- **The content is instructions to future runs.** Write it as instruction, with completion
+  criteria a run can decide, not as commentary about the work type.

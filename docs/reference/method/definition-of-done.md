@@ -63,15 +63,6 @@ so, naming what was substituted (a log excerpt, a seeded harness run) and what i
 **Verify live** pass below. An absent section and an honest one are different states, and only
 the second is reviewable.
 
-**A PR opened by the CI pipeline's bot account is the one exception, and it is not the bot's
-finding.** That body is written by the pipeline, and no worker there has a running installation
-to drive, so such a PR carries no Runtime check section and its absence is not a review finding
-— a reviewer says what the check would have to record and stops there, rather than spending a
-fix cycle on something no fix worker can produce. The observation is still owed, by the human
-partner who approves the merge: either they add the section to the PR body before approving, or
-they carry the entity ids into the task's **Verify live** list below. Approving without
-doing one of the two is the thing this bar exists to make visible.
-
 This is not a CI gate, deliberately: a mechanical presence check is satisfied by an empty
 heading, and no automated check can tell whether a pasted reading is the one the diff changed.
 The check is the review of the PR's product-code half reading the section against
@@ -131,6 +122,3 @@ matching current practice (`git log`):
 
 One row per context label, and `.github/check-method.py`'s check 3 fails when an enabled one
 has none — so a label added to the profile is a row owed here.
-
-CI's `_ai-draft.yml` uses its own coarser commit-prefix mapping for the initial draft commit
-only — see [ci-pipeline.md](ci-pipeline.md).
