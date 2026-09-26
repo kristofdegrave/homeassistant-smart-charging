@@ -9,6 +9,10 @@ Interview the user relentlessly until you reach a shared understanding. Map this
 tree**: every decision branches into the decisions that hang off it. A single decision is a tree
 of one node, asked the same way.
 
+In an interactive session every decision the session needs from the user comes here — merge or
+grant at a review cap or on a hold, an open design choice, a fact only the user holds — rather
+than as a loose question inside a status report.
+
 The **frontier** is every decision whose prerequisites are already settled: the questions you can
 ask _now_ without guessing at answers you haven't heard yet. Ask **one frontier question per
 turn**, carrying the context the user needs to answer it and your recommended answer. Then wait
