@@ -53,7 +53,8 @@ stated under the table.
 `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.github/profile-env.sh`, `.github/check-*`, `.github/test-check-*`,
 `.github/hooks/**`, `.claude/hooks/**`, `.claude/settings.json`, `.claude/skills/**`,
-`.claude/agents/**`, `.claude/profile.yml`, `docs/reference/**` and `CLAUDE.md` →
+`.claude/vendor/**`, `.claude/agents/**`, `.claude/profile.yml`, `docs/reference/**` and
+`CLAUDE.md` →
 `docs/reference/work-types/workflow/review.md`. Every entry names a checklist
 file, which the generic `reviewer` agent applies. This list is the only copy: a review
 resolves it from here. `docs/postmortems/**` keeps its

@@ -114,7 +114,8 @@ labels:
 # method check (.github/check-method.py) verifies both: one row per entry here, and the
 # directory complete (review.md; implement.md and done.md unless the row says `none`).
 #
-# A dependency below with `installed: repo` must be present under .claude/skills/, and a
+# A dependency below with `installed: repo` must be present under .claude/skills/ (one with
+# `installed: vendor` under .claude/vendor/, which declares every copy there), and a
 # skill present there that is NOT declared below is the method's own — scanned by the check
 # as a method file. This list is therefore how a vendored skill is told apart from an authored
 # one; a vendored skill is never edited to say which layer it is.
@@ -213,8 +214,10 @@ word_budgets:
 #              recorded (skills-lock.json); the drift check reports such a row as unresolvable
 #              until it is reconciled to a `commit:` pin, for the reason the CI document routed to
 #              above gives.
-#   installed  `repo` — a copy lives in .claude/skills/<name>/; `user` — installed once on
-#              the developer's machine by the plugin named, and not part of this repository
+#   installed  `repo` — a copy lives in .claude/skills/<name>/; `vendor` — a copy lives in
+#              .claude/vendor/<source owner>/<name>/, which Claude Code does not load, so only
+#              the project skill that reads it by path can start it; `user` — installed once
+#              on the developer's machine by the plugin named, and not part of this repository
 #   verbatim   optional; `true` — the copy is byte-identical to upstream at `pin`. What that
 #              obliges is the reference routed to above; the method check then leaves the
 #              copy's backticked paths unresolved, since they name upstream's tree, not this one
@@ -283,8 +286,9 @@ dependencies:
       pin: commit:321658273cb1
       installed: repo
     # Upstream-intact copies; improve-architecture routes their outputs into this
-    # repository's process instead of editing them. The last two stay model-invocable, so
-    # outside that skill nothing translates them: an open risk.
+    # repository's process instead of editing them. The last two are model-invocable
+    # upstream, so they are vendored outside the skill index; the first is not, and stays in
+    # it so a human can still type it.
     - name: improve-codebase-architecture
       source: mattpocock/skills
       path: skills/engineering/improve-codebase-architecture
@@ -295,15 +299,16 @@ dependencies:
       source: mattpocock/skills
       path: skills/engineering/codebase-design
       pin: commit:321658273cb1
-      installed: repo
+      installed: vendor
       verbatim: true
     - name: domain-modeling
       source: mattpocock/skills
       path: skills/engineering/domain-modeling
       pin: commit:321658273cb1
-      installed: repo
+      installed: vendor
       verbatim: true
-    # Upstream-intact marketplace install; used by the design documents, not by a stack.
+    # Upstream-intact marketplace install; used by the design documents, not by a stack. No
+    # `verbatim` key: its pin is an installer hash, not a commit a copy can match byte for byte.
     - name: domain-driven-design
       source: wondelai/skills
       path: domain-driven-design
