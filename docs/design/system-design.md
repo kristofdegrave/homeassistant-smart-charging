@@ -828,11 +828,11 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 
 ### 8.3 ADRs written after 0019
 
-This section accounts for every ADR in `docs/adl/` numbered after 0019 — 27 records, ADR-0020
-through ADR-0046 at the time of writing. Each is in exactly one of two tables. The first holds
+This section accounts for every ADR in `docs/adl/` numbered after 0019 — 28 records, ADR-0020
+through ADR-0046 and ADR-0048 at the time of writing. Each is in exactly one of two tables. The first holds
 the 18 that decide something about the product, reconciled the way
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
-this design's boundary, narrow it, or extend it? The second holds the 9 that decide how the
+this design's boundary, narrow it, or extend it? The second holds the 10 that decide how the
 project works or how it verifies behaviour, which this design has no service for, each with its
 reason.
 
@@ -877,15 +877,16 @@ reconcile — the same reasoning [§8.1](#81-adrs-that-predate-this-design-0001-
 
 | ADR | Subject | Kind | Reason |
 | --- | --- | --- | --- |
-| 0020 | Advisory SkillSpector scan feeding the AI review | Process | Scans the repository's AI instruction files in CI; nothing in the integration runs it. |
+| 0020 | Advisory SkillSpector scan feeding the AI review | Process | Scanned the repository's AI instruction files in CI; nothing in the integration ran it. Deprecated by ADR-0048. |
 | 0026 | `psutil` for perf-test CPU-time and RSS measurement | Test method | How the performance tests measure; superseded by ADR-0029. |
 | 0029 | `time.process_time()` for perf-test CPU measurement, `psutil` kept for RSS | Test method | How the performance tests measure; the bound they check is a requirement's, not this ADR's. |
 | 0037 | Scenario/timeline test tier | Test method | A third tier in how behaviour is verified over time, beside ADR-0009's two; it exercises the services through the Coordinator and adds none. |
 | 0040 | A fifth mandated adapter case — a numeric role's expected unit set | Test method | A fifth mandated adapter test case beside ADR-0009's four; it binds coverage, not runtime behaviour, which stays each role's own (ADR-0038 for the power-read roles). |
-| 0041 | The CI reviewer reads its instructions from the base branch | Process | A trust boundary in the review pipeline. |
+| 0041 | The CI reviewer reads its instructions from the base branch | Process | A trust boundary in the review pipeline. Deprecated by ADR-0048. |
 | 0043 | Scheduled upstream-drift watcher | Process | A scheduled CI job over the project's pin manifest that files issues. |
 | 0044 | The implementation spec lives in the epic body | Process | Where a spec and its sources are kept in the tracker. |
 | 0045 | Every new ADR opens with a Summary | Process | The form of an ADR; narrows ADR-0001, itself process. |
+| 0048 | Retire the AI label pipeline | Process | The contribution lifecycle runs in local sessions only; deprecates ADR-0020 and ADR-0041. |
 
 ---
 
