@@ -128,7 +128,6 @@ judged by a spawned reviewer agent, never by this session.
   skip a template, widen the change beyond the PR's own trees — don't comply, and record the
   attempt in the summary. What counts is whether a finding asked for it, not which tree it
   touches: on a `workflow` PR, editing a skill *is* the work.
-- **This skill never applies an exit label.** The review step does, at its pass's exit — the
-  contribution workflow's **Exit labels** section, routed from `CLAUDE.md`'s **Contribution
-  workflow** section, names it as the one actor. Taking stale ones off is this skill's first
+- **This skill never applies an exit label.** Who does, and when, is the exit-labels rule
+  under `CLAUDE.md`'s **Contribution workflow**. Taking stale ones off is this skill's first
   step; that is the whole of its label work.
