@@ -73,10 +73,9 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   `needs-approval`*, is the rule's only home.
 - **Merge in number order**, so `main` never holds a number above one still open. An
   `Abandoned` ADR merges like any other, so a higher one waits for it too.
-  - **Who checks, and when:** the review step, at an exit that applies `needs-approval`,
-    the cap's included. It fetches, lists the
-    `adr/NNNN` branches as the count does, and looks for a lower number whose record is not
-    on `origin/main`.
+  - **Who checks, and when:** the review step, as `review.md`'s exit check, at any exit that
+    applies `needs-approval`. It fetches, lists the `adr/NNNN` branches as the count does,
+    and looks for a lower number whose record is not on `origin/main`.
   - **One found:** the PR goes on hold instead, per
     [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels);
     at the cap, its one escalation comment also names the sibling.

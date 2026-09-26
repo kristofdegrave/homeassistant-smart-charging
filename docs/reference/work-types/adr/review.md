@@ -1,8 +1,9 @@
 # Work type: `adr` — the review checklist
 
-**Who reads this.** The reviewer only — a fresh, read-only Opus agent, never the session that
-drafted the record. It holds what only a reviewer can check: what to read first, and the checks
-about the **change** rather than the finished record. What a finished ADR must satisfy is
+**Who reads this.** The reviewer — a fresh, read-only Opus agent, never the session that
+drafted the record — and, for *What the review step supplies and runs*, the review step. It
+holds what only a reviewer can check: what to read first, and the checks about the **change**
+rather than the finished record. What a finished ADR must satisfy is
 [`done.md`](done.md); how one is written is [`implement.md`](implement.md). Neither is restated
 here.
 
@@ -20,15 +21,19 @@ In `docs/adl/`:
 - every other ADR — contradiction and duplication are judged against the full log, not the
   neighbours.
 
-Also the remote `adr/NNNN` branch listing, which the review step supplies since you have no
-shell: the bar's item 2 judges the number against it. None supplied → say the number was not
-checked.
-
 Then [`done.md`](done.md), before you start scoring.
 
 Also read what the ADR cites (`R7`, `UC03`, a design document) when it exists on this branch.
 A backfill ADR may cite a doc that exists only on another open branch: expected, not a broken
 reference — judge the ADR on internal merit.
+
+## What the review step supplies and runs
+
+- **Input:** the remote `adr/NNNN` branch list, after `git fetch --prune origin`, for a change
+  touching `docs/adl/**`. The bar's item 2 judges the number against it. None supplied → say
+  the number was not checked.
+- **Exit check:** on a change adding an ADR, `implement.md`'s *Merge in number order*, before
+  any exit label goes on.
 
 ## The checks that are yours alone
 
