@@ -66,9 +66,9 @@ intermittent defect the goal is a *higher reproduction rate*, not a clean repro:
 debuggable, 1% is not.
 
 **If you genuinely cannot build one**, stop and say so: list what you tried and ask the human
-partner for access to the installation, a redacted capture (full state objects, logbook extract,
-timestamped screenshot), or permission to instrument the live install. Do not hypothesise without
-a loop.
+partner for access to the installation or a redacted capture (full state objects, logbook
+extract, timestamped screenshot). Instrumenting the live install is their decision, not their
+hands: ask it through `clarify`. Do not hypothesise without a loop.
 
 **Done when** you can name one command you have already run at least once — invocation and output
 shown — that is **red-capable** (drives the real code path and asserts the reporter's symptom, so
