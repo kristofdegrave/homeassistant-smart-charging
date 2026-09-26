@@ -1166,7 +1166,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         limit_rose: bool,
         power_in_charging: bool,
     ) -> None:
-        """R17 AC4/R7 (#1335, narrowed to a rise by I0h/#1378), UC04's *State of charge
+        """R17 AC4/R7 (#1335, narrowed to a rise by #1378), UC04's *State of charge
         unavailable* exception flow: refreshes
         `self._power_soc_limit_reached` -- Power's own stop at the active SOC limit, kept
         separate from `_PowerModeHandler.is_soc_gated` (ADR-0042 keeps that flag `False` so
@@ -1192,7 +1192,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         stop the *next* Power cycle never asked to leave. A present reading *below* the limit
         always clears, regardless of which mode is active: UC04/R7 AC5's resume condition 1
         (the limit effectively no longer met) is mode-agnostic, unlike the setting side. With
-        no reading at all, R7 AC5 as I0h/#1378 rewrites it names what can still end an
+        no reading at all, R7 AC5 as #1378 rewrites it names what can still end an
         already-made stop -- a *rise*, never a fall: "a lowered limit never ends it", and "a
         raised one ends it on a cycle without a reading even when the unread state of charge is
         above the new limit". So `limit_rose` (the rising edge over this cycle's resolved

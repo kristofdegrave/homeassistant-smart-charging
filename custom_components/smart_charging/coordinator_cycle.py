@@ -448,7 +448,7 @@ class SocGateResolver:
 
         The first call always reports changed=True -- there is no prior resolve() to compare
         against, mirroring the old code's None-vs-float first-cycle behavior -- but never
-        reports rose=True: there is no prior limit to have risen from either (I0h/R7 AC5, #1378
+        reports rose=True: there is no prior limit to have risen from either (R7 AC5, #1378
         -- a lowered limit never ends Power's stop, so the caller must be able to tell "the
         limit changed" apart from "the limit rose"; `changed` alone conflated a lowered limit
         with a raised one)."""

@@ -466,7 +466,7 @@ async def test_should_resume_power_charging_without_a_soc_reading_when_unplugged
 
 async def test_should_resume_power_charging_when_the_limit_rises_while_unavailable(hass, freezer):
     """Should resume commanding Power's target current when the active SOC limit itself
-    *rises* on a cycle where the ev_soc reading is unavailable -- R7 AC5 as I0h/#1378 rewrites
+    *rises* on a cycle where the ev_soc reading is unavailable -- R7 AC5 as #1379 rewrites
     it names a rise, not any change, as the clearing condition without a reading: unlike the
     missing-reading test above (where nothing else changed), the limit override rising here is
     the coordinator's own edge-detected `soc_limit_rose` signal, which the stop's fix reads even
@@ -503,13 +503,56 @@ async def test_should_resume_power_charging_when_the_limit_rises_while_unavailab
 
     # Assert
     assert coordinator.data.active_soc_limit == 90.0
-    assert calls[-1]["value"] == 10.0  # resumed -- the limit change alone was enough
+    assert calls[-1]["value"] == 10.0  # resumed -- the rise alone was enough
+    assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
+
+
+async def test_should_resume_power_charging_when_the_limit_rises_above_a_reading_it_still_trails(
+    hass, freezer
+):
+    """Should resume even when the raised limit is still below the last-known ev_soc reading --
+    R7 AC5/#1378's own edge case: "a raised one ends it on a cycle without a reading even when
+    the unread state of charge is above the new limit". The sibling test above raises the limit
+    (80 -> 90) past the 85% last-known reading, so an implementation that wrongly compared that
+    stale reading against the new limit (rather than reading `rose` alone) would also resume
+    there -- it would take a second bug to slip through both. Here the limit only rises to 82,
+    still below the 85% last seen, so only a genuine read of `rose` -- not a stale-SOC
+    comparison -- can produce the resume this test asserts."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled deadline default to latch on
+
+    # Arrange: charge below the limit first, then cross it, so the stop that follows is a
+    # genuine Charging -> SocReached transition.
+    calls = _capture_charger_current_writes(hass)
+    _seed_states(hass, status="Charging", ev_soc=75.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_CAPTAR_AVAILABLE: False, CONF_SOLAR_AVAILABLE: False}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    hass.states.async_set("sensor.ev_soc", "85.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert calls[-2]["value"] == 10.0  # was genuinely charging, below the limit
+    assert calls[-1]["value"] == 0.0  # crossed it -- a real stop, not Idle
+
+    # Act: the reading goes unavailable AND the limit rises to 82 -- still below the 85%
+    # last-known reading.
+    hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
+    seed_owned_entity(hass, "number.smart_charging_soc_limit_override", "82.0")
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert
+    assert coordinator.data.active_soc_limit == 82.0
+    assert calls[-1]["value"] == 10.0  # resumed -- the rise alone was enough, despite 85% > 82%
     assert coordinator.data.fault is False  # C5: still no fault, missing reading or not
 
 
 async def test_should_keep_power_stopped_when_the_limit_is_lowered_while_unavailable(hass, freezer):
     """Should stay at 0 A, not resume, on a cycle where the active SOC limit is *lowered* while
-    the ev_soc reading is unavailable -- I0h/R7 AC5 as #1379 rewrites it: "a lowered limit never
+    the ev_soc reading is unavailable -- R7 AC5 as #1379 rewrites it: "a lowered limit never
     ends it", whatever the reading. Before this task, `_refresh_power_soc_limit_reached` cleared
     the stop on `SocGateResolver`'s `limit_changed`, which is true for a *lowered* limit exactly
     as much as a raised one -- #1335's shipped behaviour, and the bug this test pins. Arranged as

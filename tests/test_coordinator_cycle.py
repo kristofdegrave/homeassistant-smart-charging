@@ -602,7 +602,7 @@ def test_soc_gate_resolver_first_call_always_reports_changed():
     resolve_active_soc_limit + the inline _last_active_soc_limit comparison it replaces: with
     no prior call there is no "last" value to compare against, so the very first resolve always
     reports changed -- mirroring the old code's None-vs-float first-cycle behavior. It never
-    reports rose, though (I0h/#1378): there is equally no prior limit to have risen from."""
+    reports rose, though (#1378): there is equally no prior limit to have risen from."""
     resolver = SocGateResolver()
     limit, changed, rose = resolver.resolve(
         80.0,
@@ -641,7 +641,7 @@ def test_soc_gate_resolver_reports_changed_when_limit_moves():
     """A resolve() call whose resulting limit differs from the previous one is reported as
     changed -- here the second call's solar_reserve_active=True flips the R7 row-1 solar-reserve
     cap on, moving the effective limit from the override (80.0) to the reserve SOC (60.0). This
-    is a fall, not a rise (80.0 -> 60.0), so `rose` stays False -- I0h/#1378's own distinction,
+    is a fall, not a rise (80.0 -> 60.0), so `rose` stays False -- #1378's own distinction,
     proven the other way by the two tests below."""
     resolver = SocGateResolver()
     resolver.resolve(
@@ -684,10 +684,11 @@ def test_soc_gate_resolver_reports_unchanged_when_resolved_limit_matches_despite
     assert limit == 80.0
 
 
-def test_soc_gate_resolver_reports_rose_when_the_resolved_limit_rises():
-    """I0h/#1378: a resolve() call whose resulting limit is *higher* than the previous one
+def test_should_report_rose_when_the_resolved_limit_rises():
+    """#1378: a resolve() call whose resulting limit is *higher* than the previous one
     reports rose=True as well as changed=True -- the R7 AC5 distinction `changed` alone cannot
     draw (a fall changes the limit too, but must never report rose)."""
+    # Arrange
     resolver = SocGateResolver()
     resolver.resolve(
         60.0,
@@ -695,21 +696,26 @@ def test_soc_gate_resolver_reports_rose_when_the_resolved_limit_rises():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
+
+    # Act
     limit, changed, rose = resolver.resolve(
         80.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
+
+    # Assert
     assert changed is True
     assert rose is True
     assert limit == 80.0
 
 
-def test_soc_gate_resolver_reports_no_rose_when_the_resolved_limit_falls():
-    """I0h/#1378: a resolve() call whose resulting limit is *lower* than the previous one reports
+def test_should_report_changed_but_not_rose_when_the_resolved_limit_falls():
+    """#1378: a resolve() call whose resulting limit is *lower* than the previous one reports
     changed=True but rose=False -- R7 AC5's "a lowered limit never ends it" needs this bit kept
     apart from a plain `changed`, which #1335's own bug conflated with a rise."""
+    # Arrange
     resolver = SocGateResolver()
     resolver.resolve(
         80.0,
@@ -717,12 +723,16 @@ def test_soc_gate_resolver_reports_no_rose_when_the_resolved_limit_falls():
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
+
+    # Act
     limit, changed, rose = resolver.resolve(
         60.0,
         solar_reserve_active=False,
         solar_reserve_soc=60.0,
         step_up_state=SolarStepUpState(),
     )
+
+    # Assert
     assert changed is True
     assert rose is False
     assert limit == 60.0
