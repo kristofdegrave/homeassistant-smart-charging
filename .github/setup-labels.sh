@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
-# Create (or update) every label this repo's issue conventions define — the ones the AI
-# documentation pipeline relies on, plus the kind-of-work labels it deliberately ignores.
+# Create (or update) every label this repo's issue conventions define — context, action,
+# pre-triage and kind-of-work labels alike.
 #
 # The label set itself is not in this file. It is `.claude/profile.yml`'s `labels` section —
 # the one place the project's label vocabulary is spelled — and this script writes exactly
 # that set, every group in it, in the order the file lists them. Adding or changing a label
 # means editing the profile, then re-running this.
 #
-# The pipeline adds action labels with `gh pr edit --add-label` / `gh issue edit`, which do
-# NOT auto-create a missing label — so these must exist first. (peter-evans/create-pull-request
-# does auto-create the context label it applies, but running this once keeps colors consistent.)
+# A session applies labels with `gh pr edit --add-label` / `gh issue edit`, which do NOT
+# auto-create a missing label — so these must exist first, with consistent colours.
 #
 # Prerequisites: `gh` installed and authenticated (gh auth login); a Python with PyYAML on
 # PATH (this repo's test environment has one — requirements-test.txt pulls it in through
