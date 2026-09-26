@@ -3975,7 +3975,7 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
 
     spied = (
         "resolve_voltage",
-        "smooth_net_power",
+        "smooth_household_baseline",
         "apply_peak_clamp",
         "clamp_to_ceiling",
         "apply_floor_cap",
@@ -3988,11 +3988,12 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
 
     assert result.fault is False
     # Voltage (step 3, NF4) resolves before this cycle's net-power smoothing call (step 2's
-    # mode-dispatch reading) in this implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap)
-    # then run in ADR-0006's fixed order -- neither reordered nor merged.
+    # mode-dispatch reading, issue #1329's `smooth_household_baseline`) in this implementation;
+    # steps 7 (R3), 8 (C4), 9 (C1 floor/cap) then run in ADR-0006's fixed order -- neither
+    # reordered nor merged.
     assert call_order == [
         "resolve_voltage",
-        "smooth_net_power",
+        "smooth_household_baseline",
         "apply_peak_clamp",
         "clamp_to_ceiling",
         "apply_floor_cap",

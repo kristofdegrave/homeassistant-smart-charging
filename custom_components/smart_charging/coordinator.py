@@ -82,7 +82,7 @@ from .engines.billing_protection import (
 from .engines.cycle_invariant import apply_floor_cap
 from .engines.deadline import RequiredCurrentResult, resolve_departure_deadline
 from .engines.grid_safety import ceiling_headroom_a, clamp_to_ceiling
-from .engines.signal_conditioning import resolve_voltage, smooth_net_power
+from .engines.signal_conditioning import HouseholdWindow, resolve_voltage, smooth_household_baseline
 from .modes._phase import Phase
 from .profiles.policy import PROFILE_POLICIES
 
@@ -211,7 +211,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # own registry guard (issue #718's PROFILE_POLICIES lookup) -- a corrupted stored
         # profile would otherwise re-read and re-reject identically every cycle.
         self._last_rejected_profile: str | None = None
-        self._net_window: tuple[float, ...] = ()
+        # R10/issue #1329: the household-baseline rolling window `smooth_household_baseline`
+        # threads across cycles, plus its own one-cycle-deferral cap -- see `HouseholdWindow`.
+        self._net_window = HouseholdWindow()
         self._mode_state = self._fresh_mode_state()
         self._was_faulted = False
         # ADR-0007/issue #1311: `_safe_write_zero`'s own once-per-outage dedup for the 0 A
@@ -634,17 +636,26 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # __init__.py's SmartChargingConfig already applies DEFAULT_SMOOTHING_WINDOW for a
         # pre-solar config entry that predates this option; smoothing runs every cycle
         # regardless of mode.
-        smoothed_net_w, self._net_window = smooth_net_power(
-            net_w, self._net_window, size=self._config.smoothing_window
+        # Issue #1329/R10: folds `net_w - charger_w` (the household's own load, independent of
+        # what the charger itself drew) into the window -- NOT `net_w` alone with `charger_w`
+        # subtracted afterwards (the old `smoothed_net_w = smooth_net_power(net_w, ...)` /
+        # `surplus_w = charger_w - smoothed_net_w` shape). That old shape averaged `net_w`
+        # samples taken while the charger was drawing whatever it was set to on each earlier
+        # cycle, then compared the result against THIS cycle's own charger_w -- an
+        # apples-to-earlier-oranges mismatch that never let Solar/SolarOnly's set-point settle
+        # under steady inputs (modelled in the issue). `command_changed=self._command_stepped`
+        # is the same signal `debounce_baseline_w` above already reads for R3 (ADR-0039): a
+        # reading taken on a cycle whose command changed is partly a measurement of this
+        # integration's own actuation, and `smooth_household_baseline` leaves the window
+        # untouched on such a cycle rather than admit it. See that function's own docstring.
+        smoothed_household_w, self._net_window = smooth_household_baseline(
+            net_w - charger_w,
+            self._net_window,
+            size=self._config.smoothing_window,
+            command_changed=self._command_stepped,
         )
-        surplus_w = charger_w - smoothed_net_w  # shared by Solar/SolarOnly dispatch below and
-        # the baseline-mode dry-run. Reads the same stale charger_w a step-down can leave
-        # behind for one cycle (issue #990) -- deliberately not debounced here, unlike
-        # solar_surplus_w/peak_headroom_a/apply_peak_clamp above: `smooth_net_power` already
-        # runs `net_w` through R10's own multi-cycle smoothing window, which dampens (though
-        # does not eliminate) a one-cycle stale-charger_w spike the same way it dampens any
-        # other transient. Revisit if a real-world report ties a Solar/SolarOnly misstep to
-        # this specific staleness rather than #990's already-fixed R3/display paths.
+        surplus_w = -smoothed_household_w  # shared by Solar/SolarOnly dispatch below and the
+        # baseline-mode dry-run.
         now = self.hass.loop.time()  # injected, not read inside modes/engines
         # ADR-0012: carries this cycle's readings/derived values into the ModeHandler registry
         # lookup below, replacing the loose local variables the old dispatch chain threaded by

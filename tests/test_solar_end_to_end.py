@@ -106,13 +106,29 @@ async def _cycle_from_feedback(hass, coordinator, calls, *, solar_w: float, volt
     await _cycle(hass, coordinator, charger_w=charger_w, net_w=net_w)
 
 
+async def _cycle_from_feedback_with_lag(
+    hass, coordinator, calls, prior_charger_w, *, solar_w: float, voltage: float = 230.0
+) -> float:
+    """Issue #1329/ADR-0039's field condition: same real feedback loop as
+    `_cycle_from_feedback`, except the `charger_power` role's own reading reports the
+    PREVIOUS cycle's actual draw rather than this cycle's (a slow poll can still show a
+    stale value for one cycle after a step) -- `net_w` still reflects this cycle's real
+    draw immediately, since the net meter is fast. `prior_charger_w` is the caller's own
+    running state (what this helper returned last time, or 0.0 before the first call);
+    returns this cycle's actual `charger_w` for the caller to pass back in next time."""
+    last_current = calls[-1]["value"]
+    actual_charger_w = last_current * voltage
+    net_w = actual_charger_w - solar_w
+    await _cycle(hass, coordinator, charger_w=prior_charger_w, net_w=net_w)
+    return actual_charger_w
+
+
 async def test_uc01_closed_loop_holds_steady_once_charging_started(hass):
     """UC01 postcondition: net grid import stays bounded once surplus sustains charging --
     the mode must not oscillate once its own commanded current starts showing up in the
     next cycle's `charger_w`/`net_w` readings (see `_cycle_from_feedback`)."""
-    # smoothing_window=1: this test's feedback formula cancels charger_w's own contribution
-    # to net_w on each raw reading -- the default 4-sample rolling average (R10) would blend
-    # in stale pre-charging readings and mask that cancellation, unrelated to what's under test.
+    # smoothing_window=1 isolates this narrower regression from R10's own multi-cycle
+    # settling, which the window-size closed-loop suite below covers instead.
     coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 1})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
@@ -131,10 +147,108 @@ async def test_uc01_closed_loop_holds_steady_once_charging_started(hass):
     assert calls[-1]["value"] == 12.0
 
 
+# R10/issue #1329: the set-point settles under steady inputs at every smoothing window, not
+# only window=1 (the narrower regression above). Each scenario pre-settles at a steady
+# 2645 W of solar (11.5 A ideal -> round up -> 12 A), then steps solar to 3400 W (14.78 A
+# ideal -> round up -> 15 A) -- a *sustained* input change -- and asserts the set-point both
+# reaches 15 A within the (N + 3)th control cycle after the step and holds there, per R10's
+# own criterion. The pre-settle phase is deliberately long (18 cycles): the very first
+# connection is itself an input change (0 A -> 12 A), and with a lagging charger-power
+# reading it takes a few extra cycles to clear -- these scenarios test the STEP, not the
+# initial connection, so the step's own "last input change" must not still be entangled
+# with start-up.
+
+
+async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_the_default_window(
+    hass,
+):
+    coordinator, calls = await _setup(hass)  # CONF_SMOOTHING_WINDOW defaults to 4 (R10)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+
+    for _ in range(18):
+        await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
+    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+
+    for _ in range(6):  # (N + 3) = 7th cycle after the step is the 7th call below
+        await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+    assert calls[-1]["value"] == 15.0
+    for _ in range(3):  # holds, rather than resuming the hunt (the original defect)
+        await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+        assert calls[-1]["value"] == 15.0
+
+
+async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagging_charger_reading_at_the_default_window(  # noqa: E501
+    hass,
+):
+    coordinator, calls = await _setup(hass)  # CONF_SMOOTHING_WINDOW defaults to 4 (R10)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    prior_charger_w = 0.0
+
+    for _ in range(18):
+        prior_charger_w = await _cycle_from_feedback_with_lag(
+            hass, coordinator, calls, prior_charger_w, solar_w=2645.0
+        )
+    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+
+    for _ in range(6):
+        prior_charger_w = await _cycle_from_feedback_with_lag(
+            hass, coordinator, calls, prior_charger_w, solar_w=3400.0
+        )
+    assert calls[-1]["value"] == 15.0
+    for _ in range(3):
+        prior_charger_w = await _cycle_from_feedback_with_lag(
+            hass, coordinator, calls, prior_charger_w, solar_w=3400.0
+        )
+        assert calls[-1]["value"] == 15.0
+
+
+async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_larger_window(hass):
+    coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 6})
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+
+    for _ in range(18):
+        await _cycle_from_feedback(hass, coordinator, calls, solar_w=2645.0)
+    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+
+    for _ in range(8):  # (N + 3) = 9th cycle after the step is the 9th call below
+        await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+    assert calls[-1]["value"] == 15.0
+    for _ in range(3):
+        await _cycle_from_feedback(hass, coordinator, calls, solar_w=3400.0)
+        assert calls[-1]["value"] == 15.0
+
+
+async def test_should_settle_within_n_plus_3_cycles_when_solar_steps_with_a_lagging_charger_reading_at_a_larger_window(  # noqa: E501
+    hass,
+):
+    coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 6})
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
+    prior_charger_w = 0.0
+
+    for _ in range(18):
+        prior_charger_w = await _cycle_from_feedback_with_lag(
+            hass, coordinator, calls, prior_charger_w, solar_w=2645.0
+        )
+    assert calls[-1]["value"] == 12.0  # pre-settled before the step under test
+
+    for _ in range(8):
+        prior_charger_w = await _cycle_from_feedback_with_lag(
+            hass, coordinator, calls, prior_charger_w, solar_w=3400.0
+        )
+    assert calls[-1]["value"] == 15.0
+    for _ in range(3):
+        prior_charger_w = await _cycle_from_feedback_with_lag(
+            hass, coordinator, calls, prior_charger_w, solar_w=3400.0
+        )
+        assert calls[-1]["value"] == 15.0
+
+
 async def test_uc01_main_success_starts_and_recomputes_each_cycle(hass):
     """UC01 steps 1-3: starts within one cycle at >= the 150 W start threshold, rounding up,
     and recomputes the set-point every following cycle as surplus changes."""
-    coordinator, calls = await _setup(hass)
+    # Isolates mode-dispatch behaviour from R10's cross-cycle smoothing (the
+    # closed-loop suite above tests that separately).
+    coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 1})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     # surplus = 2645 W = 11.5 A ideal -> round up (fixed, R1) -> 12 A.
@@ -153,8 +267,11 @@ async def test_uc01_2a_cooldown_blocks_start_until_it_elapses(hass):
     """UC01 alternate 2a: a running solar-mode cooldown blocks a start even once surplus
     reaches the threshold again; the System starts on the first qualifying cycle after the
     cooldown has fully elapsed."""
+    # CONF_SMOOTHING_WINDOW: 1 isolates mode-dispatch behaviour from R10's cross-cycle
+    # smoothing (the closed-loop suite above tests that separately).
     coordinator, calls = await _setup(
-        hass, **{CONF_SOLAR_HOLD_MIN: 0.0, CONF_SOLAR_COOLDOWN_MIN: 2.0}
+        hass,
+        **{CONF_SOLAR_HOLD_MIN: 0.0, CONF_SOLAR_COOLDOWN_MIN: 2.0, CONF_SMOOTHING_WINDOW: 1},
     )
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
@@ -197,8 +314,11 @@ async def test_uc01_2b_restart_debounce_gates_a_later_idle_crossing(hass):
     starts. Driven through the real coordinator (not modes.solar.step directly), so this
     exercises the coordinator's own has-charged flag wiring (issue #757) too, not just the
     pure state machine `tests/modes/test_solar.py` already covers."""
+    # CONF_SMOOTHING_WINDOW: 1 isolates mode-dispatch behaviour from R10's cross-cycle
+    # smoothing (the closed-loop suite above tests that separately).
     coordinator, calls = await _setup(
-        hass, **{CONF_SOLAR_HOLD_MIN: 0.0, CONF_SOLAR_COOLDOWN_MIN: 0.0}
+        hass,
+        **{CONF_SOLAR_HOLD_MIN: 0.0, CONF_SOLAR_COOLDOWN_MIN: 0.0, CONF_SMOOTHING_WINDOW: 1},
     )
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
@@ -234,7 +354,9 @@ async def test_uc01_3a_grid_fallback_holds_at_minimum_and_draws_from_grid(hass):
     charging current (expressed as power) holds at the minimum current, drawing the
     shortfall from the grid -- while charging continues (this is a set-point condition
     within Charging, not a transition to Hold)."""
-    coordinator, calls = await _setup(hass)
+    # Isolates mode-dispatch behaviour from R10's cross-cycle smoothing (the
+    # closed-loop suite above tests that separately).
+    coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 1})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     await _cycle(hass, coordinator, charger_w=2760.0)
@@ -252,7 +374,11 @@ async def test_uc01_3b_post_surplus_hold_resumes_or_stops_after_the_hold_period(
     current for the hold period; if surplus returns in time the System resumes normal
     charging (hold cancelled), and if the hold period elapses while surplus is still low
     the System stops (0 A) and starts the solar-mode cooldown."""
-    coordinator, calls = await _setup(hass, **{CONF_SOLAR_COOLDOWN_MIN: 5.0})
+    # CONF_SMOOTHING_WINDOW: 1 isolates mode-dispatch behaviour from R10's cross-cycle
+    # smoothing (the closed-loop suite above tests that separately).
+    coordinator, calls = await _setup(
+        hass, **{CONF_SOLAR_COOLDOWN_MIN: 5.0, CONF_SMOOTHING_WINDOW: 1}
+    )
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR)
 
     await _cycle(hass, coordinator, charger_w=2760.0)
@@ -282,7 +408,9 @@ async def test_uc02_main_success_starts_and_recomputes_with_round_down_default(h
     """UC02 steps 1-3: starts within one cycle at >= the 1300 W start threshold, converting
     surplus into a whole-ampere set-point with the default round-down strategy (never
     importing), recomputing every following cycle."""
-    coordinator, calls = await _setup(hass)
+    # Isolates mode-dispatch behaviour from R10's cross-cycle smoothing (the
+    # closed-loop suite above tests that separately).
+    coordinator, calls = await _setup(hass, **{CONF_SMOOTHING_WINDOW: 1})
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     # surplus = 1955 W = 8.5 A ideal -> round down (default, R2) -> 8 A.
@@ -308,7 +436,11 @@ async def test_uc02_3a_surplus_below_threshold_holds_then_stops_no_ongoing_fallb
     (UC02's alternate 2a -- cooldown blocks a restart -- has no dedicated end-to-end test
     here: it's the same idle/cooldown-gate code path already proven end-to-end by UC01's
     2a test above, plus `tests/modes/test_solar_only.py`'s own cooldown coverage.)"""
-    coordinator, calls = await _setup(hass, **{CONF_SOLAR_COOLDOWN_MIN: 5.0})
+    # CONF_SMOOTHING_WINDOW: 1 isolates mode-dispatch behaviour from R10's cross-cycle
+    # smoothing (the closed-loop suite above tests that separately).
+    coordinator, calls = await _setup(
+        hass, **{CONF_SOLAR_COOLDOWN_MIN: 5.0, CONF_SMOOTHING_WINDOW: 1}
+    )
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     await _cycle(hass, coordinator, charger_w=1955.0)
@@ -340,7 +472,11 @@ async def test_uc02_3b_round_up_strategy_accepts_bounded_grid_import(hass):
     """UC02 alternate 3b: with the amp-step rounding strategy configured to round up, the
     System rounds up to the next whole ampere instead of the default round-down, accepting
     a bounded grid top-up to use all available surplus."""
-    coordinator, calls = await _setup(hass, **{CONF_SOLAR_ONLY_STRATEGY: ROUND_UP})
+    # CONF_SMOOTHING_WINDOW: 1 isolates mode-dispatch behaviour from R10's cross-cycle
+    # smoothing (the closed-loop suite above tests that separately).
+    coordinator, calls = await _setup(
+        hass, **{CONF_SOLAR_ONLY_STRATEGY: ROUND_UP, CONF_SMOOTHING_WINDOW: 1}
+    )
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
     # surplus = 1955 W = 8.5 A ideal -> round up -> 9 A (vs. 8 A under the default strategy).
@@ -354,8 +490,15 @@ async def test_uc02_3c_round_nearest_strategy_pendel_behavior(hass):
     using the configured midpoint rounding boundary -- crossing it flips the outcome
     between the two nearest amp steps, which is how surplus hovering near that boundary
     across cycles produces the "pendel" edge case (not exercised cycle-to-cycle here)."""
+    # CONF_SMOOTHING_WINDOW: 1 isolates mode-dispatch behaviour from R10's cross-cycle
+    # smoothing (the closed-loop suite above tests that separately).
     coordinator, calls = await _setup(
-        hass, **{CONF_SOLAR_ONLY_STRATEGY: ROUND_NEAREST, CONF_SOLAR_ONLY_MIDPOINT: 0.5}
+        hass,
+        **{
+            CONF_SOLAR_ONLY_STRATEGY: ROUND_NEAREST,
+            CONF_SOLAR_ONLY_MIDPOINT: 0.5,
+            CONF_SMOOTHING_WINDOW: 1,
+        },
     )
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_SOLAR_ONLY)
 
