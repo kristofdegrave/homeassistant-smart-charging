@@ -69,7 +69,7 @@ inside code spans and fences too -- a stack path in backticks is exactly the thi
 A word the method uses everywhere in its own right is deliberately not on it, so a stack
 sentence built only from such words passes; that is judgment, and the `workflow` checklist's.
 
-Why the scope of check 1 is wider than the rule that created it: a CI worker prompt is not
+Why the scope of check 1 is wider than the rule that created it: a workflow file is not
 bound by the routing rule, and neither is an ADR, a design document or a plan file, but all of them
 do point at CLAUDE.md sections, so a heading rename would break them exactly as it would
 break a skill. Two trees under docs/ are left out on purpose: docs/postmortems/** is a
@@ -511,10 +511,6 @@ def check_profile_agreement(root: Path, guide: Guide, profile: dict, findings: F
             f"labels.context {sorted(context)} and work_types.enabled {sorted(enabled)} "
             "name different sets",
         )
-    # The watched-path set -- `review.path_map` and the three enumerations that consume it --
-    # is deliberately not this check's. It belongs to .github/check-path-map.py, whole: one set
-    # with one owner, rather than this check holding two of the four copies to each other and
-    # something else holding the rest. That script's header states the split from its side.
     check_flow_deviations(root, enabled, findings)
     check_commit_prefixes(root, guide, enabled, findings)
 
