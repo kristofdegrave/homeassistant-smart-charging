@@ -7,10 +7,9 @@ is [`done.md`](done.md) beside this file, and how it is written is
 [`implement.md`](implement.md); neither is restated here.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
-not here either. They are the same for every review and live with whoever applies this
-checklist — the generic `reviewer` agent definition locally, the review workflow's own prompt
-in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
-way, through `CLAUDE.md`'s **Model selection** table.
+not here either. They are the same for every review and live with the generic `reviewer`
+agent definition that applies this checklist, which reaches this file through `CLAUDE.md`'s
+**Model selection** table.
 
 **This checklist covers the product-code tree the path map selects it for, and nothing
 else.** A `development` change produces two artifacts in two trees, and the criteria belong to
@@ -37,7 +36,7 @@ Always read:
   tool grant reaches the tracker — `CLAUDE.md`'s **Tracker mechanics** section names the
   reference carrying the command. Only where you have no body and no way to reach one, say so
   and say that the item could not be judged; never report a missing section you were never
-  handed, and never treat the two cases that item excludes as findings.
+  handed, and never treat the case that item excludes as a finding.
 
 Read conditionally: what the stack overlays' **Review** sections name, on the condition each
 states.

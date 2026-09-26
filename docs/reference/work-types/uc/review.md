@@ -8,10 +8,9 @@ one is written is [`implement.md`](implement.md) and [`../requirement/implement.
 none of it is restated here.
 
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
-not here either. They are the same for every review and live with whoever applies this
-checklist — the generic `reviewer` agent definition locally, the review workflow's own prompt
-in CI, which has no agent to spawn and self-applies instead. Both reach this file the same
-way, through `CLAUDE.md`'s **Model selection** table.
+not here either. They are the same for every review and live with the generic `reviewer`
+agent definition that applies this checklist, which reaches this file through `CLAUDE.md`'s
+**Model selection** table.
 
 **Why one file for two labels**, and why [`../requirement/review.md`](../requirement/review.md)
 points here: the same reason [`done.md`](done.md) gives for itself. The `uc` and `requirement`

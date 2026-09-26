@@ -18,9 +18,9 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Branch `adr/<adr-number>`**, zero-padded — not the issue number. The contribution workflow
   lets a work file override the number segment when it states the exception and why; this is
   that statement: the record's own number is its identity. Because that number comes from
-  `main`, it can collide: **only one ADR may be in flight (drafted, not merged) at a time.** CI
-  resolves it the same way in `_ai-draft.yml` right after checkout, and refuses (clears
-  `needs-draft`, comments why) rather than clobbering a branch that already exists upstream.
+  `main`, it can collide: **only one ADR may be in flight (drafted, not merged) at a time.** A
+  branch of that name already on the remote means another ADR holds the number: stop and
+  report rather than clobbering it.
 
 ## Drafting
 
@@ -81,8 +81,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   Nothing else is changed in that record. A change of mind is a new ADR that supersedes it;
   a better write-up, a Summary, a sturdier link are left as the record stands. Two guards:
   - **Read existence from the base, not the working tree:** `git show <base>:<path>`, `<base>`
-    the base commit the caller gives (CI's prompt supplies it; locally, the PR's base) — a bare
-    branch name may not resolve in a fresh checkout. The Status line decides nothing: under the
+    the PR's base commit — a bare branch name may not resolve in a fresh checkout. The Status line decides nothing: under the
     bar's item 10 every draft reads `Accepted` in the working tree, and a record that is on the
     base was merged as a decision taken, whichever Status it carries now.
     - Not on the base → a draft; fix normally.

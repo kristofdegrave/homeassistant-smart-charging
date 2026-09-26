@@ -1,8 +1,7 @@
 # Authoring AI artifacts
 
 Reference guidance for authoring the artifacts that drive Claude runs in this repo:
-skills (`.claude/skills/`), agent definitions (`.claude/agents/`), and the CI worker
-prompts (`.github/workflows/_ai-*.yml`). **Work-type documents**
+skills (`.claude/skills/`) and agent definitions (`.claude/agents/`). **Work-type documents**
 (`docs/reference/work-types/<label>/`) hold content moved out of a skill, so everything here
 binds them **except** the two routing sections: they do not travel between repositories, which
 is the premise both rules rest on, so they name this project's paths and tracker commands
@@ -46,24 +45,15 @@ or write/review independence, quality wins — see [Non-negotiables](#non-negoti
 
 ## Where the tokens actually go
 
-Two multipliers dominate cost in this repo, and neither is "a subagent was spawned":
+One multiplier dominates cost in this repo, and it is not "a subagent was spawned": the
+**fixed context every session re-reads.** Claude Code loads `CLAUDE.md` in full at the start of
+every session, plus the frontmatter `name` and `description` of each file under
+`.claude/skills/` and `.claude/agents/`. A skill or agent **body** is not loaded until the skill
+is invoked or the file is read. So the fixed overhead is `CLAUDE.md` plus a description index,
+multiplied by the number of sessions a change runs through — each review round's fresh reviewer
+agents among them; the bodies are a per-use cost, paid only by the run that needs them.
 
-1. **Cold sessions in the CI review/fix loop.** Each PR can run up to a small, fixed number of
-   automatic review→fix cycles (a tunable cap in `_ai-review.yml`'s "Route by verdict" step),
-   and every review and every fix is a *fresh container* with no cross-run prompt-cache reuse.
-   The per-cycle cost is paid again from cold each cycle, so the cycle count is the biggest
-   single lever.
-2. **Fixed context re-read on every cold session.** `claude-code-action` loads `CLAUDE.md`
-   in full on every run, plus the frontmatter `name` and `description` of each file under
-   `.claude/skills/` (and of `.claude/agents/` wherever subagent dispatch is available) —
-   the action's documented behaviour; what a worker receives under a restricted tool grant is
-   not independently verified here. A skill or agent **body** is not loaded until the skill is
-   invoked or the file is read — the CI prompts point the worker at a path and grant `Read`
-   precisely because of this. So the fixed overhead is `CLAUDE.md` plus a description index,
-   multiplied by the number of sessions in the loop above; the bodies are a per-use cost, paid
-   only by the run that needs them.
-
-Everything below targets one of these two.
+Everything below targets it.
 
 ## Vocabulary
 
@@ -98,12 +88,12 @@ move down that ladder — inline what every branch needs, disclose what only som
 per-label `docs/reference/work-types/` tree is that move applied to the seven reviewer agents
 it replaced. **Co-location** decides what sits beside a piece once it lands: a concept's
 definition, rules and caveats under one heading. The context-label
-vocabulary is the counter-example — values canonical in `contribution-workflow.md`, CI-side sync
+vocabulary is the counter-example — values canonical in `contribution-workflow.md`, the sync
 obligation in `ci-pipeline.md`, the `workflow` review checklist spending a paragraph
 reassembling the two.
 **Sprawl** is length itself where the material is always loaded: every line is re-read by every
-cold run, even where each is live and unique. `CLAUDE.md` is the case — loaded in full on every
-run (item 2 above), and held to a routing table for that reason. Anywhere else, length is not a
+session, even where each is live and unique. `CLAUDE.md` is the case — loaded in full on every
+session (above), and held to a routing table for that reason. Anywhere else, length is not a
 Sprawl finding; clutter, below, is the test.
 
 **Clutter** is content a reader of *this* document does not need, because another document owns
@@ -164,9 +154,7 @@ name, its documentation paths, its list of sources, its entity or module names �
 would simply be *wrong* in another repository. The reason is reusability: the artifact is what
 travels between repositories, and `CLAUDE.md` is the one file that is rewritten per repository,
 so an artifact that reaches every project-dependent fact through a `CLAUDE.md` section lands in
-the next repository working, while one that names the facts lands in it lying. A CI worker
-prompt (`.github/workflows/_ai-*.yml`) is outside the rule: it does not travel — it *is* this
-repository's pipeline.
+the next repository working, while one that names the facts lands in it lying.
 
 **What enforces it.** `.github/check-authoring-rules.sh`, run per PR by `ci.yml`'s `authoring`
 job, rejects the half a grep can decide with certainty: a **markdown link** from a skill or
@@ -198,7 +186,7 @@ join the reviewer's list.
   specific target, so it meets *Scope the read* below and the checklists' "name the file, not
   'read the docs'" bar — which is why the topic is required and `CLAUDE.md` alone is not
   enough. What it costs is the onward hop only: `CLAUDE.md` itself is already loaded on every
-  run (item 2 above), so resolving the pointer is the whole of the new work, and it buys a
+  session (above), so resolving the pointer is the whole of the new work, and it buys a
   route every artifact inherits from a single edit. **Headings are the API, at two levels**,
   and this is the convention's only statement: the pointer is written `` `CLAUDE.md`'s
   **Topic** ``, naming a **topic** — an entry of `CLAUDE.md`'s routing table, or one of its own
@@ -291,8 +279,7 @@ ids, flag spellings, and the failure mode and read-back each command needs. The 
 out: the procedure is what travels and the tracker is what gets swapped, so an artifact whose
 steps are procedures lands in a repository on another tracker needing one `CLAUDE.md` section
 rewritten, while one that spells `gh api …/pulls/<n>/reviews` into a step lands there needing
-itself rewritten. CI worker prompts (`.github/workflows/_ai-*.yml`) are outside this rule for
-the same reason the paragraph above puts them outside the project one.
+itself rewritten.
 
 **The carve-out: the commands an artifact exists to issue.** `submit-pr-review` and
 `fix` do not reach the review API on the way to somewhere else; they exist
@@ -413,9 +400,10 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
   instruction drifts apart from its twin, and each copy is read again by every run that needs
   it. `submit-pr-review` being "the single source of truth for the review payload" is the
   pattern: other artifacts reference it instead of duplicating the payload rules. (Drift is the
-  main cost; the read cost is per use, not per cold session — see item 2 above.)
+  main cost; the read cost is per use, not per session — see *Where the tokens actually go*
+  above.)
 - **Scope the read.** Tell a run *which* file to read, so it doesn't fan out across `docs/`.
-  The review worker already does this — one checklist per changed path, never all of them.
+  The `review` skill already does this — one checklist per changed tree, never all of them.
 - **Write rules as items, with the shortest example that teaches them.** A rule goes in a bullet
   or a table row, one rule per item, with an example only where the rule alone would be misread;
   prose is for reasoning that does not break into items. A reader scans items and finds the one
@@ -429,16 +417,11 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
   not change. What sits in that prefix is `CLAUDE.md` and the description index — so churn in
   `CLAUDE.md`, or in a skill's or agent's *frontmatter*, invalidates it; editing a skill
   **body** does not, since the body was never in the prefix. Batch edits; avoid cosmetic
-  churn. Note this is a **local-session lever, not a CI one**: each CI worker is a fresh
-  container with no cross-run cache reuse (see *Cold sessions* above), so CI pays the prefix
-  from cold every run whether or not anything changed. There is no CI payoff here to optimise
-  for.
+  churn.
 - **Bound the loop, not the turn.** Prefer capping *how many times* a run repeats
-  (cycles, retries) over shrinking a single run's turn ceiling. A too-low turn ceiling
-  causes truncation and a re-run, which costs more than it saved — this is why the fix pass's
-  derived ceiling (`.github/workflows/_ai-fix.yml`) starts well above the 20-turn ceiling that
-  was once hit mid-work, and why any automatic review↔fix cap belongs on the *cycle count*, not
-  the per-pass turns.
+  (rounds, retries) over shrinking a single run's turn budget. A run cut off mid-work is
+  re-run, which costs more than it saved — which is why the review↔fix cap counts *rounds*,
+  not the turns inside one.
 
 ## Checklist — authoring a skill (`.claude/skills/`)
 
@@ -481,29 +464,6 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
 - [ ] Tool grants are the minimum the checklist actually uses (a read-only reviewer needs no
       write/edit tools).
 
-## Checklist — authoring a CI worker prompt/config (`.github/workflows/_ai-*.yml`)
-
-- [ ] The prompt selects the specific checklist(s) for the changed paths rather than telling
-      the run to consider all of them.
-- [ ] `--allowed-tools` is the minimum the task needs; each grant has a comment saying why.
-- [ ] `max_turns` is set high enough to finish in one pass (avoid truncation re-runs) and no
-      higher; if a run regularly hits the ceiling, raise it — a hit ceiling means a wasted run.
-      (`_ai-draft.yml`, `_ai-review.yml`, and `_ai-fix.yml` all derive this per run from a
-      workload shape — the issue's context label for the drafter, the changed paths for
-      review/fix — plus the linked issue's project-board Size field, rather than a flat
-      constant — board hygiene is load-bearing for these paths; see each file's "Resolve
-      max_turns from context/workload + Size" step.)
-- [ ] Any automatic repeat (review↔fix, retries) has an explicit cap and a terminal state
-      (e.g. the loop's cycle cap + `needs-approval` escalation in `_ai-review.yml`), so it
-      cannot run away.
-- [ ] PR content is treated as untrusted data (this is a correctness/security rule, not a
-      cost one, but the worker prompts already carry it — keep it).
-- [ ] A third-party static-analysis report handed to a reviewer as evidence (e.g. the
-      SkillSpector report `_ai-review.yml`'s `skill-scan` job produces, per ADR-0020) is written
-      to a file and read with a tool the run already has, never inlined into the prompt string
-      or echoed to a step's own stdout — the untrusted-content containment above applies to it
-      exactly as it does to PR diff content.
-
 ## Vendored skills are forked on purpose
 
 Every skill this project did not write itself is declared in `.claude/profile.yml`'s
@@ -518,8 +478,8 @@ apply to an async Home Assistant custom integration, and cross-linked so no rule
 
 Two consequences:
 
-- **`.claude/skills/` is the only authoritative tree.** It is what Claude Code loads and what
-  every CI worker prompt names. The installer's second copy under `.agents/skills/` was an
+- **`.claude/skills/` is the only authoritative tree.** It is what Claude Code loads. The
+  installer's second copy under `.agents/skills/` was an
   unreferenced byte-identical duplicate and has been removed; don't reintroduce it.
 - **A re-sync from upstream would revert that work.** The `computedHash` entries in
   `skills-lock.json` describe where a skill came from, not what it must still contain — and
@@ -537,28 +497,22 @@ Two obligations follow, and both are cheap only if they are met at the time:
   leaves the copy out of the drift check that would otherwise tell you upstream had moved.
 - **A drift report is answered by bumping the pin, whichever way the decision went** — the
   pin records that someone looked, not that the two trees are identical. The weekly check that
-  opens such a report, and what closes it, are the CI document's (`CLAUDE.md`'s **Contribution
-  workflow** topic routes to it).
+  opens such a report, and what closes it, are [ci-pipeline.md](ci-pipeline.md)'s **The
+  upstream-pin drift check**.
 
 ## How to measure
 
-`ai-cost-summary` (`.github/actions/ai-cost-summary`) writes per-run cost, turns, and token
-usage — including `cache_read_input_tokens` and `cache_creation_input_tokens` — to the job
-summary. Use it, not estimates, to decide whether a change actually helped:
+Decide whether a change actually helped from measured numbers, not estimates:
 
-- **Cycle count per PR** — *manually* count the `<!-- ai-review-verdict: remarks -->` reviews
-  on the PR (`ai-cost-summary` is per-run and has no per-PR aggregate). This is the dominant
-  cost driver; watch it first.
-- **Cache-read ratio** — `cache_read_input_tokens` ÷ total input tokens, from the job summary.
-  A drop after an edit to `CLAUDE.md`, or to a skill's or agent's *frontmatter*, means that
-  edit invalidated the cached prefix. Editing a **body** cannot move this number: the body was
-  never in the prefix. And the comparison is only meaningful *between local sessions sharing
-  a warm cache* — across CI runs there is no cross-run reuse to lose (see *Cold sessions*
-  above), so a difference between two CI runs' ratios is not evidence about an edit.
-- **Turns vs. ceiling** — a run at its `max_turns` ceiling was likely truncated and will be
-  re-run; raise the ceiling rather than eating the re-run.
+- **Rounds per PR** — the review passes a PR took, which the local round marker counts. This is
+  the dominant cost driver; watch it first.
+- **Cache-read ratio** — cache-read input tokens ÷ total input tokens, from a session's token
+  usage. A drop after an edit to `CLAUDE.md`, or to a skill's or agent's *frontmatter*, means
+  that edit invalidated the cached prefix. Editing a **body** cannot move this number: the body
+  was never in the prefix. The comparison is only meaningful between sessions sharing a warm
+  cache.
 
-Lock in a change only when the summary shows it moved one of these numbers the right way.
+Lock in a change only when it moved one of these numbers the right way.
 
 ## Non-negotiables
 

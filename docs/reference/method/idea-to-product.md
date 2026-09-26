@@ -28,7 +28,7 @@ that one alone. The stages that carry no work type — Capture, Brainstorm,
 Route, Decompose, Verify live, Close — are the flow's spine: a project that wants them changed
 changes the method, since a deviation has no work type to name. One enabled work type has no
 stage the other way round: `workflow` work changes the method's own tooling — a skill, a
-reference document, the pipeline — so it is not a step an idea passes through; a `workflow`
+reference document, a CI workflow — so it is not a step an idea passes through; a `workflow`
 issue is filed at **Decompose** like any other child and runs the chain, outside the artifact
 chain.
 
@@ -183,7 +183,7 @@ re-argued:
 Everything already decidable is filed now: the `adr` issue if a structural decision surfaced,
 and any already-scoped `uc`, `requirement`, `documentation` or `workflow` issue. Anything that
 surfaces later and belongs to the strand — a bug found mid-implementation, a follow-up — is
-attached as a sub-issue too; belonging to an epic does not require a drafter-facing context
+attached as a sub-issue too; belonging to an epic does not require any particular context
 label, and `file-task-issue` covers which label such a child takes.
 
 **Epic membership and ordering are native GitHub relationships, not body text** — sub-issues
@@ -388,9 +388,8 @@ closing step once **Design** has merged — so requiring the body here would ask
 this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
 filed long before its plan was drafted. Without it, an
 analysis document can merge describing behaviour the code does not have.
-The review loop applies that label automatically on a clean verdict and knows nothing about
-child issues ([ci-pipeline.md](ci-pipeline.md)), so on a CI-driven PR the same condition is
-checked by whoever approves the merge. The epic is the earliest artifact that can
+The review step applies that label on a clean pass and knows nothing about child issues, so
+the same condition is checked by whoever approves the merge. The epic is the earliest artifact that can
 carry that obligation — a `development`/`testing` child cannot, because it is cut from that
 epic's body by the decomposition, so none exists until the spec has been written into it.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work

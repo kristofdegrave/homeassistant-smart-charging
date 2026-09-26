@@ -5,8 +5,8 @@ code. Five steps, each naming the skill an interactive session runs it through; 
 steps rest on follow the chain. The artifact-specific additions for analysis documents and ADRs
 (`CLAUDE.md`'s **Review protocol for analysis documents** and **Architecture Decision Records
 (ADRs)** topics) layer their own template/quality-check steps on top of this; they never
-replace it. The
-same lifecycle run by CI, with `github-actions[bot]` as the actor, is
+replace it. How the
+same lifecycle would split into CI jobs is described, abstractly, in
 [ci-pipeline.md](ci-pipeline.md).
 
 Two related references cover the phases just outside this lifecycle: the stages either side of
@@ -95,7 +95,7 @@ against a statement that turns out to be premature.
   this line the only statement of what it counts — everything that needs either routes here
   instead of repeating it.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
-  Minor/Nit counts as clean once they are fixed — the same bar CI applies to its own verdict —
+  Minor/Nit counts as clean once they are fixed,
   so the final round needs no further pass to confirm it.
 - **At the cap** — the last pass the count allows still has a Critical or Major finding open —
   the loop stops instead of fixing again: the review step, at the end of that pass, puts the
@@ -147,9 +147,6 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   starts a fresh count. The label operations and the comment follow
   [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
 - It does no further work on the PR. The human partner either merges as is, or grants a round.
-  Sending the PR to CI instead is the human's choice too, but CI's pass never sees the reason,
-  and a `clean` verdict there lifts the hold, over a reason nobody weighed
-  ([ci-pipeline.md](ci-pipeline.md)).
 - On a granted round, the session's first act posts the hold reason as a PR review of its own:
   a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
@@ -164,9 +161,6 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
 
 The session applies the hold itself, rather than asking the human partner to hold a PR that
 still carries `needs-approval`.
-
-`needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
-go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).
 
 ## Thread discipline
 
@@ -278,8 +272,7 @@ session's own footprint by the session's markers, never by author.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing`
   (implementation tasks, each one child of an epic whose body carries the spec), `workflow` (CI/skill/agent-authoring
-  changes), `documentation` (design-doc changes, `docs/design/**` — reviewed, but not yet
-  wired into automated drafting). The label set itself — every name, colour and description,
+  changes), `documentation` (design-doc changes, `docs/design/**`). The label set itself — every name, colour and description,
   and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
   `work_types`, and `.github/setup-labels.sh` writes it to the repository from there. Adding or
   renaming a label: see [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must
@@ -293,9 +286,8 @@ session's own footprint by the session's markers, never by author.
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
-  gate. Neither label substitutes for the other, and neither triggers anything on its own —
-  only an action label does. A kind label adds no Model-selection row and no drafter `case`
-  entry; see [ci-pipeline.md](ci-pipeline.md).
+  gate. Neither label substitutes for the other, and a kind label adds no Model-selection
+  row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
@@ -319,10 +311,8 @@ session's own footprint by the session's markers, never by author.
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
   issue is filed as a native sub-issue of that epic, never standing alone: the parent edge is
   what says the body was cut from a decomposition somebody reviewed rather than typed straight
-  into an issue, and `_ai-draft.yml` refuses to draft one without it (see
-  [ci-pipeline.md](ci-pipeline.md)). Get the edge on at filing time; adding it afterwards works
-  (**Epic-first for multi-artifact strands** above has both forms) but the refusal has already
-  cleared the trigger by then.
+  into an issue. Get the edge on at filing time; adding it afterwards works
+  (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `development`, `testing`, `workflow`, `documentation`),
@@ -332,8 +322,7 @@ segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-be
 defined segment, matching the `bug/<n>` branches such work already uses. Earlier branches for
 *this* kind of work also used `dev/` and `fix/`; those two spellings are historical, not
 alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
-axes are present the **context label wins**, so the branch matches what `_ai-draft.yml` would
-compute from the same issue. If extra work on the same issue needs a second, separate
+axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 
@@ -376,9 +365,6 @@ By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
 inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
-actually touches (the `workflow` checklist when it also edits `CLAUDE.md` or the pipeline).
-`docs/postmortems/**` is deliberately **not** in `ai-pipeline.yml`'s path filter or
-`_ai-review.yml`'s diff enumeration: the reviewer checklists are all written against
-artifacts that assert behaviour, and none fits a narrative document. A post-mortem-only PR
-therefore gets no CI AI review at all — by design, and stated here so it doesn't read as an
-oversight (see [ci-pipeline.md](ci-pipeline.md)).
+actually touches (the `workflow` checklist when it also edits `CLAUDE.md` or a CI workflow).
+No reviewer checklist is applied to the post-mortem itself: the checklists are all written
+against artifacts that assert behaviour, and none fits a narrative document.

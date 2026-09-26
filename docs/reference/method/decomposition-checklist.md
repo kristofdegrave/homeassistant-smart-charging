@@ -68,7 +68,7 @@ passes: its effect is that the observables do not change.
 
 **(4) Every task entry carries its keys.** The closing step fixes them: files and test, test
 boundary, blocked by, sources, verify live. A missing exact file path or concrete failing test
-is **Major** — the drafter builds the task prompt from the issue body and consumes it
+is **Major** — the session implementing the task works from the issue body and reads it
 literally. A missing test boundary, or one routing a test through the harness that is not its
 layer's, is **Major** too. The body's testing approach naming no seam for the tasks to drive
 through is **Minor**: each task then finds its own and the suite grows a seam per task. The
