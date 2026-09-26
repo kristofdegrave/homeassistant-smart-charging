@@ -1740,9 +1740,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     def _clear_baseline_deferral(self) -> None:
         """ADR-0039/R3 case (a): `deferred_previous` means "the previous CONTROL CYCLE deferred
         on the command-changed ground", not "the previous call to `debounce_baseline_w` did".
-        A cycle that returns before that call is ever reached this cycle -- the required-adapter
-        fault and the top-level exception handler, `_enter_fault`'s own docstring says which --
-        deferred nothing, yet still writes 0 A, which is a real step. Leaving the flag set would
+        A cycle that returns before that call is ever reached this cycle -- always true of the
+        required-adapter fault, and true of the top-level exception handler except when the
+        exception itself is raised downstream of the call (`_enter_fault`'s own docstring says
+        more) -- deferred nothing, yet still writes 0 A, which is a real step. Leaving the flag
+        set would
         block case (a) on the RECOVERY cycle, which is precisely the cycle whose `charger_w` is
         stale from that forced drop to 0 A: the reading then looks far below the accepted
         baseline, case (a) cannot reject it, and the debounce window commits a contaminated,
@@ -1814,19 +1816,24 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         one statement in its caller's body -- ADR-0046's body rule for `_run_cycle` (a call to a
         named step, one statement each) rather than several.
 
-        `clear_baseline_deferral` defaults True for two of the three call sites (the
-        required-adapter fault and the top-level exception handler): both return before
-        `debounce_baseline_w` is ever reached this cycle, exactly the case
-        `_clear_baseline_deferral`'s own docstring describes. The THIRD call site -- the ev_soc
-        fault -- passes `clear_baseline_deferral=False`: its return sits AFTER
-        `debounce_baseline_w` already ran this cycle, so a `deferred_previous=True` reaching
-        here was set by that same cycle's own, legitimate call and must survive the fault
-        exactly as it would survive an ordinary cycle (round-2 review finding, #1380) --
-        clearing it here would let a breaching household increase defer for two consecutive
-        cycles, against R10 AC5's one-cycle bound (ADR-0039). `_clear_household_window_deferral`
-        carries no such split: `smooth_household_baseline` runs even later in the cycle than
-        `debounce_baseline_w`, after all three fault sites' own returns, so every one of them
-        needs it cleared."""
+        `clear_baseline_deferral` defaults True for two of the three call sites. The
+        required-adapter fault always returns before `debounce_baseline_w` is reached this
+        cycle, exactly the case `_clear_baseline_deferral`'s own docstring describes. The
+        top-level exception handler is the same by default, but not a guarantee -- it wraps the
+        whole of `_run_cycle`, so an exception raised downstream of `debounce_baseline_w` (or
+        even of `smooth_household_baseline`) reaches it too, and clearing a flag that cycle's
+        own call legitimately just set is an accepted residual there (unchanged from `main`'s
+        own unconditional clear at that site) rather than a case this parameter tries to cover.
+        The THIRD call site -- the ev_soc fault -- passes `clear_baseline_deferral=False`, and
+        for it the ordering *is* a guarantee: it always sits AFTER `debounce_baseline_w` already
+        ran this cycle, so a `deferred_previous=True` reaching here was set by that same cycle's
+        own, legitimate call and must survive the fault exactly as it would survive an ordinary
+        cycle (round-2 review finding, #1380) -- clearing it here would let a breaching
+        household increase defer for two consecutive cycles, against R10 AC5's one-cycle bound
+        (ADR-0039). `_clear_household_window_deferral` carries no ev_soc-site split -- all three
+        fault sites are guaranteed to return before `smooth_household_baseline` reaches this
+        cycle -- but shares the exception-handler residual above, since that site's guarantee is
+        the same non-guarantee either way."""
         self._log_fault(reason)
         self._start_fault_stop_cooldown()
         if clear_baseline_deferral:

@@ -627,7 +627,7 @@ async def test_adr0007_write_adapter_fault_during_run_cycle_early_fault_return_d
     assert adapters[ROLE_CHARGER_CURRENT].written == [0.0, 0.0]
 
 
-async def test_should_clear_household_window_deferral_when_ev_soc_faults_after_a_command_step(
+async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_pending_window_deferral(  # noqa: E501
     hass,
 ):
     """Issue #1329 follow-up: `HouseholdWindow.deferred_previous` must be cleared on every
@@ -677,6 +677,9 @@ async def test_should_not_clear_baseline_deferral_when_ev_soc_faults_after_a_com
     _seed_ample_peak_headroom(coord)
     coord._baseline_debouncer = BaselineDebouncer(accepted_w=1000.0, deferred_previous=False)
     coord._command_stepped = True
+    coord._last_commanded_a = 10.0  # `_command_stepped=True` alone is unreachable in production
+    # (`_write` only ever sets it alongside a non-None `_last_commanded_a`) -- seeded together
+    # so this Arrange is a state a real cycle could actually produce.
 
     # Act
     result = await coord._async_update_data()
@@ -1144,9 +1147,13 @@ async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
-    await coord._async_update_data()  # cycle 1: window=(1000.0,), smoothed==raw==1000.0
+    # cycle 1: household window=(-2000.0,) (net_w - charger_w), smoothed surplus ==
+    # raw surplus == 2000.0
+    await coord._async_update_data()
 
-    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)  # cycle 2: smoothed(1500) != raw(2000)
+    # cycle 2: household window=(-2000.0, -1000.0), smoothed surplus 1500.0 != raw surplus
+    # 1000.0 (ADR-0049: the joint window, not a net-only one)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)
     result = await coord._async_update_data()
 
     assert result.solar_surplus_w == 3000.0 - 2000.0
@@ -4093,10 +4100,10 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
     _coord, result = await _run(hass, adapters, _config(), target=10.0)
 
     assert result.fault is False
-    # Voltage (step 3, NF4) resolves before this cycle's net-power smoothing call (step 2's
-    # mode-dispatch reading, issue #1329's `smooth_household_baseline`) in this implementation;
-    # steps 7 (R3), 8 (C4), 9 (C1 floor/cap) then run in ADR-0006's fixed order -- neither
-    # reordered nor merged.
+    # Voltage (step 3, NF4) resolves before this cycle's household-baseline smoothing call
+    # (step 2's mode-dispatch reading, `smooth_household_baseline`, ADR-0049) in this
+    # implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap) then run in ADR-0006's fixed
+    # order -- neither reordered nor merged.
     assert call_order == [
         "resolve_voltage",
         "smooth_household_baseline",
