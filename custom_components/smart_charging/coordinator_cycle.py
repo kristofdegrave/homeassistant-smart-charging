@@ -59,8 +59,9 @@ class CycleContext:
     future consumer that genuinely needs one adds it back for real, not speculatively."""
 
     status: str
-    net_w: float  # raw, not the smoothed reading (coordinator.py's separate smoothed_net_w) --
-    # read by coordinator.py's two clamps, off this same ctx (issue #719)
+    net_w: float  # raw, not the smoothed reading (coordinator.py's separate, joint
+    # smoothed_household_w, ADR-0049) -- read by coordinator.py's two clamps, off this same ctx
+    # (issue #719)
     charger_w: float  # read by coordinator.py's two clamps, off this same ctx (issue #719)
     voltage: float
     now: float
