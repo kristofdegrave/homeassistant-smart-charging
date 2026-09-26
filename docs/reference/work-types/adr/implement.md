@@ -19,9 +19,10 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   3. add one;
   4. reserve it before drafting: create the remote branch at `origin/main` with
      `gh api repos/$REPO/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`
-     (`$REPO` per `CLAUDE.md`'s **Tracker mechanics**), then fetch and read back that `origin/adr/NNNN` is that sha. The worktree is cut as the
-     implement step cuts it; the reservation is its ancestor. A 422 `Reference already
-     exists` means the number was taken: re-count. Any other failure: stop and report.
+     (`$REPO` per `CLAUDE.md`'s **Tracker mechanics**), then fetch and read back that
+     `origin/adr/NNNN` is that sha. The worktree is cut as the implement step cuts it; the
+     reservation is its ancestor. A 422 `Reference already exists` means the number was
+     taken: re-count. Any other failure: stop and report.
 
   A merged ADR's leftover branch never exceeds `main`'s highest: harmless. Never
   reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
