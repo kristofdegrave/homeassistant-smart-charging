@@ -26,7 +26,7 @@ template.
 | [0017](0017-profile-as-composed-mode-selection-policy.md) | Mode-selection policy Protocol and registry for `profiles/` | Accepted |
 | [0018](0018-entity-to-coordinator-access-via-ra3-store.md) | Entity-to-coordinator access via RA3's Store (pull-based read, Manager-initiated write) | Accepted |
 | [0019](0019-store-package-home.md) | Package home for the RA3 Config/State Store | Accepted |
-| [0020](0020-skillspector-advisory-pr-scan.md) | Advisory SkillSpector scan feeding the workflow-reviewer AI review | Accepted |
+| [0020](0020-skillspector-advisory-pr-scan.md) | Advisory SkillSpector scan feeding the workflow-reviewer AI review — deprecated by [ADR-0048](0048-retire-the-ai-label-pipeline.md) | Deprecated |
 | [0021](0021-adapter-readings-diagnostic-sensor.md) | Adapter-role readings surfaced via a single diagnostic sensor's attributes | Accepted |
 | [0022](0022-runtime-dashboard-delivery-mechanism.md) | Runtime-dashboard delivery mechanism | Accepted |
 | [0023](0023-decompose-run-cycle-into-named-steps.md) | Decompose `_run_cycle` into named per-step methods (extends ADR-0012) | Superseded by ADR-0046 |
@@ -47,12 +47,13 @@ template.
 | [0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Unit contract at the power-read adapter boundary — convert known units, assume-and-warn when absent, reject a present non-power unit; except `monthly_peak_external`, where an absent unit is rejected too | Accepted |
 | [0039](0039-baseline-reading-during-own-actuation.md) | The peak clamp discards a baseline reading taken during its own actuation | Accepted |
 | [0040](0040-fifth-mandated-adapter-case-unit-set.md) | A fifth mandated adapter case — a numeric role's expected unit set and its behaviour on a foreign or absent unit (extends ADR-0009) | Accepted |
-| [0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) | The CI reviewer reads its instructions from the base branch and its subject from the PR | Accepted |
+| [0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) | The CI reviewer reads its instructions from the base branch and its subject from the PR — deprecated by [ADR-0048](0048-retire-the-ai-label-pipeline.md) | Deprecated |
 | [0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) | A state-of-charge-unavailable cycle holds the deadline-unreachable clear rather than firing it (narrows [ADR-0024](0024-deadline-unreachable-cleared-event.md)) | Accepted |
 | [0043](0043-scheduled-upstream-drift-watcher.md) | The upstream-drift watcher — a scheduled, issue-writing job over the profile's pin manifest | Accepted |
 | [0044](0044-implementation-spec-lives-in-the-epic-body.md) | The implementation spec lives in its epic's body, and each task carries the sources it was cut from — retiring `docs/plans/**` and the `specs` work type | Accepted |
 | [0045](0045-every-adr-opens-with-a-summary.md) | Every new ADR opens with a Y-statement Summary (narrows [ADR-0001](0001-use-architecture-decision-records.md)) | Accepted |
 | [0046](0046-cycle-composition-rules-and-complexity-guard.md) | The control cycle's composition rules, held by a complexity guard (supersedes [ADR-0023](0023-decompose-run-cycle-into-named-steps.md)) | Accepted |
 | [0047](0047-user-enable-of-a-capability-gated-entity-lives-in-its-registry-options.md) | A user's own enable of a capability-gated entity is recorded in that entity's registry options (narrows [ADR-0028](0028-registry-level-disabling-for-capability-gated-entities.md)) | Accepted |
+| [0048](0048-retire-the-ai-label-pipeline.md) | Retire the AI label pipeline — the lifecycle runs in local sessions only (deprecates [ADR-0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) and [ADR-0020](0020-skillspector-advisory-pr-scan.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
