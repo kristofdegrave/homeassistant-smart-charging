@@ -82,7 +82,7 @@ labels:
       description: "PR: trigger the AI fix pass to address review remarks"
     - name: needs-approval
       color: b60205
-      description: "PR: no automated review/fix work is pending — a maintainer must decide"
+      description: "PR: no automated work pending — a maintainer may merge it as it stands"
     - name: needs-decision
       color: e4e669
       description: "PR: review left findings open, or the PR is on hold — a maintainer decides how to proceed"
