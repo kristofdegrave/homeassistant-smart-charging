@@ -6,7 +6,8 @@ How an ADR is written is `implement.md`; checks about the *change* belong with t
 
 **Scope: the bar scores a record the change adds.** On a record that already exists on the base,
 only review check (A) applies, and whether a permitted edit is itself correct — a finding the
-fixer may not act on is not raised.
+fixer may not act on is not raised. An `Abandoned` record is scored on item 2's filename and
+ADL-row bullets and on item 10 only.
 
 ## The bar
 
@@ -15,7 +16,6 @@ fixer may not act on is not raised.
 - Fails it → **Major**. Name the definition clause or carve-out it fails, and where it belongs
   instead (a PR description, `docs/analysis/requirements.md`,
   `docs/analysis/resolution-rules.md`).
-- Applies to the ADR being added, never retroactively to an Accepted one.
 
 **(2) Template conformance.**
 - Status / Summary / Context / Considered options / Decision / Consequences, in that order,
@@ -25,7 +25,8 @@ fixer may not act on is not raised.
 - Filename `NNNN-kebab-case-title.md`, `NNNN` above `main`'s highest `docs/adl/NNNN-*` with
   every number between held by a remote `adr/NNNN` branch (`implement.md`'s *Number*).
   Otherwise → **Major**.
-- `docs/adl/README.md` (the ADL) has a row for it whose title and Status match the record.
+- `docs/adl/README.md` (the ADL) has a row for it whose title and Status match the record; an
+  `Abandoned` row omits the reason.
   Missing or mismatched → **Major**: the row is how the log stays readable.
 
 **(3) Context states the forces — not the answer, and not the derivation.** Forces are what a
@@ -80,7 +81,7 @@ other ADRs. A term that departs from them → **Minor**.
 
 **(10) Status is `Accepted` before `needs-approval`.** The only home of this convention: **an
 ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it — or
-`Abandoned` once dropped (`implement.md`'s *Abandoned, not deleted*). A round that left it
+`Abandoned — <why>` once dropped (`implement.md`'s *Abandoned, not deleted*). A round that left it
 otherwise is corrected once the pass is clean. Handed over with any other Status → **Major**:
 the ADL row (item 2) would record a decision the log says was never taken.
 
@@ -169,8 +170,7 @@ reach test and the *why* question.
 
 ### How an ADR moves through the contribution workflow
 
-- It follows `CLAUDE.md`'s **Contribution workflow** topic. The `adr` row of `CLAUDE.md`'s
-  **Model selection** table names its files, each the only home of its part: the work file for
-  how an ADR is written, this bar for what the record must satisfy.
+- It follows `CLAUDE.md`'s **Contribution workflow** topic; the `adr` row of its **Model
+  selection** table names this bar and the work file.
 - No tracking refs (PR numbers, issue status) in the ADR body — `CLAUDE.md`'s **Review
   protocol for analysis documents** topic; the rule applies equally here.

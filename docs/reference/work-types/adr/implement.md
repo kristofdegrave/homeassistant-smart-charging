@@ -19,11 +19,10 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
      `git branch -r --list 'origin/adr/[0-9][0-9][0-9][0-9]'`;
   3. add one;
   4. reserve it at once, before drafting: create the remote branch at `origin/main` with
-     `gh api repos/<owner>/<repo>/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`,
-     then fetch it and cut the worktree from it. The call refuses (HTTP 422) a name that
-     already exists, so a refusal means another session took the number: re-count. A plain
-     push is no reservation: it goes out only after the draft, and it fast-forwards over a
-     same-named branch cut from an older `main`.
+     `gh api repos/$REPO/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`, then
+     fetch it, read back that `origin/adr/NNNN` is that sha, and cut the worktree from it.
+     HTTP 422 means another session took the number: re-count. Any other failure: stop and
+     report. A plain push reserves nothing: it comes after the draft.
 
   A merged ADR's leftover branch never exceeds `main`'s highest, so it changes nothing. Never
   reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
@@ -74,9 +73,9 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   `needs-approval`*, is the rule's only home.
 - **Merge in number order**, so `main` never holds a number above one still open. An
   `Abandoned` ADR merges like any other, so a higher one waits for it too.
-  - **Who checks, and when:** the session that ran the review step, straight after a clean
-    pass's exit. It fetches, lists the `adr/NNNN` branches as the count does, and looks for a
-    lower number whose record is not on `origin/main`.
+  - **Who checks, and when:** the review step, at a clean pass's exit. It fetches, lists the
+    `adr/NNNN` branches as the count does, and looks for a lower number whose record is not
+    on `origin/main`.
   - **One found:** a blocking reason found after the exit, so the PR goes on hold per
     [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels).
   - **How the hold ends:** once the lower ADR merges, the human partner grants a round. Its fix
@@ -84,8 +83,13 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
     reads the complete log.
 - **Abandoned, not deleted.** An ADR the human partner drops before it merges keeps its number
   and its full draft: it merges with `Status: Abandoned — <why, in one sentence>`, and its ADL
-  row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log, and the count could hand its
-  number out again.
+  row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log, and the
+  count could hand its number out again.
+  - Dropped before any draft exists: the record is the template's title, Date and that Status
+    line, so the reservation still merges.
+  - A supersession or deprecation edit the draft made to another ADR is reverted before the
+    merge, so that record stays as it was.
+  - The bar's scope line says which items score it.
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.

@@ -20,7 +20,7 @@ In `docs/adl/`:
 - every other ADR — contradiction and duplication are judged against the full log, not the
   neighbours.
 
-Also the remote `adr/NNNN` branch listing, which the dispatch supplies since you have no
+Also the remote `adr/NNNN` branch listing, which the review step supplies since you have no
 shell: the bar's item 2 judges the number against it. None supplied → say the number was not
 checked.
 
@@ -47,5 +47,8 @@ checks are about the **change**, which an author checking their own draft cannot
 **(B) The change is complete as a change.** A bar item can be met by a file you weren't shown.
 Check this diff carries the ADL row (bar item 2, *Template conformance*) and, for a
 supersession or deprecation, the old record's Status-line edit (bar item 8, *It doesn't
-contradict an Accepted ADR without superseding it*) with its ADL row's Status changed to match. Report a miss against that item at its severity. `implement.md`
-already puts them in one PR, so the finding is an incomplete PR, not a case for a separate one.
+contradict an Accepted ADR without superseding it*) with its ADL row's Status changed to
+match. Report a miss against that item at its severity. `implement.md` already puts them in
+one PR, so the finding is an incomplete PR, not a case for a separate one. An `Abandoned`
+record carries no such edit: one still in its diff → **Major**, since `implement.md` reverts
+it.

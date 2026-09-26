@@ -68,6 +68,10 @@ model it wants — say so, since only the human partner can switch it.
 - Post all their findings as **one** review. Several reviews for one pass would make the
   round count above count reviewers, not passes. Name every checklist that was applied, including any that returned nothing — after
   aggregation a reader cannot otherwise tell a clean checklist from one that was never applied.
+- **A change touching `docs/adl/**`:** run `git fetch --prune origin`, then hand every reviewer
+  the list of remote `adr/NNNN` branches. The count it feeds is the *Number* item in the work
+  file of the `adr` row of `CLAUDE.md`'s **Model selection** table, and that row's bar judges
+  the number against it.
 - Spawn every reviewer **fresh, never inline**. An author reviewing their own work in the session
   that wrote it is not a review; that separation is what the review step is for.
 
@@ -93,8 +97,10 @@ exactly one of these, from the pass's own result and the count above:
   check the diff is this PR's alone; and a related PR's "merged" status is not proof its
   artifact landed — verify with `git ls-tree origin/main <path>` after a fetch, read by output
   as the `cleanup` skill's step 2 does. Board **Status** stays *in review*; the label is a
-  signal for the human's decision, never a self-approval. Report: clean, `needs-approval`
-  applied.
+  signal for the human's decision, never a self-approval. On a PR adding an ADR, then run the
+  merge-order check in that same work file (*Merge in number order*); a lower-numbered
+  sibling unmerged puts the PR on hold at once, per the hold rule under `CLAUDE.md`'s
+  **Contribution workflow**. Report: clean, `needs-approval` applied, or on hold.
 - **Critical or Major open, and this was the last pass the cap allows**: apply both exit
   labels, then post one escalation comment, body via a file per **Tracker mechanics**: the
   open Critical and Major findings by thread, what each round tried, where author and
