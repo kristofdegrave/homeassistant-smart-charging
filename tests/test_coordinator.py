@@ -61,6 +61,8 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.coordinator import SmartChargingCoordinator
 from custom_components.smart_charging.coordinator_cycle import ActiveCooldown, CycleContext
+from custom_components.smart_charging.engines.billing_protection import BaselineDebouncer
+from custom_components.smart_charging.engines.signal_conditioning import HouseholdWindow
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from custom_components.smart_charging.modes._phase import Phase
 from custom_components.smart_charging.modes.captar import CaptarState
@@ -625,6 +627,113 @@ async def test_adr0007_write_adapter_fault_during_run_cycle_early_fault_return_d
     assert adapters[ROLE_CHARGER_CURRENT].written == [0.0, 0.0]
 
 
+async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_pending_window_deferral(  # noqa: E501
+    hass,
+):
+    """Issue #1329 follow-up: `HouseholdWindow.deferred_previous` must be cleared on every
+    early-return fault path, the same reasoning `_clear_baseline_deferral` already states for
+    `BaselineDebouncer` -- a fault cycle that forces a 0 A write is a real command step, but the
+    ev_soc-fault return sits BEFORE `smooth_household_baseline` ever runs this cycle (unlike the
+    baseline debounce call, which sits before this gate and so isn't affected by it), so a stale
+    `deferred_previous=True` left over from an earlier cycle would wrongly freeze the household
+    window on the very next (recovery) cycle instead of folding its genuine reading in."""
+    # Arrange -- smoothing_window=4 (not this suite's usual 1): the freeze this test's seeded
+    # deferred_previous=True stands for can only ever happen at size > 1
+    # (`smooth_household_baseline`'s own guard), so window=1 could never have produced it.
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(), smoothing_window=4)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._household_window = HouseholdWindow(samples=(100.0,), deferred_previous=True)
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._household_window.deferred_previous is False
+
+
+async def test_should_not_clear_baseline_deferral_when_ev_soc_faults_after_a_command_step(hass):
+    """Round-2 review finding: the ev_soc fault return sits AFTER `debounce_baseline_w` already
+    ran this cycle (unlike the required-adapter fault and the top-level exception handler,
+    which both return before it) -- so a genuine deferral `debounce_baseline_w` itself just
+    made THIS cycle must survive the fault, exactly as it already does on an ordinary
+    (non-faulted) cycle. Clearing it here too would let a breaching household increase be
+    deferred for a second consecutive cycle, against R10 AC5's one-cycle bound (ADR-0039)."""
+    # Arrange -- a lower (more headroom) raw baseline than the last accepted one, with the
+    # command already stepped: debounce_baseline_w's own command-changed case (a) defers it and
+    # sets deferred_previous=True on ITS OWN, before the ev_soc gate is ever reached.
+    adapters = _adapters(status=STATE_CHARGING, net_w=500.0, charger_w=0.0, ev_soc=None)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._baseline_debouncer = BaselineDebouncer(accepted_w=1000.0, deferred_previous=False)
+    coord._command_stepped = True
+    coord._last_commanded_a = 10.0  # `_command_stepped=True` alone is unreachable in production
+    # (`_write` only ever sets it alongside a non-None `_last_commanded_a`) -- seeded together
+    # so this Arrange is a state a real cycle could actually produce.
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- deferred_previous stays True: it was legitimately set by THIS cycle's own
+    # debounce_baseline_w call, not left over from an earlier one the fault never consulted.
+    assert result.fault is True
+    assert coord._baseline_debouncer.deferred_previous is True
+    assert coord._baseline_debouncer.accepted_w == 1000.0  # still deferred, not yet committed
+
+
+async def test_should_pass_command_stepped_into_household_window_smoothing_when_the_previous_cycle_stepped_the_command(  # noqa: E501
+    hass, monkeypatch
+):
+    """Issue #1329 follow-up: the closed-loop HA-harness tests already pin
+    `smooth_household_baseline`'s own freeze behaviour at the engine level (its unit tests do
+    too), but neither pins that the coordinator actually passes its *own* `self._command_stepped`
+    through as `command_changed` rather than some hard-coded value -- this spies on the real
+    call to prove the value passed tracks the write that ended the PREVIOUS cycle, per that
+    parameter's own contract (ADR-0039)."""
+    # Arrange
+    seen_command_changed = []
+    real_smooth_household_baseline = coordinator_module.smooth_household_baseline
+
+    def _spy(raw_baseline_w, state, size, *, command_changed):
+        seen_command_changed.append(command_changed)
+        return real_smooth_household_baseline(
+            raw_baseline_w, state, size, command_changed=command_changed
+        )
+
+    monkeypatch.setattr(coordinator_module, "smooth_household_baseline", _spy)
+
+    # Act -- cycle 1 (first ever command, nothing to have stepped from); cycle 2 (a different
+    # charger_w commands a different current, stepping the write cycle 2 itself makes); cycle 3
+    # (any reading) is the one whose OWN call should see that step.
+    adapters_1 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0)
+    coord, _ = await _run_mode(hass, adapters_1, _config(), MODE_SOLAR, soc_limit_override=80.0)
+    adapters_2 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=0.0)
+    coord, result_2 = await _run_mode(
+        hass, adapters_2, _config(), MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+    adapters_3 = _adapters(status=STATE_CHARGING, net_w=0.0, charger_w=2760.0)
+    coord, _ = await _run_mode(
+        hass, adapters_3, _config(), MODE_SOLAR, soc_limit_override=80.0, coord=coord
+    )
+
+    # Assert -- cycle 2's own write commanded a different current than cycle 1's (surplus drops
+    # to 0 W, below the solar start threshold, so Solar holds at the 6 A minimum rather than
+    # continuing to command 12 A), so cycle 3's call is the only one of the three that sees
+    # command_changed=True.
+    assert result_2.commanded_current == 6.0  # cycle 2 stepped away from cycle 1's 12 A
+    assert seen_command_changed == [False, False, True]
+
+
 async def test_nf4_grid_voltage_none_is_not_fault(hass):
     adapters = _adapters(status=STATE_CHARGING)
     adapters[ROLE_GRID_VOLTAGE] = _FakeNumeric(None)  # NF4 fallback, not a fault
@@ -1038,9 +1147,13 @@ async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     coord.active_mode = MODE_POWER
     coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
-    await coord._async_update_data()  # cycle 1: window=(1000.0,), smoothed==raw==1000.0
+    # cycle 1: household window=(-2000.0,) (net_w - charger_w), smoothed surplus ==
+    # raw surplus == 2000.0
+    await coord._async_update_data()
 
-    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)  # cycle 2: smoothed(1500) != raw(2000)
+    # cycle 2: household window=(-2000.0, -1000.0), smoothed surplus 1500.0 != raw surplus
+    # 1000.0 (ADR-0049: the joint window, not a net-only one)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)
     result = await coord._async_update_data()
 
     assert result.solar_surplus_w == 3000.0 - 2000.0
@@ -3975,7 +4088,7 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
 
     spied = (
         "resolve_voltage",
-        "smooth_net_power",
+        "smooth_household_baseline",
         "apply_peak_clamp",
         "clamp_to_ceiling",
         "apply_floor_cap",
@@ -3987,12 +4100,13 @@ async def test_adr0006_clamp_and_smoothing_call_order_is_preserved(hass, monkeyp
     _coord, result = await _run(hass, adapters, _config(), target=10.0)
 
     assert result.fault is False
-    # Voltage (step 3, NF4) resolves before this cycle's net-power smoothing call (step 2's
-    # mode-dispatch reading) in this implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap)
-    # then run in ADR-0006's fixed order -- neither reordered nor merged.
+    # Voltage (step 3, NF4) resolves before this cycle's household-baseline smoothing call
+    # (step 2's mode-dispatch reading, `smooth_household_baseline`, ADR-0049) in this
+    # implementation; steps 7 (R3), 8 (C4), 9 (C1 floor/cap) then run in ADR-0006's fixed
+    # order -- neither reordered nor merged.
     assert call_order == [
         "resolve_voltage",
-        "smooth_net_power",
+        "smooth_household_baseline",
         "apply_peak_clamp",
         "clamp_to_ceiling",
         "apply_floor_cap",
