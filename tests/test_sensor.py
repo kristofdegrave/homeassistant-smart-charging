@@ -711,13 +711,12 @@ async def test_should_keep_an_enable_made_while_unloaded_when_the_entry_is_set_u
     assert hass.states.get(entity_id) is not None
 
 
-async def test_should_keep_a_user_enable_when_the_capability_returns_and_goes_absent_again(
-    hass,
-):
+async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(hass):
     """R18/ADR-0047: once recognized, the user's enable survives a capability that then
-    returns and goes absent again, not just a single reload. One behaviour (the enable's
-    survival past a full round trip); building the recognized-enable state is Arrange, the
-    capability's own round trip is the Act, and only the final state is asserted."""
+    returns and goes absent again, not just a single reload. One action in Act: building the
+    recognized-enable state, and the capability's own return that precedes this test's own
+    scenario, are both Arrange; the single absent-again reload is the Act, so a failure here
+    points at exactly that transition."""
     # Arrange
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
@@ -731,18 +730,19 @@ async def test_should_keep_a_user_enable_when_the_capability_returns_and_goes_ab
     registry.async_update_entity(entity_id, disabled_by=None)
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
-    assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
-
-    # Act
     on_data = entry_data_base()
     on_data[CONF_SOLAR_AVAILABLE] = True
     hass.config_entries.async_update_entry(entry, data=on_data)
     await hass.async_block_till_done()
+    assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
+
+    # Act
     hass.config_entries.async_update_entry(entry, data=entry_data_base())
     await hass.async_block_till_done()
 
     # Assert
     assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
 
 
 async def test_solar_surplus_sensor_config_read_matches_other_platforms(hass):

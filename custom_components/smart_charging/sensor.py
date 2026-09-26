@@ -406,12 +406,12 @@ async def async_setup_entry(
 ) -> None:
     coordinator = entry.runtime_data.coordinator
     config = entry.runtime_data.config
+    registry = er.async_get(hass)
     # Reads entry.data directly (not config.solar_available, which holds the same value) --
     # predates T0/#888's runtime_data.config and a regression test now pins this exact read
     # path (test_solar_surplus_sensor_config_read_matches_other_platforms); left as-is rather
     # than unified onto `config` to avoid touching ADR-0028's already-settled gating logic as a
     # side effect of this task.
-    registry = er.async_get(hass)
     solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
     solar_surplus_sensor = SolarSurplusSensor(
         entry.entry_id, coordinator, solar_available=solar_available

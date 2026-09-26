@@ -278,7 +278,7 @@ async def _disabled_and_marked(hass) -> tuple:
     return entity, registry
 
 
-async def test_should_mark_disabled_seen_when_it_disables_a_row(hass):
+async def test_should_mark_disabled_seen_when_sync_disabled_by_disables_a_row(hass):
     """ADR-0047 point 2: a row this call disables (INTEGRATION) is left marked disabled_seen,
     so a later external enable is recognized as the user's own."""
     # Arrange
@@ -315,19 +315,20 @@ async def test_should_record_user_enabled_when_an_external_caller_enables_a_mark
     assert _options(registry, entity.entity_id) == {OPTION_USER_ENABLED: True}
 
 
-async def test_should_keep_a_user_enable_when_the_capability_returns_and_goes_absent_again(hass):
+async def test_should_keep_a_user_enable_when_the_capability_goes_absent_again(hass):
     """ADR-0047: once recognized, the user's enable survives every later capability change --
-    present, then absent again -- until the user disables it themselves. One behaviour (the
-    enable's survival); building the recognized-enable state is Arrange, the capability's
-    round trip is the Act, and only the final state is asserted."""
+    present, then absent again -- until the user disables it themselves. One action in Act:
+    building the recognized-enable state, and the capability's own return that precedes this
+    test's own scenario, are both Arrange; the single absent-again transition is the Act, so a
+    failure here points at exactly that transition."""
     # Arrange
     entity, registry = await _disabled_and_marked(hass)
     registry.async_update_entity(entity.entity_id, disabled_by=None)
     sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
     assert registry.async_get(entity.entity_id).disabled_by is None  # recognized, pre-Act
 
     # Act
-    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
     sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=False)
 
     # Assert
@@ -339,11 +340,20 @@ async def test_should_record_user_enabled_when_the_user_enables_while_the_capabi
     hass,
 ):
     """ADR-0047's Consequences: "a re-enable while the capability is present" is one of the
-    named follow-up cases. A marked, disabled row flipped to None by the user is recognized as
-    theirs even when the capability already holds -- not only while it stays absent -- so the
-    record still protects the entity if the capability later goes absent again."""
+    named follow-up cases -- the capability holds throughout, so the flip half of
+    sync_disabled_by never runs at all; only the row's own USER<->None history distinguishes a
+    user re-enable from an untouched row. Arrange: an enabled entity the user disables
+    themselves (disabled_by=USER) with the capability present, marked disabled_seen by the
+    sync that follows (per point 2's "last" step, which marks USER rows same as INTEGRATION),
+    then re-enabled by the user -- all with capability_met=True never once False."""
+    entity = _UnlabelledEntity(entry_id="entry1")
+    platform = MockEntityPlatform(hass, domain=Platform.SENSOR, platform_name=DOMAIN)
+    await platform.async_add_entities([entity])
+    registry = er.async_get(hass)
     # Arrange
-    entity, registry = await _disabled_and_marked(hass)
+    registry.async_update_entity(entity.entity_id, disabled_by=er.RegistryEntryDisabler.USER)
+    sync_disabled_by(registry, Platform.SENSOR, entity.unique_id, capability_met=True)
+    assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}  # pre-Act
     registry.async_update_entity(entity.entity_id, disabled_by=None)
 
     # Act
@@ -412,7 +422,9 @@ async def test_should_mark_a_freshly_registered_disabled_row_when_called_after_a
     assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}
 
 
-async def test_should_noop_when_the_freshly_registered_row_is_enabled(hass):
+async def test_should_not_mark_a_freshly_registered_row_when_the_post_add_step_sees_it_enabled(
+    hass,
+):
     """A freshly registered, enabled entity (capability already met at first install) needs no
     mark -- only a disabled row needs to be told apart from a user's future enable."""
     # Arrange
@@ -428,21 +440,33 @@ async def test_should_noop_when_the_freshly_registered_row_is_enabled(hass):
     assert _options(registry, entity.entity_id) == {}
 
 
-async def test_should_noop_when_the_row_is_already_marked(hass):
-    """A row a previous setup already marked (disabled_seen) is left alone -- from here on, a
-    later reload's sync_disabled_by owns the mark, not a repeat post-add call."""
+async def test_should_not_write_when_the_post_add_step_sees_an_already_marked_row(
+    hass, monkeypatch
+):
+    """A row a previous setup already marked (disabled_seen) gets no further registry write
+    from mark_disabled_seen -- from here on, a later reload's sync_disabled_by owns the mark,
+    not a repeat post-add call. Re-reading options after the call can't tell a real no-op from
+    a redundant re-write of the identical value, so this spies on
+    async_update_entity_options directly (mocking at the HA boundary, per the testing bar) and
+    asserts it is never called."""
     # Arrange
     entity, registry = await _disabled_and_marked(hass)
     assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}  # pre-Act
+    calls = []
+    monkeypatch.setattr(
+        registry,
+        "async_update_entity_options",
+        lambda *args, **kwargs: calls.append((args, kwargs)),
+    )
 
     # Act
     mark_disabled_seen(registry, Platform.SENSOR, entity.unique_id)
 
     # Assert
-    assert _options(registry, entity.entity_id) == {OPTION_DISABLED_SEEN: True}
+    assert calls == []
 
 
-async def test_should_noop_when_the_row_is_disabled_by_the_user(hass):
+async def test_should_not_mark_a_row_when_the_post_add_step_sees_it_disabled_by_the_user(hass):
     """mark_disabled_seen only ever marks a row entity_platform.py itself created disabled
     (INTEGRATION); a USER-disabled row is untouched -- sync_disabled_by (point 2's "last"
     step) is what marks a USER row, since a post-add step never sees one at creation time."""
@@ -460,8 +484,10 @@ async def test_should_noop_when_the_row_is_disabled_by_the_user(hass):
     assert _options(registry, entity.entity_id) == {}
 
 
-async def test_should_noop_when_not_yet_registered(hass):
-    """Mirrors sync_disabled_by's and sync_labels's own no-op case."""
+async def test_should_not_raise_when_mark_disabled_seen_sees_an_unregistered_unique_id(hass):
+    """Mirrors sync_disabled_by's and sync_labels's own no-op case. mark_disabled_seen has no
+    way to create a registry row, so the real check this proves is "does not raise" -- the
+    assert below is the honest, if trivially-true, way to state that in pytest's own terms."""
     # Arrange
     registry = er.async_get(hass)
     unique_id = "entry1_never_registered"
