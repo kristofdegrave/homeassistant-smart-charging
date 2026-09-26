@@ -411,6 +411,8 @@ case_run "4: a work file without a Skills rule fails" 1 "work file has no \`### 
   "sed -i 's/^### Skills$/### Tools/' docs/reference/work-types/alpha/implement.md"
 case_run "4: a Skills rule naming a stack skill fails" 1 "names \`stack-skill\`, which is not a method skill" \
   "sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`stack-skill\`/' docs/reference/work-types/alpha/implement.md"
+case_run "4: a Skills rule naming a vendored copy fails" 1 "names \`ven-skill\`, which is not a method skill" \
+  "sed -i 's/^  method:$/  method:\n    - name: ven-skill\n      source: example\/skills\n      path: skills\/ven-skill\n      pin: commit:0000000\n      installed: vendor/' .claude/profile.yml && mkdir -p .claude/vendor/example/ven-skill && printf -- '---\nname: ven-skill\n---\n\nUpstream text.\n' > .claude/vendor/example/ven-skill/SKILL.md && sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`ven-skill\`/' docs/reference/work-types/alpha/implement.md"
 case_run "4: a Skills rule naming an unknown skill fails" 1 "names \`nowhere\`, which is not a method skill" \
   "sed -i 's/^\`step\`, \`dep-skill\`, \`user-skill\`/\`step\`, \`nowhere\`/' docs/reference/work-types/alpha/implement.md"
 case_run "4: an overlays directory under a label that is not enabled fails" 1 "overlays/ under \`gamma\`, which is not an enabled work type" \
@@ -460,7 +462,7 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=104
+EXPECTED=105
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \

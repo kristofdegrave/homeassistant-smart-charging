@@ -287,8 +287,8 @@ dependencies:
       installed: repo
     # Upstream-intact copies, vendored outside the skill index: improve-architecture is the
     # only way in, and it routes their outputs into this repository's process instead of
-    # editing them. Typed directly, the first would call the other two through a Skill tool
-    # that cannot reach them, and write outside that process.
+    # editing them. Upstream, the first calls the other two through the Skill tool; the
+    # wrapper maps each call to a read of the vendored file.
     - name: improve-codebase-architecture
       source: mattpocock/skills
       path: skills/engineering/improve-codebase-architecture

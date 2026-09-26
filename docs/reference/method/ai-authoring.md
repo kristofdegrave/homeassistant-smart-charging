@@ -328,12 +328,12 @@ The process is three layers — a **method** that travels between repositories, 
 that is this project alone, and **stack packages** declared in the profile — and which layer a
 file belongs to follows from where it sits. Every document under `docs/reference/**` and every
 agent definition under `.claude/agents/` is method. Every skill under `.claude/skills/` is
-method unless `.claude/profile.yml`'s `dependencies` declares it, in which case it is a
-vendored dependency that belongs to no layer of this project's and is never edited to say so —
-that is what keeps an upstream-intact skill intact. A file that deviates from its tree's
-default says so in YAML frontmatter, `layer: project` or `layer: stack` (`layer: method` is
-legal and redundant), and nothing else carries the key: `docs/reference/profile.md` is the
-standing case, a project file inside a method tree.
+method unless `.claude/profile.yml`'s `dependencies` declares it, in which case it is, like
+a declared copy under `.claude/vendor/`, a vendored dependency that belongs to no layer of this
+project's and is never edited to say so — that is what keeps an upstream-intact skill intact.
+A file that deviates from its tree's default says so in YAML frontmatter, `layer: project` or
+`layer: stack` (`layer: method` is legal and redundant), and nothing else carries the key:
+`docs/reference/profile.md` is the standing case, a project file inside a method tree.
 
 Where a *new* method document **goes** is a placement rule beside that one, and
 `docs/reference/method/` is the answer: the method reference documents sit there, and
@@ -363,10 +363,10 @@ walks, minus the snapshot trees (the two frozen ones plus `docs/adl/**` and `doc
 dated records whose paths state what was true at their date, not what the tree holds now) —
 a link against the directory it is written in and an anchored one to a heading of its
 target, a backticked path at the repository root and only when its first segment names
-something there, and in a copy declared `verbatim: true` links only; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
-no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
-agreement:** the Model selection table agrees with the profile's `work_types.enabled` and
-`labels.context`; the commit-prefix table of the
+something there, and in a copy declared `verbatim: true` links only; and, in `CLAUDE.md` alone,
+every routing-table entry links to a document and no `###` precedes its `##` there or in
+`docs/reference/**`. **3, profile agreement:** the Model selection table agrees with the profile's
+`work_types.enabled` and `labels.context`; the commit-prefix table of the
 document `CLAUDE.md`'s **Definition of Done** topic routes to has a row for every enabled
 context label;
 `docs/reference/profile.md`
@@ -378,11 +378,11 @@ naming only method skills and declared method dependencies; every work type with
 slot has an `overlays/<stack>.md` for every declared stack, every stack a dependency declares
 has a `stacks` entry, and an `overlays/` directory or file sits nowhere the slot rule does not
 put it (the script header enumerates the shapes); every dependency declared
-`installed: repo` is present; every `layer:` a file does carry names a known layer. **5, no
-profile values in method files:** no value the profile holds — owner, repository name, board
-name, node ids, a status column name — appears in a method-layer file; and no stack token the
-profile lists under `stacks`, nor the name of a stack skill, appears in a method-layer file of
-the work-type tree. Status names are
+`installed: repo` or `vendor` is present, and nothing stray in `.claude/vendor/`; every `layer:` a
+file does carry names a known layer. **5, no profile values in method files:** no value the profile
+holds — owner, repository name, board name, node ids, a status column name — appears in a
+method-layer file; and no stack token the profile lists under `stacks`, nor the name of a stack
+skill, appears in a method-layer file of the work-type tree. Status names are
 matched in the form a command would use them, inside backticks, or as the exact multi-word
 phrase; the word in *Definition of Done* is English. The script's header is the authority on
 each rule's exact shape and its stated limits. It runs blocking in CI and as a warning from
@@ -464,35 +464,35 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
 ## Vendored skills are forked on purpose
 
 Every skill this project did not write itself is declared in `.claude/profile.yml`'s
-`dependencies` — that manifest, not this paragraph, is the list. Four of them arrived by
-**marketplace install** and are additionally recorded in `skills-lock.json` with their
-upstream hash: `python-anti-patterns`, `async-python-patterns`, `ha-integration-knowledge`,
-`domain-driven-design`. Two of them — `python-anti-patterns` and
-`async-python-patterns` — have since been **rewritten for this repo**: trimmed to the rules that
-apply to an async Home Assistant custom integration, and cross-linked so no rule is stated twice.
-`ha-integration-knowledge` carries one local note (the custom-integration path mapping);
-`domain-driven-design` is upstream-intact. A `verbatim: true` row is a byte-identical
+`dependencies` — that manifest, not this paragraph, is the list. Four arrived by
+**marketplace install**, also recorded in `skills-lock.json` with their upstream hash:
+`python-anti-patterns`, `async-python-patterns`, `ha-integration-knowledge`, `domain-driven-design`.
+`python-anti-patterns` and `async-python-patterns` have since been **rewritten for this repo**:
+trimmed to what applies to an async Home Assistant custom integration, cross-linked so no rule is
+stated twice. `ha-integration-knowledge` carries one local note (the custom-integration path
+mapping); `domain-driven-design` is upstream-intact. A `verbatim: true` row is a byte-identical
 copy instead: never edited, wrapped by a project skill, re-copied on a pin bump; declining an
-upstream change drops the key, and its paths get checked.
+upstream change drops the key and unskips its paths. Review it for its row, place and
+upstream match only.
 
 Two consequences:
 
-- **`.claude/skills/` is the only tree Claude Code loads.** The installer's `.agents/skills/`
-  duplicate was removed; don't reintroduce it. A `vendor` copy sits outside it, so
+- **`.claude/skills/` is the only tree Claude Code loads.** Don't reintroduce the installer's
+  `.agents/skills/` duplicate. A `vendor` copy sits outside it, so
   only its wrapper starts it.
 - **A re-sync from upstream would revert that work.** The `computedHash` entries in
   `skills-lock.json` record where a skill came from, not what it must still contain — and
-  the same hashes are declared as `sha256:` pins in `.claude/profile.yml`'s `dependencies`, the
-  copy the method reads; the two move together, in the same PR. Before
+  the same hashes are the `sha256:` pins in `.claude/profile.yml`'s `dependencies`, the
+  copy the method reads; the two move together, in one PR. Before
   re-pulling one, check whether its local copy diverged — for the two rewritten
   ones, re-apply the trim rather than accepting the upstream text.
 
 Two obligations follow:
 
-- **A skill brought in from anywhere outside this repository gets its `dependencies` row in
-  the same PR**, however it arrived. Nothing
-  refuses an undeclared copy — the layer rule above reads it as the method's own, the wrong
-  answer for a file this project did not write, and the drift check never sees it.
+- **A skill from outside this repository gets its `dependencies` row in the same PR**,
+  however it arrived. Nothing refuses an undeclared copy in `.claude/skills/` — the layer rule
+  above reads it as the method's own, though this project did not write it, and the drift
+  check never sees it.
 - **A drift report is answered by bumping the pin, whichever way the decision went** — the
   pin records that someone looked, not that the two trees are identical. The weekly check that
   opens such a report, and what closes it, are [ci-pipeline.md](ci-pipeline.md)'s **The

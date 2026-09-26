@@ -50,7 +50,8 @@ Which layer a file belongs to is a rule, and `layer:` frontmatter is the overrid
 that deviates from it. The defaults: every document under docs/reference/** and every agent
 under .claude/agents/ is method; every markdown file of a skill under .claude/skills/ is
 method unless the profile's `dependencies` declares the skill, in which case it is a vendored
-dependency and belongs to no layer here (it is never scanned, and never edited to say so).
+dependency and belongs to no layer here (it is never scanned, and never edited to say so);
+so does a declared copy under .claude/vendor/.
 A work-type overlay -- docs/reference/work-types/<label>/overlays/<stack>.md -- is stack by
 position: a stack package installs it, and it is never edited to say so either.
 Each file's own frontmatter is what overrides, so a skill's reference file can differ from
@@ -721,7 +722,12 @@ def check_work_type_shape(
                 ".claude/profile.yml",
                 f"dependency `{name}` declares stack `{stack}`, which has no `stacks` entry",
             )
-    method_skills = {name for name, e in deps.items() if e.get("_group") != STACK_GROUP}
+    # An `installed: vendor` copy is outside the skill index: only its wrapper may start it.
+    method_skills = {
+        name
+        for name, e in deps.items()
+        if e.get("_group") != STACK_GROUP and e.get("installed") != "vendor"
+    }
     skills_dir = root / ".claude/skills"
     if skills_dir.is_dir():
         method_skills |= {
