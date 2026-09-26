@@ -573,8 +573,9 @@ def resolve_solar_reserve_gate(
     compared against `forecast_threshold_kwh` (#1423): the coordinator passes None both for
     an unmapped/unavailable ROLE_SOLAR_FORECAST and, from midnight, for an unmapped/
     unavailable ROLE_SOLAR_FORECAST_TODAY -- either way the forecast condition must not hold,
-    whatever the configured threshold happens to be (a 0.0-vs-<=0 threshold comparison would
-    wrongly activate the cap otherwise)."""
+    whatever the configured threshold happens to be (a negative threshold would wrongly
+    activate the cap otherwise -- the engine's own comparison is strict, so 0.0 was never a
+    problem)."""
     if forecast_kwh is None:
         return False
     return resolve_solar_reserve_active(

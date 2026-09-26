@@ -494,15 +494,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # the optional `solar_forecast_today` (same-day) one instead, while that role is
         # mapped. While it is unmapped, or its reading is unavailable, the condition does not
         # hold from midnight -- via resolve_solar_reserve_gate's own None short-circuit, never
-        # a 0.0 default (the deliberate midnight-lift fallback, entity-catalog.md's
-        # `solar_forecast_today` row). Both roles are read every cycle regardless of which one
-        # feeds the gate, like every other optional role here (issue #717/#911) -- so
+        # a 0.0 default (the deliberate midnight-lift fallback, R9's third acceptance
+        # criterion / UC07 2a). Both roles are read every cycle regardless of which one feeds
+        # the gate, like every other optional role here (issue #717/#911) -- so
         # ROLE_SOLAR_FORECAST_TODAY keeps reporting its real reads in
         # `sensor.smart_charging_adapter_readings` too. Midnight has passed for the current
         # reserved-day night exactly when today's calendar date already equals reserved_day
-        # (resolve_reserved_day's own docstring). `reserved_day_forecast_kwh` is a separate
-        # name from either role's own reading -- the two are never mixed, and this makes that
-        # visible at the call site instead of overwriting `forecast_kwh` in place.
+        # (resolve_reserved_day's own docstring).
         forecast_kwh = await self._read_role(ROLE_SOLAR_FORECAST)
         forecast_today_kwh = await self._read_role(ROLE_SOLAR_FORECAST_TODAY)
         reserved_day_forecast_kwh = (

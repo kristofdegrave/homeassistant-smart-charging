@@ -1258,8 +1258,8 @@ def test_should_not_activate_when_forecast_is_none():
     """An unmapped/unavailable forecast role must not raise and must never activate the cap
     (#1423: via the explicit None short-circuit, not a 0.0 fold -- the next test proves the
     difference matters)."""
-    # Act
-    result = resolve_solar_reserve_gate(
+    # Arrange
+    gate_kwargs = dict(
         profile=PROFILE_AUTO,
         home_day_flag=True,
         sun_is_down=True,
@@ -1267,6 +1267,8 @@ def test_should_not_activate_when_forecast_is_none():
         forecast_threshold_kwh=12.0,
         deadline_tomorrow_resolved=False,
     )
+    # Act
+    result = resolve_solar_reserve_gate(**gate_kwargs)
     # Assert
     assert result is False
 
@@ -1276,8 +1278,8 @@ def test_should_not_activate_when_forecast_is_none_even_under_a_non_positive_thr
     midnight) must force the condition to not hold outright -- not fold through the
     None -> 0.0 default the old code compared against the threshold, which would wrongly
     activate the cap were the configured threshold ever zero or negative (0.0 > -5.0)."""
-    # Act
-    result = resolve_solar_reserve_gate(
+    # Arrange
+    gate_kwargs = dict(
         profile=PROFILE_AUTO,
         home_day_flag=True,
         sun_is_down=True,
@@ -1285,6 +1287,8 @@ def test_should_not_activate_when_forecast_is_none_even_under_a_non_positive_thr
         forecast_threshold_kwh=-5.0,
         deadline_tomorrow_resolved=False,
     )
+    # Act
+    result = resolve_solar_reserve_gate(**gate_kwargs)
     # Assert
     assert result is False
 

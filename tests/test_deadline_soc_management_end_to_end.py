@@ -1129,8 +1129,8 @@ async def test_should_hold_the_cap_past_midnight_when_only_mondays_default_would
 # forecast condition to not hold (never zero-defaulted) while it is unmapped or its reading is
 # unavailable. Most tests below set solar_forecast and solar_forecast_today on OPPOSITE sides of
 # the threshold, so a value read from the wrong sensor at the wrong time flips the assertion
-# rather than passing it by coincidence; each test's own docstring says which sensor is under
-# test and what the other one is held at.
+# rather than passing it by coincidence; each test's own Arrange block says which sensor is
+# under test and what the other one is held at.
 
 
 async def test_should_read_the_next_day_forecast_until_midnight_even_when_a_same_day_one_is_mapped(
