@@ -86,14 +86,13 @@ against a statement that turns out to be premature.
 
 ## Rounds and the cap
 
-- **The loop has a cap because no one watches it run.** The chain runs unattended (**Rule B**
-  above), so a finding the fix step cannot resolve would otherwise spend rounds without end.
+- **The cap exists because the chain runs unattended** (**Rule B**): a finding the fix step
+  cannot resolve would otherwise loop without end.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
   from the most recent reset event. That key is the **only** statement of that number and this
-  line the only statement of what it counts — everything that needs either routes here instead
-  of repeating it.
+  line the only statement of what it counts — everything that needs either routes here.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed,
   so the final round needs no further pass to confirm it.
