@@ -12,7 +12,7 @@ template.
 | [0003](0003-hardware-abstraction-adapters.md) | Hardware abstraction via config-flow entity mapping and Python adapters — the unmatched-`charger_status`-raw-state clause narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0004](0004-owned-vs-mapped-entities.md) | Owned control/diagnostic entities vs. mapped hardware entities | Accepted |
 | [0005](0005-config-entry-structure-and-interval.md) | Config entry structure and control interval | Accepted |
-| [0006](0006-coordinator-and-data-flow.md) | Coordinator and data flow — step 2's smoothed-reading list, and the smoothed-set half of its forward-looking bar, narrowed by [ADR-0036](0036-step-2-smooths-net-power-only.md) | Accepted |
+| [0006](0006-coordinator-and-data-flow.md) | Coordinator and data flow — step 2's smoothed-reading list, and the smoothed-set half of its forward-looking bar, narrowed by [ADR-0036](0036-step-2-smooths-net-power-only.md); step 2's raw charger power, for step 6's solar surplus, narrowed by [ADR-0049](0049-solar-surplus-smooths-net-and-charger-power-together.md) | Accepted |
 | [0007](0007-fault-handling.md) | Fault handling for adapter reads, translation failures, and uncaught exceptions — the `charger_status`-specific clause narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0008](0008-reconfigure-reload-behavior.md) | Config-entry reload on reconfigure and options changes | Accepted |
 | [0009](0009-testing-strategy.md) | Testing strategy — the `charger_status` unmapped-raw-state expectation narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md); its two-tier taxonomy extended by [ADR-0037](0037-scenario-timeline-test-tier.md); its mandated per-role adapter coverage extended by [ADR-0040](0040-fifth-mandated-adapter-case-unit-set.md) | Accepted |
@@ -42,7 +42,7 @@ template.
 | [0033](0033-captar-step-gains-a-mapping-half.md) | External monthly-peak mapping on the CapTar-gated step — `captar` gains a mapping half | Accepted |
 | [0034](0034-dedicated-charger-status-diagnostic-sensor.md) | Dedicated diagnostic sensor for the `charger_status` role (extends ADR-0021) — its stated `None`-on-unmatched-state premise narrowed by [ADR-0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Accepted |
 | [0035](0035-charger-status-unmatched-state-defaults-to-disconnected.md) | Unmatched `charger_status` raw states default to disconnected, not fault | Accepted |
-| [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter | Accepted |
+| [0036](0036-step-2-smooths-net-power-only.md) | The control cycle's step 2 smooths net power only — which readings are smoothed is an R10 matter; its restated raw charger power, for step 6's solar surplus, narrowed by [ADR-0049](0049-solar-surplus-smooths-net-and-charger-power-together.md) | Accepted |
 | [0037](0037-scenario-timeline-test-tier.md) | Scenario/timeline test tier — a third tier alongside ADR-0009's two (extends ADR-0009) | Accepted |
 | [0038](0038-unit-contract-at-the-power-read-adapter-boundary.md) | Unit contract at the power-read adapter boundary — convert known units, assume-and-warn when absent, reject a present non-power unit; except `monthly_peak_external`, where an absent unit is rejected too | Accepted |
 | [0039](0039-baseline-reading-during-own-actuation.md) | The peak clamp discards a baseline reading taken during its own actuation | Accepted |
@@ -55,5 +55,6 @@ template.
 | [0046](0046-cycle-composition-rules-and-complexity-guard.md) | The control cycle's composition rules, held by a complexity guard (supersedes [ADR-0023](0023-decompose-run-cycle-into-named-steps.md)) | Accepted |
 | [0047](0047-user-enable-of-a-capability-gated-entity-lives-in-its-registry-options.md) | A user's own enable of a capability-gated entity is recorded in that entity's registry options (narrows [ADR-0028](0028-registry-level-disabling-for-capability-gated-entities.md)) | Accepted |
 | [0048](0048-retire-the-ai-label-pipeline.md) | Retire the AI label pipeline — the lifecycle runs in local sessions only (deprecates [ADR-0041](0041-ci-reviewer-instruction-subject-trust-boundary.md) and [ADR-0020](0020-skillspector-advisory-pr-scan.md)) | Accepted |
+| [0049](0049-solar-surplus-smooths-net-and-charger-power-together.md) | Step 6's solar surplus is smoothed from net import and charger power together (narrows [ADR-0006](0006-coordinator-and-data-flow.md) and [ADR-0036](0036-step-2-smooths-net-power-only.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
