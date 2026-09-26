@@ -38,11 +38,12 @@ downstream of it wait for the subagent to report; keep asking from the rest of t
 _decisions_ are the user's: put each to them and wait.
 
 The session is done when the frontier is empty: every branch of the design tree visited, nothing
-left silently assumed. Do not act on it until the user confirms you have reached a shared
-understanding.
+left silently assumed. Do not act on a tree of several decisions until the user confirms you
+have reached a shared understanding; a single decision is settled by its answer.
 
-Where the skill or stage that sent you here names the built-in `brainstorming` skill for its
-dialogue instead — `CLAUDE.md`'s **Idea-to-product flow** does, for a narrow idea — use that one.
+Where the skill or stage that sent you here picks the built-in `brainstorming` skill for the
+dialogue at hand instead — `CLAUDE.md`'s **Idea-to-product flow** does, for a narrow idea — use
+that one.
 
 This is interactive-only: if you find yourself invoked with no human able to answer, do not
 block — make the recommended answer the default for every open question, record them as open
