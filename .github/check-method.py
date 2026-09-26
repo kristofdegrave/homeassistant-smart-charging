@@ -176,7 +176,8 @@ SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
 # describe upstream's layout rather than this tree, and a project skill wrapping it translates
 # them. Such a skill's backticked paths are not resolved; its links still are, since they point
 # inside the copy itself. An adapted port never carries the key, so the `tests/` references
-# above stay checked.
+# above stay checked. The key is trusted, not verified: nothing here compares the copy with
+# upstream.
 VERBATIM_KEY = "verbatim"
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".

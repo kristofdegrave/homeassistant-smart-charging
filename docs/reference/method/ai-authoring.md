@@ -360,8 +360,8 @@ every pointer under `.claude/**`, `docs/**` and `.github/workflows/**` resolves 
 never revised cannot be the thing a blocking gate asks to edit). **2, anchors inward:** every
 link and every repo-rooted backticked path resolves — in `CLAUDE.md` and in every file check 1
 walks, minus the snapshot trees (the two frozen ones plus `docs/adl/**` and `docs/plans/**`,
-dated records whose paths state what was true at their date rather than what the tree holds
-now) — a link against the directory it is written in and an anchored one to a heading of its
+dated records whose paths state what was true at their date, not what the tree holds now;
+a skill declared `verbatim: true` has no backticked path checked) — a link against the directory it is written in and an anchored one to a heading of its
 target, a backticked path at the repository root and only when its first segment names
 something there; and, in `CLAUDE.md` alone, every routing-table entry links to a document and
 no `###` precedes its `##` there or in `docs/reference/**`. **3, profile
@@ -471,9 +471,9 @@ upstream hash: `python-anti-patterns`, `async-python-patterns`, `ha-integration-
 `async-python-patterns` — have since been **rewritten for this repo**: trimmed to the rules that
 apply to an async Home Assistant custom integration, and cross-linked so no rule is stated twice.
 `ha-integration-knowledge` carries one local note (the custom-integration path mapping);
-`domain-driven-design` is upstream-intact. A row marked `verbatim: true` is a byte-identical
+`domain-driven-design` is upstream-intact. A `verbatim: true` row is a byte-identical
 copy instead: never edited, wrapped by a project skill where this repository differs, and
-re-copied when its pin is bumped.
+re-copied when its pin is bumped; one that declines an upstream change loses the key.
 
 Two consequences:
 
@@ -483,13 +483,13 @@ Two consequences:
   `skills-lock.json` describe where a skill came from, not what it must still contain — and
   the same hashes are declared as `sha256:` pins in `.claude/profile.yml`'s `dependencies`, the
   copy the method reads; the two move together, in the same PR. Before
-  re-pulling any of them, check whether the local copy has diverged — for the two rewritten
+  re-pulling one, check whether the local copy has diverged — for the two rewritten
   ones, re-apply the trim rather than accepting the upstream text.
 
-Two obligations follow, each cheap only if met at the time:
+Two obligations follow:
 
 - **A skill brought in from anywhere outside this repository gets its `dependencies` row in
-  the same PR**, whether it was installed by the marketplace or adapted by hand. Nothing
+  the same PR**, however it arrived. Nothing
   refuses an undeclared copy — the layer rule above reads it as the method's own, the wrong
   answer for a file this project did not write, and the drift check never sees it.
 - **A drift report is answered by bumping the pin, whichever way the decision went** — the

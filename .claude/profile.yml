@@ -283,7 +283,8 @@ dependencies:
       pin: commit:321658273cb1
       installed: repo
     # Upstream-intact copies; improve-architecture routes their outputs into this
-    # repository's process instead of editing them.
+    # repository's process instead of editing them. The last two stay model-invocable, so
+    # outside that skill nothing translates them: an open risk.
     - name: improve-codebase-architecture
       source: mattpocock/skills
       path: skills/engineering/improve-codebase-architecture
