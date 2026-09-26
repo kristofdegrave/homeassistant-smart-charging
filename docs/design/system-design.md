@@ -828,11 +828,11 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 
 ### 8.3 ADRs written after 0019
 
-This section accounts for every ADR in `docs/adl/` numbered after 0019 — 30 records, ADR-0020
-through ADR-0049 at the time of writing. Each is in exactly one of two tables. The first holds
+This section accounts for every ADR in `docs/adl/` numbered after 0019 — 31 records, ADR-0020
+through ADR-0050 at the time of writing. Each is in exactly one of two tables. The first holds
 the 20 that decide something about the product, reconciled the way
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
-this design's boundary, narrow it, or extend it? The second holds the 10 that decide how the
+this design's boundary, narrow it, or extend it? The second holds the 11 that decide how the
 project works or how it verifies behaviour, which this design has no service for, each with its
 reason.
 
@@ -889,7 +889,8 @@ reconcile — the same reasoning [§8.1](#81-adrs-that-predate-this-design-0001-
 | 0043 | Scheduled upstream-drift watcher | Process | A scheduled CI job over the project's pin manifest that files issues. |
 | 0044 | The implementation spec lives in the epic body | Process | Where a spec and its sources are kept in the tracker. |
 | 0045 | Every new ADR opens with a Summary | Process | The form of an ADR; narrows ADR-0001, itself process. |
-| 0048 | Retire the AI label pipeline | Process | The contribution lifecycle runs in local sessions only; deprecates ADR-0020 and ADR-0041. |
+| 0048 | Retire the AI label pipeline | Process | The contribution lifecycle runs in local sessions only; deprecates ADR-0020 and ADR-0041. Narrowed by ADR-0050. |
+| 0050 | The method keeps no description of CI's lifecycle | Process | Drops the abstract CI-jobs description ADR-0048 kept; narrows ADR-0048. |
 
 ---
 
