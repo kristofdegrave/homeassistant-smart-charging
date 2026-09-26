@@ -666,8 +666,10 @@ async def test_solar_surplus_sensor_user_enable_survives_reload_with_capability_
     # The user's own enable, exactly as HA's entity-registry websocket would leave it.
     registry.async_update_entity(entity_id, disabled_by=None)
 
-    # A reload (ADR-0008), solar_available still False.
-    hass.config_entries.async_update_entry(entry, data=entry_data_base())
+    # A reload (ADR-0008), solar_available still False -- forced explicitly since
+    # async_update_entry only fires the reload listener on an actual data change, and this
+    # case is a reload with nothing else changed.
+    assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
     assert registry.async_get(entity_id).disabled_by is None
@@ -717,7 +719,7 @@ async def test_solar_surplus_sensor_user_enable_survives_capability_present_then
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
     registry.async_update_entity(entity_id, disabled_by=None)
-    hass.config_entries.async_update_entry(entry, data=entry_data_base())
+    assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert registry.async_get(entity_id).disabled_by is None
 

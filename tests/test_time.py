@@ -386,7 +386,9 @@ async def test_departure_time_user_enable_survives_reload_with_capability_absent
 
     registry.async_update_entity(entity_id, disabled_by=None)
 
-    hass.config_entries.async_update_entry(entry, data=data)
+    # Forced explicitly: async_update_entry only fires the reload listener on an actual data
+    # change, and this reload changes nothing else.
+    assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
     assert registry.async_get(entity_id).disabled_by is None
@@ -436,7 +438,7 @@ async def test_departure_time_user_enable_survives_capability_present_then_absen
         Platform.TIME, DOMAIN, f"{entry.entry_id}_departure_{DAY_MON}"
     )
     registry.async_update_entity(entity_id, disabled_by=None)
-    hass.config_entries.async_update_entry(entry, data=data)
+    assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert registry.async_get(entity_id).disabled_by is None
 
