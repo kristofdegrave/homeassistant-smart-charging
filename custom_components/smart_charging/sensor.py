@@ -411,12 +411,13 @@ async def async_setup_entry(
     # path (test_solar_surplus_sensor_config_read_matches_other_platforms); left as-is rather
     # than unified onto `config` to avoid touching ADR-0028's already-settled gating logic as a
     # side effect of this task.
+    registry = er.async_get(hass)
     solar_available = entry.data.get(CONF_SOLAR_AVAILABLE, DEFAULT_SOLAR_AVAILABLE)
     solar_surplus_sensor = SolarSurplusSensor(
         entry.entry_id, coordinator, solar_available=solar_available
     )
     sync_disabled_by(
-        er.async_get(hass),
+        registry,
         Platform.SENSOR,
         solar_surplus_sensor.unique_id,
         capability_met=solar_available,
@@ -591,4 +592,4 @@ async def async_setup_entry(
             *(_ConfigMirrorSensor(entry.entry_id, spec) for spec in mirror_specs),
         ]
     )
-    mark_disabled_seen(er.async_get(hass), Platform.SENSOR, solar_surplus_sensor.unique_id)
+    mark_disabled_seen(registry, Platform.SENSOR, solar_surplus_sensor.unique_id)

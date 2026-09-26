@@ -6,17 +6,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 
-from .const import DOMAIN
-
-# ADR-0047: the two flags this integration keeps under its own key in a gated entity's
-# registry `options` (options[DOMAIN]), Options A + F of that record. `disabled_seen` is the
-# mark Option F's post-add step and sync_disabled_by leave on every row they see disabled
-# (INTEGRATION or USER), so a later external flip to None -- the user's own enable, however it
-# happened and whether or not the entry was loaded meanwhile -- is told apart from this
-# module's own capability-driven write of None. `user_enabled` is that recognized enable
-# itself, kept until the user's own disable clears it; a capability's return never does.
-OPTION_DISABLED_SEEN = "disabled_seen"
-OPTION_USER_ENABLED = "user_enabled"
+from .const import DOMAIN, OPTION_DISABLED_SEEN, OPTION_USER_ENABLED
 
 
 def sync_disabled_by(
@@ -29,10 +19,11 @@ def sync_disabled_by(
     No-ops if the entity isn't registered yet (a brand-new entity's initial disabled state is
     set by _attr_entity_registry_enabled_default at add time instead -- there is no row for
     this call to act on before that) or if the row is somehow missing despite a matching
-    entity_id. Never touches any other existing disabled_by value in either direction beyond
-    what ADR-0047 adds: a user's own disabled_by=USER is still left untouched, and clears any
-    stale user_enabled record instead (only the user's own disable does, per that ADR's
-    Decision).
+    entity_id. Still never writes any other `disabled_by` value in either direction (notably
+    USER): what ADR-0047 adds is entirely in the row's `options[DOMAIN]` (`const.py`'s
+    `OPTION_DISABLED_SEEN`/`OPTION_USER_ENABLED`) -- this call now also marks `disabled_seen`
+    on a row it leaves disabled, and clears a stale `user_enabled` when it sees the user's own
+    `disabled_by=USER` (only the user's own disable does, per that ADR's Decision).
 
     `domain` is the entity's platform domain (e.g. "sensor", "time") -- the same first
     positional argument `registry.async_get_entity_id(domain, platform, unique_id)` itself

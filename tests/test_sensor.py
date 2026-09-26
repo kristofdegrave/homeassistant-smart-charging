@@ -45,6 +45,7 @@ from custom_components.smart_charging.const import (
     DEFAULT_POWER_COOLDOWN_MIN,
     DEFAULT_REMINDER_LEAD_H,
     DOMAIN,
+    OPTION_DISABLED_SEEN,
     OWNED_SUFFIX_SOLAR_SURPLUS_W,
     ROLE_CHARGER_STATUS,
     STATE_CHARGING,
@@ -54,7 +55,6 @@ from custom_components.smart_charging.const import (
     STATUS_OK,
 )
 from custom_components.smart_charging.coordinator_cycle import PeakDemandState
-from custom_components.smart_charging.entity import OPTION_DISABLED_SEEN
 from custom_components.smart_charging.sensor import (
     ActiveModeSensor,
     ActiveSocLimitSensor,
@@ -628,16 +628,20 @@ async def test_solar_surplus_sensor_disables_on_reload_when_capability_removed(h
     assert disabled_state is None or disabled_state.state == STATE_UNAVAILABLE
 
 
-async def test_solar_surplus_sensor_first_registration_is_marked_disabled_seen(hass):
+async def test_should_mark_disabled_seen_when_a_fresh_install_registers_it_disabled(hass):
     """ADR-0047 point 3: a fresh install with solar_available=False registers the sensor
     disabled and marks it disabled_seen, so a user's later enable is recognized as theirs even
     without ever having gone through a reload first."""
+    # Arrange
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
+
+    # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    # Assert
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
@@ -647,73 +651,79 @@ async def test_solar_surplus_sensor_first_registration_is_marked_disabled_seen(h
     assert entry_reg.options.get(DOMAIN, {}).get(OPTION_DISABLED_SEEN) is True
 
 
-async def test_solar_surplus_sensor_user_enable_survives_reload_with_capability_absent(hass):
+async def test_should_keep_a_user_enable_live_when_reloaded_with_the_capability_still_absent(
+    hass,
+):
     """R18/ADR-0047: a user's own enable of the solar-surplus sensor, made while
     solar_available is False, survives a reload that leaves the capability still absent --
     the enable half of R18 that ADR-0028 alone left unmet."""
+    # Arrange
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
-
     # The user's own enable, exactly as HA's entity-registry websocket would leave it.
     registry.async_update_entity(entity_id, disabled_by=None)
 
-    # A reload (ADR-0008), solar_available still False -- forced explicitly since
+    # Act -- a reload (ADR-0008), solar_available still False, forced explicitly since
     # async_update_entry only fires the reload listener on an actual data change, and this
     # case is a reload with nothing else changed.
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
+    # Assert
     assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
 
 
-async def test_solar_surplus_sensor_user_enable_made_while_entry_unloaded_survives_setup(hass):
+async def test_should_keep_an_enable_made_while_unloaded_when_the_entry_is_set_up_again(hass):
     """R18/ADR-0047: an enable made while the config entry isn't loaded at all -- between an
     unload and the next setup -- still sticks, since the mark lives on the row itself rather
     than on a listener that only runs while the entry is loaded."""
+    # Arrange
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
     )
     assert registry.async_get(entity_id).disabled_by is er.RegistryEntryDisabler.INTEGRATION
-
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
-
     # The user's enable, made while the entry sits unloaded.
     registry.async_update_entity(entity_id, disabled_by=None)
 
+    # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
+    # Assert
     assert registry.async_get(entity_id).disabled_by is None
+    assert hass.states.get(entity_id) is not None
 
 
-async def test_solar_surplus_sensor_user_enable_survives_capability_present_then_absent_again(
+async def test_should_keep_a_user_enable_when_the_capability_returns_and_goes_absent_again(
     hass,
 ):
     """R18/ADR-0047: once recognized, the user's enable survives a capability that then
-    returns and goes absent again, not just a single reload."""
+    returns and goes absent again, not just a single reload. One behaviour (the enable's
+    survival past a full round trip); building the recognized-enable state is Arrange, the
+    capability's own round trip is the Act, and only the final state is asserted."""
+    # Arrange
     seed_charger_states(hass, status="Charging")
     entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=entry_options_base())
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-
     registry = er.async_get(hass)
     entity_id = registry.async_get_entity_id(
         Platform.SENSOR, DOMAIN, f"{entry.entry_id}_{OWNED_SUFFIX_SOLAR_SURPLUS_W}"
@@ -721,16 +731,17 @@ async def test_solar_surplus_sensor_user_enable_survives_capability_present_then
     registry.async_update_entity(entity_id, disabled_by=None)
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
-    assert registry.async_get(entity_id).disabled_by is None
+    assert registry.async_get(entity_id).disabled_by is None  # recognized, pre-Act
 
+    # Act
     on_data = entry_data_base()
     on_data[CONF_SOLAR_AVAILABLE] = True
     hass.config_entries.async_update_entry(entry, data=on_data)
     await hass.async_block_till_done()
-    assert registry.async_get(entity_id).disabled_by is None
-
     hass.config_entries.async_update_entry(entry, data=entry_data_base())
     await hass.async_block_till_done()
+
+    # Assert
     assert registry.async_get(entity_id).disabled_by is None
 
 

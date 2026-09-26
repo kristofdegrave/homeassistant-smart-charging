@@ -2,6 +2,17 @@
 
 DOMAIN = "smart_charging"
 
+# ADR-0047: the two flags this integration keeps under its own key in a gated entity's
+# registry `options` (options[DOMAIN]), Options A + F of that record. `disabled_seen` is the
+# mark Option F's post-add step and `entity.py`'s `sync_disabled_by` leave on every row they
+# see disabled (INTEGRATION or USER), so a later external flip to None -- the user's own
+# enable, however it happened and whether or not the entry was loaded meanwhile -- is told
+# apart from that module's own capability-driven write of None. `user_enabled` is that
+# recognized enable itself, kept until the user's own disable clears it; a capability's return
+# never does.
+OPTION_DISABLED_SEEN = "disabled_seen"
+OPTION_USER_ENABLED = "user_enabled"
+
 # Amp-step rounding strategies (R1/R2), shared by `modes/_amp_step.py`'s `round_amp_step`
 # and the config flow's `vol.In(...)` validator. Plain strings, not an Enum:
 # `strategy` round-trips through HA config-entry storage, which needs bare str values.
