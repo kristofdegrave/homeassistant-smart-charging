@@ -136,6 +136,15 @@ and a label is still on (a grant given in-session posts nothing, so only the rev
 it; a human item may reach the review step directly) — and that pass's exit re-applies
 whichever is then correct.
 
+A reason found **after** the exit makes it false too. A session that learns, before the merge,
+that a PR should not merge as it stands takes `needs-approval` off first, then says why on the
+PR. The reason might come from reading an agent's report critically, from a sibling PR's
+finding, or from a spec amendment. A concern that does not block the merge is filed as a
+follow-up instead, and the PR stays mergeable. What the session never does is ask the human
+partner to hold a PR that still carries the label, because the label is itself the signal
+that a human may decide now. The label goes back on only through the review step's exit, as
+above.
+
 `needs-draft`, `needs-review` and `needs-work` are CI's triggers and the human partner's
 go-signal — an interactive session never self-applies them ([ci-pipeline.md](ci-pipeline.md)).
 
