@@ -7,8 +7,8 @@ Status: Accepted
 
 In the context of a CI pipeline that drafts, reviews and fixes pull requests on three labels and
 is not used, facing the rules, copies and review surface it adds to every process change, we
-decided to retire it and describe the CI lifecycle abstractly, to keep the method's cost in line
-with what is actually run, accepting that adopting CI again means rebuilding it from that
+decided to retire it, keeping an abstract description of the CI lifecycle, to keep the method's
+cost in line with what is actually run, accepting that adopting CI again means rebuilding it from that
 description rather than applying a label.
 
 ## Context
