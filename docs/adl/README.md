@@ -3,8 +3,8 @@
 The Architecture Decision Log is the index of every Architecture Decision Record (ADR)
 in this project. Each row is one immutable record; see `template.md` for the format
 and `0001-use-architecture-decision-records.md` for why this project uses ADRs and this
-template. A row marked `Abandoned` is a draft dropped before it merged, kept
-so the log has every number.
+template. A row marked `Abandoned` is an ADR dropped before its decision was
+taken, kept so the log has every number.
 
 | ADR | Title | Status |
 | --- | --- | --- |

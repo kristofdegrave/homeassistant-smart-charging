@@ -17,13 +17,13 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   2. take the highest `NNNN` in `git ls-tree --name-only origin/main docs/adl/` and
      `git branch -r --list 'origin/adr/[0-9][0-9][0-9][0-9]'`;
   3. add one;
-  4. reserve it at once, before drafting: create the remote branch at `origin/main` with
-     `gh api repos/$REPO/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`, then
-     fetch and read back that `origin/adr/NNNN` is that sha. The worktree is cut as the
+  4. reserve it before drafting: create the remote branch at `origin/main` with
+     `gh api repos/$REPO/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`
+     (`$REPO` per `CLAUDE.md`'s **Tracker mechanics**), then fetch and read back that `origin/adr/NNNN` is that sha. The worktree is cut as the
      implement step cuts it; the reservation is its ancestor. A 422 `Reference already
      exists` means the number was taken: re-count. Any other failure: stop and report.
 
-  A merged ADR's leftover branch never exceeds `main`'s highest, so it changes nothing. Never
+  A merged ADR's leftover branch never exceeds `main`'s highest: harmless. Never
   reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
   *Template conformance*, judges the result.
 - **Branch `adr/<adr-number>`**, zero-padded — not the issue number. The contribution workflow
@@ -89,7 +89,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   - Dropped before any draft exists: the record is the template's title, Date and that Status
     line, so the reservation still merges.
   - A supersession or deprecation edit the draft made to another ADR is reverted before the
-    merge, so that record stays as it was.
+    merge, its ADL row with it, so that record stays as it was.
   - The bar's scope line says which items score it.
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
