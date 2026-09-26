@@ -100,7 +100,7 @@ below; the table is kept as a record of which tasks passed through which gate.
 | **0 — Gate** | — | see [§3](#3-structural-decision-gate-adrs-before-build) | G-ADR-0010, G-ADR-0011, G-ADR-0015, G-ADR-0018/0019, G-NAMING, G-ADR-0022 | All six resolved |
 | **1 — Resource Access** (V1, V11, V13) | Adapter roles; Notification access; Config/State Store | — (G-ADR-0018/0019, G-NAMING resolved) | RA1, RA2, RA3, RA4 | Shipped (`adapters/`) |
 | **2 — Engines** (V2–V10) | 5 Charging-Mode; 2 Profile; SOC-Target; Deadline; Billing-Protection; Peak-Demand Tracker; Grid-Safety; Signal-Conditioning; Cycle-Invariant; Capability-Gate | — (G-ADR-0010 resolved) | E1, E2, E3, E4, E5, E6, E7, E8, E9 | Shipped (`modes/`, `profiles/`, `engines/`); E4 partial — R5's pursued occurrence, and the missed-deadline hold read from it, designed but not built; E7 partial — ADR-0049's joint smoothing window designed, not built; E8 partial — R11's cooldown/hold gating designed, not built |
-| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M1 partial — R5's forecast still passes raw readings to both of its baseline-dependent bounds, the smoothed split being designed but not built, and it does not yet thread ADR-0049's joint window; M3 partial — UC10's plug-in reminder designed, not built |
+| **3 — Managers** | Charging Coordinator; Vehicle-Limit Manager; Notification Manager | — (G-ADR-0011, G-ADR-0015 resolved) | M1, M2, M3 | Shipped (`coordinator.py`, `coordinator_cycle.py`, `managers/`); M1 partial — R5's forecast still passes raw readings to both of its baseline-dependent bounds, the smoothed split being designed but not built, nor does M1 yet thread ADR-0049's joint window; M3 partial — UC10's plug-in reminder designed, not built |
 | **4 — Clients** (V14 + triggers) | Control-interval timer; Owned control entities; Diagnostic outputs; Config/options flow (UC12); Dashboard (UC11); External-event wiring | — (G-NAMING, G-ADR-0022 resolved) | C1, C2, C3, C4, C5, C6 | Shipped (platform files, `config_flow.py`, `dashboard.py`, `__init__.py` wiring) |
 
 Each phase ends with an **integration checkpoint** (⎔) proving the phase is wired to its callers
@@ -772,12 +772,12 @@ from the retired functional sequence.
   duplicates one.
 - **Every task's Status reflects the shipped tree**, checked against
   `custom_components/smart_charging/` and `tests/`: all four Resource-Access tasks and all six
-  Client tasks have shipped, as have all nine Engine tasks — two of them
-  partially: E4's pursued occurrence and the hold read from it, and E8's R11 cooldown/hold gating,
-  are designed but not built. R5's raw/smoothed split is **not** a third: neither E5 nor E6 needs a
-  change for it, since each takes its readings as parameters and cannot tell one operand from the
-  other — it is M1's gap, counted once, at M1. Of the three Manager tasks, M1 is partial for that
-  reason and M2 has shipped;
+  Client tasks have shipped, as have all nine Engine tasks — three of them
+  partially: E4's pursued occurrence and the hold read from it, E7's ADR-0049 joint window, and
+  E8's R11 cooldown/hold gating, are designed but not built. R5's raw/smoothed split is **not** a
+  fourth: neither E5 nor E6 needs a change for it, since each takes its readings as parameters and
+  cannot tell one operand from the other — it is M1's gap, counted once, at M1. Of the three
+  Manager tasks, M1 is partial for that reason and for threading E7's joint window, and M2 has shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Checkpoint markers are not uniform and say so individually rather than to one formula —
