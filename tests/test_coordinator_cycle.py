@@ -1308,9 +1308,9 @@ def test_resolve_solar_reserve_gate_inactive_under_manual():
     )
 
 
-def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_tomorrow():
+def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_reserved_day():
     """Anchored to engines/test_soc_target.py::
-    test_reserve_inactive_when_deadline_resolved_for_tomorrow -- proves
+    test_reserve_inactive_when_deadline_resolved_for_reserved_day -- proves
     deadline_reserved_day_resolved is actually threaded through to the wrapped engine call, not
     just accepted and ignored (all other tests here pass False)."""
     assert (

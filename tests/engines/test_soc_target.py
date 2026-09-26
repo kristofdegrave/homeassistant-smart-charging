@@ -177,8 +177,8 @@ def test_reserve_inactive_under_manual():
     )
 
 
-def test_reserve_inactive_when_deadline_resolved_for_tomorrow():
-    # R9/UC07: mutually exclusive with a departure deadline resolved for tomorrow.
+def test_reserve_inactive_when_deadline_resolved_for_reserved_day():
+    # R9/UC07: mutually exclusive with a departure deadline resolved for the reserved day.
     assert (
         resolve_solar_reserve_active(
             profile=PROFILE_AUTO,
