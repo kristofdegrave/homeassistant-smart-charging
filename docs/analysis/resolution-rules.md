@@ -180,8 +180,9 @@ urgency comes to be in effect.
   (the effective-peak-limit rule's *Urgency raise* row, below). It is computed every cycle from
   the household baseline and the peak/ceiling bounds alone, **whether or not urgency is actually
   in effect**, so the engage test below does not move the moment it fires. The household baseline
-  it reads is the **smoothed** one (R10), not the instantaneous reading, and undeferred — R3's two
-  deferral cases belong to its clamp, not to this forecast. Every bound of the rate that depends
+  it reads is the **smoothed** one R10's window forms, over the samples it admits, not the
+  instantaneous reading, and it carries none of R3's deferrals — those two cases belong to R3's
+  clamp, not to this forecast. Every bound of the rate that depends
   on that baseline is fitted to that same reading, the C4 ceiling headroom as much as the peak
   headroom; R5 is authoritative for both the smoothing and the absence of deferral. This rate is a forecast of what urgency could sustain
   over the remaining window, and one cycle of household load is not evidence about that. The
