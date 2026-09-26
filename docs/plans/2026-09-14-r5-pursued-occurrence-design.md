@@ -146,7 +146,8 @@ here as test anchors rather than re-derived.** `requirements.md` R5:
   ceiling (C4) leaves. C1's maximum charging current depends on no reading and is unaffected, and
   the peak bound is a bound at all only where the peak clamp is composed — so not with the CapTar
   capability absent (R18), nor under `Power`'s R17 opt-out.
-- `:92` — that smoothed baseline carries **no** R3 deferral.
+- `:92` — that smoothed baseline is R10's admitted joint mean, negated, and carries **no** R3
+  deferral; a single charger-current step leaves the rate unchanged.
 
 The two clamps and the `sensor.smart_charging_peak_headroom_a` readout all stay raw, per the same
 criteria.

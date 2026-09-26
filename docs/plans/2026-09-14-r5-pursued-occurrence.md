@@ -296,7 +296,9 @@ each time on its own.
 **Anchors:** `requirements.md` R5 `:90-92` — the smoothed operand, every reading-dependent bound
 fitted to it, and no R3 deferral on it — and R10; `system-overview.md`'s `escalated maximum
 permitted rate` and `maximum permitted rate` entries. **ADR-0012** governs the `CycleContext`
-field.
+field. The forecast now consumes charger power smoothed, jointly with net import, so this task
+also depends on the ADR narrowing ADR-0006 step 2's raw charger power for this forecast, as
+ADR-0049 did for step 6 — which must be accepted before this task lands.
 
 ## T11 — The two ACs that rot silently
 
