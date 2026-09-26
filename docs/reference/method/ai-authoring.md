@@ -471,7 +471,7 @@ Every skill this project did not write itself is declared in `.claude/profile.ym
 trimmed to what applies to an async Home Assistant custom integration, cross-linked so no rule is
 stated twice. `ha-integration-knowledge` carries one local note (the custom-integration path
 mapping); `domain-driven-design` is upstream-intact. A `verbatim: true` row is a byte-identical
-copy instead: never edited, wrapped by a project skill, re-copied on a pin bump; declining an
+copy instead: never edited, re-copied on a pin bump, and, if `vendor`, wrapped; declining an
 upstream change drops the key and unskips its paths. Review it for its row, place and
 upstream match only.
 
