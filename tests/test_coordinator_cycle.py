@@ -959,10 +959,10 @@ def _resolve_deadline_urgency(**overrides):
         # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
         escalated_maximum_permitted_rate_a=32.0,
         pursued_occurrence=None,
-        # The connected half of `deadline_resolvable`, which defaults True above. The two are
-        # separate inputs because they release the pursued occurrence in opposite directions
-        # when the combined predicate is False -- see the split's own tests below.
-        connected=True,
+        # Read by the non-resolvable early return, whose connected half releases the pursued
+        # occurrence in the opposite direction to its state-of-charge half -- see the split's
+        # own tests below.
+        status=STATE_CONNECTED,
         auto_dispatchable=False,
         solar_available=False,
         captar_available=True,
@@ -976,10 +976,10 @@ def _resolve_deadline_urgency(**overrides):
     kwargs.update(overrides)
     mode_desired_current = kwargs.pop("mode_desired_current")
     ctx_kwargs = {name: kwargs.pop(name) for name in _CTX_FIELD_NAMES}
-    # status/net_w/charger_w/now/baseline_w: unused by resolve_deadline_urgency, just
-    # CycleContext's own other required fields.
+    # net_w/charger_w/now/baseline_w: unused by resolve_deadline_urgency, just CycleContext's
+    # own other required fields.
     ctx = CycleContext(
-        status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, now=0.0, baseline_w=0.0, **ctx_kwargs
+        status=kwargs.pop("status"), net_w=0.0, charger_w=0.0, now=0.0, baseline_w=0.0, **ctx_kwargs
     )
     return resolve_deadline_urgency(
         ctx, DeadlineUrgencyInputs(**kwargs), mode_desired_current=mode_desired_current
@@ -1247,12 +1247,13 @@ def test_resolve_deadline_urgency_releases_the_occurrence_when_the_car_is_discon
     # Arrange / Act -- `deadline_resolvable` False with its CONNECTED half also False.
     result = _resolve_deadline_urgency(
         deadline_resolvable=False,
-        connected=False,
+        status=STATE_DISCONNECTED,
         pursued_occurrence=datetime(2026, 7, 27, 9, 0),
     )
 
     # Assert
     assert result.required.pursued_occurrence is None
+    assert result.urgent is False
 
 
 def test_resolve_deadline_urgency_holds_the_occurrence_when_state_of_charge_is_unavailable():
@@ -1265,12 +1266,18 @@ def test_resolve_deadline_urgency_holds_the_occurrence_when_state_of_charge_is_u
     pursued = datetime(2026, 7, 27, 9, 0)
     result = _resolve_deadline_urgency(
         deadline_resolvable=False,
-        connected=True,
+        status=STATE_CONNECTED,
+        ev_soc=None,
         pursued_occurrence=pursued,
     )
 
-    # Assert
+    # Assert -- the urgency the occurrence implies is held with it ("urgency is in effect for
+    # exactly as long as there is a pursued occurrence", resolution-rules.md), while
+    # `unreachable` stays False.
     assert result.required.pursued_occurrence == pursued
+    assert result.urgent is True
+    assert result.required.urgent is True
+    assert result.required.unreachable is False
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---

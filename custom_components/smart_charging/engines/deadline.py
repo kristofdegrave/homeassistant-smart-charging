@@ -160,9 +160,8 @@ class RequiredCurrentResult:
     urgent: bool
     unreachable: bool  # required_a > escalated_maximum_permitted_rate_a
     # The occurrence urgency is chasing, for the Manager to thread back in next cycle -- None
-    # when none is. The default is load-bearing: `RequiredCurrentResult` is constructed at two
-    # sites OUTSIDE this engine (coordinator.py, coordinator_cycle.py) which do not set it, so
-    # without the default this commit would not compile there.
+    # when none is. The default is load-bearing: `coordinator.py` constructs its pre-first-cycle
+    # placeholder OUTSIDE this engine without setting it.
     pursued_occurrence: datetime | None = None
 
 

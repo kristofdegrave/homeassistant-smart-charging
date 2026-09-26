@@ -761,14 +761,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # separately written copy of the same predicate is exactly the lockstep-editing hazard
         # this design exists to remove. Stays inline in `_run_cycle` rather than moving into
         # `_read_deadline_urgency_inputs` (ADR-0023).
-        # D-5: the two halves are carried separately as well as combined, because they release
-        # in OPPOSITE directions when the combined predicate is False -- a disconnect ends the
-        # session and releases the pursued occurrence, while an unavailable state of charge
-        # establishes nothing and must hold it (UC05's State model). Derived here, once, for the
-        # same reason the combined predicate is: a second copy on the other side of the module
-        # boundary is the lockstep-editing hazard this design exists to remove.
-        connected = status in CHARGEABLE_STATES
-        deadline_resolvable = connected and ev_soc is not None
+        deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
         deadline_today, effective_battery_capacity_kwh = await self._read_deadline_urgency_inputs(
             deadline_resolvable=deadline_resolvable,
             today_date=today_date,
@@ -795,7 +788,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     ctx, peak_operand_kw=peak_operand_kw
                 ),
                 pursued_occurrence=self._pursued_occurrence,
-                connected=connected,
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
@@ -838,8 +830,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # sys.float_info.max would be. NaN needs no separate branch: it can never reach
             # here since `nan > maximum_permitted_rate_a` is always False, which would leave
             # `unreachable` False and this block unentered.
+            # A missed-deadline hold reaches here with `required_a` None -- no required current
+            # is computed once the occurrence has passed -- and carries the same cap: it is the
+            # saturated case's statement about a deadline that has run out entirely.
             notified_required_a = (
-                self._config.max_current if math.isinf(required.required_a) else required.required_a
+                self._config.max_current
+                if required.required_a is None or math.isinf(required.required_a)
+                else required.required_a
             )
             self.hass.bus.async_fire(
                 EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
@@ -856,7 +853,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle
         # that established nothing about the deadline must not decide anything about it either.
         # A fault is not one of R5's release conditions, and the cycle forces 0 A regardless.
-        self._pursued_occurrence = deadline_urgency.required.pursued_occurrence
+        self._pursued_occurrence = required.pursued_occurrence
         effective_peak_limit_kw = resolve_effective_peak_limit(
             peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
         )

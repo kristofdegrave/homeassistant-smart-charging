@@ -4392,8 +4392,8 @@ async def test_read_owned_entities_applies_every_table_driven_read(hass):
     assert coord.departure_home_day_override == time_of_day(8, 0)
 
 
-async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_engage(hass, freezer):
-    """R5's latch, driven naturally across two cycles rather than seeded (issue #1078).
+async def test_should_keep_urgency_when_a_later_slack_test_would_not_re_engage(hass, freezer):
+    """R5's held occurrence, driven naturally across two cycles rather than seeded (issue #1078).
 
     Cycle 1 engages urgency on a tight deadline. Cycle 2 moves the deadline far enough out that
     the slack test would NOT fire on its own, with a baseline of `Off` that can never satisfy the
@@ -4430,18 +4430,18 @@ async def test_urgency_latch_survives_a_cycle_whose_slack_test_would_not_re_enga
     assert coord._pursued_occurrence is not None
 
     # Cycle 2: 6 h out, ~5.43 A required -- far under the 12.8 A threshold, so the slack test
-    # alone would leave this Normal. The latch, and an `Off` baseline that cannot hand back
-    # (0 A < 5.43 A), are the only reasons urgency survives.
+    # alone would leave this Normal. The held occurrence, and an `Off` baseline that cannot hand
+    # back (0 A < 5.43 A), are the only reasons urgency survives.
     _seed_today_deadline(coord, hours_from_now=6)
     await coord._async_update_data()
     assert coord._required_current.urgent is True
     assert coord._pursued_occurrence is not None
 
 
-async def test_urgency_latch_is_held_not_cleared_across_an_ev_soc_fault_cycle(hass, freezer):
+async def test_should_hold_the_pursued_occurrence_across_an_ev_soc_fault_cycle(hass, freezer):
     """A fault cycle establishes nothing about the deadline, so it must not decide anything
     about it either -- the same reasoning `_role_readings_at` and `_unreachable_edge` carry
-    through these early returns (ADR-0024). A fault is not one of R5's clear conditions.
+    through these early returns (ADR-0024). A fault is not one of R5's release conditions.
     """
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON)
@@ -4462,33 +4462,6 @@ async def test_urgency_latch_is_held_not_cleared_across_an_ev_soc_fault_cycle(ha
 
     assert result.fault is True
     assert coord._pursued_occurrence == held  # held, not released
-
-
-async def test_urgency_latch_clears_on_disconnect(hass, freezer):
-    """R5 lists a disconnect among urgency's clear conditions. It reaches the latch through
-    `deadline_resolvable=False` -> `urgent=False` rather than through a branch of its own, so
-    this pins that the funnel actually works."""
-    freezer.move_to("2026-01-15 12:00:00")
-    adapters = _adapters(
-        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
-    )
-    config = _config()
-    config = dataclasses.replace(config, solar_available=False)
-    coord = SmartChargingCoordinator(
-        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
-    )
-    coord.active_profile = PROFILE_AUTO
-    coord.active_mode = MODE_OFF
-    coord.soc_limit_override = 80.0
-    _seed_ample_peak_headroom(coord)
-    _seed_today_deadline(coord, hours_from_now=1.25)
-
-    await coord._async_update_data()
-    assert coord._pursued_occurrence is not None
-
-    adapters[ROLE_CHARGER_STATUS]._canonical = STATE_DISCONNECTED
-    await coord._async_update_data()
-    assert coord._pursued_occurrence is None
 
 
 # --- R5's escalated maximum permitted rate: the operands that actually bind (issue #1078) ---
@@ -4672,7 +4645,8 @@ async def test_should_thread_one_pursued_occurrence_across_engage_hold_and_relea
     assert coord._pursued_occurrence == engaged_occurrence
 
     # Cycle 2 holds, and does NOT re-anchor onto the later departure time just seeded: ~5.43 A
-    # required is far under the slack threshold, so only the latch keeps urgency in effect.
+    # required is far under the slack threshold, so only the held occurrence keeps urgency in
+    # effect.
     _seed_today_deadline(coord, hours_from_now=6)
     await coord._async_update_data()
     assert coord._required_current.urgent is True
@@ -4684,6 +4658,8 @@ async def test_should_thread_one_pursued_occurrence_across_engage_hold_and_relea
     await coord._async_update_data()
     assert coord._required_current.urgent is False
     assert coord._pursued_occurrence is None
+    # The boolean it replaces is gone, not kept alongside (D-8).
+    assert not hasattr(coord, "_urgency_latched")
 
 
 async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable(
@@ -4698,24 +4674,63 @@ async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavai
     non-resolvable early return at all instead of faulting upstream -- written with a solar mode
     active, this test would pass on the fault path and prove nothing.
     """
-    # Arrange -- a live hold: the pursued occurrence has already elapsed.
+    # Arrange -- a live hold: the pursued occurrence has already elapsed. A maximum peak above
+    # the floor, so a dropped urgency would show as a lowered effective peak limit.
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    held = dt_util.now() - timedelta(hours=1)
+    coord._pursued_occurrence = held
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- the cycle reached the split rather than the fault path, and held both the
+    # occurrence and the urgency it implies, raised peak limit included (UC05's `Urgent` row).
+    assert result.fault is False
+    assert coord._required_current.pursued_occurrence == held
+    assert coord._pursued_occurrence == held
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 7.0
+
+
+async def test_should_keep_charging_when_the_pursued_occurrence_has_passed(hass, freezer):
+    """A missed-deadline hold computes no required current (`required_a` None) yet is
+    unreachable by definition, so it enters the unreachable-notification block. That block must
+    take the None rather than fault: "a departure time is a target, not a cutoff"
+    (requirements.md R5), and UC05's `Unreachable` row keeps charging.
+
+    Threading the occurrence in is what makes the engine's hold branch reachable from the cycle
+    at all, so this is the first change that can reach the None here.
+    """
+    # Arrange -- connected, state of charge readable and short of the limit, occurrence elapsed.
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
     )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
+    coord.target_current = 10.0
     _seed_ample_peak_headroom(coord)
-    held = dt_util.now() - timedelta(hours=1)
-    coord._pursued_occurrence = held
+    _seed_today_deadline(coord, hours_from_now=6)
+    coord._pursued_occurrence = dt_util.now() - timedelta(hours=1)
 
     # Act
-    await coord._async_update_data()
+    result = await coord._async_update_data()
 
-    # Assert -- unchanged, not released.
-    assert coord._pursued_occurrence == held
+    # Assert -- the hold was entered, and the cycle neither faulted nor stopped charging.
+    assert coord._required_current.required_a is None
+    assert coord._required_current.unreachable is True
+    assert result.fault is False
+    assert result.commanded_current == 10.0
 
 
 async def test_should_release_the_pursued_occurrence_when_the_car_disconnects(hass, freezer):

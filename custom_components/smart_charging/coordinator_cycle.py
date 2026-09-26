@@ -632,10 +632,6 @@ class DeadlineUrgencyInputs:
     # exactly as long as there is one, and it is held rather than re-derived from the slack test
     # each cycle, which would revert it the moment charging closed the gap.
     pursued_occurrence: datetime | None
-    # The connected half of `deadline_resolvable` above, carried separately because the two
-    # halves release the pursued occurrence in opposite directions -- see the early return in
-    # `resolve_deadline_urgency`. Both are derived once in `_run_cycle`, never re-derived here.
-    connected: bool
     auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
@@ -699,14 +695,21 @@ def resolve_deadline_urgency(
         # This is reachable with a live hold: the ev_soc fault gate upstream is itself gated on
         # `is_soc_gated`, which is False for `Off` and `Power` (below), so those modes arrive
         # here with a missing reading rather than faulting.
+        #
+        # Holding the occurrence holds the urgency it implies -- "urgency is in effect for
+        # exactly as long as there is a pursued occurrence" (resolution-rules.md) -- so `urgent`
+        # follows it, and the effective peak limit stays raised. The connected half is read off
+        # `ctx.status` rather than carried in: the hazard the docstring names is a second copy
+        # of the combined predicate, not this one-condition half `ctx` already holds.
+        held = inputs.pursued_occurrence if ctx.status in CHARGEABLE_STATES else None
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(
                 required_a=None,
-                urgent=False,
+                urgent=held is not None,
                 unreachable=False,
-                pursued_occurrence=None if not inputs.connected else inputs.pursued_occurrence,
+                pursued_occurrence=held,
             ),
-            urgent=False,
+            urgent=held is not None,
             resolved_mode=None,
         )
 
