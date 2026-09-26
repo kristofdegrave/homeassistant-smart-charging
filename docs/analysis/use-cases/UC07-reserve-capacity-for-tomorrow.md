@@ -97,7 +97,9 @@ same way as any other precondition lapsing (Postconditions).
   the reserved day; the solar forecast for the reserved day no longer exceeds its threshold; a
   departure deadline becomes resolved for the reserved day; or a missed-deadline hold begins.
   The date rolling over at midnight is not among them, since the reserved day does not change then
-  (R9); a change in the forecast reading across midnight is a forecast change like any other. The
+  (R9); a change in the forecast reading across midnight, including the forecast condition lapsing
+  then while no same-day forecast is mapped (R9's deliberate fallback), is a forecast change like
+  any other. The
   active-SOC-limit rule then falls through to *Solar step-up* or *Default limit*, and Auto mode-selection is no longer withheld by the
   *Overnight top-up* row's reserve condition — the reserved headroom is then available for a solar mode to fill (step 4).
 
