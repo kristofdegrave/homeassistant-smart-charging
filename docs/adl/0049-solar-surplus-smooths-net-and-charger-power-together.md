@@ -16,120 +16,119 @@ charger power, so a lagging charger reading has to be kept out of the window.
 - **R10 requires the set-point to settle under steady inputs**, in every mode, by the (N + 3)th
   control cycle after the last input change. The solar path fails it. Step 6's
   [solar surplus](../analysis/system-overview.md#ubiquitous-language) is `charger_w − mean(net_w)`,
-  and the net-import mean still holds samples taken while the charger drew earlier currents. A
-  model against the real `modes/solar.py` hunts over 3 A with an 8-cycle period at the default
-  window of 4, and alternates between two currents when the charger power reading lags one
-  cycle. It settles only at a window of 1 without the lag.
+  and the mean still holds samples taken while the charger drew earlier currents. Modelled
+  against `modes/solar.py`, it hunts over 3 A at the default window of 4, and alternates when
+  the charger power reading lags one cycle.
 - **Which form a step consumes is ADR-0006's, not R10's.**
   [ADR-0036](0036-step-2-smooths-net-power-only.md) gave R10 the question of which readings have a
-  smoothing window. It kept with [ADR-0006](0006-coordinator-and-data-flow.md) the question of
-  which form, raw or smoothed, a step consumes: a change there needs an ADR, which may narrow
-  one clause as ADR-0036 itself did. Both records
-  state that charger power is used raw, "not an operand of solar surplus via the smoothed
-  channel". Any fix that smooths charger power for step 6 is that kind of change.
+  smoothing window, and kept with [ADR-0006](0006-coordinator-and-data-flow.md) which form a
+  step consumes: that needs an ADR, which may narrow one clause as ADR-0036 did. Both state that
+  charger power is used raw, "not an operand of solar surplus via the smoothed channel".
 - **ADR-0039's rejection of a charger window does not carry over.**
   [ADR-0039](0039-baseline-reading-during-own-actuation.md) rejected giving `charger_w` a window
-  for R3's clamp for two reasons: R3 is exempt from smoothing, and a window slows the clamp. Step
-  6 is already smoothed, and it clamps nothing.
+  for R3's clamp because R3 is exempt from smoothing and a window slows a clamp. Step 6 is
+  already smoothed and clamps nothing.
 - **A reading taken on a cycle the command changed measures the integration's own actuation.**
-  ADR-0039 settled that for R3's household baseline. It holds equally for a sample entering a
-  window.
+  ADR-0039 settled that for R3's baseline; it holds equally for a sample entering a window.
 - **R3, C4 and the raw net-power reading must not move.** Steps 7 and 8 clamp on raw readings so
   that a breach cannot hide behind a window (ADR-0006, R3).
-- **The evidence is the author's simulation and the HA-harness regressions.** At every window
-  above 1, Option A settles in simulation with and without the one-cycle lag, and Option B at
-  none. The regressions pin windows 4 and 6. At a window of 1 nothing is frozen and the three
-  options coincide; no result is recorded for that size with the lag. The freeze's share of A's
-  result was not measured apart from the per-sample subtraction.
+- **The evidence is the author's simulation and the HA-harness regressions.** Above a window
+  of 1, Option A settles in simulation with and without the lag, and Option B at no size. The
+  regressions pin windows 4 and 6. At a window of 1 the options coincide, and no result is
+  recorded there with the lag. Option D was not simulated.
 
 ## Considered options
 
 ### Option A — Smooth net import and charger power together, per sample
 
 Each cycle's sample is `net_w − charger_w`, the
-[household baseline](../analysis/system-overview.md#ubiquitous-language). Step 6's surplus is the
-negated window mean. A sample taken on a cycle whose command changed is not admitted, at most once
-in a row: ADR-0039's rule, with the one-in-a-row cap R3 gives its own deferral. At a window of 1
-nothing is frozen.
+[household baseline](../analysis/system-overview.md#ubiquitous-language), and step 6's surplus is
+the negated window mean. A sample taken on a cycle whose command changed is deferred: the window
+keeps its earlier samples for that cycle. That is ADR-0039's rule, with the one-in-a-row cap R3
+gives its own deferral. A window of 1 has no earlier samples to keep, so nothing is deferred.
 
 - Pro: each sample's own charger draw cancels, so the window holds no past actuation. It settles in
   simulation at every window above 1, with and without the lag.
 - Pro: it matches the operand that R1, R2, UC01 and UC02's start and stop conditions already
   name, *smoothed solar surplus*.
 - Con: step 6 consumes a smoothed form of `charger_w` for the first time, so a lagging charger
-  reading enters the window too, and a sample taken with one stays for N cycles. The option
-  therefore carries ADR-0039's freeze.
-- Con: the smoothing engine gains the command-changed parameter and a second deferral flag. The
-  window no longer averages simply the last N samples, so R10's wording no longer fits.
+  reading enters the window too; the deferral is what keeps such a sample out.
+- Con: the smoothing engine gains the command-changed parameter and a second deferral flag, and
+  the window no longer averages simply the last N samples, so R10's wording no longer fits.
 
-### Option B — Keep `charger_w` raw; freeze net import's window on a command-changed cycle
+### Option B — Keep `charger_w` raw; defer net import's sample on a command-changed cycle
 
-- Pro: it keeps ADR-0036's raw charger operand and R10's "net grid power is the only reading it
-  smooths".
-- Con: it does not settle, in simulation, at any window above 1. A one-cycle freeze leaves every
-  earlier-current sample in the window, so raw `charger_w` still meets a mean of other currents.
-- Con: its freeze couples the smoothing engine to the command history, as Option A's does.
+- Pro: it keeps the raw charger operand and R10's net-only rule.
+- Con: it does not settle, in simulation, at any window above 1. A one-cycle deferral leaves
+  every earlier-current sample in the window, so raw `charger_w` still meets a mean of other
+  currents.
+- Con: its deferral couples the smoothing engine to the command history, as Option A's does.
 
 ### Option C — Keep the status quo
 
 - Pro: no change anywhere; every record and requirement stays true as written.
 - Con: it fails R10's steady-input criterion at the default window, with and without the lag.
 
+### Option D — Option A without the deferral
+
+- Pro: the engine stays judgeable from its readings alone, with no new parameter or flag, and
+  R10's "most recent N samples" stays true.
+- Con: on every command change, a sample taken with a lagging charger reading enters the window
+  and stays for N cycles: the self-actuation ADR-0039 found for R3, now averaged in. This is
+  argued, not measured.
+
 ## Decision
 
-**Option A.** It is the only option that settles above a window of 1 (Option A's first Pro
-against B's and C's first Cons). It takes nothing from R3 or C4.
+**Option A.** It is the only option measured to settle above a window of 1 (its first Pro
+against B's and C's first Cons). It is chosen over D on D's Con, an argument, not a measurement;
+should D be shown to settle, dropping the deferral is a later decision. A takes nothing from R3
+or C4.
 
-This narrows **one clause**, stated in ADR-0006's step 2 and repeated in ADR-0036's Decision:
-charger power is used raw and is not an operand of solar surplus via the smoothed channel. For
-step 6's solar surplus, charger power now enters smoothed, jointly with net import, sample by
-sample. Every consumer of that one surplus reads it: the `Solar` and `SolarOnly` dispatch,
-`Auto`'s solar-surplus test and the baseline-mode dry-run. Both records keep Status `Accepted`
-and are not edited.
+This narrows **one clause**, in ADR-0006's step 2 and repeated in ADR-0036's Decision: for
+step 6's solar surplus, charger power now enters smoothed, jointly with net import. Every consumer of that surplus reads it: the `Solar` and `SolarOnly` dispatch, `Auto`'s
+solar-surplus test and the baseline-mode dry-run. Both records keep Status `Accepted` and are
+not edited.
 
 Unchanged:
 
 - steps 7 and 8 on raw readings, with ADR-0039's deferral for R3;
 - the raw net-power reading kept in scope for the whole cycle;
-- the displayed `solar_surplus_w`, which stays R3's accepted baseline, negated;
+- the displayed `solar_surplus_w`: R3's accepted baseline, negated and floored at 0;
 - ADR-0036's split: R10 owns which readings have a window, ADR-0006 which form a step reads.
 
-The window's freeze is ADR-0039's rule for its second reading: *what* is withheld is a sample
-taken while the actuator settles. It reuses the coordinator's existing command-changed signal,
-and its one-in-a-row flag, separate from R3's, travels with the window the coordinator already
-threads.
+The window's deferral applies ADR-0039's rule to a second reading, reusing the coordinator's
+command-changed signal; its flag, separate from R3's, travels with the window.
 
 ## Consequences
 
-- Easier: above a window of 1 the solar path meets R10's steady-input criterion, so its tests
-  need not pin a window of 1 to see a set-point hold.
-- Harder: the smoothing engine now reads the command history, so its window can no longer be
-  judged from the readings alone, the price ADR-0039 already paid for R3's baseline.
-- Follow-up, requirements: a `requirement` task rewords R10's What and its window criterion, the
-  glossary, `entity-catalog.md`, UC02's set-point and `control-cycle.md` to say the solar
-  surplus is smoothed from the household baseline and to admit the freeze. Until then the
+- Easier: above a window of 1 the solar path meets R10's steady-input criterion. A window of 1,
+  which already fails R10's one-cycle-spike criterion, is outside what this decision fixes.
+- Harder: the smoothing engine reads the command history, so its window can no longer be judged
+  from the readings alone, as ADR-0039 accepted for R3.
+- **Requirements** follow-up: a `requirement` task rewords R10's What and window criterion, the
+  overview and glossary, `entity-catalog.md`, UC02's set-point and `control-cycle.md`: the
+  solar surplus is smoothed from the household baseline, with the deferral. Until then the
   analysis layer describes Option C.
 - Out of scope: R5's escalated-rate forecast. R5 fits it to a smoothed, undeferred household
-  baseline, on the premise that the window already keeps out the system's own actuation. This
-  record's Context is evidence against that premise for the solar surplus. Which form R5 reads,
-  and whether its premise holds, is left to a separate `requirement` task under R5.
-- Follow-up, code: the development task for R10's steady-input criterion builds Option A in
-  `engines/signal_conditioning.py` and `coordinator.py`. Every early-return path that clears
-  ADR-0039's deferral clears this flag too, or a fault cycle leaves the freeze latched.
-- Follow-up, design: `system-design.md`'s Signal-Conditioning row, its smoothing sequence line and
+  baseline, on the premise that the window already keeps out the system's own actuation; this
+  record's Context is evidence against it for the solar surplus. Which form R5 reads, and
+  whether the premise holds, is left to a separate `requirement` task under R5.
+- **Code** follow-up: the development task for R10's steady-input criterion builds Option A. Every
+  early return that clears ADR-0039's deferral clears the window's flag too, or a fault cycle
+  leaves it latched.
+- **Design** follow-up: `system-design.md`'s Signal-Conditioning row, its smoothing sequence line and
   its ADR table gain this record.
-- ADR-0039's caveat carries over: the one-cycle freeze assumes the charger settles within a
+- ADR-0039's caveat carries over: a one-cycle deferral assumes the charger settles within a
   cycle. If one does not, it becomes a count, and that is a later decision.
-- `docs/adl/README.md`'s rows for ADR-0006 and ADR-0036 point here. Their Status stays
-  `Accepted`.
+- The ADL rows for ADR-0006 and ADR-0036 point here; their Status stays `Accepted`.
 
 **Blast radius.** Run from the repository root:
 
-`rg -n -i 'smoothed_net_w|smooth_net_power|smoothed channel|raw .?charger_w|from net grid power alone|only reading (it|R10) smooths|smooth(ed)? .?net_w|smooth\w*.{0,40}.charger_w.|.charger_w..{0,40}smooth|smoothed (solar )?surplus|smooth\w* (the )?net (grid )?(power|import)|smoothed net|one reading R10 smooths|net grid power is sampled|smoothed value|smoothed\W{0,4}(undeferred )?(household )?baseline|term smoothed|_net_window|_clear_baseline_deferral' custom_components/ tests/ docs/ .claude/ .github/ CLAUDE.md`
+`rg -n -i 'smoothed_net_w|smooth_net_power|smoothed channel|raw .?charger_w|from net grid power alone|only reading (it|R10) smooths|smooth(ed)? .?net_w|smooth\w*.{0,40}.charger_w.|.charger_w..{0,40}smooth|smoothed (solar )?surplus|smooth\w* (the )?net (grid )?(power|import)|smoothed net|one reading R10 smooths|net grid power is sampled|smoothed value|smoothed_net|smooths .?net_w|smoothed(==|\()|smoothed\W{0,4}(undeferred )?(household )?baseline|term smoothed|_net_window|_clear_baseline_deferral' custom_components/ tests/ docs/ .claude/ .github/ CLAUDE.md`
 
-— 181 hits, 26 of them in this record. It is wide enough because it is keyed on:
+— 188 hits, 29 of them in this record. It is wide enough because it is keyed on:
 - step 6's net-import mean, its function, its window, and the method whose early returns the
-  freeze follows;
+  deferral follows;
 - the raw-charger clause, R10's net-only rule and the glossary term, in code and prose;
 - *smoothed surplus*, the consumers' name for step 6's operand;
 - R5's forecast, the other smoothed household baseline.
@@ -140,53 +139,58 @@ The dot-directories are named, because a root sweep skips them.
 |---|---|---|
 | `custom_components/smart_charging/coordinator.py:85` | Imports the net-only smoother | Import the joint one |
 | `custom_components/smart_charging/coordinator.py:214` | Holds the net-only window | Hold the joint window and its flag |
+| `custom_components/smart_charging/coordinator.py:222` | Comment names R10's window `_net_window` | Rename with it |
 | `custom_components/smart_charging/coordinator.py:344` | Clears R3's deferral on an early return | Clear the window's flag too |
 | `custom_components/smart_charging/coordinator.py:522` | Same | Same |
-| `custom_components/smart_charging/coordinator.py:637` | Smooths `net_w` alone for step 6 | Smooth `net_w − charger_w`, with the freeze |
+| `custom_components/smart_charging/coordinator.py:637` | Smooths `net_w` alone for step 6 | Smooth `net_w − charger_w`, with the deferral |
 | `custom_components/smart_charging/coordinator.py:638` | Threads the net-only window | Thread the joint one |
 | `custom_components/smart_charging/coordinator.py:640` | `surplus_w = charger_w − smoothed_net_w` | The negated window mean |
 | `custom_components/smart_charging/coordinator.py:643` | Comment: the net window dampens a stale `charger_w` | Drop it |
 | `custom_components/smart_charging/coordinator.py:1735` | `_clear_baseline_deferral` clears R3's flag only | Or clear the window's flag here |
 | `custom_components/smart_charging/coordinator_cycle.py:62` | Comment names `smoothed_net_w` | Rename with it |
 | `custom_components/smart_charging/engines/signal_conditioning.py:3` | Docstring: R10 smooths `net_w` only | Name the joint window |
+| `custom_components/smart_charging/engines/signal_conditioning.py:4` | Same docstring | Same |
+| `tests/test_coordinator.py:1041` | Comment: a net-only window | Recompute for the joint one |
+| `tests/test_coordinator.py:1043` | Same | Same |
 | `tests/test_coordinator.py:3978` | Spies the net-only smoother as step 2's call | Spy the joint one |
 | `tests/test_coordinator.py:3995` | Asserts it in the call order | Same |
 | `tests/test_solar_end_to_end.py:113` | Pins a window of 1: the net-only mean blends in stale readings | The pin may go |
-| `docs/analysis/requirements.md:176` | R10: net grid power is the only reading smoothed | The requirements follow-up |
-| `docs/analysis/requirements.md:180` | R10's window criterion: net grid power is averaged | The requirements follow-up |
-| `docs/analysis/system-overview.md:59` | Overview: the loop smooths net grid power | The requirements follow-up |
-| `docs/analysis/system-overview.md:127` | `coordinator`: the same | The requirements follow-up |
-| `docs/analysis/system-overview.md:129` | `control cycle`: the same | The requirements follow-up |
-| `docs/analysis/system-overview.md:163` | `smoothed value`: a mean of `net_w` only | The requirements follow-up |
-| `docs/analysis/entity-catalog.md:127` | `net_power`: the one reading R10 smooths | The requirements follow-up |
-| `docs/analysis/entity-catalog.md:130` | The solar set-point converges the smoothed net value | The requirements follow-up |
-| `docs/analysis/control-cycle.md:17` | Purpose: smooth the net grid power reading | The requirements follow-up |
-| `docs/analysis/control-cycle.md:74` | Step 2 node: smooth `net_w` | The requirements follow-up |
-| `docs/analysis/control-cycle.md:79` | Step 6 node: smoothed `net_w`, raw `charger_w` | The requirements follow-up |
-| `docs/analysis/control-cycle.md:106` | Step 2: raw `net_w` enters the window | The requirements follow-up |
-| `docs/analysis/control-cycle.md:149` | Step 6 passes smoothed `net_w` | The requirements follow-up |
-| `docs/analysis/use-cases/UC02-charge-from-solar-only.md:94` | Set-point keeps smoothed net grid import ≤ 0 W | The requirements follow-up |
-| `docs/analysis/use-cases/UC02-charge-from-solar-only.md:142` | Charging row: the same | The requirements follow-up |
-| `docs/analysis/use-cases/UC02-charge-from-solar-only.md:181` | Diagram: the same | The requirements follow-up |
-| `docs/design/system-design.md:165` | Signal-Conditioning row: smoothed `net_w` | The design follow-up |
-| `docs/design/system-design.md:442` | Sequence: smooth `net_w` | The design follow-up |
-| `docs/design/system-design.md:443` | Sequence: returns smoothed `net_w` | The design follow-up |
+| `docs/analysis/requirements.md:176` | R10: net grid power is the only reading smoothed | Requirements |
+| `docs/analysis/requirements.md:180` | R10's window criterion: net grid power is averaged | Requirements |
+| `docs/analysis/system-overview.md:59` | Overview: the loop smooths net grid power | Requirements |
+| `docs/analysis/system-overview.md:127` | `coordinator`: the same | Requirements |
+| `docs/analysis/system-overview.md:129` | `control cycle`: the same | Requirements |
+| `docs/analysis/system-overview.md:163` | `smoothed value`: a mean of `net_w` only | Requirements |
+| `docs/analysis/entity-catalog.md:127` | `net_power`: the one reading R10 smooths | Requirements |
+| `docs/analysis/entity-catalog.md:130` | The solar set-point converges the smoothed net value | Requirements |
+| `docs/analysis/control-cycle.md:17` | Purpose: smooth the net grid power reading | Requirements |
+| `docs/analysis/control-cycle.md:74` | Step 2 node: smooth `net_w` | Requirements |
+| `docs/analysis/control-cycle.md:79` | Step 6 node: smoothed `net_w`, raw `charger_w` | Requirements |
+| `docs/analysis/control-cycle.md:106` | Step 2: raw `net_w` enters the window | Requirements |
+| `docs/analysis/control-cycle.md:149` | Step 6 passes smoothed `net_w` | Requirements |
+| `docs/analysis/use-cases/UC02-charge-from-solar-only.md:94` | Set-point keeps smoothed net grid import ≤ 0 W | Requirements |
+| `docs/analysis/use-cases/UC02-charge-from-solar-only.md:142` | Charging row: the same | Requirements |
+| `docs/analysis/use-cases/UC02-charge-from-solar-only.md:181` | Diagram: the same | Requirements |
+| `docs/design/system-design.md:165` | Signal-Conditioning row: smoothed `net_w` | Design |
+| `docs/design/system-design.md:442` | Sequence: smooth `net_w` | Design |
+| `docs/design/system-design.md:443` | Sequence: returns smoothed `net_w` | Design |
+| `docs/design/system-design.md:867` | ADR table: §3 and §5.1 smooth `net_w` only | Design |
 
-52 other hits conform:
+51 other hits conform:
 - `signal_conditioning.py:16` and seven in its tests: the primitive stays, reused.
 - The 34 in `requirements.md` (six), `system-overview.md:173`, `resolution-rules.md:454`, UC01
   (12), UC02 (13) and `.github/create-uc-issues.sh:42` already name *smoothed surplus*.
 - Eight that hold under either form: `requirements.md:50` (R3 reads raw) and `:505`,
   `entity-catalog.md:112` and `:113`, `control-cycle.md:108` and `:110`,
-  `coordinator_cycle.py:79` and `coordinator.py:222`.
-- `system-design.md:867` and the ADL's ADR-0036 row, both still true.
+  `coordinator_cycle.py:79` and `test_coordinator.py:1024` (the display still reads raw).
+- The ADL's ADR-0036 row, still true.
 
 Out of scope:
 - Seven in `coordinator_cycle.py`, `peak_demand_tracker.py` and their tests keep R21's window.
 - The 12 on R5's forecast, three each in `requirements.md` (:90–92), `system-overview.md`,
   `system-design.md` and `project-plan.md`, keep it undeferred until the R5 task settles it.
-- The 15 in ADR-0006, ADR-0036 and ADR-0039 are immutable. `0006…:91` and `0036…:193` are the
-  clause this record narrows.
+- The 15 in ADR-0006, ADR-0036 and ADR-0039 are immutable; ADR-0006's step 2 line 91 and
+  ADR-0036's line 193 are the clause this record narrows.
 - The 17 in `docs/plans/`, the 18 in `docs/archive/` and `project-plan.md:407` record what was
   planned or built at their date.
-- The 26 in this record itself.
+- This record's own 29, which cite the sites above.
