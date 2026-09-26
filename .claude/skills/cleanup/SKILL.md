@@ -60,8 +60,7 @@ it.
 
    If it still refuses — uncommitted changes, untracked files, a locked worktree — report
    exactly what blocks it and leave it in place. Never force the removal: whatever is in there
-   was not pushed. Whether it matters is the human partner's decision, asked through
-   `clarify`; until they answer, the worktree stays.
+   was not pushed. Whether it matters, and removing it, are the human partner's.
 4. **Move the linked issue's board Status to Done** — the field move only, per **Tracker
    mechanics**. Which issue that is, what merging has already done to it, and why a PR that
    carried only `Part of #N` leaves its issue's Status alone, are the **Contribution
