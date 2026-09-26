@@ -5,7 +5,7 @@ description: Use when creating any GitHub issue in this repo — sets the correc
 
 # File a task issue
 
-Filing an issue correctly the first time avoids a wasted `needs-draft` cycle later. This skill
+Filing an issue correctly the first time avoids a wasted implement step later. This skill
 is the checklist to run through before running `gh issue create`, not a replacement for
 deciding *what* the issue is about.
 
@@ -34,8 +34,8 @@ half-scoped.
    are board fields, not labels: setting them is its own step after the issue is on the board,
    per **Tracker mechanics** above.
 3. **File it** — setting whichever of step 4's edges are already known as flags on the create
-   call rather than as a second pass — then move on; the drafter/review cycle is a separate,
-   later step.
+   call rather than as a second pass — then move on; implementing it is a separate, later
+   step.
 4. **If the issue belongs to an epic** — one being decomposed now, or an already-open one a
    later finding fits — attach it as a **native sub-issue** of that epic, and add a
    **blocked-by edge** to each already-filed issue it cannot start before, rather than leaving
@@ -67,9 +67,7 @@ lines and edges, and no task in that body is left without one.
 
 The conventions are `CLAUDE.md`'s **Issue conventions**, not this list — except the `Source:`
 lines, whose owner is item 2 above; the ones this skill's users trip on most are the context
-label, those lines, Size and Estimate, and epic edges.
-What a drafter run does when one of them is wrong is the CI side of `CLAUDE.md`'s
-**Contribution workflow**. The mistakes that are this skill's own:
+label, those lines, Size and Estimate, and epic edges. The mistakes that are this skill's own:
 
 - Forcing a context label onto work that is still fuzzy instead of filing it as an `idea`
   (item 1).

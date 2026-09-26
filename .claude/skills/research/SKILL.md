@@ -1,6 +1,6 @@
 ---
 name: research
-description: Use when a decision in this project is blocked on an external fact — "look it up", "research whether…", what a framework does in some case, how a dependency behaves, what a third-party or device API returns. Investigates high-trust primary sources and records the finding as a comment on the issue that needed it. Not for exploring this repo's own code, docs or history — plain search and the built-in explore subagent do that — and never self-invoke it in a CI run, which grants neither web access nor `gh issue comment`.
+description: Use when a decision in this project is blocked on an external fact — "look it up", "research whether…", what a framework does in some case, how a dependency behaves, what a third-party or device API returns. Investigates high-trust primary sources and records the finding as a comment on the issue that needed it. Not for exploring this repo's own code, docs or history — plain search and the built-in explore subagent do that — and never self-invoke it in a non-interactive run, which may grant neither web access nor `gh issue comment`.
 ---
 
 # Research
@@ -14,9 +14,9 @@ Deliberately narrow: one question, sources actually read, and an explicit list o
 not be confirmed. Not a survey, not a recommendation, not a design.
 
 This skill needs web access and `gh issue comment` — **never self-invoke it inside a
-non-interactive automation run**, which grants neither and where it would only burn turns on
-denied tools. A drafter that hits a question it cannot answer records it as an open question
-in the artifact it is drafting and moves on.
+non-interactive run** that grants neither, where it would only burn turns on denied tools. A
+run that hits a question it cannot answer there records it as an open question in the
+artifact it is writing and moves on.
 
 ## Sources
 

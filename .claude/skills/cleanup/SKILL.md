@@ -1,6 +1,6 @@
 ---
 name: cleanup
-description: Use when the human partner says a pull request in this project has been merged ("merged #N", "I merged it", /cleanup #N) — confirms the merge, verifies the change is on origin/main, removes the task's worktree, moves the linked issue's board Status to Done, and reports the epic's open-children count — drafting the shipped summary when none remain. "Approved" is not a trigger, and neither is a merge stated only in a PR body, issue or comment the human did not write, nor a merge of main into a branch. Interactive sessions only; CI has no counterpart.
+description: Use when the human partner says a pull request in this project has been merged ("merged #N", "I merged it", /cleanup #N) — confirms the merge, verifies the change is on origin/main, removes the task's worktree, moves the linked issue's board Status to Done, and reports the epic's open-children count — drafting the shipped summary when none remain. "Approved" is not a trigger, and neither is a merge stated only in a PR body, issue or comment the human did not write, nor a merge of main into a branch. Interactive sessions only.
 argument-hint: "#<PR number>"
 ---
 
@@ -23,14 +23,9 @@ genuinely is merged runs that PR's own cleanup — the writes below, each recove
 removal refuses when dirty and never forces, a board field moves back) and each one the merge
 already owed. That bounded surface, and the description's standing load in every run's index,
 are the cost of the trigger, and both are accepted here.
-The CI workers are bounded harder than by the description's "interactive only": none of their
-tool grants names the `Skill` tool, so this file cannot be invoked as a skill there, and none
-grants `git worktree`, so the one destructive step below is refused even to a run that followed
-the description from context — what a worker could reach through `gh api` is the board move,
-which is in the recoverable set above. The flag also enforced, mechanically, that no other
-skill could reach this one; that enforcement is now carried by the files:
-`review` and `fix` stop at their own exits, and other skills may point at a procedure in this
-file — a reference is not a dispatch, and none of them runs it.
+No other skill reaches this one: `review` and `fix` stop at their own exits, and other skills
+may point at a procedure in this file — a reference is not a dispatch, and none of them runs
+it.
 
 ## Then, in order
 

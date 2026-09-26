@@ -295,7 +295,7 @@ itself rewritten. CI worker prompts (`.github/workflows/_ai-*.yml`) are outside 
 the same reason the paragraph above puts them outside the project one.
 
 **The carve-out: the commands an artifact exists to issue.** `submit-pr-review` and
-`address-review-remarks` do not reach the review API on the way to somewhere else; they exist
+`fix` do not reach the review API on the way to somewhere else; they exist
 *to drive* it, and it is what they are about. Genericising those
 calls is not a trade of one line for a pointer — take the endpoints, the payload shape and the
 thread semantics (which threads may be resolved, and when) out and nothing is left to state,
@@ -476,7 +476,7 @@ committable, and the PR is where the finding is caught instead. Its fixtures,
       `CLAUDE.md`](#tracker-dependent-mechanics-route-through-claudemd).
 - [ ] The checklist is self-contained for its artifact type, so a review needs to load only
       *this* agent def plus the payload skill — not several agent defs.
-- [ ] Shared review mechanics (payload shape, anchoring, verdict marker) are referenced from
+- [ ] Shared review mechanics (payload shape, anchoring, round marker) are referenced from
       `submit-pr-review`, not copied.
 - [ ] Tool grants are the minimum the checklist actually uses (a read-only reviewer needs no
       write/edit tools).
