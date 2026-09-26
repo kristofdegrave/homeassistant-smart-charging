@@ -108,8 +108,7 @@ exactly one of these, from the pass's own result and the count above:
   open Critical and Major findings by thread, what each round tried, where author and
   reviewer disagree, and the human's two decisions — merge as is, or grant another round.
   Its last line is the escalation marker `<!-- local-review-escalated -->`, which the count
-  above reads as a reset event. Then ask the two decisions through `grilling`; its
-  recommended answer is never taken as the reply, so with no reply the session stops here.
+  above reads as a reset event. Then ask the two decisions through `clarify`.
   Report: cap reached. A grant is an instruction from the human, never inferred from a
   thread.
 - **Critical or Major open, passes left**: no label. Report the findings by severity and the

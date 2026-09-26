@@ -7,13 +7,10 @@ steps rest on follow the chain. The artifact-specific additions for analysis doc
 (ADRs)** topics) layer their own template/quality-check steps on top of this; they never
 replace it.
 
-Two related references cover the phases just outside this lifecycle: the stages either side of
-it ([idea-to-product.md](idea-to-product.md) — the default flow from a captured idea, through
-the artifact chain, to a slice verified on the real installation) and the **Definition of
-Done** an author checks inside step 1, before the PR
-([definition-of-done.md](definition-of-done.md), also covering commit message conventions) —
-the project-wide floor, distinct from a row's per-type *completion bar*, which that document
-routes to.
+Beside this lifecycle: the stages either side of it are
+[idea-to-product.md](idea-to-product.md)'s, and the **Definition of Done** an author checks before
+the PR is [definition-of-done.md](definition-of-done.md)'s — the project-wide floor, with commit
+message conventions and the route to a row's per-type *completion bar*.
 
 ## The chain
 
@@ -84,6 +81,11 @@ exception: `cleanup` is triggered by the human stating that the merge happened, 
 session does not watch for the merge — no step dispatches it, and the skill itself guards
 against a statement that turns out to be premature.
 
+## Rule C — decisions go through `clarify`
+
+In an interactive session, a decision put to the human partner is asked through `clarify`,
+never as a loose question in a status report.
+
 ## Rounds and the cap
 
 - **The cap exists because the chain runs unattended** (**Rule B**): a finding no fix
@@ -112,9 +114,8 @@ against a statement that turns out to be premature.
   fixing again: the review step, at the end of that pass, puts the exit labels on (**Exit
   labels** below) and posts one escalation comment handing the disagreement to the human,
   who has **two decisions**: merge as is, accepting the open findings, or **grant another
-  round** — a fresh count, since the escalation comment is itself the reset event. In-session
-  they are asked through `grilling`. A grant is an instruction given to the session, never
-  inferred from a thread or a default answer.
+  round** — a fresh count, since the escalation comment is itself the reset event. A grant
+  is an instruction given to the session, never inferred from a thread or a default answer.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
