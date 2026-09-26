@@ -35,8 +35,8 @@ procedure:
   operation you are in before trusting either — taking the wrong side here is exactly the silent
   revert this skill exists to prevent. Discarding the whole working tree is denied, as are
   force-push and forced branch deletion — no resolution needs any of them, and if yours seems to,
-  you are rewriting published history: stop and put that to the human partner through
-  `clarify`.
+  you are rewriting published history: stop and put whether to rewrite it to the human partner
+  through `clarify`.
 
 `--abort` is not blocked by the guard. It is blocked by this skill, absent the human partner's
 say-so.
