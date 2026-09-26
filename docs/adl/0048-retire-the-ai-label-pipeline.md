@@ -7,9 +7,9 @@ Status: Accepted
 
 In the context of a CI pipeline that drafts, reviews and fixes pull requests on three labels and
 is not used, facing the rules, copies and review surface it adds to every process change, we
-decided to retire it, keeping an abstract description of the CI lifecycle, to keep the method's
-cost in line with what is actually run, accepting that adopting CI again means rebuilding it from that
-description rather than applying a label.
+decided to retire it, keeping an abstract description of the CI lifecycle, to keep the
+method's cost in line with what is actually run, accepting that adopting CI again means
+rebuilding it from that description rather than applying a label.
 
 ## Context
 
@@ -68,7 +68,7 @@ label, workflow or tool grant.
 - Con: adopting CI again means rebuilding it from that description and from history, not
   applying a label. ADR-0041's trust boundary and ADR-0020's scan go with it, so a future
   pipeline has to decide its own.
-- Con: a one-time migration across some fifty files, which has to be ordered so that no live
+- Con: a one-time migration across nearly sixty files, which has to be ordered so that no live
   pointer names a file that has already been deleted.
 
 ### Option D — Retire it with no description at all
@@ -120,7 +120,7 @@ nothing drafts, reviews or fixes unattended, so every step needs a session.
 rg -n -i --hidden --glob '!.git/' \
   --glob '!docs/adl/**' --glob '!docs/postmortems/**' --glob '!docs/archive/**' \
   --glob '!docs/plans/**' --glob '!CHANGELOG.md' --glob '!.github/test-check-authoring-rules.sh' \
-  -e '_ai-(draft|review|fix)' -e 'ai-pipeline' -e 'ai-review-verdict' -e 'needs-(draft|review|work)' \
+  -e '_ai-(draft|review|fix)' -e 'ai-pipeline' -e 'ai-review-verdict' -e 'needs-(draft|review|work|\*)' \
   -e 'drafter' -e '(CI|review|fix) worker' -e 'CI mode' -e 'self-appl' -e 'address-review-remarks' \
   -e 'path_map|check-path-map' -e 'create-uc-issues' -e 'ai-cost-summary|anthropic-smoke-test' \
   -e 'WORKFLOW_PAT|ANTHROPIC_API_KEY' .
@@ -130,30 +130,34 @@ rg -n -i --hidden --glob '!.git/' \
 rg -n -i --hidden --glob '!.git/' \
   --glob '!docs/adl/**' --glob '!docs/postmortems/**' --glob '!docs/archive/**' \
   --glob '!docs/plans/**' --glob '!CHANGELOG.md' --glob '!.github/test-check-authoring-rules.sh' \
-  -e 'github-actions\[bot\]|claude-code-action|documentation pipeline|CI-drafted|CI lifecycle|CI pipeline' .
+  -e 'github-actions\[bot\]|claude-code-action|documentation pipeline|CI-drafted|CI lifecycle|CI pipeline' \
+  -e 'AI review|review pipeline|SkillSpector|ADR-00(20|41)\b|\| 00(20|41) \|' .
 ```
 
 Wide enough because the first keys on every name the pipeline's parts have — its workflows,
 actions, labels, marker, roles, secrets, fix-entry skill and the rules that exist only for it —
-and the second on how prose names the pipeline as a whole: its bot account, the action it runs
-and the phrases the documents use for it. `--hidden` is load-bearing, since most sites sit under
-`.claude/` and `.github/`, which `rg` otherwise skips. On `origin/main` the first returns **396**
-hits in 49 files and the second **33**, 22 of them in files the first already hits.
+and the second on how prose names the pipeline as a whole — its bot account, the action it
+runs, the phrases the documents use for it — and on the two records this one deprecates, since
+a citation of either describes a decision that no longer holds. `--hidden` is load-bearing,
+since most sites sit under `.claude/` and `.github/`, which `rg` otherwise skips. On
+`origin/main` the first returns **398** hits in 50 files and the second **64**, 53 of them in
+files the first already hits.
 
 | Sites | Today | Follow-up |
 |---|---|---|
-| **The pipeline's own files** (7): `.github/workflows/ai-pipeline.yml`, `_ai-draft.yml`, `_ai-review.yml`, `_ai-fix.yml`; `.github/actions/ai-cost-summary/`, `.github/actions/anthropic-smoke-test/`; `.github/create-uc-issues.sh` — 146 + 14 hits | Route the three labels to the drafting, review and fix jobs, and run them | Removed with the pipeline's workflows |
-| **The path-map check** (3): `.github/check-path-map.py`, `check-path-map.sh`, `test-check-path-map.sh` — 61 + 1 | Hold the path map's four copies in step | Removed with the path map |
+| **The pipeline's own files** (7): `.github/workflows/ai-pipeline.yml`, `_ai-draft.yml`, `_ai-review.yml`, `_ai-fix.yml`; `.github/actions/ai-cost-summary/`, `.github/actions/anthropic-smoke-test/`; `.github/create-uc-issues.sh` — 146 + 35 hits | Route the three labels to the drafting, review and fix jobs, and run them | Removed with the pipeline's workflows |
+| **The path-map check** (3): `.github/check-path-map.py`, `check-path-map.sh`, `test-check-path-map.sh` — 61 + 2 | Hold the path map's four copies in step | Removed with the path map |
 | **Retained checks, hooks and scripts** (7): `.github/workflows/ci.yml`, `.github/hooks/pre-commit`, `.github/check-method.py`, `.github/test-check-method.sh`, `.github/check-word-budget.sh`, `.github/setup-labels.sh`, `.gitignore` — 12 + 2 | Run or cite the path-map check, name the CI worker, describe the labels as the pipeline's, or justify an ignore rule by the action the pipeline runs | Path-map steps and citations removed with the path map; the comments reworded for regular CI |
-| **The CI lifecycle document and a workflow pointing into it** (2): `docs/reference/method/ci-pipeline.md`, `.github/workflows/upstream-drift.yml` — 52 + 4 | Describe the pipeline in full; point at "the CI lifecycle" and keep a `needs-*` invariant | Rewritten as the abstract description plus its three regular-CI sections; the watched-path section removed with the path map; the pointer and invariant reworded |
-| **Skills** (13) under `.claude/skills/`: `address-review-remarks`, `cleanup`, `diagnosing-bugs`, `file-task-issue`, `fix`, `grilling`, `handoff`, `implement`, `research`, `resolve-review-thread`, `review`, `submit-pr-review`, `work-idea` — 33 + 0 | Carry a CI branch, the self-apply rule or CI's fix entry | CI branches removed; `address-review-remarks` folded into `fix` |
-| **Routing and profile** (6): `CLAUDE.md`, `.claude/profile.yml`, `docs/reference/method/model-selection.md`, `docs/reference/work-types/workflow/review.md`, `docs/reference/profile.md`, `.github/CODEOWNERS` — 41 + 3 | State the self-apply rule, the path map's copies, the three labels, the `workflow` row's CI reason and the checklist's CI-worker checks | Rewritten for the local case; the labels and `path_map` removed from the profile; the secrets checks reworded for any workflow that holds secrets |
-| **Other method and work-type documents, and the issue forms** (18): under `docs/reference/method/`, `ai-authoring.md`, `contribution-workflow.md`, `decomposition-checklist.md`, `definition-of-done.md`, `idea-to-product.md`, `tracker-mechanics.md`; under `docs/reference/work-types/`, `README.md`, `adr/implement.md`, `adr/review.md`, `development/review.md`, `development/done.md`, `documentation/review.md`, `testing/review.md`, `uc/done.md`, `uc/review.md`; `.github/ISSUE_TEMPLATE/adr.yml`, `requirement.yml`, `use-case.yml` — 51 + 7 | Carry an "in CI…" branch, the review prompt's self-apply sentence, the bot-PR exception to the Runtime check, or a form's prompt to trigger the drafter | "In CI" branches removed or rewritten for the local case |
+| **The CI lifecycle document and a workflow pointing into it** (2): `docs/reference/method/ci-pipeline.md`, `.github/workflows/upstream-drift.yml` — 53 + 5 | Describe the pipeline in full; point at "the CI lifecycle" and keep a `needs-*` invariant | Rewritten as the abstract description plus its three regular-CI sections; the watched-path section removed with the path map; the pointer and invariant reworded |
+| **Skills** (13) under `.claude/skills/`: `address-review-remarks`, `cleanup`, `diagnosing-bugs`, `file-task-issue`, `fix`, `grilling`, `handoff`, `implement`, `research`, `resolve-review-thread`, `review`, `submit-pr-review`, `work-idea` — 33 + 2 | Carry a CI branch, the self-apply rule or CI's fix entry | CI branches removed; `address-review-remarks` folded into `fix` |
+| **Routing and profile** (6): `CLAUDE.md`, `.claude/profile.yml`, `docs/reference/method/model-selection.md`, `docs/reference/work-types/workflow/review.md`, `docs/reference/profile.md`, `.github/CODEOWNERS` — 42 + 4 | State the self-apply rule, the path map's copies, the three labels, the `workflow` row's CI reason and the checklist's CI-worker checks | Rewritten for the local case; the labels and `path_map` removed from the profile; the secrets checks reworded for any workflow that holds secrets |
+| **Other method and work-type documents, and the issue forms** (18): under `docs/reference/method/`, `ai-authoring.md`, `contribution-workflow.md`, `decomposition-checklist.md`, `definition-of-done.md`, `idea-to-product.md`, `tracker-mechanics.md`; under `docs/reference/work-types/`, `README.md`, `adr/implement.md`, `adr/review.md`, `development/review.md`, `development/done.md`, `documentation/review.md`, `testing/review.md`, `uc/done.md`, `uc/review.md`; `.github/ISSUE_TEMPLATE/adr.yml`, `requirement.yml`, `use-case.yml` — 51 + 9 | Carry an "in CI…" branch, the review prompt's self-apply sentence, the bot-PR exception to the Runtime check, or a form's prompt to trigger the drafter | "In CI" branches removed or rewritten for the local case |
+| **The design document's ADR index** (1): `docs/design/system-design.md` — 0 + 3 | Lists ADR-0020 and ADR-0041 as standing, and counts the records after ADR-0019 without this one | Both rows marked deprecated by this record, and this record given its row |
 
-No hit conforms: 396 + 31 hits are in the rows above.
+No hit conforms: 398 + 62 hits are in the rows above.
 
-Out of scope: `.github/workflows/upstream-drift.yml:112` and `:114`, the second search's last
-two hits, name `github-actions[bot]` for regular CI's own issue lookup and keep doing so. The
+Out of scope: `.github/workflows/upstream-drift.yml:112` and `:114`, two of the second search's
+hits, name `github-actions[bot]` for regular CI's own issue lookup and keep doing so. The
 excluded trees are never edited for this: Accepted ADRs keep their text apart from the
 deprecation Status lines, post-mortems, archived documents, plans and the changelog stay dated
 records, and `test-check-authoring-rules.sh` keeps its synthetic `_ai-*` fixture names, which
