@@ -563,7 +563,7 @@ def resolve_solar_reserve_gate(
     sun_is_down: bool,
     forecast_kwh: float | None,
     forecast_threshold_kwh: float,
-    deadline_tomorrow_resolved: bool,
+    deadline_reserved_day_resolved: bool,
 ) -> bool:
     """R9 solar-reserve-cap gating (ADR-0023) -- a thin wrapper over
     engines/soc_target.py::resolve_solar_reserve_active. A plain function, not a class,
@@ -584,7 +584,7 @@ def resolve_solar_reserve_gate(
         sun_is_down=sun_is_down,
         forecast_kwh=forecast_kwh,
         forecast_threshold_kwh=forecast_threshold_kwh,
-        deadline_tomorrow_resolved=deadline_tomorrow_resolved,
+        deadline_reserved_day_resolved=deadline_reserved_day_resolved,
     )
 
 
