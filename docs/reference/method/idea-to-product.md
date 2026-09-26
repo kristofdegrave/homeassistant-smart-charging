@@ -83,11 +83,11 @@ it means the `idea` issue is the first thing that exists, not the epic.
 
 **Mandatory, whatever form the idea arrived in** — a one-line thought, a filed `idea` issue, a
 bug report that turns out to be a feature. An idea decomposed without the human partner's
-buy-in relocates the ambiguity into the child issues, so no idea skips this stage. Two skills
-own the technique, and the shape of the idea picks between them:
+buy-in relocates the ambiguity into the child issues, so no idea skips this stage. Two skills,
+both entered through `clarify`, own the technique; the idea's shape picks between them:
 
-- **`grilling`** for a branch-heavy idea — one where settling a decision opens further
-  decisions, so the dialogue has to work a design tree in rounds.
+- **`grilling`** for a branch-heavy idea — one where settling a decision
+  opens further decisions, so the dialogue works a design tree.
 - **`brainstorming`** for a narrow one — a single artifact or a single behaviour, where the
   questions are few and the design converges in one pass.
 
@@ -116,7 +116,7 @@ the stage ends, not carried forward as an assumption.
 
 ### Skills
 
-`work-idea`, `grilling`, `brainstorming`, `research`.
+`work-idea`, `clarify`, `grilling`, `brainstorming`, `research`.
 
 ## 3. Route — two tracks
 
