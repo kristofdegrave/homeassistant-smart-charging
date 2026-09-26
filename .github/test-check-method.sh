@@ -305,8 +305,8 @@ case_run "1: an unresolvable pointer in an ADR fails" 1 "[1 anchors, outward] do
   "mkdir -p docs/adl && printf 'Per \`CLAUDE.md\`'\"'\"'s **Nowhere** topic.\n' > docs/adl/0001.md"
 case_run "1: an unresolvable pointer in a reference doc fails" 1 "[1 anchors, outward] docs/reference/wf.md" \
   "printf 'See \`CLAUDE.md\`'\"'\"'s **Nowhere** section.\n' >> docs/reference/wf.md"
-case_run "1: an unresolvable pointer in a CI workflow fails" 1 ".github/workflows/_ai-x.yml" \
-  "mkdir -p .github/workflows && printf 'prompt: CLAUDE.md'\"'\"'s **Nowhere**\n' > .github/workflows/_ai-x.yml"
+case_run "1: an unresolvable pointer in a CI workflow fails" 1 ".github/workflows/x.yml" \
+  "mkdir -p .github/workflows && printf '# See CLAUDE.md'\"'\"'s **Nowhere**\n' > .github/workflows/x.yml"
 case_run "1: renaming a CLAUDE.md heading breaks the skills pointing at it" 1 "**Model selection**" \
   "sed -i 's/^## Model selection$/## Row selection/' CLAUDE.md"
 
@@ -331,8 +331,8 @@ case_run "2: a backticked work-type directory that does not exist fails" 1 "name
   "printf 'Renamed to \`docs/reference/work-types/gamma/\`.\n' >> docs/reference/wf.md"
 case_run "2: a dangling relative link in a skill fails" 1 ".claude/skills/step/SKILL.md:9: link target notes.md does not exist" \
   "printf 'See [the notes](notes.md).\n' >> .claude/skills/step/SKILL.md"
-case_run "2: a dangling backticked path in a CI workflow prompt fails" 1 ".github/workflows/_x.yml:1: names docs/reference/gone.md, which does not exist" \
-  "mkdir -p .github/workflows && printf 'prompt: read \`docs/reference/gone.md\`\n' > .github/workflows/_x.yml"
+case_run "2: a dangling backticked path in a CI workflow fails" 1 ".github/workflows/_x.yml:1: names docs/reference/gone.md, which does not exist" \
+  "mkdir -p .github/workflows && printf '# Read \`docs/reference/gone.md\`\n' > .github/workflows/_x.yml"
 case_run "2: a link fragment no heading in the target carries fails outside CLAUDE.md" 1 "no heading in dod.md has that anchor" \
   "printf 'See [the prefixes](dod.md#nope).\n' >> docs/reference/wf.md"
 case_run "2: a link written repo-rooted from a nested file fails" 1 "link target docs/reference/dod.md does not exist" \

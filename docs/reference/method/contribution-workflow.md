@@ -5,9 +5,7 @@ code. Five steps, each naming the skill an interactive session runs it through; 
 steps rest on follow the chain. The artifact-specific additions for analysis documents and ADRs
 (`CLAUDE.md`'s **Review protocol for analysis documents** and **Architecture Decision Records
 (ADRs)** topics) layer their own template/quality-check steps on top of this; they never
-replace it. How the
-same lifecycle would split into CI jobs is described, abstractly, in
-[ci-pipeline.md](ci-pipeline.md).
+replace it.
 
 Two related references cover the phases just outside this lifecycle: the stages either side of
 it ([idea-to-product.md](idea-to-product.md) — the default flow from a captured idea, through
@@ -88,6 +86,8 @@ against a statement that turns out to be premature.
 
 ## Rounds and the cap
 
+- **The loop has a cap because no one watches it run.** The chain runs unattended (**Rule B**
+  above), so a finding the fix step cannot resolve would otherwise spend rounds without end.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted

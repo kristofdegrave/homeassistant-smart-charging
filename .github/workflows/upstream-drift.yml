@@ -12,7 +12,7 @@ name: Upstream drift
 # they are is this file's own subject, and every step below is written to one of them:
 #
 #   1. It writes nothing to the repository -- no commit, no branch, no edit to a skill.
-#   2. It applies `workflow` and no other label -- least of all one that starts work.
+#   2. It applies `workflow` and no other label -- the report is for a human to triage.
 #   3. One open report at a time, updated in place and only when its content actually changed.
 
 on:
