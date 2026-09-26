@@ -162,7 +162,7 @@ either engine. All three "happen" inside the one cycle the Coordinator already r
 | **Billing-Protection Engine** | V6 · stateful (`PeakBreachTracker`'s R3 breach timer; `BaselineDebouncer`) | Effective peak limit, the peak headroom **under a given limit** as a value (the in-force one for the `sensor.smart_charging_peak_headroom_a` readout, the raised one for R5's escalated maximum permitted rate), and the R3 peak clamp that fits a request to that headroom. Headroom and clamp are distinct operations: only the clamp advances R3's breach timer, which is why the readout and R5's hypothetical both ask for the headroom (§5.1). The clamp does not run at all where the CapTar capability is absent (R18) or `Power`'s R17 opt-out is set |
 | **Peak-Demand Tracker** | V6 · stateful (the running monthly peak and its month marker) | The [monthly peak demand](../analysis/system-overview.md#ubiquitous-language) accumulated from net import, reset monthly (`sensor.smart_charging_monthly_peak_kw`) |
 | **Grid-Safety Engine** | V7 · pure | The C4 grid-supply-ceiling clamp — no opt-out, runs every cycle — and the C4 headroom under it as a value, for callers that need to know what C4 would allow without performing a clamp (§5.1) |
-| **Signal-Conditioning Engine** | V8 · stateful (the R10 smoothing window) | Smoothed `net_w` (R10 — `solar_w` is read raw and never smoothed) and resolved supply voltage (NF4, now R22) |
+| **Signal-Conditioning Engine** | V8 · stateful (the R10 smoothing window, and whether it left the previous cycle's sample out) | Smoothed [solar surplus](../analysis/system-overview.md#ubiquitous-language) (R10, ADR-0049): the mean of per-cycle samples, each pairing raw `net_w` with raw `charger_w`; a cycle's sample is not admitted when the Coordinator reports the charger current just changed, and the mean already admitted stands — R10 states when that applies and its bounds. Negated, the same admitted mean is the smoothed household baseline R5's forecast reads, free of R3's deferrals, until R5 settles whether the admission rule applies to it; should R5 exempt it, this Engine gains a second, unadmitted output. `solar_w` is read raw and never smoothed. Also resolved supply voltage (NF4, now R22) |
 | **Cycle-Invariant Engine** | V9 · pure **today** — R11's cooldown/hold is deferred and its timers live in the Coordinator; stateful once that lands | The final current after R11 cooldown/hold gating and the C1 floor/cap |
 | **Capability-Gate Engine** | V10 · pure | Whether a given mode/behavior is available for the declared capabilities (R18) |
 
@@ -439,8 +439,8 @@ sequenceDiagram
     S-->>C: current values (user- or Manager-written since last cycle, if any)
     C->>A: read raw (net_w, solar_w, charger_w, voltage, status, SOC)
     A-->>C: raw readings (or None → fault path, ADR-0007)
-    C->>SC: smooth net_w (R10) + resolve voltage (NF4)
-    SC-->>C: smoothed net_w + supply voltage
+    C->>SC: smooth solar surplus from net_w and charger_w together, told whether the charger<br/>current just changed (R10, ADR-0049) + resolve voltage (NF4)
+    SC-->>C: smoothed solar surplus (that cycle's sample not admitted if it just changed; negated,<br/>the SMOOTHED baseline R5's headrooms read below) + supply voltage
     C->>A: read the optional sensed EV battery capacity role (R15, NF3)
     A-->>C: sensed capacity, or None when the role is unmapped/unavailable
     Note over C: the Coordinator composes the effective battery capacity — the sensed value when<br/>there is one, else the configured `ev_battery_capacity_kwh` from the Store read above (R15).<br/>It is the Manager's: rule 4 puts both *reads* here, since no Engine performs I/O, and the<br/>composition itself lands here because it carries no policy an Engine could own — an Engine<br/>can be handed two already-read values, as SOC-Target is. Note this is NOT NF4's<br/>voltage shape — that fallback is a tunable policy and lives in the Signal-Conditioning<br/>Engine (V8). Capacity's is a plain two-source read with no policy to own, so nothing here<br/>belongs to V5; the Deadline Engine owns only what the capacity is used for
@@ -828,22 +828,23 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 
 ### 8.3 ADRs written after 0019
 
-This section accounts for every ADR in `docs/adl/` numbered after 0019 — 29 records, ADR-0020
-through ADR-0048 at the time of writing. Each is in exactly one of two tables. The first holds
-the 19 that decide something about the product, reconciled the way
+This section accounts for every ADR in `docs/adl/` numbered after 0019 — 30 records, ADR-0020
+through ADR-0049 at the time of writing. Each is in exactly one of two tables. The first holds
+the 20 that decide something about the product, reconciled the way
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
 this design's boundary, narrow it, or extend it? The second holds the 10 that decide how the
 project works or how it verifies behaviour, which this design has no service for, each with its
 reason.
 
-As in §8.2, no ADR in this range contradicts the decomposition. Three required a change to the
+As in §8.2, no ADR in this range contradicts the decomposition. Four required a change to the
 text above, and each is reflected there rather than left as a divergence: ADR-0024's clear event
 ([§4](#4-static-architecture) rule 5,
 [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing),
 [§5.3](#53-notification-plug-in-reminder-uc10--evening-prompt-uc08)), ADR-0030's adapter role
-([§3](#3-service-catalog)'s Resource Access list) and ADR-0036's smoothed set (§3's
+([§3](#3-service-catalog)'s Resource Access list), ADR-0036's smoothed set (§3's
 Signal-Conditioning row and
-[§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step). The same
+[§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step), and
+ADR-0049's jointly smoothed solar surplus, in the same two places. The same
 Resource Access bullet defers to [C5](../analysis/requirements.md#constraints)'s role table for
 which roles fault when unavailable, which several rows below cite.
 
@@ -864,12 +865,13 @@ which roles fault when unavailable, which several rows below cite.
 | 0033 | The CapTar-gated `captar` step gains a mapping half | **Below this design's altitude; narrows ADR-0027** | Places the `monthly_peak_external` mapping on the config flow's CapTar-gated step, inside the same Client as ADR-0027. A household without the CapTar capability cannot map the role, and needs none: the peak clamp does not run without that capability (R18), so the role would have no consumer (V6). |
 | 0034 | Dedicated diagnostic sensor for the `charger_status` role | **Extends ADR-0021; adds a diagnostic output** | `sensor.smart_charging_charger_status` joins the Coordinator-written diagnostic outputs of [§3](#3-service-catalog), showing R19's canonical charger-status vocabulary. It is fed from the same cached reading as ADR-0021's attributes, so the two surfaces cannot disagree; neither is an adapter. |
 | 0035 | Unmatched `charger_status` raw states default to disconnected | **Narrows the fault signal at one adapter; consistent** | An unmatched raw state now resolves to disconnected inside the `charger_status` adapter's translation rather than to `None`, so it no longer reaches the fault path; an unavailable `charger_status` entity still reads `None` and faults (C5). The adapter still translates without deciding what a status means for charging, as [§4](#4-static-architecture)'s *What each layer must not hold* requires. |
-| 0036 | The control cycle's step 2 smooths net power only | **Narrows ADR-0006 step 2; reflected above** | [§3](#3-service-catalog)'s Signal-Conditioning row and [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step smooth `net_w` only and read `solar_w` raw. Which readings have a smoothing window is R10's from here on; which form a step consumes stays ADR-0006's, and the order of the §5.1 sequence is unchanged. |
+| 0036 | The control cycle's step 2 smooths net power only | **Narrows ADR-0006 step 2; reflected above, as ADR-0049 narrows it** | [§3](#3-service-catalog)'s Signal-Conditioning row and [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step read `solar_w` raw. Which readings have a smoothing window is R10's from here on; which form a step consumes stays ADR-0006's, and the order of the §5.1 sequence is unchanged. Its clause that charger power enters step 6 raw is the one ADR-0049 narrows, and its row below is the reconciliation. |
 | 0038 | Unit contract at the power-read adapter boundary | **A contract at the V1 boundary; consistent** | Power-read adapters convert a recognized unit to the role's documented one, assume it with a warning when no unit is present, and read `None` when a present unit is not a power unit; `monthly_peak_external` also rejects an absent unit. Unit handling is access mechanics inside Resource Access, so every Engine receives a value in its documented unit, and a rejected reading is a required role's fault or an optional role's absence under [C5](../analysis/requirements.md#constraints). |
 | 0039 | The peak clamp discards a baseline reading taken during its own actuation | **Narrows an input to V6; consistent** | The Coordinator tells the Billing-Protection Engine's baseline debounce whether this cycle's reading was taken during its own actuation; the Engine keeps the decision. It gains a parameter, not a dependency, so it stays free of I/O and remains a stateful Engine under [§3](#3-service-catalog)'s signature test. |
 | 0042 | A state-of-charge-unavailable cycle holds the deadline-unreachable clear | **Narrows ADR-0024; consistent** | A cycle that establishes nothing about the deadline — state of charge unavailable while the car stays connected — holds the unreachable edge's prior flag and publishes no `DeadlineUnreachableCleared`; a disconnect still clears it. `Off` and `Power` run such a cycle without faulting ([C5](../analysis/requirements.md#constraints)'s role table). The edge is a unit inside the Coordinator, so no service or event edge changes. |
 | 0046 | The control cycle's composition rules, held by a complexity guard | **Below this design's altitude; supersedes ADR-0023** | Like ADR-0012, it organizes code inside the Charging Coordinator Manager and moves no boundary. It keeps ADR-0006's step order literal in the cycle's body, so the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence — the order — is unchanged, and keeps the R3 and C4 clamps two distinct calls (V6 and V7 stay split). Events fire from the Coordinator method that calls the resolution they report, never from a pure unit, which is this design's Manager-does-the-I/O rule. The complexity guard is a build check, not a service. The account of how the cycle is composed, which the ADR asks of this design, is [§5.1.1](#511-how-the-cycle-is-composed). |
 | 0047 | A user's own enable of a capability-gated entity is recorded in its registry options | **Narrows ADR-0028; consistent** | The enable lives in the entity's own registry row, under this integration's key, and `sync_disabled_by` reads it at setup before ADR-0028's flip — the same setup-time shape, not a runtime Client→Engine call. No service, edge or event is added, and it delivers the 0028 row's rule that a user's own enable or disable is never overridden by a capability change. |
+| 0049 | Step 6's solar surplus is smoothed from net import and charger power together | **Narrows ADR-0006 step 2 and ADR-0036; reflected above** | [§3](#3-service-catalog)'s Signal-Conditioning row and [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step smooth one sample per cycle, raw `net_w` paired with raw `charger_w`, and every charging-rate decision that reads the solar surplus reads that mean — the `Solar` and `SolarOnly` dispatch, `Auto`'s surplus test and the baseline query. A sample from a cycle the charger current just changed is not admitted: the Coordinator passes the command-changed signal it already holds for ADR-0039, and the Engine keeps the decision and the flag, threaded as state. It gains a parameter, not a dependency, so it stays a stateful Engine under [§3](#3-service-catalog)'s signature test. The R3 and C4 clamps and the displayed `solar_surplus_w` still read raw, and R5's escalated rate reads the same admitted mean, negated, as its smoothed household baseline, without R3's deferrals, until R5 settles whether the admission rule applies to that forecast. |
 
 **Out of scope: process and test method.** These decide how the project works or how behaviour is
 verified. None adds, moves or relies on a service boundary, so there is nothing for this design to
