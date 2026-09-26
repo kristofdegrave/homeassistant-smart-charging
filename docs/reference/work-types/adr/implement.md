@@ -12,17 +12,16 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 ## Before the branch exists
 
 - **Number: one above the highest held.** Several ADRs may be in flight at once, and an open
-  `adr/NNNN` branch reserves its number. Re-run the count, never remember it, just before the
-  branch is cut:
+  `adr/NNNN` branch reserves its number. Re-run the count, never remember it:
   1. `git fetch --prune origin`;
   2. take the highest `NNNN` in `git ls-tree --name-only origin/main docs/adl/` and
      `git branch -r --list 'origin/adr/[0-9][0-9][0-9][0-9]'`;
   3. add one;
   4. reserve it at once, before drafting: create the remote branch at `origin/main` with
      `gh api repos/$REPO/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`, then
-     fetch it, read back that `origin/adr/NNNN` is that sha, and cut the worktree from it.
-     HTTP 422 means another session took the number: re-count. Any other failure: stop and
-     report. A plain push reserves nothing: it comes after the draft.
+     fetch and read back that `origin/adr/NNNN` is that sha. The worktree is cut as the
+     implement step cuts it; the reservation is its ancestor. A 422 `Reference already
+     exists` means the number was taken: re-count. Any other failure: stop and report.
 
   A merged ADR's leftover branch never exceeds `main`'s highest, so it changes nothing. Never
   reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
@@ -73,11 +72,13 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   `needs-approval`*, is the rule's only home.
 - **Merge in number order**, so `main` never holds a number above one still open. An
   `Abandoned` ADR merges like any other, so a higher one waits for it too.
-  - **Who checks, and when:** the review step, at a clean pass's exit. It fetches, lists the
+  - **Who checks, and when:** the review step, at an exit that applies `needs-approval`,
+    the cap's included. It fetches, lists the
     `adr/NNNN` branches as the count does, and looks for a lower number whose record is not
     on `origin/main`.
-  - **One found:** a blocking reason found after the exit, so the PR goes on hold per
-    [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels).
+  - **One found:** the PR goes on hold instead, per
+    [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels);
+    at the cap, its one escalation comment also names the sibling.
   - **How the hold ends:** once the lower ADR merges, the human partner grants a round. Its fix
     merges `origin/main` in, where a conflict on the ADL row is expected, and the next pass
     reads the complete log.

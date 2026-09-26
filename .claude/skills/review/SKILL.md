@@ -85,7 +85,11 @@ their supplier.
 
 Who puts the exit labels on, and when, is the exit-labels rule under `CLAUDE.md`'s
 **Contribution workflow**; this is the review step's part of it. Once the pass is posted, do
-exactly one of these, from the pass's own result and the count above:
+exactly one of these, from the pass's own result and the count above. On a PR adding an ADR,
+first run the merge-order check in the `adr` row's work file (*Merge in number order*): an
+unmerged lower sibling puts the PR on hold instead of a clean or capped exit's labels, per the
+hold rule under `CLAUDE.md`'s **Contribution workflow**; at the cap, the escalation comment
+also names the sibling.
 
 - **Clean pass** (as the routed doc defines it): apply `needs-approval` and remove a stale
   `needs-decision` — two operations, so a failed removal cannot take the add down with it;
@@ -97,10 +101,8 @@ exactly one of these, from the pass's own result and the count above:
   check the diff is this PR's alone; and a related PR's "merged" status is not proof its
   artifact landed — verify with `git ls-tree origin/main <path>` after a fetch, read by output
   as the `cleanup` skill's step 2 does. Board **Status** stays *in review*; the label is a
-  signal for the human's decision, never a self-approval. On a PR adding an ADR, then run the
-  merge-order check in that same work file (*Merge in number order*); a lower-numbered
-  sibling unmerged puts the PR on hold at once, per the hold rule under `CLAUDE.md`'s
-  **Contribution workflow**. Report: clean, `needs-approval` applied, or on hold.
+  signal for the human's decision, never a self-approval. Report: clean, `needs-approval`
+  applied, or on hold.
 - **Critical or Major open, and this was the last pass the cap allows**: apply both exit
   labels, then post one escalation comment, body via a file per **Tracker mechanics**: the
   open Critical and Major findings by thread, what each round tried, where author and
