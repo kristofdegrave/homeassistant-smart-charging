@@ -24,6 +24,7 @@ fixer may not act on is not raised.
   **Major**.
 - Filename `NNNN-kebab-case-title.md`, `NNNN` above `main`'s highest `docs/adl/NNNN-*` with
   every number between held by a remote `adr/NNNN` branch (`implement.md`'s *Number*).
+  Otherwise → **Major**.
 - `docs/adl/README.md` (the ADL) has a row for it whose title and Status match the record.
   Missing or mismatched → **Major**: the row is how the log stays readable.
 
@@ -78,10 +79,10 @@ contradiction with no supersession → **Critical**.
 other ADRs. A term that departs from them → **Minor**.
 
 **(10) Status is `Accepted` before `needs-approval`.** The only home of this convention: **an
-ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it unless
-abandoned (`implement.md`'s *Abandoned, not deleted*). A round that left it otherwise is
-corrected once the pass is clean. Handed over with any other Status → **Major**: the ADL row
-(item 2) would record a decision the log says was never taken.
+ADR carries `Status: Accepted` from its first draft, in its own PR**, and keeps it — or
+`Abandoned` once dropped (`implement.md`'s *Abandoned, not deleted*). A round that left it
+otherwise is corrected once the pass is clean. Handed over with any other Status → **Major**:
+the ADL row (item 2) would record a decision the log says was never taken.
 
 **(11) Links point only at targets that outlive the record.** A merged record's link is touched
 only once it has actually broken, so every link that can break is a future edit to an immutable

@@ -17,7 +17,13 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
   1. `git fetch --prune origin`;
   2. take the highest `NNNN` in `git ls-tree --name-only origin/main docs/adl/` and
      `git branch -r --list 'origin/adr/[0-9][0-9][0-9][0-9]'`;
-  3. add one.
+  3. add one;
+  4. reserve it at once, before drafting: create the remote branch at `origin/main` with
+     `gh api repos/<owner>/<repo>/git/refs -f ref=refs/heads/adr/NNNN -f sha=<origin/main sha>`,
+     then fetch it and cut the worktree from it. The call refuses (HTTP 422) a name that
+     already exists, so a refusal means another session took the number: re-count. A plain
+     push is no reservation: it goes out only after the draft, and it fast-forwards over a
+     same-named branch cut from an older `main`.
 
   A merged ADR's leftover branch never exceeds `main`'s highest, so it changes nothing. Never
   reuse or renumber: a superseded or abandoned ADR keeps its number. The bar's item 2,
@@ -25,8 +31,7 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Branch `adr/<adr-number>`**, zero-padded — not the issue number. The contribution workflow
   lets a work file override the number segment when it states the exception and why; this is
   that statement: the record's own number is its identity, and the branch is what reserves it.
-  A branch of that name already on the remote means the number was taken since the count:
-  re-count rather than clobbering it.
+  Its reservation is step 4 of the count; never clobber a branch of that name.
 
 ## Drafting
 
@@ -68,20 +73,25 @@ How an Architecture Decision Record under `docs/adl/` is written — and nothing
 - **Status `Accepted` from the first draft** — the bar's item 10, *Status is `Accepted` before
   `needs-approval`*, is the rule's only home.
 - **Merge in number order**, so `main` never holds a number above one still open. An
-  `Abandoned` ADR counts as merged. A clean pass still exits on `needs-approval`; a
-  lower-numbered `adr/` PR not yet merged is then a blocking reason found after the exit, and
-  the PR goes on hold per
-  [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels).
+  `Abandoned` ADR merges like any other, so a higher one waits for it too.
+  - **Who checks, and when:** the session that ran the review step, straight after a clean
+    pass's exit. It fetches, lists the `adr/NNNN` branches as the count does, and looks for a
+    lower number whose record is not on `origin/main`.
+  - **One found:** a blocking reason found after the exit, so the PR goes on hold per
+    [contribution-workflow.md's *Exit labels*](../../method/contribution-workflow.md#exit-labels).
+  - **How the hold ends:** once the lower ADR merges, the human partner grants a round. Its fix
+    merges `origin/main` in, where a conflict on the ADL row is expected, and the next pass
+    reads the complete log.
 - **Abandoned, not deleted.** An ADR the human partner drops before it merges keeps its number
   and its full draft: it merges with `Status: Abandoned — <why, in one sentence>`, and its ADL
-  row reads `Abandoned`. Deleted, it would leave a gap in the log, and the count could hand its
+  row reads `Abandoned`, without the reason. Deleted, it would leave a gap in the log, and the count could hand its
   number out again.
 - **Fix a finding by rewriting, not appending.** Revise the passage the finding names so it
   reads as if written right the first time. A clarifying paragraph added beside the flawed one
   is not a fix; it is how a record grows longer every round without getting clearer.
 - **Immutable once merged.** An ADR that exists on the base is edited in exactly three ways,
-  whatever its Status there — `Superseded`, `Deprecated` and `Abandoned` records included — and this list is
-  the rule's only home, for author, fixer and reviewer alike:
+  whatever its Status there — `Superseded`, `Deprecated` and `Abandoned` records included —
+  and this list is the rule's only home, for author, fixer and reviewer alike:
   - its Status line, to record a supersession (`Superseded by ADR-NNNN`) or a deprecation, or
     to correct one merged as anything but `Accepted` or `Abandoned` — the bar's item 10 — to
     `Accepted`;

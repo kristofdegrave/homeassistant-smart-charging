@@ -20,6 +20,10 @@ In `docs/adl/`:
 - every other ADR — contradiction and duplication are judged against the full log, not the
   neighbours.
 
+Also the remote `adr/NNNN` branch listing, which the dispatch supplies since you have no
+shell: the bar's item 2 judges the number against it. None supplied → say the number was not
+checked.
+
 Then [`done.md`](done.md), before you start scoring.
 
 Also read what the ADR cites (`R7`, `UC03`, a design document) when it exists on this branch.
