@@ -85,12 +85,12 @@ carries *what was decided*.
 ## Dispatched from `grilling`
 
 `grilling` treats finding facts as the agent's job and dispatches this skill as a sub-agent when
-a frontier question needs one. How many go out at once, and what the rest of the round does
-meanwhile, are `grilling`'s rules — read them there.
+a frontier question needs one. How many go out at once, and what the dialogue does meanwhile,
+are `grilling`'s rules — read them there.
 
 What this side owes the caller: the sub-agent reports back two things and nothing else, the
 one-line answer and the URL of the comment it posted. The caller quotes the answer into the
-round it unblocks.
+question it unblocks.
 
 ## Common mistakes
 

@@ -86,6 +86,13 @@ exception: `cleanup` is triggered by the human stating that the merge happened, 
 session does not watch for the merge — no step dispatches it, and the skill itself guards
 against a statement that turns out to be premature.
 
+## Rule C — decisions go to the human partner through `grilling`
+
+In an interactive session, every decision the session puts to the human partner is asked through
+the `grilling` skill, never as a loose question inside a status report. That covers merge or
+grant at the cap, an open design choice, and a fact the session cannot look up. A stage of
+[idea-to-product.md](idea-to-product.md) that names `brainstorming` for its dialogue keeps it.
+
 ## Rounds and the cap
 
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is

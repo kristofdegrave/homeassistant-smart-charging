@@ -80,7 +80,7 @@ below.
 context re-read above. **Cognitive load** is what it costs the maintainer to know a document
 exists and when to reach for it. Only the first is minimised here; the second is the price of the
 split, not a cost to drive to zero. `grill-me` spends cognitive load to buy zero context load;
-`grilling` pays a three-sentence description every turn to stay model-reachable.
+`grilling` pays a two-sentence description every turn to stay model-reachable.
 
 **Information hierarchy.** Three rungs, by how immediately a run needs the material: in-file
 step, in-file reference, reference disclosed behind a pointer. **Progressive disclosure** is the
@@ -125,7 +125,7 @@ because the steps still visible ahead pull attention towards being done. *Demand
 bound asks: "every changed path has its checklist applied" forces legwork where "review the PR"
 does not, and it binds flat reference ("every rule applied") as much as a sequence. `grilling`
 shows both — a fuzzy opening bound ("until you reach a shared understanding") rescued by a
-checkable terminal gate (the user confirms) and a high-demand round format. Sharpen the bound
+checkable terminal gate (the user confirms) and a high-demand question format. Sharpen the bound
 first; hiding later steps needs a context boundary (a subagent, a hand-off).
 
 **Negation.** Steering by prohibition drags the forbidden behaviour into context and makes it
