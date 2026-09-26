@@ -59,6 +59,7 @@ from .const import (
     CONF_SOLAR_COOLDOWN_MIN,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    CONF_SOLAR_FORECAST_TODAY_ENTITY,
     CONF_SOLAR_HOLD_MIN,
     CONF_SOLAR_ONLY_HOLD_MIN,
     CONF_SOLAR_ONLY_MIDPOINT,
@@ -665,6 +666,10 @@ SOLAR_MAPPING_SCHEMA = vol.Schema(
         # plain vol.Required on the capability-gated `solar` step -- `_solar_forecast_missing_
         # error` is deleted at T4.
         vol.Required(CONF_SOLAR_FORECAST_ENTITY): _entity("sensor"),
+        # Optional, absent by default -- no migration step (NF12): an existing entry loads
+        # unchanged with this role unmapped. R9's forecast condition reads it from midnight
+        # until the sun comes up, while mapped (#1423).
+        vol.Optional(CONF_SOLAR_FORECAST_TODAY_ENTITY): _entity("sensor"),
     }
 )
 

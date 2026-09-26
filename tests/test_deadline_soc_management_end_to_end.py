@@ -40,6 +40,7 @@ from custom_components.smart_charging.const import (
     CONF_SOLAR_AVAILABLE,
     CONF_SOLAR_FORECAST_ENTITY,
     CONF_SOLAR_FORECAST_THRESHOLD_KWH,
+    CONF_SOLAR_FORECAST_TODAY_ENTITY,
     CONF_SOLAR_RESERVE_SOC,
     CONF_SOLAR_STEP_PP,
     CONF_SOLAR_STEP_THRESHOLD_PP,
@@ -1030,7 +1031,12 @@ async def test_should_hold_the_cap_past_midnight_when_the_flag_was_set_the_eveni
     Saturday keeps the solar-reserve cap engaged across midnight until sun-up, instead of
     lifting at 00:00 -- the shipped bug. Saturday is chosen so the day after the reserved day
     (Sunday) has no compiled day-of-week default, isolating the flag from the deadline
-    precondition (mirrors #1363's diagnosis loop)."""
+    precondition (mirrors #1363's diagnosis loop).
+
+    A same-day forecast is mapped and kept above threshold throughout (#1423): from midnight
+    the reserved day's forecast condition reads that role instead of `solar_forecast`, and an
+    unmapped one would itself lift the cap at midnight (the deliberate fallback, proven
+    separately below) -- mapping it here isolates this test's own subject, the flag."""
     # Arrange: evening before Saturday, every reserve precondition holding for the reserved
     # day (sun down, forecast above threshold, Auto/Off, the flag bound to tomorrow).
     _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
@@ -1038,9 +1044,13 @@ async def test_should_hold_the_cap_past_midnight_when_the_flag_was_set_the_eveni
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    hass.states.async_set("sensor.solar_forecast_today", "20.0")  # ditto, for past midnight
     coordinator = await _setup(
         hass,
-        data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
+        data_overrides={
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+        },
         option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
     )
     await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
@@ -1074,15 +1084,23 @@ async def test_should_hold_the_cap_past_midnight_when_only_mondays_default_would
     evaluated for the reserved day"): a home-day flag set the evening before a Sunday keeps the
     cap engaged past midnight even though Monday (the day after the reserved day) has a
     compiled 06:00 default -- the shipped bug reads that default as if it were resolved for the
-    reserved day itself and lifts the cap on it."""
+    reserved day itself and lifts the cap on it.
+
+    A same-day forecast is mapped and kept above threshold throughout (#1423), for the same
+    reason as this suite's other #1422 regression test: isolating the deadline precondition
+    under test from the separate, unmapped-forecast midnight fallback proven below."""
     # Arrange: evening before Sunday, every reserve precondition holding for the reserved day.
     _freeze_local(freezer, datetime(2026, 1, 17, 23, 0, 0))  # Saturday evening
     _seed_states(hass, status="Charging", ev_soc=50.0)
     hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
     hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    hass.states.async_set("sensor.solar_forecast_today", "20.0")  # ditto, for past midnight
     coordinator = await _setup(
         hass,
-        data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
+        data_overrides={
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+        },
         option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
     )
     await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
@@ -1103,3 +1121,144 @@ async def test_should_hold_the_cap_past_midnight_when_only_mondays_default_would
     # Assert: the cap stays engaged -- Monday's default is not read as "a deadline resolved
     # for the reserved day" and must not lift it.
     assert coordinator.data.active_soc_limit == 55.0
+
+
+# --- #1423: the forecast condition itself, crossing midnight -- until midnight the reserved
+# day's forecast is read from the next-day sensor (solar_forecast); from midnight until the sun
+# comes up, from the optional same-day sensor (solar_forecast_today) while mapped, forcing the
+# forecast condition to not hold (never zero-defaulted) while it is unmapped or its reading is
+# unavailable. Every test below deliberately sets solar_forecast and solar_forecast_today to
+# values on OPPOSITE sides of the threshold, so a value read from the wrong sensor at the wrong
+# time flips the assertion rather than passing it by coincidence.
+
+
+async def test_should_read_the_next_day_forecast_until_midnight_even_when_a_same_day_one_is_mapped(
+    hass, freezer
+):
+    """R9's forecast criterion (#1423): before midnight the reserved day's forecast still comes
+    from `solar_forecast` alone, whatever `solar_forecast_today` reports -- a mapped same-day
+    sensor must not leak into the pre-midnight resolution."""
+    _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "5.0")  # below the 12 kWh default threshold
+    hass.states.async_set("sensor.solar_forecast_today", "20.0")  # above it
+    coordinator = await _setup(
+        hass,
+        data_overrides={
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+        },
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17)
+
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    # solar_forecast (5.0) is what's read before midnight -- insufficient, cap not engaged.
+    assert coordinator.data.active_soc_limit == 80.0  # DEFAULT_SOC_LIMIT
+
+
+async def test_should_switch_to_the_mapped_same_day_forecast_from_midnight(hass, freezer):
+    """R9's forecast criterion (#1423): from midnight until the sun comes up, the reserved
+    day's forecast comes from the mapped `solar_forecast_today` instead -- the inverse of the
+    test above, proving the switch happens in both directions."""
+    _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "5.0")  # below the 12 kWh default threshold
+    hass.states.async_set("sensor.solar_forecast_today", "20.0")  # above it
+    coordinator = await _setup(
+        hass,
+        data_overrides={
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+        },
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17)
+
+    # Arrange (precondition guard): not engaged before midnight (previous test's own assertion).
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 80.0
+
+    # Act: cross midnight into Saturday -- the reserved day is still Saturday (today, now).
+    await _cross_midnight(hass, freezer, datetime(2026, 1, 17, 0, 1, 0))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert: solar_forecast_today (20.0) is now read instead -- sufficient, cap engages.
+    assert coordinator.data.active_soc_limit == 55.0
+
+
+async def test_should_lift_the_cap_at_midnight_when_no_same_day_forecast_is_mapped(hass, freezer):
+    """UC07 2a / R9 (#1423): the deliberate fallback -- with no same-day sensor mapped, the
+    forecast condition stops holding the instant midnight passes, so the cap lifts even though
+    the next-day sensor that engaged it pre-midnight has not itself changed."""
+    _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    coordinator = await _setup(
+        hass,
+        data_overrides={CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast"},
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17)
+
+    # Arrange (precondition guard): engaged before midnight.
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0
+
+    # Act: cross midnight into Saturday.
+    await _cross_midnight(hass, freezer, datetime(2026, 1, 17, 0, 1, 0))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert: the forecast condition no longer holds -- the cap lifts to the default limit.
+    assert coordinator.data.active_soc_limit == 80.0
+
+
+async def test_should_lift_the_cap_at_midnight_when_the_same_day_forecast_reading_is_unavailable(
+    hass, freezer
+):
+    """R9's forecast criterion (#1423): a mapped same-day sensor whose reading is unavailable
+    is treated the same as unmapped -- the forecast condition does not hold, so the cap lifts
+    at midnight, it does not fail open."""
+    _freeze_local(freezer, datetime(2026, 1, 16, 23, 0, 0))  # Friday evening
+    _seed_states(hass, status="Charging", ev_soc=50.0)
+    hass.states.async_set("sun.sun", SUN_STATE_BELOW_HORIZON)
+    hass.states.async_set("sensor.solar_forecast", "20.0")  # above the 12 kWh default threshold
+    hass.states.async_set("sensor.solar_forecast_today", STATE_UNAVAILABLE)
+    coordinator = await _setup(
+        hass,
+        data_overrides={
+            CONF_SOLAR_FORECAST_ENTITY: "sensor.solar_forecast",
+            CONF_SOLAR_FORECAST_TODAY_ENTITY: "sensor.solar_forecast_today",
+        },
+        option_overrides={CONF_SOLAR_RESERVE_SOC: 55.0},
+    )
+    await _select_option(hass, "select.smart_charging_profile", PROFILE_AUTO)
+    await _select_option(hass, "select.smart_charging_mode", MODE_OFF)
+    await _turn_on_home_day(hass)  # binds tomorrow (Saturday 2026-01-17)
+
+    # Arrange (precondition guard): engaged before midnight.
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator.data.active_soc_limit == 55.0
+
+    # Act: cross midnight into Saturday -- solar_forecast_today stays unavailable.
+    await _cross_midnight(hass, freezer, datetime(2026, 1, 17, 0, 1, 0))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert: an unavailable same-day reading lifts the cap exactly like an unmapped role.
+    assert coordinator.data.active_soc_limit == 80.0
