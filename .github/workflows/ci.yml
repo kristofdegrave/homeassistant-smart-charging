@@ -13,8 +13,9 @@ name: CI
 # never running. The `needs.changes.result != 'success'` half is deliberate fail-safe: if the
 # `changes` job itself errors, jobs still run rather than silently reporting green.
 #
-# `perf` is a deliberate exception to that pattern: it isn't a required status check, so it
-# simply reports "skipped" on `pull_request` events instead (its `if:` excludes that event) --
+# `perf` is a deliberate exception to that pattern: it isn't a required status check for the
+# human's merge (a session merge counts every check, and a skipped one passes), so it simply
+# reports "skipped" on `pull_request` events instead (its `if:` excludes that event) --
 # avoids sampling the perf suite on noisy per-PR shared-runner attempts, matching its
 # baseline/trend model of one accepted data point per merge (issue #729). It still runs on
 # `push` (to main) and on a manual `workflow_dispatch` (e.g. to re-seed baseline.json without
@@ -88,8 +89,10 @@ jobs:
           # The check diffs against the PR base, which a shallow clone does not contain.
           fetch-depth: 0
       # Not a required status check, unlike lint/test/hassfest/hacs above: a red `authoring`
-      # surfaces at the manual merge gate rather than blocking, which is the right weight for a
-      # rule whose judgment half lives with the reviewer. Promote it once it has run a while.
+      # surfaces at the manual merge gate rather than blocking the human's merge (a session
+      # merge it blocks already: the merge guard counts every check), which is the right
+      # weight for a rule whose judgment half lives with the reviewer. Promote it once it has
+      # run a while.
       #
       # The check's own tests run first: its only correctness evidence would otherwise rot
       # silently, and they need no dependencies beyond the checkout already made.

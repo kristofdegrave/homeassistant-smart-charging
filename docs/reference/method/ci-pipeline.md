@@ -176,8 +176,9 @@ body, an `owner/repo#n` reference, a full issue URL and a link made in the PR's 
 sidebar all count. It is evaluated as of the last push or edit, though: a sidebar link emits no
 `pull_request` event, so one added after the last event is caught only by the next one.
 
-It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
-in branch protection's required checks on `main`.
+It reports a status on every PR, but only blocks the human's merge once `docs-only-close-guard`
+is listed in branch protection's required checks on `main`; a session merge counts it already,
+as the merge guard counts every check.
 
 ## The upstream-pin drift check
 
