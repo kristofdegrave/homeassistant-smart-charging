@@ -282,6 +282,23 @@ path — plain `-f` turns the read into a write attempt and comes back `422 "bod
 supplied`. And `--paginate` applies `--jq` per page, so the filter must emit a stream
 (`.[].body`) rather than index into one page.
 
+## Reading a work item's comments by author
+
+Who wrote a comment decides whether a run may act on it; which rule admits one is the work
+file's that reads it. The listing is REST, and the association comes with each item:
+
+```sh
+gh api repos/$REPO/issues/<n>/comments \
+  --paginate --jq '.[] | "\(.user.login) \(.author_association) \(.created_at)"'
+```
+
+`author_association` is `OWNER`, `MEMBER` or `COLLABORATOR` for a collaborator and `NONE` or
+`CONTRIBUTOR` for anyone else; it is the platform's answer, not the body's, so a login typed
+into a comment's text spoofs nothing. The read-back rule is the listing's: `--paginate`, a
+streaming filter, and the marker test on each body (*Reading a change request's label events*
+below) — the session posts under the owner's login too, so its own comments pass the author
+test and fail only the marker test.
+
 ## Applying a label
 
 ```sh
@@ -314,6 +331,19 @@ These recipes apply an existing label; they never create or rename one. Which la
 and what they mean is [contribution-workflow.md](contribution-workflow.md)'s **Issue
 conventions**, and the places that vocabulary is baked into are
 [ci-pipeline.md](ci-pipeline.md)'s **Label vocabulary sync**.
+
+## Closing a work item
+
+Only an issue with no pull request is closed by hand — which ones, and by whom, is
+[contribution-workflow.md](contribution-workflow.md)'s **Merge and issue closing**. Post the
+closing comment first (*Commenting* above), then close over REST, which the limiter cannot
+refuse — `gh issue close` is GraphQL and fails silently under it, as *Applying a label* does:
+
+```sh
+gh api -X PATCH repos/$REPO/issues/<n> -f state=closed -f state_reason=completed
+```
+
+Read back with `gh api repos/$REPO/issues/<n> --jq '.state'`, which must print `closed`.
 
 ## Opening a change request
 

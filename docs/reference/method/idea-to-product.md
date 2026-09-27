@@ -160,8 +160,8 @@ stops; which strands those are is the first bullet set below.
 The stage is **entered twice, with the artifact stages in between**, the way the **ADR** stage
 below is: the issues those stages run against have to exist before they start, and the spec has
 to derive from what they merged. The **opening pass** runs straight after **Route**; the
-**closing step** runs once the `decompose` child is unblocked. An issue that surfaces after both still
-belongs here — the opening pass says where it attaches.
+**closing step** runs once the `decompose` child is unblocked. An issue that surfaces after both
+still belongs here — the opening pass says where.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
 
@@ -384,8 +384,8 @@ artifact-specific additions, and this rule is the first of them:
 **A `requirement` or `uc` change that touches shipped behaviour does not get
 `needs-approval` until the epic that will carry its spec exists for it.** The epic, not the
 written body: the opening pass files it at **Decompose**, while the body is written at the
-closing step once **Design** has merged — so requiring the body here would ask for an artifact
-this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
+closing step once the `decompose` child is unblocked — so requiring the body here would ask for
+an artifact this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
 filed long before its plan was drafted. Without it, an
 analysis document can merge describing behaviour the code does not have.
 The review step applies that label on a clean pass and knows nothing about child issues, so

@@ -68,7 +68,7 @@ labels:
   action:
     - name: needs-approval
       color: b60205
-      description: "PR or epic: no automated work pending — a maintainer merges it, or reads the epic and says go"
+      description: "PR or epic: no automated work pending — a maintainer merges it as it stands, or reads and says go"
     - name: needs-decision
       color: e4e669
       description: "PR or issue: findings open, on hold, or a parked question — a maintainer decides how to proceed"
@@ -99,7 +99,7 @@ labels:
       description: "Design-doc change (docs/design/**)"
     - name: decompose
       color: 006b75
-      description: "Epic-body read: draft the spec from the merged documents, run the pass, park the epic"
+      description: "Epic-body read: draft the spec, run the pass, park the epic; on go, file the children"
   # Orthogonal to the context label, never a substitute. GitHub creates both by default with a
   # vaguer description; the script's --force rewrites it to the meaning Issue conventions gives
   # them. Colours are GitHub's own defaults, so re-running never recolours labels already on

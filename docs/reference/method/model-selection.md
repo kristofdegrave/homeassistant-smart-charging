@@ -120,7 +120,7 @@ landed somewhere else. A `documentation` PR editing `docs/design/**` therefore g
 `documentation` checklist for the file and its label's checklist for the subject, and a `development` PR
 that also edits a workflow file gets the `workflow` checklist on that file rather than nothing.
 
-## Two rows that differ from the rest
+## Rows that differ from the rest
 
 ### The `development` and `testing` rows lean on their stack overlays
 
@@ -142,6 +142,19 @@ still automated, and its
 checklist is the one file in its `docs/reference/work-types/workflow/` directory: with no bar
 beside it, that file carries the whole of the criteria rather than only what a bar cannot.
 What a `workflow` author reads instead is in `CLAUDE.md`'s **Authoring AI artifacts** topic.
+
+### The `decompose` row's review is the pass its work file runs
+
+**The `decompose` row's review is the pass its work file runs.** Its artifact is tracker
+content — an epic's body and, later, its children — so the run opens no pull request, and a
+review dispatch has no diff to route and nothing to spawn: the one fresh `reviewer` run the
+work file makes over the body, against the decomposition checklist, is the review, and it
+runs before the human's read because that read is what follows it. The row still names all
+three files, so it reads like every other: the checklist states where the review happens and
+routes to the pass's criteria, and the bar scores what the pass cannot see — that it ran once,
+and what the run left on the tracker. The author applies the bar before parking; a reviewer
+applies it only if a dispatch ever reaches the row, which the checklist tells it was a
+misrouting.
 
 ## The no-label row's path map
 

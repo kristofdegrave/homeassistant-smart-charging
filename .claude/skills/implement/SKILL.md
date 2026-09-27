@@ -31,7 +31,9 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    against a fetched `origin/main`, not a stale checkout, since a work file may derive its
    branch name from something already merged there. The branch-naming rule under `CLAUDE.md`'s
    **Issue conventions** grants one override, the number segment; nothing else about the
-   implement step is the work file's to override.
+   implement step is the work file's to override — except that a row whose work file says
+   the issue produces no branch and no PR (`CLAUDE.md`'s **Model selection** names which)
+   has nothing for items 3 and 5 to act on, so the run ends where that work file ends.
 2. Take the task from the issue itself: its body is the task text, and where the issue is a
    child of an epic, that epic's body is what it was cut from — which artifact that is, and
    which issues are cut from one, are the closing step of the flow `CLAUDE.md`'s
@@ -47,7 +49,9 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    fetched `origin/main`, never a stale local `main`:
    `git fetch origin && git worktree add -b <branch> <path> origin/main`. When deliberately
    stacking on a not-yet-merged prior branch, fetch first and name that branch instead of
-   `origin/main`; the PR still bases `main`, per the doc's **Base `main` and stacking**.
+   `origin/main`; the PR still bases `main`, per the doc's **Base `main` and stacking**. For
+   a work file that makes no branch (item 1), skip the worktree and branch here, the push
+   and PR in item 5, and take only the board move.
 4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
    completion bar, that file is the self-check before item 5 below — the same one the reviewer will
    apply, so it is checked now rather than discovered in review.

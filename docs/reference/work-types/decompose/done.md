@@ -1,9 +1,10 @@
 # Work type: `decompose` — the completion bar
 
 What must be true when a `decompose` run ends — parked, at entry 1, or closed, at entry 2 of
-`implement.md`. The author self-checks against it before stopping. No reviewer applies it:
-the run produces no pull request, and this work type's review is the checklist pass
-`implement.md` runs, as `review.md` states. What that pass scores — the body — is the
+`implement.md`. The author self-checks against it before stopping; the run produces no pull
+request, so a reviewer applies it only when a dispatch ever reaches this row — why the review
+is the checklist pass `implement.md` runs is the `decompose` rule under *Rows that differ from
+the rest*, reached from `CLAUDE.md`'s **Model selection**. What that pass scores — the body — is the
 checklist `CLAUDE.md`'s **Decomposition checklist** topic routes to, and no item of it is
 repeated here. This bar scores what the pass cannot see: that it ran, and what the run left on
 the tracker.
@@ -48,8 +49,9 @@ here: label, board fields, `Source:` lines, edges. A task without one → **Majo
 whose Size differs from the summary's, with no line in the closing comment saying why →
 **Minor**.
 
-**(9) Every human comment newer than the marker was applied**, and the closing comment says
-how. One ignored → **Major**: the human's instruction at the gate was the point of the gate.
+**(9) Every comment newer than the marker that `implement.md`'s entry rule admits was
+applied**, and the closing comment says how; one it does not admit was reported, not applied.
+Either missed → **Major**: the human's instruction at the gate was the point of the gate.
 
 **(10) The `decompose` issue is closed by its closing comment**, which lists the children by
 number, and it is *done*. Open, or closed without the list → **Major**.

@@ -48,8 +48,9 @@ half-scoped.
 
 The closing step's four steps, their order and what the epic body must contain are the flow's,
 per **Idea-to-product flow** above — don't re-derive them here. Drafting the body, running its
-review pass and parking the epic are the `decompose` row's work file, which reaches this
-section for the flow's step 4 once the human has said go. Each child goes through the
+review pass and parking the epic are the work file of the `decompose` row in `CLAUDE.md`'s
+**Model selection**, which reaches this section for the flow's step 4 once the human has said
+go. Each child goes through the
 checklist at the top of this file: its own task text as the body, its `Source:` lines, its
 native sub-issue edge to the epic, and a blocked-by edge to each child it cannot start before.
 
@@ -67,6 +68,6 @@ label, those lines, Size and Estimate, and epic edges. The mistakes that are thi
 - Stopping after the create call — Size/Estimate are a second step (item 2), and an edge not
   passed as a flag is a second step too (item 4); an issue missing them reads as filed and is
   not.
-- Filing a decomposition's children before the pass and the human read the `decompose` work
-  file runs. The pass is there to catch what lives between tasks, and a task already filed is
-  one it can no longer cheaply change.
+- Filing a decomposition's children before the pass and the human read that the `decompose`
+  row of `CLAUDE.md`'s **Model selection** runs. The pass is there to catch what lives between
+  tasks, and a task already filed is one it can no longer cheaply change.
