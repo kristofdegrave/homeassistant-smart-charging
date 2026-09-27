@@ -19,15 +19,14 @@ out of the core work-type files.
 
 ## Repository and git identity
 
-Claude commits, comments, opens PRs and merges as the developer's own GitHub account — one
-account, shared with the human partner, whether the session is interactive or unattended. The
-local `user.name` and `user.email` of this repository, which every worktree of it shares, are
-the human's public commit identity; no global git config is relied on. **Why one account:**
-[ADR-0052](../adl/0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md) has
-merges run as the human, with `--admin`, because a PR's author cannot approve it — so a second
-account would only rubber-stamp the merge rule its guard already states once. Commits were the
-`kristofdegrave-bot` account's last use — its author line is history, on older squash
-merges — and with them authored as the human it is retired. **Why it matters:** a
+Claude commits, comments and opens PRs as the developer's own GitHub account — one account,
+shared with the human partner, whether the session is interactive or unattended. The local
+`user.name` and `user.email` of this repository, which every worktree of it shares, are the
+human's public commit identity; no global git config is relied on. **Why one account:**
+[ADR-0052](../adl/0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md)'s Option
+C2 decides it, and commits were the `kristofdegrave-bot` account's last use: its author line
+stays on older squash merges, and with commits now the human's the account is retired. Whether
+a session merges is **Merge strategy** below. **Why it matters:** a
 human item and the session's own footprint are posted under the same login, so
 [contribution-workflow.md](method/contribution-workflow.md)'s **Rounds and the cap** tells them apart
 by the session's markers, never by author.
