@@ -4867,3 +4867,107 @@ async def test_should_keep_the_hold_when_the_next_occurrence_resolves_to_no_dead
     assert coord._required_current.urgent is True
     assert coord._required_current.unreachable is True
     assert result.effective_peak_limit_kw == 7.0
+
+
+async def test_should_release_the_hold_when_the_day_after_the_pursued_occurrence_has_elapsed(
+    hass, freezer
+):
+    """T7/D-4: the occurrence for the day AFTER the pursued one, once it has itself elapsed,
+    releases a missed-deadline hold well inside R5's 24-hour bound -- the case that fails
+    outright if `resolve_next_occurrence`'s own output were used instead, since that always
+    yields an occurrence strictly after `now` and could never satisfy `<= now` from inside a
+    live hold (requirements.md R14; resolution-rules.md's departure-deadline lookup).
+
+    Set up entirely within the 24-hour bound (13h since the pursued occurrence), so only the
+    new arm can account for the release.
+    """
+    # Arrange -- frozen at local noon (freezer.move_to takes a UTC instant; this harness's
+    # local zone is US/Pacific, UTC-8 in January, so 20:00 UTC is noon local) so the 13h-old
+    # pursued occurrence falls on the day BEFORE "now", making the day after it "today" --
+    # and a departure time for that day already past by noon.
+    freezer.move_to("2026-01-15 20:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    now_dt = dt_util.now()
+    coord._pursued_occurrence = now_dt - timedelta(hours=13)
+    coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(6, 0)  # already past by noon
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- released, not held to the 24-hour bound (no headroom seeded, so the untracked
+    # monthly peak falls back to the floor once the raised, urgency-only 7.0 no longer binds).
+    assert result.fault is False
+    assert coord._pursued_occurrence is None
+    assert coord._required_current.urgent is False
+    assert result.effective_peak_limit_kw == 2.5
+
+
+async def test_should_keep_the_hold_when_the_day_after_the_pursued_occurrence_has_no_deadline(
+    hass, freezer
+):
+    """T7 case 2: an installation whose following day resolves to "no deadline" passes `None`
+    for `following_occurrence`, and the 24-hour arm alone governs the release -- reachable end
+    to end through the coordinator, not only in the pure engine (`test_deadline.py`'s
+    `test_should_release_the_hold_on_the_24_hour_arm_when_no_following_occurrence_resolves`).
+
+    Set up entirely within the 24-hour bound, with no departure default for the day after the
+    pursued occurrence -- every weekday's own default starts at `None` -- so the hold must
+    persist: a crash, or a wrongly-elapsed comparison against `None`, would show up here as an
+    early release.
+    """
+    # Arrange
+    freezer.move_to("2026-01-15 20:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    held = dt_util.now() - timedelta(hours=13)
+    coord._pursued_occurrence = held
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- still held; the following day's own "no deadline" resolution cannot release it.
+    assert result.fault is False
+    assert coord._pursued_occurrence == held
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 7.0
+
+
+async def test_should_release_the_hold_when_the_day_after_has_elapsed_soc_unavailable(
+    hass, freezer
+):
+    """T7/#1468: the non-resolvable early return's own `missed_deadline_backstop_fired` call
+    (`coordinator_cycle.py`'s `if not inputs.deadline_resolvable:` branch) must receive
+    `following_occurrence` too -- R5's Missed-deadline hold criterion states that both arms of
+    the backstop fire on any non-fault cycle, with or without a state-of-charge reading. Set up
+    like `test_should_hold_urgency_inside_the_24_hour_bound_when_state_of_charge_is_unavailable`
+    but with the day-after-pursued's own deadline already elapsed, well inside the 24-hour
+    bound, so only the new arm on THIS call site can account for the release.
+    """
+    # Arrange
+    freezer.move_to("2026-01-15 20:00:00")
+    coord = _soc_unavailable_hold(hass, timedelta(hours=13))
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(6, 0)  # already past by noon
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- released, not held to the 24-hour bound.
+    assert result.fault is False
+    assert coord._pursued_occurrence is None
+    assert coord._required_current.urgent is False
+    assert result.effective_peak_limit_kw == 2.5

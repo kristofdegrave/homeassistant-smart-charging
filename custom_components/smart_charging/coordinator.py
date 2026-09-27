@@ -546,6 +546,32 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         deadline_today = resolve_deadline_for(today_date) if deadline_resolvable else None
         return deadline_today, effective_battery_capacity_kwh
 
+    def _resolve_following_occurrence(
+        self, resolve_deadline_for: Callable[[date], time_of_day | None]
+    ) -> datetime | None:
+        """T7: the occurrence for the day AFTER the pursued one, from the same R14 table
+        `deadline_tomorrow`/`deadline_reserved_day` above already evaluate -- one more call to
+        the same closure, so all three can never drift apart. Feeds R5's backstop
+        (`missed_deadline_backstop_fired`, coordinator_cycle.py) alongside the 24-hour bound.
+
+        None whenever there is no pursued occurrence to hold (nothing to release, so nothing to
+        resolve), and equally None when that day's own R14 resolution is "no deadline" -- both
+        are ordinary values here, not errors.
+
+        Deliberately NOT `resolve_next_occurrence`'s output (D-4): that always yields an
+        occurrence strictly after `now`, whereas this operand is relative to the *pursued*
+        occurrence, which while held has already elapsed -- fed the next-occurrence call's
+        result instead, `following_occurrence <= now` would be unreachable in production."""
+        if self._pursued_occurrence is None:
+            return None
+        following_date = self._pursued_occurrence.date() + timedelta(days=1)
+        following_time = resolve_deadline_for(following_date)
+        if following_time is None:
+            return None
+        return datetime.combine(
+            following_date, following_time, tzinfo=self._pursued_occurrence.tzinfo
+        )
+
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
         now_dt = dt_util.now()
@@ -788,6 +814,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     ctx, peak_operand_kw=peak_operand_kw
                 ),
                 pursued_occurrence=self._pursued_occurrence,
+                following_occurrence=self._resolve_following_occurrence(resolve_deadline_for),
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,

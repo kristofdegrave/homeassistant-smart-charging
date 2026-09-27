@@ -633,6 +633,10 @@ class DeadlineUrgencyInputs:
     # exactly as long as there is one, and it is held rather than re-derived from the slack test
     # each cycle, which would revert it the moment charging closed the gap.
     pursued_occurrence: datetime | None
+    # The R14 table's own resolution for the day AFTER the pursued occurrence, or None (T7).
+    # R5's backstop reads this alongside the 24-hour bound -- the hold releases as soon as
+    # EITHER arm fires, whichever comes first (missed_deadline_backstop_fired, below).
+    following_occurrence: datetime | None
     auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
@@ -703,10 +707,13 @@ def resolve_deadline_urgency(
         # `ctx.status` rather than carried in: the hazard the docstring names is a second copy
         # of the combined predicate, not this one-condition half `ctx` already holds.
         #
-        # R5's backstop still applies: it needs only the clock, so the hold never outlives its
-        # 24-hour bound whether the reading is available or not (requirements.md R5).
+        # R5's backstop still applies: it needs only the clock and the following occurrence
+        # (T7), so the hold never outlives either bound whether the reading is available or
+        # not (requirements.md R5).
         held = inputs.pursued_occurrence if ctx.status in CHARGEABLE_STATES else None
-        if held is not None and missed_deadline_backstop_fired(held, inputs.now_dt):
+        if held is not None and missed_deadline_backstop_fired(
+            held, inputs.now_dt, inputs.following_occurrence
+        ):
             held = None
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(
@@ -765,6 +772,7 @@ def resolve_deadline_urgency(
         # it is now the threshold urgency itself turns on, not just the notification's.
         escalated_maximum_permitted_rate_a=inputs.escalated_maximum_permitted_rate_a,
         pursued_occurrence=inputs.pursued_occurrence,
+        following_occurrence=inputs.following_occurrence,
     )
 
     # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as

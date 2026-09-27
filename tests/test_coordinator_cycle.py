@@ -959,6 +959,7 @@ def _resolve_deadline_urgency(**overrides):
         # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
         escalated_maximum_permitted_rate_a=32.0,
         pursued_occurrence=None,
+        following_occurrence=None,
         # Read by the non-resolvable early return, whose connected half releases the pursued
         # occurrence in the opposite direction to its state-of-charge half -- see the split's
         # own tests below.
@@ -1247,6 +1248,41 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     # Assert
     assert without.urgent is False
     assert threaded.urgent is True
+
+
+def test_should_release_the_hold_when_the_following_occurrence_has_elapsed():
+    """`inputs.following_occurrence` reaches the held branch's backstop check (R5, T7, D-4):
+    forwarded and already elapsed, it releases a hold well inside the 24-hour bound; left at
+    its default `None`, the identical hold persists on the clock alone. Same pursued occurrence
+    and `now_dt` either way, so only the forwarding can account for the difference -- exactly
+    the case that is unreachable if `resolve_next_occurrence`'s output were used instead,
+    since that always yields an occurrence strictly after `now`."""
+    # Arrange -- the pursued occurrence elapsed 5h ago, well short of the 24-hour bound.
+    pursued = datetime(2026, 7, 26, 9, 0)
+    now_dt = datetime(2026, 7, 26, 14, 0)
+    following_elapsed = datetime(2026, 7, 26, 13, 0)  # already past `now_dt`
+
+    # Act
+    kept = _resolve_deadline_urgency(
+        pursued_occurrence=pursued,
+        now_dt=now_dt,
+        ev_soc=70.0,
+        active_soc_limit=80.0,
+        following_occurrence=None,
+    )
+    released = _resolve_deadline_urgency(
+        pursued_occurrence=pursued,
+        now_dt=now_dt,
+        ev_soc=70.0,
+        active_soc_limit=80.0,
+        following_occurrence=following_elapsed,
+    )
+
+    # Assert
+    assert kept.required.pursued_occurrence == pursued
+    assert kept.urgent is True
+    assert released.required.pursued_occurrence is None
+    assert released.urgent is False
 
 
 def test_should_release_the_pursued_occurrence_when_the_car_is_disconnected():
