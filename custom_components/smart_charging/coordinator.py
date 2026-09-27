@@ -551,9 +551,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         self, resolve_deadline_for: Callable[[date], time_of_day | None]
     ) -> datetime | None:
         """T7: the occurrence for the day AFTER the pursued one, from the same R14 table
-        `deadline_tomorrow`/`deadline_reserved_day` above already evaluate -- one more call to
-        the same closure, so all three can never drift apart. Feeds R5's backstop
-        (`missed_deadline_backstop_fired`, coordinator_cycle.py) alongside the 24-hour bound.
+        `today_date`/`deadline_tomorrow`/`deadline_reserved_day` above already evaluate (the
+        comment at `resolve_deadline_for`'s own definition counts this as the fourth call site)
+        -- one more call to the same closure, so none of the four can drift apart from another.
+        Feeds R5's backstop (`missed_deadline_backstop_fired`, coordinator_cycle.py) alongside
+        the 24-hour bound.
 
         None whenever there is no pursued occurrence to hold (nothing to release, so nothing to
         resolve), and equally None when that day's own R14 resolution is "no deadline" -- both
