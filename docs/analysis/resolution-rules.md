@@ -166,8 +166,11 @@ urgency comes to be in effect.
 
 - **Energy needed** = EV battery capacity (R15, sensed or configured) × (active SOC limit −
   current state of charge) ÷ 100.
-- **Time remaining** = the departure deadline above − now. Since that deadline is the *next future
-  occurrence* of the resolved departure time (above), the time remaining is always strictly
+- **Time remaining** = the departure deadline above − now. While an occurrence is
+  [pursued](system-overview.md#ubiquitous-language) and has not yet elapsed, the deadline here is
+  that occurrence instead, which follows its own date's departure time (R5; see *Clearing urgency*
+  below). Since either is still ahead of now — the deadline above being the *next future
+  occurrence* of the resolved departure time — the time remaining is always strictly
   positive: it shrinks as the deadline approaches and, once the deadline passes, jumps to the
   interval to the following occurrence rather than going negative. When the departure deadline has
   resolved to "no deadline" — or the deadline capability is absent, so no deadline is resolved at
@@ -263,7 +266,8 @@ there is a pursued occurrence. It is **released** when any of these holds:
   by state of charge reaching the active SOC limit.
 - state of charge is at or above the active SOC limit (the required current is then zero, so the
   handback holds trivially for any baseline);
-- the car disconnects; the departure deadline resolves to "no deadline" (a later occurrence resolving that way never ends a missed-deadline hold, which is anchored to the occurrence already pursued — see the hold below); or the deadline
+- the car disconnects; the departure deadline resolves to "no deadline" (while the pursued
+  occurrence has not yet elapsed, that is its own date resolving so — see below; a later occurrence resolving that way never ends a missed-deadline hold, which is anchored to the occurrence already pursued — see the hold below); or the deadline
   capability becomes absent (R18);
 - the occurrence **following** the pursued one elapses, or 24 hours pass since the pursued occurrence, whichever comes first — the backstop, so a
   [missed-deadline hold](system-overview.md#ubiquitous-language) never outlives one deadline cycle.
@@ -274,6 +278,17 @@ there is a pursued occurrence. It is **released** when any of these holds:
   neither test runs while the pursued occurrence lies in the past: without it, an `Off` baseline
   that can never hand back would keep the occurrence pursued indefinitely. Note there is no
   separate hold flag to keep in step with this one — see the hold's own section below.
+
+**A pursued occurrence that has not yet elapsed follows its own date's departure time** (R5,
+authoritative). It is the departure of one calendar date, and until it elapses it is what the
+departure-deadline table above resolves for that date on this cycle, not what it resolved when
+urgency engaged. So a change that reaches that date's resolution moves it. The move is neither a
+release nor an engagement: neither test runs because of it, and the required current is judged
+against the moved occurrence from then on. A new time that has already passed leaves the
+occurrence in the past, which is the missed-deadline hold (below). The date resolving to "no
+deadline" is the release above. The occurrence **following** the pursued one is still the one
+for the day after the pursued occurrence's date, and the 24 hours run from the moved
+occurrence, so the backstop moves with it.
 
 **The slack test takes precedence over the handback where both hold on the same cycle**, and they
 genuinely can: a [desired charger current](system-overview.md#ubiquitous-language) is what a mode
@@ -330,7 +345,9 @@ disconnects, when the deadline capability becomes absent (R18), or — as the ba
 release list above — when the *following* occurrence elapses or 24 hours pass since the pursued
 occurrence, whichever comes first, so a hold never outlives one deadline cycle. Nothing else the
 departure-deadline rule resolves ends it: the pursued occurrence *is* the occurrence already missed,
-so it survives a later occurrence resolving to "no deadline" or to a different time. Releasing the
+so it survives a later occurrence resolving to "no deadline" or to a different time. It also
+survives a change to its own date's departure time made after it elapsed, which moves nothing
+(R5). Releasing the
 pursued occurrence ends the hold and urgency together — they were never two things — and from the
 next cycle the required current above governs normally again.
 
