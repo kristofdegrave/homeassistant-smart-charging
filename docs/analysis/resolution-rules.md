@@ -288,7 +288,8 @@ release nor an engagement: neither test runs because of it, and the required cur
 against the moved occurrence from then on. A new time that has already passed leaves the
 occurrence in the past, which is the missed-deadline hold (below). The date resolving to "no
 deadline" is the release above. Whether it has elapsed is judged against the occurrence as it stood
-entering the cycle, so a change read at or after that moment moves nothing. The occurrence **following** the pursued one is still the one
+entering the cycle: once that occurrence is at or before now it is a missed-deadline hold, and no
+change read on that cycle or later moves it. The occurrence **following** the pursued one is still the one
 for the day after the pursued occurrence's date, and the 24 hours run from the moved
 occurrence, so the backstop moves with it.
 
