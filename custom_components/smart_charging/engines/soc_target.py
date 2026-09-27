@@ -55,6 +55,7 @@ def resolve_solar_reserve_active(
     forecast_kwh: float,
     forecast_threshold_kwh: float,
     deadline_reserved_day_resolved: bool,
+    missed_deadline_hold: bool = False,
 ) -> bool:
     """R9/UC07's cap-activation condition -- shared by `resolve_active_soc_limit`'s
     row 1 and Auto mode-selection's row 4 (E2), per resolution-rules.md's note
@@ -65,6 +66,14 @@ def resolve_solar_reserve_active(
     coordination (R8/R9) is not part of Profile's decision at all -- SOC-Target keeps owning
     it, parameterized by a flag Profile has no say in beyond existing, and Auto's row 4 above
     receives this function's result as an input, not as a Profile-owned object.
+
+    `missed_deadline_hold` is R9's sixth precondition (resolution-rules.md's "hold excludes
+    the solar-reserve cap"): a missed-deadline hold takes priority over the cap exactly as a
+    departure deadline resolved for the reserved day already does, so the cap never competes
+    with either (R5/R9). It defaults to False -- read as it stood *entering* the cycle (T9
+    wires the real, threaded-in value through `resolve_solar_reserve_gate`
+    (`coordinator_cycle.py`) and its coordinator call site; until then, every existing caller
+    keeps behaving as if no hold is ever in effect).
     """
     return (
         profile == PROFILE_AUTO
@@ -72,6 +81,7 @@ def resolve_solar_reserve_active(
         and sun_is_down
         and forecast_kwh > forecast_threshold_kwh
         and not deadline_reserved_day_resolved
+        and not missed_deadline_hold
     )
 
 

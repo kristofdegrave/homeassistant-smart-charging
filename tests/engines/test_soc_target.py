@@ -232,3 +232,35 @@ def test_reserve_inactive_while_sun_is_up():
         )
         is False
     )
+
+
+def test_reserve_inactive_when_missed_deadline_hold_in_effect():
+    # R9's sixth precondition (R5): a missed-deadline hold takes priority over the cap even
+    # when the other five conditions all hold.
+    assert (
+        resolve_solar_reserve_active(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_reserved_day_resolved=False,
+            missed_deadline_hold=True,
+        )
+        is False
+    )
+
+
+def test_reserve_active_when_no_missed_deadline_hold_and_five_conditions_met():
+    assert (
+        resolve_solar_reserve_active(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_reserved_day_resolved=False,
+            missed_deadline_hold=False,
+        )
+        is True
+    )
