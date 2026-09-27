@@ -49,7 +49,7 @@ and this line is the copy that shrinks.
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
 `review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
-`requirement`, `development`, `testing`, `documentation` and `workflow` — every label
+`requirement`, `development`, `testing`, `documentation`, `workflow` and `decompose` — every label
 that has a directory, `requirement/review.md` being a pointer to `uc/`'s the way its `done.md`
 is. A label whose directory holds `review.md` and nothing else is migrated, not half-built —
 see the paragraph above. What a generic reviewer holds instead — the output contract, the anchoring rules and how
@@ -80,7 +80,7 @@ the role is split at all — that belongs at the label's own level too, stated i
 files with the others routing to it rather than repeating it. `documentation` states it in its
 `done.md`, the file both the author and the reviewer read.
 
-That distinction is the reason for the nesting, and it is load-bearing rather than cosmetic: one
+That distinction is the reason for the nesting, and it is load-bearing: one
 role can be shared across a label's branches while another is split, and the level a file sits
 at is the whole of how that is expressed. A shared role is simply one file at the label's own
 level with no branch copies beneath it — which is what `review.md` is for `documentation`,

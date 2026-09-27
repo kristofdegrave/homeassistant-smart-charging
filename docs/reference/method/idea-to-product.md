@@ -112,7 +112,7 @@ One entry per settled question, plus a `research` comment per question of fact.
 
 The idea is scoped enough to route and split — not designed in detail; that belongs to each
 child's own stage. A question of fact still open is answered by a `research` comment before
-the stage ends, not carried forward as an assumption.
+the stage ends.
 
 ### Skills
 
@@ -160,7 +160,7 @@ stops; which strands those are is the first bullet set below.
 The stage is **entered twice, with the artifact stages in between**, the way the **ADR** stage
 below is: the issues those stages run against have to exist before they start, and the spec has
 to derive from what they merged. The **opening pass** runs straight after **Route**; the
-**closing step** runs once **Design** has merged. An issue that surfaces after both still
+**closing step** runs once the `decompose` child is unblocked. An issue that surfaces after both still
 belongs here — the opening pass says where it attaches.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
@@ -197,19 +197,20 @@ inventing a scheme ad hoc.
 
 ### The closing step: the epic body is the spec, and its children are the tasks
 
-Once **Design** has merged, the spec for one build slice is written into the epic's body and
-the children are cut from it. Four steps, each finishing before the next starts. This list is
-the order; the mechanics of running each one — the scratch file, the dispatch, the `gh` calls,
-the per-child filing checklist — are `file-task-issue`'s.
+Once the `decompose` child is unblocked, the spec for one build slice is written into the
+epic's body and the children are cut from it. Four steps, each finishing before the next
+starts. This list is the order; steps 1–3 are the `decompose` row's work file's, which runs
+them as one issue, and step 4's per-child filing checklist is `file-task-issue`'s.
 
-1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. Nothing
-   else has to be written first, and no child exists yet to be cut from it.
+1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. No
+   child exists yet to be cut from it.
 2. **One fresh-agent pass over that body**, against the [decomposition
    checklist](decomposition-checklist.md), while the decomposition is still cheap to change.
    Its findings are fixed in the body.
-3. **The human partner reads the fixed body** and says to go on. The pass is one agent run
-   followed by that read — not repeated, and carrying no round cap, so a finding it raises is
-   answered before the read rather than in a later round.
+3. **The human partner reads the fixed body** and says to go on — the parked gate: the
+   `decompose` work file parks the epic with an executive summary and `needs-approval`, and
+   removing the label is the go. The pass is one agent run followed by that read — not
+   repeated, and carrying no round cap, so a finding it raises is answered before the read.
 4. **The children are filed**, in build order, one issue per task.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` into concrete
@@ -256,9 +257,8 @@ and cannot be verified live. Each entry carries these keys, one item per key:
   the worker re-derive the reading; anchoring so tightly that the surrounding text is needed to
   read it is the same fault mirrored.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
-  `none` and why in one line. Written now, not after deployment — a list written once the build
-  exists is written from what the build produced rather than from what the task promised, and
-  nothing downstream can tell those two apart.
+  `none` and why in one line. Written now, not after deployment: a list written once the build
+  exists records what the build produced, not what the task promised.
 
 Each child issue is then filed with that entry as its body, its context label and board fields,
 its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and the
@@ -276,8 +276,8 @@ one child per task.
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
 The opening pass's own gate is that nothing downstream starts without an issue to run against.
-The closing step's is the pass of step 2 and the human read of step 3, both complete before any
-child is filed, and then every task in the body having an issue, filed as step 4 above says.
+The closing step's is the pass of step 2 and the parked read of step 3, both complete before
+any child is filed, and then every task in the body having an issue, filed as step 4 above says.
 The **Implementation** stage starts from those issues and from
 nothing else.
 

@@ -1,7 +1,6 @@
 # Contribution workflow
 
-Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a design, or
-code. Five steps, each naming the skill an interactive session runs it through; the rules the
+Universal lifecycle for **every** unit of work in this repo. Five steps, each naming the skill an interactive session runs it through; the rules the
 steps rest on follow the chain. The artifact-specific additions for analysis documents and ADRs
 (`CLAUDE.md`'s **Review protocol for analysis documents** and **Architecture Decision Records
 (ADRs)** topics) layer their own template/quality-check steps on top of this; they never
@@ -141,7 +140,10 @@ still open and no round self-granted, it applies `needs-decision` **alongside**
 `needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
 skill applies either label; the one exception is the session putting a PR on hold (below), which a checklist's
-exit check can also do at the exit.
+exit check can also do at the exit. On an **issue** the same two labels are the parking signal
+ADR-0052 introduces, and this section's rules, a PR's, do not reach them: `needs-approval` on
+an epic asks the human for a go on its body, applied by the `decompose` row's work file;
+`needs-decision` asks a question, applied by `clarify`.
 Neither label replaces manual merge approval (**Merge and issue closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
@@ -214,13 +216,13 @@ the `Closes` reference is the one that names it.
 
 **Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
 **Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue
-via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
-fully clean verification-only task — closing is left to that reference, which fires on merge.
+via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`) — closing is left to that
+reference, which fires on merge.
 
-**An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
-itself — the `development`/`testing` children are filed as part of the decomposition that wrote
-the epic body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
-routes to — so the work actually gets picked up. Implementing each child is its own issue and its own chain.
+**An epic's body is the spec, and its children are the tasks.** The `development`/`testing`
+children are filed by the decomposition that wrote the epic body — the closing step of the
+flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to; implementing each is its own
+issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
@@ -263,7 +265,7 @@ progress* changes nothing.
 
 Multiple tasks can proceed in parallel. When one task needs something a not-yet-built task
 will produce (an entity, an event, a function signature), don't block and don't
-invent/implement the missing piece. Pin down the **contract** instead — exact name/id, value
+implement the missing piece. Pin down the **contract** instead — exact name/id, value
 semantics/unit, a shared constant both sides code against — in the relevant
 spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task. The
 producing task implements the real thing; the consuming task only adds the signature and
@@ -281,7 +283,8 @@ session's own footprint by the session's markers, never by author.
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow` (CI/skill/agent-authoring
-  changes), `documentation` (design-doc changes, `docs/design/**`). The label set itself — every name, colour and description,
+  changes), `documentation` (design-doc changes, `docs/design/**`), `decompose` (an epic's
+  body read, one child per epic — its row's work file). The label set itself — every name, colour and description,
   and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
   `work_types`, and `.github/setup-labels.sh` writes it to the repository from there. Adding or
   renaming a label: see [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must
@@ -290,16 +293,14 @@ session's own footprint by the session's markers, never by author.
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
   orthogonal because the fix for a defect is not always code: an entity-catalog row that claims
-  a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`, and a stale
-  minimum-HA declaration is a `bug` whose fix is neither. So an issue carries the kind label
+  a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`. So an issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
   gate. Neither label substitutes for the other, and a kind label adds no Model-selection
   row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
-  filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
-  cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
+  filing an issue. Size a sweep/audit-shaped task up at least one tier from raw effort — it takes more reading than the
   raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
   its children's estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
@@ -307,7 +308,7 @@ session's own footprint by the session's markers, never by author.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
   relationship**. Neither is body text —
-  `gh` supports both directly, so nobody needs to re-derive them — the commands, and the
+  `gh` supports both directly — the commands, and the
   read-backs that confirm an edge actually landed, are in
   [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
@@ -325,11 +326,11 @@ session's own footprint by the session's markers, never by author.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `development`, `testing`, `workflow`, `documentation`),
-number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
+number is the GitHub issue number; a `decompose` issue makes no branch, its work being on
+the tracker. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those
-two spellings are historical, not alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
+defined segment. Earlier `dev/` and `fix/` spellings are historical, not alternatives. When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
@@ -369,7 +370,7 @@ why and is not revised.
 
 By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
-inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
+inaccurate, truncated to change its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
 No reviewer checklist is applied to the post-mortem itself: the checklists are all written

@@ -68,10 +68,10 @@ labels:
   action:
     - name: needs-approval
       color: b60205
-      description: "PR: no automated work pending — a maintainer may merge it as it stands"
+      description: "PR or epic: no automated work pending — a maintainer merges it, or reads the epic and says go"
     - name: needs-decision
       color: e4e669
-      description: "PR: review left findings open, or the PR is on hold — a maintainer decides how to proceed"
+      description: "PR or issue: findings open, on hold, or a parked question — a maintainer decides how to proceed"
   # One per enabled work type — `work_types.enabled` below is this list's names, kept as a
   # separate key because a label is a tracker fact and a work type a method fact. The method
   # check (.github/check-method.py) fails when the two sets differ.
@@ -97,6 +97,9 @@ labels:
     - name: documentation
       color: ededed
       description: "Design-doc change (docs/design/**)"
+    - name: decompose
+      color: 006b75
+      description: "Epic-body read: draft the spec from the merged documents, run the pass, park the epic"
   # Orthogonal to the context label, never a substitute. GitHub creates both by default with a
   # vaguer description; the script's --force rewrites it to the meaning Issue conventions gives
   # them. Colours are GitHub's own defaults, so re-running never recolours labels already on
@@ -128,6 +131,7 @@ work_types:
     - development
     - testing
     - workflow
+    - decompose
 
 # The stacks this project is built on: one entry per distinct `stack:` value of
 # `dependencies.stack` below, keyed by that value. Each names, under `tokens`, the words that
