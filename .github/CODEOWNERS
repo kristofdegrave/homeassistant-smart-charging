@@ -2,7 +2,8 @@
 # Enforced only when the `main` branch protection rule has
 # "Require review from Code Owners" enabled (see repo Settings → Branches).
 #
-# This is the manual merge gate: nothing reaches `main` without the owner's approval.
+# This is the manual merge gate for every tree outside the auto-merge class ADR-0052 decides;
+# an auto-merge under that class runs as the owner, with --admin, behind the local guard.
 
 *                       @kristofdegrave
 

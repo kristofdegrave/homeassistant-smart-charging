@@ -183,8 +183,8 @@ review:
 # explains. `auto_merge_trees` is read by .claude/hooks/block-destructive-git.sh, which refuses
 # a `gh pr merge` with any changed file outside them: a plain block list of path prefixes,
 # each with its trailing slash, since the hook reads it with awk and no YAML parser. `lanes` is
-# how many issues' chains may be in flight at once, on disjoint trees; the skill that runs the
-# loop reads it.
+# the lane cap ADR-0052 decides: how many issues' chains may be in flight at once, on disjoint
+# trees.
 autopilot:
   auto_merge_trees:
     - custom_components/

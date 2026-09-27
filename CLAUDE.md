@@ -19,8 +19,9 @@ table plus the few rules that must be known before any skill or document is chos
   Committing and pushing on a task branch is standing-authorized; what that excludes, and a
   `gh pr merge` whose PR fails any auto-merge condition, is refused by a `PreToolUse` guard
   (`.claude/hooks/block-destructive-git.sh`, wired in `.claude/settings.json`). The
-  commit-and-push rule under **Contribution workflow** defines all three, and the script is
-  the authority on what it refuses — read it when a git or gh command comes back refused.
+  commit-and-push rule under **Contribution workflow** defines the authorization, what it
+  excludes and the merge rule, and the script is the authority on what it refuses — read it
+  when a git or gh command comes back refused.
 
 Only rules of this kind survive here: the two early process failures — a PR reaching the human
 without `needs-approval`, and a PR opened only once all the work was done — were cured by a

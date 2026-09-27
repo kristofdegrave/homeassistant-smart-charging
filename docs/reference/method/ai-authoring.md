@@ -520,5 +520,5 @@ These bound every optimization here; a token saving that touches one of them is 
   reintroduces the bias the split exists to remove (`CLAUDE.md`, review protocol).
 - **Model tiering is by task, not by cost.** Opus for analysis/design/ADR work, Sonnet for
   code — per `CLAUDE.md`. Do not downgrade an analysis run to save tokens.
-- **No merge without the maintainer's manual approval.** Cost bounds cap *automatic* work;
-  they never auto-approve or auto-merge.
+- **No merge outside the merge rule** `CLAUDE.md`'s **Contribution workflow** states. Cost
+  bounds cap *automatic* work, not merges.

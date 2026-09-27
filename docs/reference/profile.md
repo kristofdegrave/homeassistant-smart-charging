@@ -37,7 +37,7 @@ may be merged by a Claude session, as the maintainer's own account, under the co
 [contribution-workflow.md](method/contribution-workflow.md)'s **Commit & push authorization**
 states; every other PR is merged by the maintainer by hand — `CODEOWNERS` covers every tree and
 branch protection on `main` requires that approval, which a session's `--admin` merge
-bypasses. **Why the trees are those three:** they are read by a human later, at the epic-body
+bypasses. **Why those trees:** they are read by a human later, at the epic-body
 read and at verify live; the analysis, the records and the rules a run works under are the spec
 and stay at the human's gate. **The known limit:** the rule is enforced locally, by the
 `PreToolUse` guard in a Claude session of this repository — not by the platform, which has no

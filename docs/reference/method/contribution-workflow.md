@@ -43,8 +43,8 @@ message conventions and the route to a row's per-type *completion bar*.
      open on the last pass the cap allows, no round self-granted → both exit labels and one
      escalation comment handing the disagreement to the human partner; Critical or Major open
      with passes left, or a round self-granted → no label, the findings are the fix step's.
-   - Board **Status** stays *in review*. Merge is the human's, always (**Merge and issue
-     closing** below).
+   - Board **Status** stays *in review*. Whose the merge is: **Merge and issue closing**
+     below.
 3. **Fix** (`fix`, then `review` again).
    - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
      close per **Thread discipline** below.
@@ -142,7 +142,7 @@ still open and no round self-granted, it applies `needs-decision` **alongside**
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
 skill applies either label; the one exception is the session putting a PR on hold (below), which a checklist's
 exit check can also do at the exit.
-Neither label replaces manual merge approval (**Merge and issue closing** below).
+Neither label is a merge (**Merge and issue closing** below).
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a round the human grants: both labels come off no later than the review step's
@@ -215,7 +215,7 @@ one issue.
 **Merge is the human's, except under the merge rule** (**Commit & push authorization** below;
 its enforcement is [profile.md](../profile.md)'s **Merge strategy**) — never self-approved.
 Merging auto-closes the linked issue via `Closes #N` (not via `Part of #N`); never close it
-directly (`gh issue close`).
+directly (`gh issue close`), even on a fully clean verification-only task.
 
 **An epic's body is the spec, and its children are the tasks**, filed by the decomposition
 that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**

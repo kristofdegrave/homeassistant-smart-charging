@@ -17,11 +17,17 @@ fail=0
 
 # The stub gh: `pr view` prints $GH_VIEW, `pr checks` prints $GH_CHECKS, anything else
 # nothing; GH_FAIL=1 makes every call fail the way an unauthenticated or absent gh does.
+# It answers only the call the case expects -- `pr view|checks <$STUB_SEL> -R <$STUB_REPO>`,
+# the number pinned to the profile's repository -- and fails on any other shape, so a
+# forwarding bug (a selector dropped, a `-R` not pinned) fails its case instead of
+# passing on canned facts. Nothing here is GH_-prefixed except GH_FAIL, which gh does not
+# read; the hook reads the command text, not this environment.
 STUB=$(mktemp -d)
 trap 'rm -rf "$STUB"' EXIT
 cat > "$STUB/gh" <<'EOF'
 #!/bin/sh
 [ "${GH_FAIL:-0}" = 1 ] && exit 1
+[ "$3" = "$STUB_SEL" ] && [ "$4" = -R ] && [ "$5" = "$STUB_REPO" ] || exit 1
 case "$1 $2" in
   "pr view") printf '%s\n' "$GH_VIEW" ;;
   "pr checks") printf '%s\n' "$GH_CHECKS" ;;
@@ -29,7 +35,9 @@ esac
 EOF
 chmod +x "$STUB/gh"
 PATH="$STUB:$PATH"
-export PATH GH_VIEW GH_CHECKS GH_FAIL
+export PATH GH_VIEW GH_CHECKS GH_FAIL STUB_SEL STUB_REPO
+# The tool the payload names; the merge cases send one PowerShell payload.
+TOOL=Bash
 
 # The rebase rule keys off "the checked-out branch has an upstream", so state plainly
 # when the checkout cannot exercise it instead of failing four cases obscurely.
@@ -51,7 +59,7 @@ run() { # run BLOCK|ALLOW <command> [cwd]
   esc=$(printf '%s' "$cmd" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' |
     awk 'NR > 1 { printf "\\n" } { gsub(/\t/, "\\\\t"); printf "%s", $0 }')
   shown=$(printf '%s' "$cmd" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
-  out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"%s","description":"t"}}' "$dir" "$esc" | sh "$HOOK" 2>&1)
+  out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s","description":"t"}}' "$dir" "$TOOL" "$esc" | sh "$HOOK" 2>&1)
   rc=$?
   case "$out" in *'"permissionDecision":"deny"'*) denied=1 ;; *) denied=0 ;; esac
   if [ "$expect" = BLOCK ]; then
@@ -274,14 +282,24 @@ B"
 
 echo
 echo "=== the merge rule: gh pr merge only under every auto-merge condition ==="
-# Facts under which the merge passes; each blocked case below breaks exactly one.
+# A stub profile, so the cases do not depend on the real profile's tree list; the last
+# case runs on the real profile. One tree is listed without its trailing slash on purpose:
+# the hook normalises it, so `tests/test_x.py` still sits under `tests`.
+printf 'repo:\n  owner: o\n  name: r\nautopilot:\n  auto_merge_trees:\n    - custom_components/\n    - tests\n    - docs/design/\n  lanes: 2\n' > "$STUB/profile.yml"
+PROFILE=$STUB/profile.yml
+export PROFILE
+STUB_SEL=1234
+STUB_REPO=o/r
+# Facts under which the merge passes; each blocked case below breaks exactly one. The
+# head, count and labels come before the files, in the order the hook's template asks.
 GOOD_VIEW='cross=false
+head=abc123
 count=3
+label=development
+label=needs-approval
 file=custom_components/smart_charging/coordinator.py
 file=tests/test_coordinator.py
-file=docs/design/system-design.md
-label=development
-label=needs-approval'
+file=docs/design/system-design.md'
 GOOD_CHECKS='check=pass lint
 check=pass test
 check=skipping perf
@@ -289,83 +307,166 @@ check=pass method'
 GH_VIEW=$GOOD_VIEW
 GH_CHECKS=$GOOD_CHECKS
 GH_FAIL=0
-run ALLOW 'gh pr merge 1234 --squash --admin'
-run ALLOW 'gh pr merge --squash --delete-branch 1234'
-run ALLOW 'gh pr merge -sd 1234'
-run ALLOW 'gh pr merge 1234 -R owner/name --squash'
-run ALLOW 'gh pr merge --squash --admin --body-file /tmp/msg.md 1234'
-run ALLOW 'gh pr merge --squash'  # no selector: gh resolves the checked-out branch
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'
+run ALLOW 'gh pr merge --squash --delete-branch --match-head-commit=abc123 1234'
+run ALLOW 'gh pr merge -sd --match-head-commit abc123 1234'
+run ALLOW 'gh pr merge 1234 -R o/r --squash --match-head-commit abc123'          # the profile's repository
+run ALLOW 'gh pr merge 1234 --repo=o/r --squash --match-head-commit abc123'
+run ALLOW 'gh pr merge 1234 -R github.com/o/r --squash --match-head-commit abc123'
+run ALLOW 'gh pr -R o/r merge 1234 --squash --match-head-commit abc123'          # -R before the subcommand
+run ALLOW 'gh pr --repo=o/r merge 1234 --squash --match-head-commit abc123'
+run ALLOW 'gh pr merge https://github.com/o/r/pull/1234 --squash --match-head-commit abc123'  # a URL: the guard reads by number
+run ALLOW 'gh pr merge --squash --admin --body-file /tmp/msg.md --match-head-commit abc123 1234'
+run ALLOW 'gh pr merge 1234 -bfixes --squash --match-head-commit abc123'         # -b takes "fixes": its s is no squash, but --squash is
+run ALLOW 'gh pr merge 1234 --disable-auto'   # merges nothing
 run ALLOW 'gh pr merge --help'
 run ALLOW 'gh pr view 1234 --json labels'
 run ALLOW 'gh pr comment 1234 --body "run gh pr merge --squash once it is green"'
-run BLOCK 'gh pr merge 1234 --admin'          # not a squash
-run BLOCK 'gh pr merge 1234 --merge'
-run BLOCK 'gh pr merge 1234 --rebase --admin'
+run ALLOW 'gh api repos/o/r/pulls/1234/comments -f body=x'   # an api call that merges nothing
+run ALLOW 'echo "gh pr merge is guarded"'                     # prose behind a non-interpreter
+TOOL=PowerShell
+run ALLOW '& gh pr merge 1234 --squash --admin --match-head-commit abc123'  # PowerShell's call operator
+run BLOCK '& gh pr merge 1234 --admin'                                       # ... and the rule still bites behind it
+TOOL=Bash
+run BLOCK 'gh pr merge 1234 --admin --match-head-commit abc123'          # not a squash
+run BLOCK 'gh pr merge 1234 --merge --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 --rebase --admin --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 -m --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 -rd --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 -Afoo@users.noreply.github.com --match-head-commit abc123'  # the s in a value is no squash
+run BLOCK 'gh pr merge 1234 --merge -Afoo@users.noreply.github.com --match-head-commit abc123'
+run BLOCK 'gh pr merge -bs 1234 --match-head-commit abc123'               # -b takes "s" as its value
 run BLOCK 'echo hi; gh pr merge 1234'          # a separator starts a segment of its own
+# Which pull request: exactly one selector, by number or URL, on the profile's repository.
+run BLOCK 'gh pr merge --squash --admin --match-head-commit abc123'      # no selector
+run BLOCK 'cd ../other-worktree && gh pr merge --squash --admin'         # no selector: gh would read that checkout's PR
+run BLOCK 'gh pr merge --squash #1234 --match-head-commit abc123'        # a shell comment, not a selector
+run BLOCK 'gh pr merge --squash some-branch --match-head-commit abc123'  # a branch is not pinnable
+run BLOCK 'gh pr merge 1234 1235 --squash --match-head-commit abc123'    # two selectors
+run BLOCK 'gh pr merge https://github.com/other/repo/pull/1234 --squash --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 -R other/repo --squash --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 --repo=other/repo --squash --match-head-commit abc123'
+run BLOCK 'gh pr -R other/repo merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'gh pr -R o/r merge 1234 --admin --match-head-commit abc123'   # -R walked past, then the squash rule bites
+run BLOCK 'gh pr merge 1234 -Ro/r --admin --match-head-commit abc123'
+run BLOCK 'GH_REPO=o/r gh pr merge 1234 --squash --match-head-commit abc123'   # a GH_* assignment, even to the same repo
+run BLOCK 'GH_HOST=ghe.example gh pr merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'echo 1234 | xargs gh pr merge --squash --match-head-commit abc123'  # a wrapper
+run BLOCK 'sudo gh pr merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'sh -c "gh pr merge 1234 --squash --admin --match-head-commit abc123"'   # an interpreter
+run BLOCK "bash -c 'gh pr -R o/r merge 1234 --squash'"
+run BLOCK 'pwsh -c "& gh pr merge 1234 --squash"'
+# A merge under another name.
+run BLOCK 'gh api -X PUT repos/o/r/pulls/1234/merge -f merge_method=squash'
+run BLOCK 'gh api graphql -f query="mutation { mergePullRequest(input: {pullRequestId: \"x\"}) { clientMutationId } }"'
+# The head pin.
+run BLOCK 'gh pr merge 1234 --squash --admin'                            # not pinned to the head the guard read
+run BLOCK 'gh pr merge 1234 --squash --match-head-commit def456'          # pinned to a stale head
 GH_VIEW='cross=true
+head=abc123
 count=1
-file=tests/test_x.py
-label=needs-approval'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # the head is a fork's branch
-GH_VIEW='cross=false
-count=1
-file=tests/test_x.py
-label=development'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # no needs-approval
-GH_VIEW='cross=false
-count=1
-file=tests/test_x.py
 label=needs-approval
-label=needs-decision'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # needs-decision alongside
+file=tests/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # the head is a fork's branch
 GH_VIEW='cross=false
+head=abc123
+count=1
+label=development
+file=tests/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # no needs-approval
+GH_VIEW='cross=false
+head=abc123
+count=1
+label=needs-approval
+label=needs-decision
+file=tests/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # needs-decision alongside
+GH_VIEW='cross=false
+head=abc123
 count=2
+label=needs-approval
 file=tests/test_x.py
-file=docs/analysis/requirements.md
-label=needs-approval'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # a file outside the auto-merge trees
+file=docs/analysis/requirements.md'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a file outside the auto-merge trees
 GH_VIEW='cross=false
+head=abc123
 count=2
+label=needs-approval
 file=tests/test_x.py
-file=CLAUDE.md
-label=needs-approval'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # a rules file at the root
+file=CLAUDE.md'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a rules file at the root
 GH_VIEW='cross=false
+head=abc123
+count=1
+label=needs-approval
+file=tests_extra/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a prefix match must not straddle a directory name
+GH_VIEW='cross=false
+head=abc123
 count=101
-file=tests/test_x.py
-label=needs-approval'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # gh listed fewer files than the PR has
+label=needs-approval
+file=tests/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # gh listed fewer files than the PR has
 GH_VIEW='cross=false
+head=abc123
 count=0
 label=needs-approval'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # no files at all
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # no files at all
+# A file name is the one fact a contributor chooses: one carrying a line break would forge
+# a fact line, so it is refused, as is a control character in a name.
+GH_VIEW='cross=false
+head=abc123
+count=1
+label=development
+file=tests/x
+label=needs-approval'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a forged label after the files began
+GH_VIEW='cross=false
+head=abc123
+count=2
+label=needs-approval
+file=tests/x
+count=1'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a forged count: the first count stands, and the line is refused
+GH_VIEW="cross=false
+head=abc123
+count=1
+label=needs-approval
+file=tests/x${tab}y"
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a control character in a name
+GH_VIEW='cross=false
+count=1
+label=needs-approval
+file=tests/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # no head to pin to
 GH_VIEW=$GOOD_VIEW
 GH_CHECKS='check=pass lint
 check=fail test'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # a red check
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a red check
 GH_CHECKS='check=pass lint
 check=pending test'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # a check still running
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a check still running
 GH_CHECKS='check=cancel lint
 check=pass test'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # a cancelled check
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a cancelled check
 GH_CHECKS=''
-run BLOCK 'gh pr merge 1234 --squash --admin'  # no checks reported
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # no checks reported
 GH_CHECKS='not what gh prints'
-run BLOCK 'gh pr merge 1234 --squash --admin'  # an unreadable checks answer
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # an unreadable checks answer
 GH_CHECKS=$GOOD_CHECKS
 GH_FAIL=1
-run BLOCK 'gh pr merge 1234 --squash --admin'  # gh itself fails: closed, not open
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # gh itself fails: closed, not open
 GH_FAIL=0
 GH_VIEW=''
-run BLOCK 'gh pr merge 1234 --squash --admin'  # gh answers nothing
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # gh answers nothing
 GH_VIEW=$GOOD_VIEW
-printf 'autopilot:\n  lanes: 2\n' > "$STUB/profile.yml"
-PROFILE=$STUB/profile.yml
-export PROFILE
-run BLOCK 'gh pr merge 1234 --squash --admin'  # a profile with no trees
+printf 'repo:\n  owner: o\n  name: r\nautopilot:\n  lanes: 2\n' > "$STUB/profile.yml"
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a profile with no trees
+printf 'autopilot:\n  auto_merge_trees:\n    - tests/\n' > "$STUB/profile.yml"
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a profile with no repo to pin to
 unset PROFILE
-run ALLOW 'gh pr merge 1234 --squash --admin'  # and the real profile still passes
+STUB_REPO=kristofdegrave/homeassistant-smart-charging
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # and the real profile still passes
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
