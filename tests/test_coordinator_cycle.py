@@ -1250,9 +1250,9 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     assert threaded.urgent is True
 
 
-def test_should_keep_the_hold_when_the_following_occurrence_is_left_at_its_default():
-    """`inputs.following_occurrence` left at `None` (R14's own "no deadline" outcome for that
-    day) changes nothing: the hold persists on the 24-hour arm alone, well inside that bound."""
+def test_should_keep_the_hold_when_no_following_occurrence_resolves():
+    """`inputs.following_occurrence=None` (R14's own "no deadline" outcome for that day) changes
+    nothing: the hold persists on the 24-hour arm alone, well inside that bound."""
     # Arrange -- the pursued occurrence elapsed 16h ago, short of the 24-hour bound.
     pursued = datetime(2026, 7, 25, 22, 0)
     now_dt = datetime(2026, 7, 26, 14, 0)

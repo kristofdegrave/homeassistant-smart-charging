@@ -38,10 +38,10 @@ MISSED_DEADLINE_HOLD_BACKSTOP_HOURS = 24.0
 backstop releases on WHICHEVER of its two arms fires first, so this bound alone is not
 "unconditional": the following occurrence's own elapse (the first arm) can release the hold
 earlier -- the common case is both arms landing on the same instant (the following day sharing
-the pursued one's own departure time). This arm fires SECOND, not first, whenever the following
-occurrence lies more than this many absolute hours after the pursued one -- a later departure
-time on the following day, or a fall-back DST transition in between -- so the 24-hour arm alone
-governs then.
+the pursued one's own departure time). THIS bound fires first instead, ahead of the following
+occurrence's own elapse, whenever that occurrence lies more than this many absolute hours after
+the pursued one -- a later departure time on the following day, or a fall-back DST transition in
+between, are both examples -- so this arm alone governs then.
 
 It is what makes "a hold never outlives one deadline cycle" a guarantee rather than a hope
 regardless (requirements.md R5, resolution-rules.md's release list): R14 lets any day resolve

@@ -434,8 +434,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         purpose (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
         (`resolve_reserved_day`, coordinator_cycle.py), a separate call through the same
         closure, so a future change to either one cannot silently move the other's date with
-        it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) also
-        calls, for today's deadline. is_holiday is
+        it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) and
+        `_resolve_following_occurrence` (T7, below) also call, for today's deadline and the day
+        after the pursued occurrence respectively. is_holiday is
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
         table never matches. Each optional-role read here goes through `_read_role` (issue
         #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
@@ -446,10 +447,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
         bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
         flag currently applies to (at most today's and tomorrow's at once). Resolving today's,
-        calendar tomorrow's and the reserved day's deadline are three separate calls to the
-        same closure, one per date, so each reads the home-day flag for its own date and none
-        can leak into another -- which is what fixes the flag set in the evening for tomorrow
-        also overriding today's resolution."""
+        calendar tomorrow's, the reserved day's and the day-after-the-pursued-occurrence's
+        deadline are four separate calls to the same closure, one per date, so each reads the
+        home-day flag for its own date and none can leak into another -- which is what fixes the
+        flag set in the evening for tomorrow also overriding today's resolution."""
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single

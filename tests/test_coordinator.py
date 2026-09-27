@@ -4939,6 +4939,11 @@ async def test_should_keep_the_hold_when_the_day_after_the_pursued_occurrence_ha
     coord._pursued_occurrence = held
     # The pursued day's own weekday default -- NOT the day after it -- already elapsed by noon.
     coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(6, 0)
+    # Tomorrow's own weekday explicitly "no deadline" -- pinned rather than left to the
+    # constructor's own default, so a future change to that default cannot silently stop this
+    # test from testing the case its name and docstring claim.
+    tomorrow_weekday = (now_dt + timedelta(days=1)).weekday()
+    coord.departure_dow_defaults[tomorrow_weekday] = None
 
     # Act
     result = await coord._async_update_data()
@@ -4950,7 +4955,7 @@ async def test_should_keep_the_hold_when_the_day_after_the_pursued_occurrence_ha
     assert result.effective_peak_limit_kw == 7.0
 
 
-async def test_should_release_the_hold_when_the_day_after_has_elapsed_soc_unavailable(
+async def test_should_release_the_hold_when_the_day_after_has_elapsed_and_soc_is_unavailable(
     hass, freezer
 ):
     """T7/#1468: the non-resolvable early return's own `missed_deadline_backstop_fired` call
