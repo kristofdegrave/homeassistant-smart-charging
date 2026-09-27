@@ -283,8 +283,7 @@ nothing else.
 
 ### Skills
 
-`file-task-issue`; `brainstorming` — scoping the slice boundary and the deferrals before the
-body is drafted.
+`file-task-issue`.
 
 ## 5. ADR
 

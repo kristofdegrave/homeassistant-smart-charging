@@ -31,9 +31,8 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    against a fetched `origin/main`, not a stale checkout, since a work file may derive its
    branch name from something already merged there. The branch-naming rule under `CLAUDE.md`'s
    **Issue conventions** grants one override, the number segment; nothing else about the
-   implement step is the work file's to override — except that a row whose work file says
-   the issue produces no branch and no PR (`CLAUDE.md`'s **Model selection** names which)
-   has nothing for items 3 and 5 to act on, so the run ends where that work file ends.
+   implement step is the work file's to override — except for a row whose work file makes
+   no branch and no PR, which item 3 states.
 2. Take the task from the issue itself: its body is the task text, and where the issue is a
    child of an epic, that epic's body is what it was cut from — which artifact that is, and
    which issues are cut from one, are the closing step of the flow `CLAUDE.md`'s
@@ -50,16 +49,19 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    `git fetch origin && git worktree add -b <branch> <path> origin/main`. When deliberately
    stacking on a not-yet-merged prior branch, fetch first and name that branch instead of
    `origin/main`; the PR still bases `main`, per the doc's **Base `main` and stacking**. For
-   a work file that makes no branch (item 1), skip the worktree and branch here, the push
-   and PR in item 5, and take only the board move.
+   a row whose work file says the issue produces no branch and no PR (`CLAUDE.md`'s **Model
+   selection** names which), skip the worktree and branch here and the push and PR in item
+   5; the board move here and item 5's self-check still apply, and the run ends where that
+   work file ends.
 4. Follow the work file. Its steps and stop conditions govern. Where the row also names a
    completion bar, that file is the self-check before item 5 below — the same one the reviewer will
    apply, so it is checked now rather than discovered in review.
 5. Definition of Done self-check, then push, PR and board **Status** per the implement step.
 
 The implement step ends with the PR open, its issue in the *in review* column and — where the
-issue has an epic — that epic in *in progress* or beyond, as the step's board rule asks; report
-that and stop. What
+issue has an epic — that epic in *in progress* or beyond, as the step's board rule asks — or,
+for a work file that makes no PR (item 3), where that file ends, with the issue in the column
+it names; report that and stop. What
 runs next is the workflow's to say, not this skill's. The work is judged in a spawned reviewer
 agent, never in this session, and the next issue is not started off the back of this one.
 

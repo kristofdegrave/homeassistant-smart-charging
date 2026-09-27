@@ -2,9 +2,10 @@
 
 What must be true when a `decompose` run ends — parked, at entry 1, or closed, at entry 2 of
 `implement.md`. The author self-checks against it before stopping; the run produces no pull
-request, so a reviewer applies it only when a dispatch ever reaches this row — why the review
-is the checklist pass `implement.md` runs is the `decompose` rule under *Rows that differ from
-the rest*, reached from `CLAUDE.md`'s **Model selection**. What that pass scores — the body — is the
+request, so a reviewer applies it — to the parked body and the tracker state — only when a
+dispatch reaches this row, which `review.md` says was a misrouting. Why the review is the
+checklist pass `implement.md` runs is the `decompose` rule under *Rows that differ from the
+rest*, reached from `CLAUDE.md`'s **Model selection**. What that pass scores — the body — is the
 checklist `CLAUDE.md`'s **Decomposition checklist** topic routes to, and no item of it is
 repeated here. This bar scores what the pass cannot see: that it ran, and what the run left on
 the tracker.
@@ -13,9 +14,10 @@ the tracker.
 
 **(1) The body was derived, and the pass ran exactly once against it.** A body parked with no
 `reviewer` run behind it, or one the pass was run twice over → **Critical**: the human's read
-then rests on an unreviewed body, or the closing step's single-pass rule is broken. A Critical
-or Major finding of the pass neither fixed in the body nor filed against the document that
-owns it → **Major**.
+then rests on an unreviewed body, or the closing step's single-pass rule is broken. A re-entry
+after a design-change stop (`implement.md`'s step 4) is a fresh draft with its own single
+pass, not a second run over the earlier one. A Critical or Major finding of the pass neither
+fixed in the body nor filed against the document that owns it → **Major**.
 
 **(2) The body on the tracker is the fixed body.** Read back after the last edit, before the
 park. No read-back → **Major**: the fix is then assumed.
@@ -27,17 +29,20 @@ park. No read-back → **Major**: the fix is then assumed.
   entry of `CLAUDE.md`'s **Authoring AI artifacts** topic, at its severities.
 - A task in the children part with no Size → **Minor**.
 
-**(4) The comment ends in the parking marker**, as its last line, and it is the only park the
-human has not answered. Missing or elsewhere in the comment → **Critical**: the autopilot
-cannot then tell the park from any other comment, and re-parks or never proceeds. A second park
-over an unanswered one → **Major**.
+**(4) The comment ends in the parking marker**, as its last line, posted under a login that
+passes the entry rule's author test, and it is the only park the human has not answered.
+Missing or elsewhere in the comment → **Critical**: the autopilot cannot then tell the park
+from any other comment, and re-parks or never proceeds. A second park over an unanswered one
+→ **Major**.
 
-**(5) `needs-approval` is on the epic and `needs-decision` is not**, read back after the
-apply; every other label on the epic and on the `decompose` issue is as the run found it.
-Otherwise → **Major**.
+**(5) `needs-approval` is on the epic and `needs-decision` is not**, read back before the
+parking comment was posted — the entry rule's go reads the label's events against that
+comment's time; every other label on the epic and on the `decompose` issue is as the run
+found it. Otherwise → **Major**.
 
-**(6) No child exists.** A task issue filed before the human's go → **Critical**: it is the
-failure the park exists to prevent, and one it cannot cheaply undo.
+**(6) No child exists.** A task issue filed before the human's go — the label removal the
+entry rule reads from the timeline, never a marker or a label state alone → **Critical**: it
+is the failure the park exists to prevent, and one it cannot cheaply undo.
 
 **(7) The `decompose` issue is open and *in progress***, not *in review* and not closed →
 **Minor**.

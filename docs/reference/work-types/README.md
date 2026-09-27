@@ -6,10 +6,9 @@ agents: how each artifact is written, and what must be true of a finished one. I
 the files themselves, and the authoritative mapping from a work type to its files is the
 matching row of `CLAUDE.md`'s **Model selection** table.
 
-Read this when you are adding a work type, adding a role file to one, or working out which file
-a row means. Read `CLAUDE.md`'s **Model selection** section when you need to know which files a
-given change is governed by — that row is the source of truth, and this document never
-overrides it.
+Read this when adding a work type, adding a role file to one, or working out which file a row
+means. Read `CLAUDE.md`'s **Model selection** section to know which files a given change is
+governed by — that row is the source of truth, and this document never overrides it.
 
 ## The shape
 
@@ -19,19 +18,19 @@ One directory per **context label**, named exactly for the label:
 docs/reference/work-types/<label>/<role>.md
 ```
 
-So `adr/implement.md`, `uc/done.md`. The label is the directory name, which is what makes
-renaming a label a directory move rather than an edit — `ci-pipeline.md`'s **Label vocabulary
+So `adr/implement.md`, `uc/done.md`. The label is the directory name, so renaming a label is
+a directory move rather than an edit — `ci-pipeline.md`'s **Label vocabulary
 sync** owns that obligation and the rest of what a rename touches.
 
 Not every label has a directory, and a label that has one need not hold all three roles. A
 label gets a directory when its work type has content worth writing down, and each role file
 appears when that role has content of its own: a label may have a work file without a
-completion bar or vice versa. `workflow` is the extreme case and a deliberate one — it is never
+completion bar or vice versa. `workflow` is the extreme case, and deliberate — it is never
 drafted from an issue, so it has **no work file and no completion bar**, and its directory holds
 `review.md` alone. Do not manufacture the other two for symmetry: the document `CLAUDE.md`'s
 **Model selection** section routes to argues why that label has no drafted work, and a
-placeholder work file would contradict it. The row is what says which files exist, so an absent file is a fact about the
-row, not a gap in this tree.
+placeholder work file would contradict it. The row says which files exist, so an absent file
+is a fact about the row, not a gap in this tree.
 
 ## The three roles
 
@@ -48,12 +47,14 @@ and this line is the copy that shrinks.
 | `done.md` | The **completion bar**: what must be true of the finished artifact, each item carrying the severity a miss lands at. | The author, as the self-check before requesting review, **and** the reviewer, as the bulk of the review criteria — the document `CLAUDE.md`'s **Model selection** section routes to says why one file serves both. |
 | `review.md` | Reviewer-only material: how to read the change, and the checks about the *change* rather than the artifact. | The reviewer. |
 
-`review.md` **exists for the labels whose reviewer has been made generic** — `adr`, `uc`,
-`requirement`, `development`, `testing`, `documentation`, `workflow` and `decompose` — every label
-that has a directory, `requirement/review.md` being a pointer to `uc/`'s the way its `done.md`
-is. A label whose directory holds `review.md` and nothing else is migrated, not half-built —
-see the paragraph above. What a generic reviewer holds instead — the output contract, the anchoring rules and how
-a checklist is resolved — sits with the agent that applies the checklist, `.claude/agents/reviewer.md`.
+`review.md` **exists for every label that has a directory**: for the labels whose reviewer
+has been made generic — `adr`, `uc`, `requirement`, `development`, `testing`, `documentation`
+and `workflow` — `requirement/review.md` being a pointer to `uc/`'s the way its `done.md` is;
+and for `decompose`, whose file dispatches no reviewer and instead says where its review
+happens. A label whose directory holds `review.md` and nothing else is migrated, not
+half-built — see the paragraph above. What a generic reviewer holds instead — the output
+contract, the anchoring rules and how a checklist is resolved — sits with the agent that
+applies the checklist, `.claude/agents/reviewer.md`.
 
 ## When a label branches
 
@@ -91,8 +92,8 @@ kind goes.
 The row is unaffected by any of this: it names the label's own `implement.md` and `done.md`, and
 a run that follows them reaches the branch without the row ever mentioning one.
 
-Because the role names never change with the depth, every leaf reads the same as every
-unbranched label's directory.
+Because the role names never change with depth, every leaf reads like an unbranched label's
+directory.
 
 ## When two labels share a bar
 

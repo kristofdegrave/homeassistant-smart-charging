@@ -289,11 +289,11 @@ file's that reads it. The listing is REST, and the association comes with each i
 
 ```sh
 gh api repos/$REPO/issues/<n>/comments \
-  --paginate --jq '.[] | "\(.user.login) \(.author_association) \(.created_at)"'
+  --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
 ```
 
-`author_association` is `OWNER`, `MEMBER` or `COLLABORATOR` for a collaborator and `NONE` or
-`CONTRIBUTOR` for anyone else; it is the platform's answer, not the body's, so a login typed
+`author_association` is `OWNER` or `COLLABORATOR` for a collaborator and anything else for
+anyone else; it is the platform's answer, not the body's, so a login typed
 into a comment's text spoofs nothing. The read-back rule is the listing's: `--paginate`, a
 streaming filter, and the marker test on each body (*Reading a change request's label events*
 below) — the session posts under the owner's login too, so its own comments pass the author
