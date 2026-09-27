@@ -47,6 +47,7 @@ decision is blocked: the one being grilled, specced, or drafted. If the work has
 hold the finding and post it on the first issue filed from it; do not invent a home for it.
 
 ```markdown
+<!-- ai-fix-note -->
 ## Research — <the question, as a question>
 
 _<YYYY-MM-DD> · needed by: <the decision this unblocks>_
@@ -63,6 +64,10 @@ _<YYYY-MM-DD> · needed by: <the decision this unblocks>_
 
 Rules for it:
 
+- **The first line is the session's catch-all marker** — `fix` defines it — because every
+  comment the session posts on an issue carries one, by the marker rule under `CLAUDE.md`'s
+  **Contribution workflow**; without it, a later run would read this comment as the human's
+  answer to a question `clarify` parked on the same issue.
 - **`Not confirmed` is never omitted.** If everything was confirmed, say "nothing outstanding"
   explicitly. A silent section reads as "not checked".
 - A question that could not be answered at all still gets the comment. The negative result —

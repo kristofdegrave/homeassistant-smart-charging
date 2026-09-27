@@ -63,17 +63,18 @@ A change is judged by a **spawned reviewer agent**, never by the session that ho
 author's context. What corrupts a review is the *reviewer* carrying that context, not the
 session: the session that wrote the work may run step 2, because it only dispatches to agents
 that cannot see what it saw and relays what they return. The moment it judges the work itself
-— screening findings before posting, or "checking the reviewer missed nothing" — the separation
+— screening findings before posting, or checking the reviewer missed nothing — the separation
 is gone.
 
 ## Rule B — stop-and-report, per issue
 
 The chain runs **unattended** from the step it is entered at: implement → review → fix →
-review … → a clean pass or the cap, with no check-in between steps. The session stops at exactly
-two points — a clean pass, or the cap with Critical or Major findings still open and no round
-self-granted — both found by step 2 at the end of its pass, and reports.
-It never starts the next issue off the back of the one that just finished; that is the control
-on autonomous artifact-chaining, and it is per issue, not per step.
+review … → a clean pass or the cap, with no check-in between steps. The session stops at two
+points — a clean pass, or the cap with Critical or Major findings still open and no round
+self-granted — both found by step 2 at the end of its pass, and reports; an unattended run has
+a third, the park `clarify` makes (**Rule C**).
+It never starts the next issue off the back of the one just finished: the control on
+autonomous artifact-chaining, per issue, not per step.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
@@ -84,17 +85,18 @@ against a premature statement.
 ## Rule C — decisions go through `clarify`
 
 A decision put to the human partner goes through `clarify`, which asks it or parks it — never
-as a loose question in a status report.
+as a loose question in a status report. The one report form admitted is `clarify`'s: a
+question with no issue to park on, in its shape.
 
 ## Rounds and the cap
 
 - **The cap exists because the chain runs unattended** (**Rule B**): a finding no fix
-  resolves would otherwise loop without end.
+  resolves would otherwise loop forever.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
   from the most recent reset event. That key is the **only** statement of that number and this
-  line the only statement of what it counts — everything that needs either routes here.
+  line of what it counts; everything that needs either routes here.
 - **A clean pass** has nothing Critical or Major open; a pass whose remaining findings are all
   Minor/Nit counts as clean once they are fixed,
   so the final round needs no further pass to confirm it.
@@ -103,8 +105,7 @@ as a loose question in a status report.
   - (i) the author agrees with every open Critical or Major finding;
   - (ii) no fix needs a decision that is the human partner's — a product choice, or a
     trade-off the spec does not settle;
-  - (iii) each such finding comes from the original work, not from the previous round's own
-    fix.
+  - (iii) each such finding comes from the original work, not the previous round's own fix.
 
   The review step posts the grant as a PR comment giving why each condition holds, ending in
   the self-grant marker `<!-- local-review-self-granted -->`. Each such comment since the
@@ -115,7 +116,7 @@ as a loose question in a status report.
   labels** below) and posts one escalation comment handing the disagreement to the human,
   who has **two decisions**: merge as is, accepting the open findings, or **grant another
   round** — a fresh count, since the escalation comment is itself the reset event. A grant
-  is an instruction given to the session, never inferred from a thread or a default answer.
+  is an instruction to the session, never inferred from a thread or a default answer.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
@@ -123,12 +124,14 @@ as a loose question in a status report.
   own markers (the local round, `ai-fix-`, escalation, self-grant and `autopilot-parked`
   markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
   `unlabeled` one. Every session post carries one — a review's inline comments via its body,
-  else `fix`'s note marker — bar the hold-reason review (**Exit labels** below). Nothing else
+  else `fix`'s note marker — bar the hold-reason review (**Exit labels** below); an issue
+  comment the session posts carries one too, so a parked question's reader can tell the
+  human's answer. Nothing else
   resets the count, a self-grant comment included; no reset event means counting from the
   PR's first review. This is the rule's only statement — the `review` skill's *Count the
   rounds* item is its one procedure.
-  A round the human grants, or a human review, therefore never gets refused by a cap it did
-  not ask for.
+  So a round the human grants, or a human review, is never refused by a cap it did not ask
+  for.
 
 ## Exit labels
 
@@ -138,24 +141,25 @@ why a hold takes it off; `needs-decision` adds that a reason not to merge is sti
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision`. After the last pass the cap allows, with Critical or Major
 still open and no round self-granted, it applies `needs-decision` **alongside**
-`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
-clean one in any list view while `needs-approval` keeps its single meaning. No other step or
-skill applies either label to a PR; the one exception is the session putting a PR on hold (below), which a checklist's
+`needs-approval` and posts the one escalation comment **Rounds and the cap** describes, so a capped PR is told from a
+clean one in any list view and `needs-approval` keeps one meaning. No other step or
+skill applies either label to a PR, bar the session putting one on hold (below), which a checklist's
 exit check can also do at the exit.
 Neither label replaces manual merge approval (**Merge and issue closing** below).
 
-On an **issue** the same two labels park work for the human, as ADR-0052 decided:
-`needs-decision` is applied by `clarify`'s parking rule, in an unattended run, and means a
-question waits for the human's answer; `needs-approval` on an epic asks for a go. An issue's
-label says nothing about any PR.
-
-A human item (**Rounds and the cap** above) posted **while** either label is on makes it
+On a PR, a human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a round the human grants: both labels come off no later than the review step's
 next pass — the `fix` skill's first step removes them when a human item precedes it, and the
 review step's first act removes them whenever a reset event of either kind precedes its pass
 and a label is still on (a grant given in-session posts nothing, so only the review step sees
 it; a human item may reach the review step directly) — and that pass's exit re-applies
 whichever is then correct.
+
+On an **issue** the same two labels park work for the human, as ADR-0052 decided:
+`needs-decision` is applied, among others, by `clarify`'s parking rule, in an unattended run,
+and means a question waits for the human's answer; `needs-approval` on an epic asks for a go.
+The human takes an issue's label off, or the next run does on reading the answer — the
+removal is the go. An issue's label says nothing about any PR.
 
 **A blocking reason found after the exit puts the PR on hold.** When the session learns, before
 the merge, that a PR carrying `needs-approval` should not merge as it stands:
@@ -166,13 +170,13 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   comment is a reset event (**Rounds and the cap** above), so a round the human partner grants
   starts a fresh count. The label operations and the comment follow
   [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
-- It does no further work on the PR. The human partner either merges as is, or grants a round.
+- It does no further work on the PR. The human partner merges as is, or grants a round.
 - On a granted round, the session's first act posts the hold reason as a PR review of its own:
   a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
-  since the review step never reads human review bodies as findings. The fix step then reads it
-  as it reads any human review body, and the chain runs on from **Fix**. Unmarked, it also
+  since the review step never reads human review bodies as findings. The fix step reads it as
+  any human review body, and the chain runs on from **Fix**. Unmarked, it also
   counts as a human item, which changes nothing: the grant already started a fresh count. The session's reason
   is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
@@ -183,17 +187,16 @@ still carries `needs-approval`.
 
 ## Thread discipline
 
-- **Reply always.** Every finding addressed gets a reply on its thread describing what was done,
-  or why not.
+- **Reply always.** Every finding gets a reply on its thread: what was done, or why not.
 - **Resolve only what was actually fixed.** A disputed, deferred or partially addressed thread
   stays open, with the reply saying why.
 - **Resolve after the push, never before.** A failed push would otherwise leave threads closed
   over work that is not on the branch.
-- **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
-  resolved explicitly.
+- **Outdated is not resolved.** A thread the diff no longer shows stays open until resolved
+  explicitly.
 - **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
   gets an issue instead (`file-task-issue`, context label per the artifact it belongs to,
-  linked to the PR); the reply names the issue, and the thread is then resolved.
+  linked to the PR); the reply names the issue, and the thread is resolved.
 
 These five are the rule; `resolve-review-thread` applies them per thread, and
 [tracker-mechanics.md](tracker-mechanics.md) holds the commands.
@@ -204,16 +207,16 @@ The PR always bases `main` directly — never another work branch, even one it i
 stacked on, because this project's merge strategy ([profile.md](../profile.md)'s **Merge
 strategy**) orphans stacked branches. Branching off a prior task's branch locally is fine; the
 PR is `--base main` from the start, and the new branch is cut from a fetched `origin/main` —
-or, when deliberately stacking, from the freshly fetched prior branch — never from a stale
-local `main`.
+or, when deliberately stacking, from the freshly fetched prior branch — never a stale local
+`main`.
 
 ## `Closes` and `Part of`
 
 The PR description references the linked issue with `Closes #<issue-number>` so merging
 auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>` on every PR
 except the one that finishes the issue. A task PR normally carries both — `Closes` for its own
-task issue and `Part of` for the epic — and where anything needs to resolve a PR to one issue,
-the `Closes` reference is the one that names it.
+task issue and `Part of` for the epic — and where anything resolves a PR to one issue, the
+`Closes` reference names it.
 
 ## Merge and issue closing
 
@@ -223,27 +226,26 @@ via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part 
 verification-only task: closing is left to that reference, which fires on merge.
 
 **An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
-itself — the `development`/`testing` children are filed as part of the decomposition that wrote
-the epic body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
-routes to — so the work actually gets picked up. Implementing each child is its own issue and its own chain.
+itself: the `development`/`testing` children are filed by the decomposition that wrote the
+epic body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes
+to — so the work gets picked up. Each child is its own issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
-[idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
-two conditions, step 4 establishes the first — every child closed — and never the second,
+[idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4 establishes the first — every child closed — and never the second,
 which is an observation on the real installation and the human's: `cleanup` reads the
-epic's open-children count once the linked issue is *done*, and reports it; what the report says at zero is the skill's own step. It never
-closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
-sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
-cannot.
+epic's open-children count once the linked issue is *done*, and reports it; what the report
+says at zero is the skill's own step. It never closes. Nothing else watches for the moment:
+GitHub does not close a parent whose sub-issues are all closed, and a child PR carries `Part
+of` for its epic precisely so a merge cannot.
 
 Step 4 removes the task's worktree because one left behind is a stale checkout nobody sweeps.
 
 ## Commit & push authorization
 
 Commit and push freely, at any point during the work — no per-commit or per-push approval
-needed. This is a standing authorization the project makes in this document; it does not
-extend to anything destructive or hard to reverse (force-push, rewriting published history,
-`git reset --hard`, etc.), which still follow the general ask-before-acting default. A
+needed: a standing authorization this document makes, which does not extend to anything
+destructive or hard to reverse (force-push, rewriting published history, `git reset --hard`,
+etc.); those still follow the general ask-before-acting default. A
 `PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/block-destructive-git.sh`) refuses
 the most common of those before they run.
 
@@ -251,17 +253,17 @@ the most common of those before they run.
 
 The chain above names four column **roles** — *backlog*, *in progress*, *in review*, *done* —
 and never a column by its name on the board: the board's Status vocabulary and option ids are
-`.claude/profile.yml`'s `board.fields.status`, and which column plays which role on this
-project — including any column that plays none — is [profile.md](../profile.md)'s **Project
-board**. The rule here is only that the chain moves an item **backlog → in progress → in
-review → done** and through no other column: a column that later gains a defined meaning is
-inserted explicitly into step 0/1 here rather than left implicit.
+`.claude/profile.yml`'s `board.fields.status`, and which column plays which role — including
+any that plays none — is [profile.md](../profile.md)'s **Project board**. The rule here is
+only that the chain moves an item **backlog → in progress → in review → done** and through
+no other column: a column that later gains a defined meaning is inserted explicitly into
+step 0/1 here.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
 there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
-it to *done* with the same hand that closes it, which step 4's open-children report is there
-to prompt (**Merge and issue closing** above). A child starting under an epic already *in
+it to *done* with the same hand that closes it, which step 4's open-children report prompts
+(**Merge and issue closing** above). A child starting under an epic already *in
 progress* changes nothing.
 
 ## Parallel work and forward dependencies
@@ -309,9 +311,8 @@ session's own footprint by the session's markers, never by author.
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**. Neither is body text —
-  `gh` supports both directly, so nobody needs to re-derive them — the commands, and the
-  read-backs that confirm an edge actually landed, are in
+  relationship**. Neither is body text — `gh` supports both directly, so nobody re-derives
+  them — the commands, and the read-backs that confirm an edge landed, are in
   [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
@@ -321,9 +322,9 @@ session's own footprint by the session's markers, never by author.
   condition and explains why the automatic label cannot enforce it.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
-  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge is
-  what says the body was cut from a decomposition somebody reviewed rather than typed straight
-  into an issue. Get the edge on at filing time; adding it afterwards works
+  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge
+  says the body was cut from a reviewed decomposition rather than typed straight into an
+  issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
@@ -333,14 +334,14 @@ number is the GitHub issue number. **An issue carrying only a kind label** (`bug
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
 defined segment. Earlier branches for this kind of work used `dev/` and `fix/`; both
 spellings are historical, not alternatives (`development/<n>` keeps its meaning above). When both
-axes are present the **context label wins**. If extra work on the same issue needs a second, separate
+axes are present the **context label wins**. If extra work on the same issue needs a second
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
-its row — may override the number segment when there's a concrete reason to key the branch off
-the artifact's own identity instead of the issue's. State the exception and its reason in that
-file, don't leave it implicit here.
+its row — may override the number segment for a concrete reason to key the branch off the
+artifact's own identity rather than the issue's; state the exception and its reason in that
+file, not here.
 
 ## Post-mortems
 
@@ -353,17 +354,16 @@ do not reach it, and how it is reviewed are this topic's.
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that. Its job is to explain how a specific failure got past a specific process, so the changes
-it recommends can be argued from evidence; once they land, it stays as the record of why,
-unrevised.
+that. Its job is to explain how a specific failure got past a specific process, so the changes it
+recommends can be argued from evidence; once they land, it stays as the record of why.
 
 ### Two rules that apply elsewhere do not apply here
 
 - **Tracking refs are required, not forbidden.** `CLAUDE.md`'s *Review protocol for analysis
   documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies, because
-  they rot. That rule does not reach this directory: a post-mortem's entire evidentiary value
-  is the specific PRs, issues, commits and review comments it cites, at the dates it cites
-  them — don't "fix" these.
+  they rot. That rule does not reach this directory: a post-mortem's whole evidentiary value
+  is the PRs, issues, commits and review comments it cites, at the dates it cites them —
+  don't "fix" these.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis
   tree's own review checklist do not govern it; it quotes the analysis docs as evidence
   rather than asserting behaviour.
@@ -375,5 +375,5 @@ accuracy** — a post-mortem is an argument built entirely from quotes, so a quo
 inaccurate, truncated so its meaning changes, or mined from a context that would undercut the
 point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
-No reviewer checklist is applied to the post-mortem itself: the checklists are all written
-against artifacts that assert behaviour, and none fits a narrative document.
+No reviewer checklist applies to the post-mortem itself: all are written against artifacts
+that assert behaviour, and none fits a narrative document.
