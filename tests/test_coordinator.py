@@ -4867,11 +4867,3 @@ async def test_should_keep_the_hold_when_the_next_occurrence_resolves_to_no_dead
     assert coord._required_current.urgent is True
     assert coord._required_current.unreachable is True
     assert result.effective_peak_limit_kw == 7.0
-
-    # R18's absence needs no code (design doc D-7) and is not asserted at this direct-
-    # construction level: a fake reload built from two bare constructor calls sharing one
-    # store cannot exercise the reload itself, since `_pursued_occurrence` is a per-instance
-    # attribute the store never carries. The genuine, public-route assertion --
-    # `test_should_release_the_pursued_occurrence_across_a_reload_mid_hold` -- lives in
-    # tests/test_deadline_soc_management_end_to_end.py, driven through a real
-    # `hass.config_entries.async_reload`; it also doubles as T11's sibling restart AC.

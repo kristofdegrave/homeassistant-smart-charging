@@ -338,13 +338,16 @@ async def test_should_rearm_the_notice_when_the_hold_releases(hass, freezer):
     assert len(calls) == 2
 
 
-async def test_should_release_the_pursued_occurrence_across_a_reload_mid_hold(hass, freezer):
+async def test_should_start_without_a_pursued_occurrence_when_the_entry_reloads_mid_hold(
+    hass, freezer
+):
     """R18/D-7 (issue #1192, T6): withdrawing the deadline capability is a reconfigure that
     updates `entry.data`, so the entry reloads and a fresh coordinator is built with
-    `_pursued_occurrence` starting at `None` -- the release the design doc says needs no code
-    of its own. This doubles as T11's sibling restart AC: a pursued occurrence is scoped to the
-    connected session and is never preserved across a restart (system-overview.md's `pursued
-    occurrence` entry; UC05; R5's AC).
+    `_pursued_occurrence` starting at `None` -- never re-derived from whatever the prior
+    instance was carrying, the design doc's stated reason no code of its own is needed. This
+    doubles as T11's sibling restart AC: a pursued occurrence is scoped to the connected
+    session and is never preserved across a restart (system-overview.md's `pursued occurrence`
+    entry; UC05; R5's AC).
 
     Same public-route hold entry as the notify-once siblings above -- a real, tight deadline
     crossed by the frozen clock, never a direct `coordinator._pursued_occurrence` write -- so
@@ -363,10 +366,10 @@ async def test_should_release_the_pursued_occurrence_across_a_reload_mid_hold(ha
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     assert coordinator._pursued_occurrence is not None  # a genuine hold, not yet reloaded
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
 
     # Act -- what a reconfigure withdrawing the deadline capability (R18) or a Home Assistant
     # restart does: the entry reloads and a fresh coordinator replaces this one.
-    entry = hass.config_entries.async_entries(DOMAIN)[0]
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
