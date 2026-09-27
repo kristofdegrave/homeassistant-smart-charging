@@ -183,10 +183,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # LEFT by the handback test, which are not each other's inverse: charging at the
         # escalated rate closes the gap faster than the clock closes the window, so a
         # latch-free implementation would revert urgency on the cycle after it engaged and
-        # duty-cycle the charger. Released for free on every one of urgency's own release
-        # conditions, because each already funnels through the engine's own resolution that this
-        # is assigned from. Scoped to the current connected session and never preserved across a
-        # restart (UC05's State model), which is why it starts at None rather than from the Store.
+        # duty-cycle the charger. Released by whatever `resolve_deadline_urgency` resolves: the
+        # engine's successor, or -- on a cycle that never reaches the engine -- its non-resolvable
+        # early return, which releases on a disconnect and on R5's 24-hour backstop. Scoped to the
+        # current connected session and never preserved across a restart (UC05's State model),
+        # which is why it starts at None rather than from the Store.
         self._pursued_occurrence: datetime | None = None
         # R9/R14 inputs -- read through the Store each cycle (_read_owned_entities,
         # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
@@ -843,10 +844,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             )
 
         urgent = deadline_urgency.urgent
-        # The occurrence this cycle's resolution leaves behind. Taken from the engine's own
-        # successor rather than re-derived here, so the handback -- and every other release
-        # condition that funnels through it -- releases the occurrence without a second code
-        # path, and so the occurrence is never re-anchored onto a later resolution.
+        # The occurrence this cycle's resolution leaves behind, taken from
+        # `deadline_urgency.required` rather than re-derived here: the engine's successor, or the
+        # non-resolvable early return's split (a disconnect or the 24-hour backstop releases, an
+        # unavailable state of charge holds). Either way the occurrence is never re-anchored onto
+        # a later resolution.
         # Both fault early-returns above sit UPSTREAM of this line, so a fault cycle holds
         # whichever occurrence it entered with rather than releasing it -- the same reasoning
         # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle

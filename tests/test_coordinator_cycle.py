@@ -1229,6 +1229,7 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     occurrence can account for the difference. It is the one the deadline below resolves to,
     and still ahead of `now_dt`, so this is ordinary urgency rather than a missed-deadline hold.
     """
+    # Arrange
     ample_slack = dict(
         deadline_today=time(11, 0),
         ev_soc=50.0,
@@ -1238,8 +1239,14 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
         mode_desired_current=lambda mode: 0.0,
     )
     pursued = datetime(2026, 7, 27, 11, 0)
-    assert _resolve_deadline_urgency(pursued_occurrence=None, **ample_slack).urgent is False
-    assert _resolve_deadline_urgency(pursued_occurrence=pursued, **ample_slack).urgent is True
+
+    # Act
+    without = _resolve_deadline_urgency(pursued_occurrence=None, **ample_slack)
+    threaded = _resolve_deadline_urgency(pursued_occurrence=pursued, **ample_slack)
+
+    # Assert
+    assert without.urgent is False
+    assert threaded.urgent is True
 
 
 def test_should_release_the_pursued_occurrence_when_the_car_is_disconnected():
@@ -1282,7 +1289,7 @@ def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable(
     assert result.required.unreachable is False
 
 
-def test_should_release_the_occurrence_when_state_of_charge_is_unavailable_past_the_24_hour_bound():
+def test_should_release_the_occurrence_when_state_of_charge_is_unavailable_at_the_24_hour_bound():
     """R5's 24-hour bound needs only the clock and the pursued occurrence, so it applies on a
     cycle whose state of charge is unavailable as well: at the bound the occurrence is released
     and urgency with it ("a hold never outlives one deadline cycle", requirements.md R5)."""

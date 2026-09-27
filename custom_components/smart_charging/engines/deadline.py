@@ -192,8 +192,8 @@ def missed_deadline_backstop_fired(
     elapsed, or 24 hours have passed since the pursued occurrence, whichever comes first.
 
     Its own function because both arms need only the clock and the occurrences, so the backstop
-    also applies on a cycle whose state of charge is unavailable, where this engine is never
-    called (`coordinator_cycle.resolve_deadline_urgency`).
+    also applies on a cycle whose state of charge is unavailable, where
+    `resolve_required_current` is never called (`coordinator_cycle.resolve_deadline_urgency`).
     `_absolute_hours_between` rather than wall-clock arithmetic: a 24-hour span crosses midnight
     by construction and so straddles both DST transitions, which is the hazard that helper
     exists for.

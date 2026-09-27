@@ -2829,15 +2829,14 @@ async def test_urgency_engages_when_the_slack_test_fires(hass, freezer):
     assert coord._required_current.unreachable is False
 
 
-async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass, freezer):
+async def test_should_revert_urgency_when_the_baseline_alone_would_meet_the_deadline(hass, freezer):
     """R5's handback: held urgency clears once the baseline mode's own desired current
     reaches the required current -- the ordinary policy will meet the deadline unaided.
 
     Held on entry (issue #1078), because post-#1078 the revert case IS the handback and
     nothing else at this tier covers it clearing. Without the held occurrence this test was
-    inert: at
-    ~3.26 A required against a 12.8 A slack threshold, `target_current` could be set to 0.0 and
-    it would still have passed."""
+    inert: at ~3.26 A required against a 12.8 A slack threshold, `target_current` could be set
+    to 0.0 and it would still have passed."""
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=79.0)
     config = _config()
@@ -2859,7 +2858,9 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
     assert coord._pursued_occurrence is None
 
 
-async def test_handback_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
+async def test_should_hand_back_against_rows_3_to_5_when_the_escalated_mode_is_active(
+    hass, freezer
+):
     """Regression per resolution-rules.md's own warning, in its post-#1078 home: the baseline
     comparison is now the HANDBACK test rather than the entry condition, and reading the
     escalated mode's own (already-maximum) desired current there would clear urgency the instant
@@ -3539,7 +3540,7 @@ async def test_ev_soc_fault_holds_the_flag_so_a_later_genuine_resolve_still_clea
 # --- ROLE_LOW_TARIFF (issue #376): Auto row 4's low-tariff input ---
 
 
-async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
+async def test_should_default_the_low_tariff_to_active_when_its_role_is_unmapped(hass, freezer):
     """Glossary's own single-tariff default: with ROLE_LOW_TARIFF unmapped, row 4 behaves
     as though low_tariff_active is always True -- baseline selects Captar (16 A, exceeds
     the ~10.87 A the deadline below requires), so urgency never engages."""
@@ -3565,7 +3566,7 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     assert coord._required_current.urgent is False
 
 
-async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
+async def test_should_withhold_baseline_row_4_when_the_low_tariff_reads_inactive(hass, freezer):
     """With ROLE_LOW_TARIFF mapped and reading False, row 4 never matches -- baseline falls
     through to Off (0 A), which can never satisfy R5's handback, so held urgency holds.
 
@@ -3598,7 +3599,7 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     assert coord._required_current.urgent is True
 
 
-async def test_low_tariff_mapped_true_matches_default(hass, freezer):
+async def test_should_match_the_default_when_the_low_tariff_reads_true(hass, freezer):
     """A mapped ROLE_LOW_TARIFF reading True behaves the same as the unmapped default: row 4
     matches, the baseline is `Captar`, and its maximum-current request satisfies R5's handback
     so held urgency clears.
@@ -4595,38 +4596,30 @@ async def test_should_thread_one_pursued_occurrence_across_engage_hold_and_relea
     _seed_ample_peak_headroom(coord)
     engaged_occurrence = dt_util.now() + timedelta(hours=1.25)
 
-    # Act / Assert -- cycle 1 engages: 7.5 kWh over 1.25 h at 230 V is ~26.09 A, over both the
-    # 12.8 A slack threshold and the 16 A escalated rate.
+    observed = []
+
+    async def _cycle():
+        await coord._async_update_data()
+        observed.append((coord._required_current.urgent, coord._pursued_occurrence))
+
+    # Act -- cycle 1 engages: 7.5 kWh over 1.25 h at 230 V is ~26.09 A, over both the 12.8 A
+    # slack threshold and the 16 A escalated rate. Cycle 2 re-seeds a later departure time at
+    # ~5.43 A required, far under the slack threshold. Cycle 3 brings the state of charge to the
+    # active SOC limit, so the required current is 0 A and the handback holds trivially.
     _seed_today_deadline(coord, hours_from_now=1.25)
-    await coord._async_update_data()
-    assert coord._required_current.urgent is True
-    assert coord._pursued_occurrence == engaged_occurrence
-
-    # Cycle 2 holds, and does NOT re-anchor onto the later departure time just seeded: ~5.43 A
-    # required is far under the slack threshold, so only the held occurrence keeps urgency in
-    # effect.
+    await _cycle()
     _seed_today_deadline(coord, hours_from_now=6)
-    await coord._async_update_data()
-    assert coord._required_current.urgent is True
-    assert coord._pursued_occurrence == engaged_occurrence
-
-    # Cycle 3 releases: state of charge reaches the active SOC limit, so the required current is
-    # 0 A and the handback holds trivially (resolution-rules.md's release list).
+    await _cycle()
     adapters[ROLE_EV_SOC]._value = 80.0
-    await coord._async_update_data()
-    assert coord._required_current.urgent is False
-    assert coord._pursued_occurrence is None
+    await _cycle()
 
-
-async def test_should_not_keep_the_boolean_urgency_flag_when_the_occurrence_replaces_it(hass):
-    """D-8: the pursued occurrence replaces `_urgency_latched` rather than sitting beside it."""
-    # Arrange / Act
-    coord = SmartChargingCoordinator(
-        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
-    )
-
-    # Assert
-    assert not hasattr(coord, "_urgency_latched")
+    # Assert -- engaged; held and NOT re-anchored onto the later time, since only the held
+    # occurrence keeps urgency in effect; released (resolution-rules.md's release list).
+    assert observed == [
+        (True, engaged_occurrence),
+        (True, engaged_occurrence),
+        (False, None),
+    ]
 
 
 async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable(
@@ -4667,18 +4660,11 @@ async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavai
     assert result.effective_peak_limit_kw == 7.0
 
 
-async def test_should_release_a_hold_past_the_24_hour_bound_when_state_of_charge_is_unavailable(
-    hass, freezer
-):
-    """R5's 24-hour bound is what makes "a hold never outlives one deadline cycle"
-    unconditional, so it holds on a cycle whose state of charge is unavailable too: urgency is
-    held up to the bound (UC05's State model) and released once the bound passes, the effective
-    peak limit falling back from the maximum peak with it.
-
-    Set up in `Power`, not a solar mode, for the reason its sibling above gives.
-    """
-    # Arrange -- a hold 23 h old, the state of charge unavailable, a maximum peak above the floor.
-    freezer.move_to("2026-01-15 12:00:00")
+def _soc_unavailable_hold(hass, hold_age):
+    """A `Power` coordinator with the state of charge unavailable and a hold `hold_age` old, and a
+    maximum peak above the floor so held urgency shows as a raised effective peak limit. `Power`
+    rather than a solar mode for the reason
+    `test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable` gives."""
     adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
     config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
     coord = SmartChargingCoordinator(
@@ -4687,25 +4673,48 @@ async def test_should_release_a_hold_past_the_24_hour_bound_when_state_of_charge
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
-    held = dt_util.now() - timedelta(hours=23)
-    coord._pursued_occurrence = held
+    coord._pursued_occurrence = dt_util.now() - hold_age
+    return coord
 
-    # Act -- one cycle inside the bound, then one past it.
-    inside = await coord._async_update_data()
-    urgent_inside = coord._required_current.urgent
-    held_inside = coord._pursued_occurrence
-    freezer.tick(timedelta(hours=2))
-    past = await coord._async_update_data()
 
-    # Assert -- held inside the bound; released past it, reading or not.
-    assert inside.fault is False
-    assert urgent_inside is True
-    assert held_inside == held
-    assert inside.effective_peak_limit_kw == 7.0
-    assert past.fault is False
-    assert coord._required_current.urgent is False
+async def test_should_hold_urgency_inside_the_24_hour_bound_when_state_of_charge_is_unavailable(
+    hass, freezer
+):
+    """Up to R5's 24-hour bound a SOC-unavailable cycle holds the urgency its occurrence implies
+    (UC05's State model), raised peak limit included."""
+    # Arrange -- a hold one minute short of the bound.
+    freezer.move_to("2026-01-15 12:00:00")
+    coord = _soc_unavailable_hold(hass, timedelta(hours=24) - timedelta(minutes=1))
+    held = coord._pursued_occurrence
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
+    assert coord._pursued_occurrence == held
+    assert coord._required_current.urgent is True
+    assert result.effective_peak_limit_kw == 7.0
+
+
+async def test_should_release_a_hold_past_the_24_hour_bound_when_state_of_charge_is_unavailable(
+    hass, freezer
+):
+    """R5's 24-hour bound is what makes "a hold never outlives one deadline cycle"
+    unconditional, so it applies on a cycle whose state of charge is unavailable too: the
+    occurrence is released and the effective peak limit falls back from the maximum peak."""
+    # Arrange -- a hold one minute past the bound.
+    freezer.move_to("2026-01-15 12:00:00")
+    coord = _soc_unavailable_hold(hass, timedelta(hours=24) + timedelta(minutes=1))
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is False
     assert coord._pursued_occurrence is None
-    assert past.effective_peak_limit_kw == 2.5
+    assert coord._required_current.urgent is False
+    assert result.effective_peak_limit_kw == 2.5
 
 
 async def test_should_keep_charging_when_the_pursued_occurrence_has_passed(hass, freezer):

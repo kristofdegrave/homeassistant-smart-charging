@@ -600,25 +600,18 @@ def test_should_keep_urgency_when_charging_has_closed_the_gap_and_an_occurrence_
     """Urgency is held: charging at the escalated rate drives the required current back below
     the slack threshold within a cycle, and re-deriving the engage test there would revert
     urgency and duty-cycle the charger (resolution-rules.md, 'Clearing urgency')."""
+    # Arrange -- an occurrence already pursued, and a 0 A baseline that cannot hand back.
+
+    # Act
     result = resolve_required_current(
         **SLACK_KWARGS,
         baseline_desired_a=0.0,
         escalated_maximum_permitted_rate_a=32.0,  # slack test would NOT fire on this cycle
         pursued_occurrence=SLACK_DEADLINE_AT,
     )
+
+    # Assert
     assert result.urgent is True
-
-
-def test_should_release_the_pursued_occurrence_when_the_baseline_meets_required():
-    """The ordinary policy will now meet the deadline unaided -- e.g. the low tariff has opened
-    and `Auto`'s own overnight row would charge anyway -- so the levers have nothing to add."""
-    result = resolve_required_current(
-        **SLACK_KWARGS,
-        baseline_desired_a=12.0,  # exactly the required current: '>=' clears
-        escalated_maximum_permitted_rate_a=32.0,
-        pursued_occurrence=SLACK_DEADLINE_AT,
-    )
-    assert result.urgent is False
 
 
 def test_slack_test_takes_precedence_over_handback():
@@ -626,18 +619,26 @@ def test_slack_test_takes_precedence_over_handback():
     escalated rate could ever deliver -- both tests then hold on the same cycle. The slack test
     wins; letting the handback win would clear urgency and re-engage it next cycle for ever
     (resolution-rules.md, 'The slack test takes precedence')."""
+    # Arrange -- an occurrence already pursued, both tests holding at once.
+
+    # Act
     result = resolve_required_current(
         **SLACK_KWARGS,
         baseline_desired_a=32.0,  # handback satisfied: 32.0 >= 12.0
         escalated_maximum_permitted_rate_a=14.0,  # but slack test fires: 12.0 > 11.2
         pursued_occurrence=SLACK_DEADLINE_AT,
     )
+
+    # Assert
     assert result.urgent is True
 
 
 def test_should_release_the_pursued_occurrence_when_soc_reaches_the_active_limit():
     """Required current is 0 A, so the handback holds for any baseline and the slack test
     cannot fire -- urgency clears even with nothing else changing."""
+    # Arrange -- an occurrence already pursued, the state of charge at the active limit.
+
+    # Act
     result = resolve_required_current(
         deadline_at=SLACK_DEADLINE_AT,
         now=SLACK_NOW,
@@ -649,8 +650,11 @@ def test_should_release_the_pursued_occurrence_when_soc_reaches_the_active_limit
         escalated_maximum_permitted_rate_a=32.0,
         pursued_occurrence=SLACK_DEADLINE_AT,
     )
+
+    # Assert
     assert result.required_a == 0.0
     assert result.urgent is False
+    assert result.pursued_occurrence is None
 
 
 def test_unreachable_is_a_strict_subset_of_urgent_by_construction():
@@ -665,25 +669,6 @@ def test_unreachable_is_a_strict_subset_of_urgent_by_construction():
     )
     assert result.unreachable is True
     assert result.urgent is True
-
-
-def test_should_release_the_pursued_occurrence_when_no_deadline_resolves():
-    """The deadline resolving to 'no deadline' (R14, or the deadline capability going absent,
-    R18) is one of urgency's own clear conditions."""
-    result = resolve_required_current(
-        deadline_at=None,
-        now=SLACK_NOW,
-        soc=50.0,
-        active_soc_limit=80.0,
-        ev_battery_capacity_kwh=100.0,
-        voltage=250.0,
-        baseline_desired_a=0.0,
-        escalated_maximum_permitted_rate_a=32.0,
-        pursued_occurrence=SLACK_DEADLINE_AT,
-    )
-    assert result.required_a is None
-    assert result.urgent is False
-    assert result.unreachable is False
 
 
 # --- R5 pursued occurrence (issue #1187, T1) ----------------------------------------------
