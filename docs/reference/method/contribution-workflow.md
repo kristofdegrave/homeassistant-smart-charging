@@ -4,8 +4,8 @@ Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a
 code. Five steps, each naming the skill an interactive session runs it through; the rules the
 steps rest on follow the chain. The artifact-specific additions for analysis documents and ADRs
 (`CLAUDE.md`'s **Review protocol for analysis documents** and **Architecture Decision Records
-(ADRs)** topics) layer their own template/quality-check steps on top of this; they never
-replace it.
+(ADRs)** topics) layer their own template and quality-check steps on top of this, never
+replacing it.
 
 Beside this lifecycle: the stages either side of it are
 [idea-to-product.md](idea-to-product.md)'s, and the **Definition of Done** an author checks before
@@ -64,7 +64,7 @@ author's context. What corrupts a review is the *reviewer* carrying that context
 session: the session that wrote the work may run step 2, because it only dispatches to agents
 that cannot see what it saw and relays what they return. The moment it judges the work itself
 — screening findings before posting, or "checking the reviewer missed nothing" — the separation
-is gone. A fresh **agent**, not a fresh session.
+is gone.
 
 ## Rule B — stop-and-report, per issue
 
@@ -79,12 +79,12 @@ on autonomous artifact-chaining, and it is per issue, not per step.
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
 exception: `cleanup` is triggered by the human stating that the merge happened, since the
 session does not watch for the merge — no step dispatches it, and the skill itself guards
-against a statement that turns out to be premature.
+against a premature statement.
 
 ## Rule C — decisions go through `clarify`
 
-In an interactive session, a decision put to the human partner is asked through `clarify`,
-never as a loose question in a status report.
+A decision put to the human partner goes through `clarify`, which asks it or parks it — never
+as a loose question in a status report.
 
 ## Rounds and the cap
 
@@ -120,8 +120,8 @@ never as a loose question in a status report.
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
-  own markers (the local round, `ai-fix-`, escalation and self-grant markers; **Git identity**
-  below), posted while an exit label was on: after its `labeled` event and before any later
+  own markers (the local round, `ai-fix-`, escalation, self-grant and `autopilot-parked`
+  markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
   `unlabeled` one. Every session post carries one — a review's inline comments via its body,
   else `fix`'s note marker — bar the hold-reason review (**Exit labels** below). Nothing else
   resets the count, a self-grant comment included; no reset event means counting from the
@@ -133,16 +133,21 @@ never as a loose question in a status report.
 ## Exit labels
 
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. `needs-approval` adds that a human may merge the PR **as it stands**, which is
-why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both exits have one actor: the **review step**, at the end of the pass it
+human decides**. On a PR, `needs-approval` adds that a human may merge it **as it stands**, which is
+why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both PR exits have one actor: the **review step**, at the end of the pass it
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision`. After the last pass the cap allows, with Critical or Major
 still open and no round self-granted, it applies `needs-decision` **alongside**
 `needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
 clean one in any list view while `needs-approval` keeps its single meaning. No other step or
-skill applies either label; the one exception is the session putting a PR on hold (below), which a checklist's
+skill applies either label to a PR; the one exception is the session putting a PR on hold (below), which a checklist's
 exit check can also do at the exit.
 Neither label replaces manual merge approval (**Merge and issue closing** below).
+
+On an **issue** the same two labels park work for the human, as ADR-0052 decided:
+`needs-decision` is applied by `clarify`'s parking rule, in an unattended run, and means a
+question waits for the human's answer; `needs-approval` on an epic asks for a go. An issue's
+label says nothing about any PR.
 
 A human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a round the human grants: both labels come off no later than the review step's
@@ -195,12 +200,12 @@ These five are the rule; `resolve-review-thread` applies them per thread, and
 
 ## Base `main` and stacking
 
-The PR always bases `main` directly — never another work branch, even if logically stacked on
-a not-yet-merged prior task, because this project's merge strategy — [profile.md](../profile.md)'s **Merge strategy** — orphans
-stacked branches. Branching off a
-prior task's branch locally is fine; the PR itself is `--base main` from the start, and the
-new branch is still cut from a fetched `origin/main` — or, when deliberately stacking, from
-the freshly fetched prior branch — never from a stale local `main`.
+The PR always bases `main` directly — never another work branch, even one it is logically
+stacked on, because this project's merge strategy ([profile.md](../profile.md)'s **Merge
+strategy**) orphans stacked branches. Branching off a prior task's branch locally is fine; the
+PR is `--base main` from the start, and the new branch is cut from a fetched `origin/main` —
+or, when deliberately stacking, from the freshly fetched prior branch — never from a stale
+local `main`.
 
 ## `Closes` and `Part of`
 
@@ -215,7 +220,7 @@ the `Closes` reference is the one that names it.
 **Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
 **Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue
 via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
-fully clean verification-only task — closing is left to that reference, which fires on merge.
+verification-only task: closing is left to that reference, which fires on merge.
 
 **An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
 itself — the `development`/`testing` children are filed as part of the decomposition that wrote
@@ -261,14 +266,13 @@ progress* changes nothing.
 
 ## Parallel work and forward dependencies
 
-Multiple tasks can proceed in parallel. When one task needs something a not-yet-built task
-will produce (an entity, an event, a function signature), don't block and don't
-invent/implement the missing piece. Pin down the **contract** instead — exact name/id, value
-semantics/unit, a shared constant both sides code against — in the relevant
-spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task. The
-producing task implements the real thing; the consuming task only adds the signature and
-tests against a simulated/stubbed instance of the contract — never a private reimplementation
-of the producer's logic.
+Tasks may proceed in parallel. When one needs something a not-yet-built task will produce (an
+entity, an event, a function signature), neither block nor invent the missing piece: pin down
+the **contract** — exact name/id, value semantics/unit, a shared constant both sides code
+against — in the relevant spec/`const.py`/ADR, and mark the producing side as a dependency of
+the consuming task. The producer implements the real thing; the consumer adds only the
+signature and tests against a stubbed instance of the contract, never a private
+reimplementation of the producer's logic.
 
 ## Git identity
 
@@ -290,8 +294,7 @@ session's own footprint by the session's markers, never by author.
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
   orthogonal because the fix for a defect is not always code: an entity-catalog row that claims
-  a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`, and a stale
-  minimum-HA declaration is a `bug` whose fix is neither. So an issue carries the kind label
+  a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`. So an issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
@@ -299,8 +302,8 @@ session's own footprint by the session's markers, never by author.
   row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
-  cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
-  raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
+  cross-check an ADR) up at least one tier from raw effort — it takes more reading than it
+  looks. **Epics get Size only, never Estimate** — an epic's cost is the sum of
   its children's estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
@@ -328,8 +331,8 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those
-two spellings are historical, not alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
+defined segment. Earlier branches for this kind of work used `dev/` and `fix/`; both
+spellings are historical, not alternatives (`development/<n>` keeps its meaning above). When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
@@ -351,8 +354,8 @@ A post-mortem is a **snapshot of reasoning at a date**, not a source of truth fo
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
 that. Its job is to explain how a specific failure got past a specific process, so the changes
-it recommends can be argued from evidence. Once those changes land, it stays as the record of
-why and is not revised.
+it recommends can be argued from evidence; once they land, it stays as the record of why,
+unrevised.
 
 ### Two rules that apply elsewhere do not apply here
 
@@ -369,8 +372,8 @@ why and is not revised.
 
 By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
-inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
-undercut the point is the defect class that matters. Pick the reviewer from what the PR
+inaccurate, truncated so its meaning changes, or mined from a context that would undercut the
+point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
 No reviewer checklist is applied to the post-mortem itself: the checklists are all written
 against artifacts that assert behaviour, and none fits a narrative document.
