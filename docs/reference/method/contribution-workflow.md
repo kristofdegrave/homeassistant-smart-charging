@@ -214,13 +214,14 @@ the `Closes` reference is the one that names it.
 
 **Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
 **Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue
-via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
-fully clean verification-only task — closing is left to that reference, which fires on merge.
+via the PR's `Closes #N` reference, or leaves it open under `Part of #N`. Never close the
+linked issue directly (`gh issue close`), even on a verification-only task — that reference
+fires on merge.
 
-**An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
-itself — the `development`/`testing` children are filed as part of the decomposition that wrote
-the epic body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
-routes to — so the work actually gets picked up. Implementing each child is its own issue and its own chain.
+**An epic's body is the spec, and its children are the tasks.** The `development`/`testing`
+children are filed by the decomposition that wrote the epic body — the closing step of the
+flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to — so the work gets picked up. Each
+child is its own issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
@@ -249,8 +250,8 @@ and never a column by its name on the board: the board's Status vocabulary and o
 `.claude/profile.yml`'s `board.fields.status`, and which column plays which role on this
 project — including any column that plays none — is [profile.md](../profile.md)'s **Project
 board**. The rule here is only that the chain moves an item **backlog → in progress → in
-review → done** and through no other column: a column that later gains a defined meaning is
-inserted explicitly into step 0/1 here rather than left implicit.
+review → done** and through no other column: a column that later gains a meaning is
+inserted explicitly into step 0/1 here.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
@@ -261,9 +262,9 @@ progress* changes nothing.
 
 ## Parallel work and forward dependencies
 
-Multiple tasks can proceed in parallel. When one task needs something a not-yet-built task
-will produce (an entity, an event, a function signature), don't block and don't
-invent/implement the missing piece. Pin down the **contract** instead — exact name/id, value
+Tasks can proceed in parallel. When one needs something a not-yet-built task will produce (an
+entity, an event, a signature), neither block nor invent the missing piece. Pin down the
+**contract** instead — exact name/id, value
 semantics/unit, a shared constant both sides code against — in the relevant
 spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task. The
 producing task implements the real thing; the consuming task only adds the signature and
@@ -289,38 +290,40 @@ session's own footprint by the session's markers, never by author.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
-  orthogonal because the fix for a defect is not always code: an entity-catalog row that claims
-  a Read-by it does not earn is a `bug` whose fix lands in `docs/analysis/**`, and a stale
-  minimum-HA declaration is a `bug` whose fix is neither. So an issue carries the kind label
+  orthogonal because a defect's fix is not always code: an entity-catalog row claiming a
+  Read-by it does not earn is a `bug` fixed in `docs/analysis/**`. So an issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
   gate. Neither label substitutes for the other, and a kind label adds no Model-selection
   row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
-  filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
-  cross-check an ADR) up at least one tier from raw effort — it takes more reading than the
-  raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
+  filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run)
+  up at least one tier — it takes more reading than raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
   its children's estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**. Neither is body text —
-  `gh` supports both directly, so nobody needs to re-derive them — the commands, and the
-  read-backs that confirm an edge actually landed, are in
-  [tracker-mechanics.md](tracker-mechanics.md).
+  relationship**. Neither is body text — `gh` supports both directly; the commands, and the
+  read-backs that confirm an edge landed, are [tracker-mechanics.md](tracker-mechanics.md)'s.
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
+- **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice, its rank a
+  numeric prefix in the title, never a due date. An epic carries its milestone and a child
+  inherits it through the parent edge, so filing copies the epic's. Nothing
+  enters the backlog unmilestoned by design — [idea-to-product.md](idea-to-product.md)'s
+  **Decompose** stage ends with new work placed on one — and an unmilestoned issue is picked
+  last, never never. The `gh` flag is [tracker-mechanics.md](tracker-mechanics.md)'s
+  **Filing a work item**.
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
   shipped behaviour also needs an epic whose body carries the spec to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
   condition and explains why the automatic label cannot enforce it.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
-  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge is
-  what says the body was cut from a decomposition somebody reviewed rather than typed straight
-  into an issue. Get the edge on at filing time; adding it afterwards works
+  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge
+  says the body was cut from a reviewed decomposition rather than typed straight into an issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
@@ -328,8 +331,8 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches for *this* kind of work also used `dev/` and `fix/`; those
-two spellings are historical, not alternatives (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
+defined segment. Earlier `dev/` and `fix/` spellings are historical, not alternatives
+(`development/<n>` keeps its own meaning above — a task cut from an epic). When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
@@ -371,6 +374,6 @@ By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
 inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
 undercut the point is the defect class that matters. Pick the reviewer from what the PR
-actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
-No reviewer checklist is applied to the post-mortem itself: the checklists are all written
-against artifacts that assert behaviour, and none fits a narrative document.
+touches (the `workflow` checklist when it also edits `CLAUDE.md`).
+No reviewer checklist is applied to the post-mortem itself: the checklists are written
+against artifacts that assert behaviour; none fits a narrative document.

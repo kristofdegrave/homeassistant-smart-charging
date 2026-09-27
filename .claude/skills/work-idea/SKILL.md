@@ -30,7 +30,8 @@ only sequences those stages and says which skill performs each. Cite it, never r
    each child issue's own downstream skill.
 3. **Route it down one track** — new behaviour, or a defect/improvement against behaviour that
    already ships. The flow document owns the rule and what each track must produce. Write the
-   chosen track on the issue, so the next step is not re-argued.
+   chosen track on the issue, so the next step is not re-argued; on the shipped-behaviour
+   track, place the issue on a milestone now, as the flow's **Route** stage says.
 4. **On the shipped-behaviour track, verify the claim before anything is designed** — the
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
@@ -46,7 +47,10 @@ only sequences those stages and says which skill performs each. Cite it, never r
    they end up. The flow owns the closing step and its order, `file-task-issue` its mechanics, so the epic body never
    carries a checklist of them; what a child is and in what order children are filed is the
    flow document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
-   later — recursion is expected, not an error.
+   later — recursion is expected, not an error. The step ends with what it filed — the epic,
+   or the single issue — placed on a milestone, creating one where none fits; the flow's
+   **Decompose** stage owns that rule, and a routed `bug` gets its milestone at step 3 for
+   the same reason.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues

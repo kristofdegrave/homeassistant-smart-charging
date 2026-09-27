@@ -84,13 +84,19 @@ was re-verified when it was written down.
 the item to the board and edit its fields by raw node id.
 
 ```sh
-# 1. create (see the Windows note below for why the body is a file)
+# 1. create (see the Windows note below for why the body is a file); --milestone takes the
+#    milestone's title — an epic's own, or the parent epic's for a child
 gh issue create --repo $REPO \
-  --title "<title>" --body-file <path> --label <context-label>
+  --title "<title>" --body-file <path> --label <context-label> --milestone "<title>"
 
 # 2. put it on the board; item-add prints the item id you then edit
 gh project item-add $BOARD --owner $OWNER --url <issue-url> --format json
 ```
+
+A milestone placed or changed later is `gh issue edit <n> --milestone "<title>"`; a new one is
+`gh api -X POST repos/$REPO/milestones -f title="<title>"`. Read the placement back with
+`gh issue view <n> --json milestone --jq .milestone.title` — the create call's exit code says
+nothing about whether the name resolved.
 
 ```sh
 # 3. set the fields, one call each, by node id
@@ -131,8 +137,8 @@ gh project item-list $BOARD --owner $OWNER --format json --limit 1000 \
 gh api -X POST repos/$REPO/issues --input <payload.json>
 ```
 
-with `{"title": …, "body": …, "labels": [ … ]}`. Using `--input` also keeps the body's UTF-8
-intact.
+with `{"title": …, "body": …, "labels": [ … ], "milestone": <number>}` — REST takes the
+milestone's number, not its title. Using `--input` also keeps the body's UTF-8 intact.
 
 ## Rewriting a work item's body
 
