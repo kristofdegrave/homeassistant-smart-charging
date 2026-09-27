@@ -7,7 +7,7 @@ Status: Accepted
 
 In the context of a contribution chain whose only control on unattended work is a human
 gesture per issue, facing an autopilot that would start issues and merge pull requests
-unwatched, we decided on gates plus a cap, auto-merge by tree, a local guard and milestones
+unwatched, we decided on three gates plus a cap, merging by tree, a local guard and milestones
 as ordered slices, to spend the human's attention only on judgment, accepting that the guard
 is an accident guard, not a sandbox.
 
@@ -16,19 +16,19 @@ is an accident guard, not a sandbox.
 - **The control today is a human per issue.** **Rule B** runs the chain unattended to a
   clean pass or the cap and never starts the next issue. Every merge is manual, by
   `CODEOWNERS` and branch protection, and `cleanup` starts from the human.
-- **An autopilot is wanted**: each tick it starts the next startable issue in isolation and
-  parks what needs a human — a loop the human starts and stops under their own account, not
+- **An autopilot is wanted**: each tick starts the next startable issue and parks what needs
+  a human — a loop the human starts and stops under their own account, not
   the CI pipeline [ADR-0048](0048-retire-the-ai-label-pipeline.md) retired, nor
   [ADR-0043](0043-scheduled-upstream-drift-watcher.md)'s case, a clock-fired job with no
-  human anywhere in its trigger.
-- **What each tree is to the flow.** Analysis and records are the spec. A design document is
-  derived from merged analysis; an epic body is derived from one approved slice of it, then
-  read by a human ([ADR-0044](0044-implementation-spec-lives-in-the-epic-body.md)).
+  human in its trigger.
+- **What each tree is to the flow.** Analysis and records are the spec; a design derives
+  from merged analysis, and an epic body from one approved slice of it, then read by a human
+  ([ADR-0044](0044-implementation-spec-lives-in-the-epic-body.md)).
   `.github/`, `.claude/`, `docs/reference/` and `CLAUDE.md` are the rules a run operates
   under.
 - **Merges run as the human's account.** An author cannot approve their own pull request, so
   a merge by the session is `gh pr merge --admin`, bypassing code-owner review and required
-  checks; the platform has no rule keyed on a label and a file set.
+  checks; the platform has no rule keyed on label and files.
 - **Nothing orders the backlog.** `Ready` plays no role and the flow leaves priority
   unstandardized.
 
@@ -39,7 +39,7 @@ is an accident guard, not a sandbox.
 #### Option A1 — Keep Rule B: the human starts every issue
 
 - Pro: a human looks at every issue.
-- Con: the gesture per issue is the ceiling.
+- Con: the per-issue gesture is the ceiling.
 
 #### Option A2 — Three gates plus a cap
 
@@ -48,7 +48,8 @@ no open blocked-by edge, is startable; the human acts at three gates — the spe
 the epic-body read, verify live. The human starts and stops the loop, so a human is in its
 trigger. At most two tree-disjoint lanes in flight.
 
-- Pro: attention goes to the spec, the slice and the installation.
+- Pro: attention goes to the spec, the slice and the installation, and only a collaborator's
+  issue starts a run.
 - Con: the per-issue veto goes; what is worked next is then set only by edges and order.
 - Con: an ill-formed issue is started by a machine; a pre-flight catches only the mechanical.
 
@@ -64,7 +65,8 @@ trigger. At most two tree-disjoint lanes in flight.
 All files under `custom_components/`, `tests/` or `docs/design/`, the head a branch of this
 repository, `needs-approval` without `needs-decision`, CI green; any other tree waits.
 
-- Pro: decided from the diff and labels alone, over trees a human reads again later.
+- Pro: decided from the diff, labels and head alone, over trees a human reads again later;
+  outside work stays at the human's gate.
 - Con: a design change reaches the flow's *approved* state without a human merge.
 - Con: a fork's pull request never auto-merges.
 
@@ -80,10 +82,10 @@ repository, `needs-approval` without `needs-decision`, CI green; any other tree 
 The destructive-git guard refuses `gh pr merge` outside B2's conditions or without a squash;
 merges run as the human via `--admin --squash`.
 
-- Pro: one rule in one script with its own tests, beside the guard it extends; one account,
+- Pro: one rule in one script with tests, beside the guard it extends; one account,
   once the bot's last use, commit authorship, goes.
-- Con: an accident guard, not a sandbox: it sees `gh pr merge` typed as such here, not a
-  wrapped shell, a raw API call or another client.
+- Con: an accident guard, not a sandbox: it sees `gh pr merge` typed as such, not a wrapped
+  shell or a raw API call.
 - Con: commits stop carrying a bot author, which the chain never used.
 
 ### In what order issues are picked
@@ -110,13 +112,13 @@ come last.
 
 A2 over A1, which keeps the gesture that is the ceiling; A2's second Con is accepted.
 
-B2 over B1, which leaves the ceiling in place; B2's first Con is accepted on its Pro, and its
-second, with A2's filer condition, keeps outside work and issues at the human's gate.
+B2 over B1, which leaves the ceiling in place; B2's first Con is accepted on its Pro, its
+second as the price of the gate that Pro names.
 
-C2 over C1 because C1's account would rubber-stamp the rule C2 states once; its
-first Con is the known limit written down here, its second the bot's last use.
+C2 over C1 because C1's account would rubber-stamp the rule C2 states once; its Cons are
+the known limit written down here and the bot's last use.
 
-D2 over D1 because a picker needs an order somebody meant; its Cons are accepted as stated.
+D2 over D1 because a picker needs an order somebody meant; its Cons are accepted.
 
 One record, not four: A2 removes the per-issue gesture, so B2 must say what the run may
 finish alone, C2 must hold B2, and D2 keeps the human's say on what is worked next — with D1
@@ -124,17 +126,17 @@ in its place, A2's first Con is unbounded.
 
 ## Consequences
 
-- **Rule B loses its chaining sentence.**
+- **Rule B loses its chaining sentence**, keeping its stop.
 - **Merge is manual for the manual-merge trees only**; `needs-approval` is the auto-merge
   class's merge condition, which meets the Design gate's *approved*.
-- **`cleanup` after an auto-merge runs from the autopilot's own merge.**
+- **`cleanup` runs from the autopilot's own merge.**
 - **Parking reuses the exit labels on issues**: `needs-approval` on an epic asks for a go,
   `needs-decision` asks a question; a marker in the parking comment keeps a tick from
   re-parking what the human answered.
 - **The merge rule lives in the workflow's *Commit & push authorization***, which the guard
-  mechanizes: the rule, head condition included, with tests and a wider header; the profile
-  lists the auto-merge trees; a check branch protection does not require reaches the rule
-  or is promoted.
+  mechanizes: the rule, head condition included, with tests; the profile lists the
+  auto-merge trees; a check branch protection does not require reaches the rule or is
+  promoted.
 - **The bot identity is retired**; commits carry the human partner's account.
 - **Milestones become the method's priority**, stated in **Issue conventions**; filing
   copies the epic's milestone to the child, and an idea or a routed bug ends on one.
@@ -146,7 +148,7 @@ in its place, A2's first Con is unbounded.
   `CODEOWNERS`' justification by the manual gate alone; **ADR-0043** in its may-not-dispatch
   rule and its scheduled-automation constraint, which bind a job with no human in its
   trigger, not a loop the human starts — narrowed, not superseded, since its decision stands
-  for its own job. Both stand.
+  for its own job.
 
 **Blast radius.** One search, run from the repository root:
 
@@ -164,15 +166,16 @@ rg -n --hidden --glob '!.git/' \
   -e 'human-authored|names none|Narrowed by ADR-0050|through ADR-0051|\| 0043 \|' \
   -e 'manual-approval-before-merge|maintainer is the sole|never a self-approval|No other step or|says to go on|Size/Estimate, `Source:`' \
   -e '^  context:|^  enabled:|[Oo]ne row per (enabled )?(context label|entry)|one row each|`adr`, `uc`, `requirement`|^## Labels' \
+  -e 'filed here|filed first|filed now|fresh-agent pass over|Running the pass' \
   -e '[Ii]nteractive (session|lifecycle)|non-interactive|[Ii]nteractive(-| )only|[Ii]nteractive sessions only' .
 ```
 
 Wide enough because each part replaces a rule that names itself: Rule B, the manual merge and `cleanup`'s trigger, the
-Design gate's *approved*, the milestone sentence and filing's list, `Ready`, the guard's
+Design gate's *approved*, the milestone sentence, `Ready`, the guard's
 block list, scope, tests and authorization, branch protection's gates, rows without a work
 file, the label vocabulary and row set, the exit labels' scope and actor, the bot identity,
-the closing step's go, the design index, the interactive qualifier and the cap's keys.
-**113** hits.
+the epic's filing and closing step, the design index, the interactive qualifier and the
+cap's keys. **118** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
@@ -185,15 +188,14 @@ the closing step's go, the design index, the interactive qualifier and the cap's
 | `docs/reference/method/contribution-workflow.md:136`, `:137`, `:142`; `docs/reference/method/ci-pipeline.md:142`; `.claude/profile.yml:71`, `:74` | A pull request's, with one actor | Widened to issues and the autopilot |
 | `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73` | Enumerate the context labels and rows | Gain `decompose`; `epic` joins the labels |
 | `docs/reference/work-types/workflow/review.md:177`; `.claude/skills/submit-pr-review/SKILL.md:12`; `.claude/skills/review/SKILL.md:107` | The manual gate is sole and non-negotiable | Narrowed to the manual-merge trees |
-| `docs/reference/method/ai-authoring.md:523`, `:524`; `.github/dependabot.yml:5` | No merge without manual approval, never auto-merge; Dependabot like any other PR | Narrowed to the manual-merge trees; Dependabot's stay manual |
+| `docs/reference/method/ai-authoring.md:523`, `:524`; `.github/dependabot.yml:5` | Never auto-merge; Dependabot like any PR | Narrowed; Dependabot's stay manual |
 | `docs/reference/method/idea-to-product.md:215`, `:416` | *Approved* gates the spec | Met by the auto-merge condition |
-| `docs/reference/method/idea-to-product.md:210` | The human says go on | The `decompose` park |
-| `.claude/skills/file-task-issue/SKILL.md:63` | Filing's done-when list has no milestone | Gains the epic's milestone |
+| `docs/reference/method/idea-to-product.md:156`, `:168`, `:183`, `:207`, `:210`; `.claude/skills/file-task-issue/SKILL.md:54`, `:63` | File the epic and artifact issues, run the pass in session, no milestone | Gain the `decompose` child, `epic` label and milestone; the pass moves to its work file |
 | `.github/workflows/ci.yml:90`, `:91`, `:133`; `docs/reference/method/ci-pipeline.md:163`, `:180` | Block only as branch protection's required checks | Reach the merge rule, or are promoted |
-| `.claude/hooks/block-destructive-git.sh:2`, `:3`, `:4`, `:30`, `:38`, `:100`, `:294`; `.claude/hooks/test-block-destructive-git.sh:2` | Refuse and test destructive git, on `git` segments | Gain the `gh pr merge` rule, its cases, and a wider header |
-| `docs/reference/method/contribution-workflow.md:236`; `CLAUDE.md:18` | Frame the guard as destructive-git only | The section states the merge rule; the bullet names it |
+| `.claude/hooks/block-destructive-git.sh:2`, `:3`, `:4`, `:30`, `:38`, `:100`, `:294`; `.claude/hooks/test-block-destructive-git.sh:2` | Refuse and test destructive git on `git` segments | Gain the `gh pr merge` rule and its cases |
+| `docs/reference/method/contribution-workflow.md:236`; `CLAUDE.md:18` | Frame the guard as destructive-git only | State the merge rule too |
 | `docs/design/system-design.md:832`, `:891`, `:894` | Count the records through 0051; the 0043 and 0048 rows | Gain this record and both narrowings |
-| `docs/reference/profile.md:23` | Says there is no separate bot account | True once the commit identity goes |
+| `docs/reference/profile.md:23` | Says there is no separate bot account for the interactive session | True once the commit identity goes; holds unattended too |
 | `docs/reference/method/idea-to-product.md:195` | Not yet standardized | Replaced by the milestone rule |
 | `.claude/skills/implement/SKILL.md:3`, `:13`; `.claude/skills/review/SKILL.md:3`, `:14`; `.claude/skills/fix/SKILL.md:3`; `.claude/skills/resolve-review-thread/SKILL.md:3` | Interactive-only, with why | Widened to the unattended dispatch |
 | `.claude/skills/clarify/SKILL.md:3`; `docs/reference/method/contribution-workflow.md:86` | Rule C sends decisions there; it blocks | Parks the question instead |
@@ -206,5 +208,5 @@ the closing step's go, the design index, the interactive qualifier and the cap's
 `implement/SKILL.md:23`, `workflow/review.md:53`, `resolving-merge-conflicts/SKILL.md:20`.
 Out of scope: the 4 hits in `grilling/SKILL.md`, `diagnosing-bugs/SKILL.md` and
 `improve-architecture/SKILL.md`, which keep refusing to run unattended, and
-`test-check-method.sh:40`, `:82`, `:90`, `:99`, fixtures.
-Excluded trees keep their dated text.
+`test-check-method.sh:40`, `:82`, `:90`, `:99`, fixtures that keep feeding the method check
+a synthetic profile. Excluded trees keep their text.
