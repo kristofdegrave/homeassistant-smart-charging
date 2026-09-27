@@ -29,8 +29,7 @@ is an accident guard, not a sandbox.
 - **Merges run as the human's account.** An author cannot approve their own pull request, so
   a merge by the session is `gh pr merge --admin`, bypassing code-owner review and required
   checks; the platform has no rule keyed on label and files.
-- **Nothing orders the backlog.** `Ready` plays no role and the flow leaves priority
-  unstandardized.
+- **Nothing orders the backlog**; `Ready` plays no role.
 
 ## Considered options
 
@@ -46,7 +45,7 @@ is an accident guard, not a sandbox.
 Any open issue filed by a collaborator, with a context label whose row names a work file and
 no open blocked-by edge, is startable; the human acts at three gates — the spec-class merge,
 the epic-body read, verify live. The human starts and stops the loop, so a human is in its
-trigger. At most two tree-disjoint lanes in flight.
+trigger. At most two lanes — one issue's chain each — in flight, on disjoint trees.
 
 - Pro: attention goes to the spec, the slice and the installation, and only a collaborator's
   issue starts a run.
@@ -75,7 +74,7 @@ repository, `needs-approval` without `needs-decision`, CI green; any other tree 
 #### Option C1 — A second account: the bot approves and merges
 
 - Pro: branch protection stays real.
-- Con: a second account, whose rubber stamp empties the code-owner rule.
+- Con: a second account whose rubber stamp empties the code-owner rule.
 
 #### Option C2 — A local guard: the PreToolUse hook refuses `gh pr merge` outside the class
 
@@ -93,7 +92,7 @@ merges run as the human via `--admin --squash`.
 #### Option D1 — Board order, tie-break smallest Size
 
 - Pro: no new field.
-- Con: insertion order nobody curates says nothing about what ships first.
+- Con: insertion order says nothing about what ships first.
 
 #### Option D2 — Milestones as ordered slices
 
@@ -128,7 +127,7 @@ in its place, A2's first Con is unbounded.
 
 - **Rule B loses its chaining sentence**, keeping its stop.
 - **Merge is manual for the manual-merge trees only**; `needs-approval` is the auto-merge
-  class's merge condition, which meets the Design gate's *approved*.
+  class's merge condition.
 - **`cleanup` runs from the autopilot's own merge.**
 - **Parking reuses the exit labels on issues**: `needs-approval` on an epic asks for a go,
   `needs-decision` asks a question; a marker in the parking comment keeps a tick from
@@ -165,7 +164,7 @@ rg -n --hidden --glob '!.git/' \
   -e 'bot account|kristofdegrave-bot' -e '"PR: ' -e 'one actor|one step that applies' \
   -e 'human-authored|names none|Narrowed by ADR-0050|through ADR-0051|\| 0043 \|' \
   -e 'manual-approval-before-merge|maintainer is the sole|never a self-approval|No other step or|says to go on|Size/Estimate, `Source:`' \
-  -e '^  context:|^  enabled:|[Oo]ne row per (enabled )?(context label|entry)|one row each|`adr`, `uc`, `requirement`|^## Labels' \
+  -e '^  context:|^  enabled:|[Oo]ne row per (enabled )?(context label|entry)|one row each|`adr`, `uc`, `requirement`|`uc`, `requirement`, `adr`|`documentation` and `workflow`|^## Labels' \
   -e 'filed here|filed first|filed now|fresh-agent pass over|Running the pass' \
   -e '[Ii]nteractive (session|lifecycle)|non-interactive|[Ii]nteractive(-| )only|[Ii]nteractive sessions only' .
 ```
@@ -175,18 +174,18 @@ Design gate's *approved*, the milestone sentence, `Ready`, the guard's
 block list, scope, tests and authorization, branch protection's gates, rows without a work
 file, the label vocabulary and row set, the exit labels' scope and actor, the bot identity,
 the epic's filing and closing step, the design index, the interactive qualifier and the
-cap's keys. **118** hits.
+cap's keys. **120** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
-| `docs/reference/method/contribution-workflow.md:69`, `:75`, `:76`; `.claude/skills/implement/SKILL.md:60` | Rule B forbids starting the next issue | The sentence goes |
+| `docs/reference/method/contribution-workflow.md:75`, `:76`; `.claude/skills/implement/SKILL.md:60` | Rule B forbids starting the next issue | The sentence goes |
 | `docs/reference/method/contribution-workflow.md:4`, `:275`; `.claude/profile.yml:171`; `.claude/skills/implement/SKILL.md:8`; `.claude/skills/review/SKILL.md:8`; `.claude/skills/fix/SKILL.md:8` | Say interactive | Hold unattended too |
 | `CLAUDE.md:113` | Says interactive; `cleanup` starts from the human | Holds unattended; the autopilot's merge triggers it too |
 | `docs/reference/method/contribution-workflow.md:46`, `:215`, `:216`; `docs/reference/profile.md:34`, `:35`, `:55`; `.github/CODEOWNERS:2`, `:5` | Every merge is the human's, by branch protection | Narrowed to the manual-merge trees |
 | `docs/reference/method/contribution-workflow.md:54`, `:80`, `:81`; `.claude/skills/cleanup/SKILL.md:3`, `:9`, `:14` | `cleanup` waits for the human's statement | Triggered by the autopilot's own merge |
 | `docs/reference/method/contribution-workflow.md:145` | Neither label replaces manual merge approval | The auto-merge class's merge condition |
 | `docs/reference/method/contribution-workflow.md:136`, `:137`, `:142`; `docs/reference/method/ci-pipeline.md:142`; `.claude/profile.yml:71`, `:74` | A pull request's, with one actor | Widened to issues and the autopilot |
-| `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73` | Enumerate the context labels and rows | Gain `decompose`; `epic` joins the labels |
+| `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73`; `docs/reference/work-types/README.md:52`; `.github/ISSUE_TEMPLATE/idea.yml:13` | Enumerate the context labels and rows | Gain `decompose`; `epic` joins the labels |
 | `docs/reference/work-types/workflow/review.md:177`; `.claude/skills/submit-pr-review/SKILL.md:12`; `.claude/skills/review/SKILL.md:107` | The manual gate is sole and non-negotiable | Narrowed to the manual-merge trees |
 | `docs/reference/method/ai-authoring.md:523`, `:524`; `.github/dependabot.yml:5` | Never auto-merge; Dependabot like any PR | Narrowed; Dependabot's stay manual |
 | `docs/reference/method/idea-to-product.md:215`, `:416` | *Approved* gates the spec | Met by the auto-merge condition |
@@ -201,7 +200,7 @@ cap's keys. **118** hits.
 | `.claude/skills/clarify/SKILL.md:3`; `docs/reference/method/contribution-workflow.md:86` | Rule C sends decisions there; it blocks | Parks the question instead |
 | `.claude/skills/research/SKILL.md:3`, `:17` | Refuses a run without grants | The dispatch states its grants |
 
-23 hits conform: `use-case.yml:13`, `contribution-workflow.md:91`, `:95`, `:112`, `.claude/profile.yml:175`,
+24 hits conform: `use-case.yml:13`, `contribution-workflow.md:69`, `:91`, `:95`, `:112`, `.claude/profile.yml:175`,
 `:177`, `:179`, `handoff/SKILL.md:11`, `:12`, `check-authoring-rules.sh:26`,
 `check-method.py:103`, `ci.yml:6`, `:7`, `:12`, `:16`, `profile.md:49`, `CLAUDE.md:44`,
 `work-types/README.md:134`, `model-selection.md:81`, `definition-of-done.md:34`,
