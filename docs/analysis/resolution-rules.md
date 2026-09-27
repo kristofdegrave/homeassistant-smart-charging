@@ -275,7 +275,12 @@ there is a pursued occurrence. It is **released** when any of these holds:
   [missed-deadline hold](system-overview.md#ubiquitous-language) never outlives one deadline cycle.
   The 24-hour bound is not belt-and-braces: R14 lets any day resolve to "no deadline", so a
   following occurrence does not always exist, and waiting only for one would leave the guarantee
-  conditional on there being a deadline tomorrow.
+  conditional on there being a deadline tomorrow. Both arms need only the clock, never a
+  state-of-charge reading, so the backstop fires on any cycle that is not a
+  [fault](system-overview.md#ubiquitous-language), with or without a reading; a fault cycle
+  decides nothing about the deadline, so where the bound passes during a fault, the release falls
+  on the first later cycle that does not fault ([UC05](use-cases/UC05-guarantee-ready-by-departure.md)'s
+  State model).
   This is the only release that a hold does not share with ordinary urgency, and it exists because
   neither test runs while the pursued occurrence lies in the past: without it, an `Off` baseline
   that can never hand back would keep the occurrence pursued indefinitely. Note there is no
@@ -350,7 +355,10 @@ Everything the hold has to guarantee follows from that, rather than from rules o
 It **clears** when the car's state of charge is at or above the active SOC limit, when the car
 disconnects, when the deadline capability becomes absent (R18), or — as the backstop stated in the
 release list above — when the *following* occurrence elapses or 24 hours pass since the pursued
-occurrence, whichever comes first, so a hold never outlives one deadline cycle. Nothing else the
+occurrence, whichever comes first, so a hold never outlives one deadline cycle. The backstop
+needs no state-of-charge reading: it ends the hold on any cycle that is not a fault, with or
+without one, and a bound that passes during a fault ends it on the first later cycle that does
+not fault. Nothing else the
 departure-deadline rule resolves ends it: the pursued occurrence *is* the occurrence already missed,
 so it survives a later occurrence resolving to "no deadline" or to a different time. It also
 survives a change to its own date's departure time made after it elapsed, which moves nothing
