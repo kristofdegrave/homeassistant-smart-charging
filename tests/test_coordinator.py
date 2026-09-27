@@ -3245,10 +3245,16 @@ async def test_should_notify_at_max_current_when_a_held_cycle_computes_no_requir
     guard the `None` it can now see, or T2's own case 1 crashes the cycle the moment it reaches
     the coordinator. Capped to `self._config.max_current` -- C1's configured maximum charging
     current, which is what the existing infinite-saturation cap already caps to, and NOT the
-    escalated maximum permitted rate (the glossary's clamped delivered value, D-6)."""
+    escalated maximum permitted rate (the glossary's clamped delivered value, D-6).
+
+    `max_peak_kw=2.3` (~10 A headroom), deliberately below `max_current` (16 A) and NOT ample --
+    an implementation that capped to the escalated maximum permitted rate instead of
+    `max_current` would report ~10 A here, distinguishing the two; ample headroom would make
+    both bounds resolve to the same 16 A and leave this assertion unable to tell them apart."""
+    # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
-    config = _config()  # CONF_MAX_CURRENT=16.0
+    config = _config(max_peak_kw=2.3)  # CONF_MAX_CURRENT=16.0; escalated rate ~10 A, not ample
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -3256,7 +3262,6 @@ async def test_should_notify_at_max_current_when_a_held_cycle_computes_no_requir
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
     coord.target_current = 10.0
-    _seed_ample_peak_headroom(coord)
     _seed_today_deadline(coord, hours_from_now=6)
     coord._pursued_occurrence = dt_util.now() - timedelta(hours=1)  # already elapsed -> held
 
@@ -3271,7 +3276,8 @@ async def test_should_notify_at_max_current_when_a_held_cycle_computes_no_requir
     # Act
     result = await coord._async_update_data()
 
-    # Assert -- reaches the notification block without raising, `required_a` None guarded.
+    # Assert -- reaches the notification block without raising, `required_a` None guarded, and
+    # capped to `max_current` specifically (not the lower escalated rate this fixture creates).
     assert coord._required_current.required_a is None
     assert result.fault is False
     assert len(events) == 1

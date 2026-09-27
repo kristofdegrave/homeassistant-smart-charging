@@ -2,13 +2,13 @@
 
 These helpers (``entry_data_base``, ``entry_options_base``, ``seed_charger_states``,
 ``capture_charger_current_writes``, ``seed_ample_peak_headroom``, ``seed_today_deadline``,
-``AMPLE_PEAK_HEADROOM_KW``) are the shared shape promoted from ``tests/test_init.py``,
-``tests/test_coordinator.py``, ``tests/test_captar_end_to_end.py``,
-``tests/test_deadline_soc_management_end_to_end.py``, and ``tests/test_solar_end_to_end.py``
-(issue #411, follow-up from PR #407's code-reviewer findings): those files had each grown
-near-verbatim copies of the same config-entry/coordinator seeding helpers. Each importing
-suite still owns its own scenario-specific overrides -- these only give the identical common
-shape one source of truth.
+``AMPLE_PEAK_HEADROOM_KW``, ``register_notify_capture``, ``NOTIFY_TARGET``) are the shared shape
+promoted from ``tests/test_init.py``, ``tests/test_coordinator.py``,
+``tests/test_captar_end_to_end.py``, ``tests/test_deadline_soc_management_end_to_end.py``, and
+``tests/test_solar_end_to_end.py`` (issue #411, follow-up from PR #407's code-reviewer
+findings): those files had each grown near-verbatim copies of the same config-entry/coordinator
+seeding helpers. Each importing suite still owns its own scenario-specific overrides -- these
+only give the identical common shape one source of truth.
 
 Deliberately kept out of ``tests/conftest.py``: everything here needs ``homeassistant`` and
 the integration package, which would otherwise make ``conftest.py`` -- imported for every test
@@ -199,3 +199,20 @@ def seed_today_deadline(hass, *, hours_from_now):
     seed_owned_entity(
         hass, entity_id, (now_dt + timedelta(hours=hours_from_now)).time().isoformat()
     )
+
+
+NOTIFY_TARGET = "notify.mobile_app_phone"
+
+
+def register_notify_capture(hass):
+    """M3's real delivery channel (RA4, `notify.send_message`) -- a fake service handler, so a
+    count of these calls is a count of actual notices delivered, not merely of bus events fired.
+    Callers still map `CONF_NOTIFICATION_TARGET_ENTITY` to `NOTIFY_TARGET` themselves; this only
+    captures the resulting service call."""
+    calls = []
+
+    async def _record(call):
+        calls.append(call.data)
+
+    hass.services.async_register("notify", "send_message", _record)
+    return calls

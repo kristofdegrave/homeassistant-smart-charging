@@ -66,9 +66,11 @@ from custom_components.smart_charging.const import (
 )
 from custom_components.smart_charging.engines.soc_target import SolarStepUpState
 from tests.helpers import (
+    NOTIFY_TARGET,
     capture_charger_current_writes,
     entry_data_base,
     entry_options_base,
+    register_notify_capture,
     seed_ample_peak_headroom,
     seed_charger_states,
     seed_home_day,
@@ -147,20 +149,8 @@ async def _setup(hass, *, data_overrides=None, option_overrides=None):
     return coordinator
 
 
-_NOTIFY_TARGET = "notify.mobile_app_phone"
-
-
-def _register_notify_capture(hass):
-    """M3's real delivery channel (RA4, `notify.send_message`) -- fake service handler,
-    mirroring tests/test_notifications_end_to_end.py's own helper, so a count of these calls is
-    a count of actual R5 notices delivered, not merely of bus events fired."""
-    calls = []
-
-    async def _record(call):
-        calls.append(call.data)
-
-    hass.services.async_register("notify", "send_message", _record)
-    return calls
+_NOTIFY_TARGET = NOTIFY_TARGET
+_register_notify_capture = register_notify_capture
 
 
 def _active_soc_limit_entity_id(hass):
@@ -261,60 +251,95 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     assert events[0].data[ATTR_REQUIRED_CURRENT_A] == expected_required_a
 
 
-async def test_should_deliver_the_deadline_unreachable_notice_once_per_occasion_and_rearm_on_release(  # noqa: E501
-    hass, freezer
-):
+async def test_should_deliver_the_deadline_unreachable_notice_only_once_while_held(hass, freezer):
     """T5/R5: M3's notify-once latch (ADR-0024) scopes the *notice* -- the real delivery through
     NotifyAdapter, not the bus event, which fires every cycle `unreachable` stays True (ADR-0011)
     -- to a single occasion, end to end through the real coordinator's pursued-occurrence hold
     (#1154/T4), not just at the Manager's own unit level (tests/managers/test_notification_
     manager.py already pins the raw bus-event mechanism).
 
-    Manual+Power (not a solar mode -- `is_soc_gated` is False there, same reason T4/T5's own
-    body gives for every SOC-unavailable-hold test in this slice)."""
-    freezer.move_to("2026-01-17 12:00:00")
+    Manual+Power (not a solar mode -- `is_soc_gated` is False there, same reason T4/T5's own body
+    gives for every SOC-unavailable-hold test in this slice). The hold is entered through the
+    public route -- a real, tight deadline, then the frozen clock crossing it -- rather than by
+    writing `coordinator._pursued_occurrence` directly."""
+    # Arrange
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
     calls = _register_notify_capture(hass)
-    _seed_states(hass, status="Charging", ev_soc=70.0)
+    _seed_states(hass, status="Charging", ev_soc=10.0)
     coordinator = await _setup(
         hass, data_overrides={CONF_NOTIFICATION_TARGET_ENTITY: _NOTIFY_TARGET}
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
 
-    # Act -- cycle 1: the occurrence has already elapsed, entering a held cycle (required_a
-    # None, unreachable True) -- delivers the occasion's one notice.
-    coordinator._pursued_occurrence = dt_util.now() - timedelta(hours=1)
+    # Act -- cycle 1: a 3-minute deadline needs ~4565 A (75 kWh * 70 pp / 3 min), far past the
+    # 16 A ceiling -- unreachable engages immediately and the departure time threads in as the
+    # pursued occurrence, delivering the occasion's one notice. Cycle 2: the clock crosses that
+    # departure time -- a genuine hold, no required current computed. Cycle 3: still held.
+    _seed_today_deadline(hass, hours_from_now=0.05)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    freezer.move_to(dt_util.now() + timedelta(minutes=10))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+
+    # Assert -- held (required_a None, unreachable True), and only the occasion's one notice.
+    assert coordinator._required_current.required_a is None
     assert coordinator._required_current.unreachable is True
     assert len(calls) == 1
 
-    # cycle 2: still held -- the bus event fires again every cycle (ADR-0011), but the latch
-    # suppresses a second delivery for the same occasion.
+
+async def test_should_rearm_the_notice_when_the_hold_releases(hass, freezer):
+    """T5/ADR-0024's paired half: releasing a hold re-arms M3's notify-once latch, so a second
+    occasion delivers its own notice rather than staying permanently latched. Same public-route
+    hold entry as the sibling `..._only_once_while_held` test above."""
+    # Arrange -- engage, then cross the departure time into a genuine hold (as the sibling test
+    # above), and confirm the occasion's one notice has already been delivered.
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
+    calls = _register_notify_capture(hass)
+    _seed_states(hass, status="Charging", ev_soc=10.0)
+    coordinator = await _setup(
+        hass, data_overrides={CONF_NOTIFICATION_TARGET_ENTITY: _NOTIFY_TARGET}
+    )
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    _seed_today_deadline(hass, hours_from_now=0.05)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    assert coordinator._pursued_occurrence is not None
+    freezer.move_to(dt_util.now() + timedelta(minutes=10))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator._required_current.required_a is None  # held
     assert len(calls) == 1
 
-    # cycle 3: release -- the state of charge reaches the active limit, ending the occasion
-    # (resolution-rules.md's release list) and re-arming the latch.
+    # Act -- release: the state of charge reaches the active limit, ending the occasion
+    # (resolution-rules.md's release list) and re-arming the latch; a second occasion then
+    # engages under a fresh tight deadline.
     hass.states.async_set("sensor.ev_soc", "80.0")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    assert coordinator._pursued_occurrence is None
-    assert len(calls) == 1
-
-    # cycle 4: a new occasion engages unreachable again -- proves the latch was genuinely
-    # re-armed, not left permanently latched.
-    hass.states.async_set("sensor.ev_soc", "70.0")
-    coordinator._pursued_occurrence = dt_util.now() - timedelta(minutes=1)
+    hass.states.async_set("sensor.ev_soc", "10.0")
+    _seed_today_deadline(hass, hours_from_now=0.05)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+
+    # Assert -- a second, distinct occasion is engaged, and the latch delivered its own notice --
+    # proof the release genuinely re-armed it rather than leaving it permanently latched.
+    assert coordinator._pursued_occurrence is not None
     assert coordinator._required_current.unreachable is True
     assert len(calls) == 2
 
 
-@pytest.mark.xfail(strict=True, reason="#1178")
+@pytest.mark.xfail(
+    strict=True,
+    raises=AssertionError,
+    reason=(
+        "#1178 -- closed as an analysis decision (ADR-0042); the code fix is T13, tracked in "
+        "epic #1183, not yet filed as its own issue"
+    ),
+)
 async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_mid_hold(
     hass, freezer
 ):
@@ -328,20 +353,26 @@ async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_m
 
     `strict=True`: T13 (D-9) builds the fix and removes this marker in the same commit; a plain
     xfail would XPASS silently once that lands, and `xfail_strict` is not set project-wide
-    (T12's own integration checkpoint greps for exactly that)."""
-    freezer.move_to("2026-01-17 12:00:00")
+    (T12's own integration checkpoint greps for exactly that). Same public-route hold entry as
+    this file's other two-notice tests above."""
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
     calls = _register_notify_capture(hass)
-    _seed_states(hass, status="Charging", ev_soc=70.0)
+    _seed_states(hass, status="Charging", ev_soc=10.0)
     coordinator = await _setup(
         hass, data_overrides={CONF_NOTIFICATION_TARGET_ENTITY: _NOTIFY_TARGET}
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
 
-    # Arrange -- a live hold, the occasion's one notice already delivered.
-    coordinator._pursued_occurrence = dt_util.now() - timedelta(hours=1)
+    # Arrange -- engage, then cross the departure time into a genuine hold; the occasion's one
+    # notice already delivered.
+    _seed_today_deadline(hass, hours_from_now=0.05)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    freezer.move_to(dt_util.now() + timedelta(minutes=10))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator._required_current.required_a is None
     assert len(calls) == 1
 
     # Act -- state of charge goes unavailable mid-hold (Power does not fault on this, C5), then
@@ -349,7 +380,7 @@ async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_m
     hass.states.async_set("sensor.ev_soc", STATE_UNAVAILABLE)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
-    hass.states.async_set("sensor.ev_soc", "70.0")
+    hass.states.async_set("sensor.ev_soc", "10.0")
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
