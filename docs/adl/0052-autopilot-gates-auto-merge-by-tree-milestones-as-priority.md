@@ -7,7 +7,7 @@ Status: Accepted
 
 In the context of a chain whose only control on unattended work is a human
 gesture per issue, facing an autopilot that would start issues and merge pull requests
-unwatched, we decided on three gates plus a lane cap, merging by tree, a local guard and milestones
+alone, we decided on three gates plus a lane cap, merging by tree, a local guard and milestones
 as ordered slices, to spend the human's attention on judgment, accepting that the guard
 is an accident guard, not a sandbox.
 
@@ -62,7 +62,8 @@ trigger; at most two lanes, one issue's chain each, run on disjoint trees.
 #### Option B2 — By tree
 
 All files under `custom_components/`, `tests/` or `docs/design/`, the head a branch of this
-repository, `needs-approval` without `needs-decision`, CI green; any other tree waits.
+repository, `needs-approval` without `needs-decision`, every check green; any other tree
+waits.
 
 - Pro: decided from diff, labels and head alone, over trees a human reads later;
   outside work stays at the human's gate.
@@ -97,7 +98,7 @@ merges run as the human, `--admin`.
 #### Option D2 — Milestones as ordered slices
 
 One milestone per slice — of `project-plan.md`, or a method epic — ordered by a
-numeric prefix in its title; an epic carries it, a child inherits it.
+numeric prefix in its title.
 
 - Pro: native to issues and `gh`, assigned once per epic.
 - Con: GitHub has no milestone order; the prefix is a hand-held convention.
@@ -123,14 +124,15 @@ A2's first Con is unbounded.
 
 ## Consequences
 
-- **Rule B loses its chaining sentence**, keeping its stop.
-- **`cleanup` runs from the autopilot's merge**.
+- **Rule B loses its chaining sentence.**
+- **`cleanup` runs from the autopilot's merge**; a manual one still needs the human's
+  statement.
 - **Parking reuses the exit labels on issues**: `needs-approval` on an epic asks for a go,
-  `needs-decision` asks a question; a marker in the parking comment stops a tick re-parking
-  what the human answered.
+  `needs-decision` asks a question, as a failed pre-flight does; a marker in the parking
+  comment stops a tick re-parking what the human answered.
 - **The merge rule lives in the workflow's *Commit & push authorization***, which the guard
   mechanizes: the rule, head condition included, tested; the profile lists the
-  auto-merge trees and lane limit; a non-required check reaches the rule or is promoted.
+  auto-merge trees and lane limit; the rule counts every check.
 - **The picker holds the verify-live gate**: an epic's first child closing parks it with
   `needs-approval` and the verify-live list; no other child starts before its removal.
 - **Milestones become the method's priority**, in **Issue conventions**; filing
@@ -170,7 +172,7 @@ Wide enough: each part replaces a rule that names itself — Rule B, the manual 
 `cleanup`'s trigger, the Design gate, milestones, `Ready`, the guard's scope, wiring and
 authorization, branch protection, rows without a work file, the label vocabulary, the exit
 labels' actor, the bot identity, the epic's filing and pass, verify live's holder and
-author, the interactive qualifier, the cap's keys. **134** hits.
+author, the interactive qualifier; the cap's keys only counted. **134** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
@@ -178,7 +180,7 @@ author, the interactive qualifier, the cap's keys. **134** hits.
 | `docs/reference/method/contribution-workflow.md:4`, `:275`; `.claude/profile.yml:171`; `.claude/skills/implement/SKILL.md:8`; `.claude/skills/review/SKILL.md:8`; `.claude/skills/fix/SKILL.md:8` | Say interactive | Hold unattended |
 | `CLAUDE.md:113` | Says interactive; `cleanup` starts from the human | Holds unattended; the autopilot's merge triggers it |
 | `docs/reference/method/contribution-workflow.md:46`, `:215`, `:216`; `docs/reference/profile.md:34`, `:35`, `:55`; `.github/CODEOWNERS:2`, `:5` | Every merge is the human's, by branch protection | Narrowed |
-| `docs/reference/method/contribution-workflow.md:54`, `:80`, `:81`; `.claude/skills/cleanup/SKILL.md:3`, `:9`, `:14` | Waits for the human's statement | Triggered by the autopilot's merge |
+| `docs/reference/method/contribution-workflow.md:54`, `:80`, `:81`; `.claude/skills/cleanup/SKILL.md:3`, `:9`, `:14` | Waits for the human's statement | Also triggered by the autopilot's merge |
 | `docs/reference/method/contribution-workflow.md:145` | Neither label replaces manual approval | The auto-merge class's merge condition |
 | `docs/reference/method/contribution-workflow.md:136`, `:137`, `:142`; `docs/reference/method/ci-pipeline.md:142`; `.claude/profile.yml:71`, `:74` | A pull request's, with one actor | Widened to issues and the autopilot |
 | `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73`; `docs/reference/work-types/README.md:52`; `.github/ISSUE_TEMPLATE/idea.yml:13` | Enumerate the context labels and rows | Gain `decompose`; `epic` joins the labels |
@@ -188,7 +190,7 @@ author, the interactive qualifier, the cap's keys. **134** hits.
 | `docs/reference/method/idea-to-product.md:156`, `:168`, `:183`, `:207`, `:210`; `.claude/skills/file-task-issue/SKILL.md:54`, `:63` | File the epic and its issues, run the pass, no milestone | Gain the `decompose` child, `epic` label and milestone |
 | `docs/reference/method/definition-of-done.md:78`, `:92`, `:104`; `docs/reference/method/idea-to-product.md:480`, `:488`, `:490`, `:498` | Slice two waits for slice one's verify live by its author | The picker parks the epic after its first child |
 | `.claude/skills/file-task-issue/SKILL.md:3`, `:50`; `docs/reference/method/idea-to-product.md:202`; `CLAUDE.md:115`; `docs/reference/method/decomposition-checklist.md:5`, `:101` | Hold the pass's mechanics, run by the closing step | Move to the `decompose` work file |
-| `.github/workflows/ci.yml:90`, `:91`, `:133`; `docs/reference/method/ci-pipeline.md:163`, `:180` | Block only as branch protection's required checks | Reach the merge rule or are promoted |
+| `.github/workflows/ci.yml:90`, `:91`, `:133`; `docs/reference/method/ci-pipeline.md:163`, `:180` | Block only as branch protection's required checks | The rule counts every check |
 | `.claude/hooks/block-destructive-git.sh:2`, `:3`, `:4`, `:30`, `:38`, `:100`, `:294`; `.claude/hooks/test-block-destructive-git.sh:2` | Refuse and test destructive git on `git` segments | Gain the `gh pr merge` rule and its cases |
 | `.claude/settings.json:8` | Wires the guard to the Bash tool only | Wired to every shell tool |
 | `docs/reference/method/contribution-workflow.md:236`; `CLAUDE.md:18` | Frame the guard as destructive-git only | State the merge rule too |
