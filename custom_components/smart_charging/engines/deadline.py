@@ -160,9 +160,8 @@ class RequiredCurrentResult:
     urgent: bool
     unreachable: bool  # required_a > escalated_maximum_permitted_rate_a
     # The occurrence urgency is chasing, for the Manager to thread back in next cycle -- None
-    # when none is. The default is load-bearing: `RequiredCurrentResult` is constructed at two
-    # sites OUTSIDE this engine (coordinator.py, coordinator_cycle.py) which do not set it, so
-    # without the default this commit would not compile there.
+    # when none is. The default is load-bearing: `coordinator.py` constructs its pre-first-cycle
+    # placeholder OUTSIDE this engine without setting it.
     pursued_occurrence: datetime | None = None
 
 
@@ -184,6 +183,26 @@ def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
     return (later - earlier).total_seconds() / 3600
 
 
+def missed_deadline_backstop_fired(
+    pursued_occurrence: datetime,
+    now: datetime,
+    following_occurrence: datetime | None = None,
+) -> bool:
+    """R5's backstop on a missed-deadline hold: the occurrence following the pursued one has
+    elapsed, or 24 hours have passed since the pursued occurrence, whichever comes first.
+
+    Its own function because both arms need only the clock and the occurrences, so the backstop
+    also applies on a cycle whose state of charge is unavailable, where
+    `resolve_required_current` is never called (`coordinator_cycle.resolve_deadline_urgency`).
+    `_absolute_hours_between` rather than wall-clock arithmetic: a 24-hour span crosses midnight
+    by construction and so straddles both DST transitions, which is the hazard that helper
+    exists for.
+    """
+    return (following_occurrence is not None and following_occurrence <= now) or (
+        _absolute_hours_between(now, pursued_occurrence) >= MISSED_DEADLINE_HOLD_BACKSTOP_HOURS
+    )
+
+
 def resolve_required_current(
     deadline_at: datetime | None,
     now: datetime,
@@ -193,7 +212,6 @@ def resolve_required_current(
     voltage: float,
     baseline_desired_a: float,
     escalated_maximum_permitted_rate_a: float,
-    urgency_latched: bool = False,
     pursued_occurrence: datetime | None = None,
     following_occurrence: datetime | None = None,
 ) -> RequiredCurrentResult:
@@ -220,8 +238,8 @@ def resolve_required_current(
     normalised.
 
     Urgency is ENTERED by the slack test and LEFT by the handback test -- they are not each
-    other's inverse, which is why `urgency_latched` (whether urgency was in effect entering this
-    cycle) is an input rather than something this function could re-derive:
+    other's inverse, which is why `pursued_occurrence` (the occurrence urgency was chasing
+    entering this cycle) is an input rather than something this function could re-derive:
 
         slack test:  required_a > escalated_maximum_permitted_rate_a / (1 + margin)
         handback:    baseline_desired_a >= required_a, on a cycle whose slack test does not hold
@@ -237,8 +255,9 @@ def resolve_required_current(
     could ever deliver. Letting the handback win there would clear urgency and re-engage it the
     next cycle, for ever.
 
-    The latch is why charging at the escalated rate does not revert urgency: it closes the gap
-    faster than the clock closes the window, so the slack test is falsified within one cycle.
+    Holding the occurrence is why charging at the escalated rate does not revert urgency: it
+    closes the gap faster than the clock closes the window, so the slack test is falsified
+    within one cycle.
 
     `unreachable` = required_a > escalated_maximum_permitted_rate_a, the same comparison with no
     margin -- so it is a strict subset of urgency by construction, and UC05's
@@ -271,13 +290,7 @@ def resolve_required_current(
     #    resolving to "no deadline" must not end it -- the hold is anchored to the occurrence
     #    already missed (requirements.md R5).
     if pursued_occurrence is not None and pursued_occurrence <= now and not soc_at_active_limit:
-        # The backstop, whose two arms fire on whichever comes first. `_absolute_hours_between`
-        # rather than wall-clock arithmetic: a 24-hour span crosses midnight by construction and
-        # so straddles both DST transitions, which is the hazard that helper exists for.
-        backstop_fired = (following_occurrence is not None and following_occurrence <= now) or (
-            _absolute_hours_between(now, pursued_occurrence) >= MISSED_DEADLINE_HOLD_BACKSTOP_HOURS
-        )
-        if backstop_fired:
+        if missed_deadline_backstop_fired(pursued_occurrence, now, following_occurrence):
             # Releasing the pursued occurrence ends the hold and urgency together -- they were
             # never two things -- "and from the NEXT cycle the required current above governs
             # normally again" (resolution-rules.md, 'Missed-deadline hold'). Both halves of
@@ -338,10 +351,7 @@ def resolve_required_current(
     slack_test_holds = required_a > escalated_maximum_permitted_rate_a / (
         1 + DEADLINE_URGENCY_MARGIN
     )
-    # `urgency_latched` is the pre-#1187 spelling of the same state, still accepted so the
-    # Coordinator keeps working until it moves onto the occurrence.
-    latched = pursued_occurrence is not None or urgency_latched
-    if latched:
+    if pursued_occurrence is not None:
         # Precedence: the handback only clears on a cycle the slack test would not re-engage.
         handback = baseline_desired_a >= required_a and not slack_test_holds
         urgent = not handback

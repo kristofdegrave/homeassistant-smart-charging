@@ -958,7 +958,11 @@ def _resolve_deadline_urgency(**overrides):
         # the baseline. 32.0 leaves ample slack by default, so each test that wants urgency now
         # says so explicitly by overriding this down rather than by leaning on a 0 A baseline.
         escalated_maximum_permitted_rate_a=32.0,
-        urgency_latched=False,
+        pursued_occurrence=None,
+        # Read by the non-resolvable early return, whose connected half releases the pursued
+        # occurrence in the opposite direction to its state-of-charge half -- see the split's
+        # own tests below.
+        status=STATE_CONNECTED,
         auto_dispatchable=False,
         solar_available=False,
         captar_available=True,
@@ -972,10 +976,10 @@ def _resolve_deadline_urgency(**overrides):
     kwargs.update(overrides)
     mode_desired_current = kwargs.pop("mode_desired_current")
     ctx_kwargs = {name: kwargs.pop(name) for name in _CTX_FIELD_NAMES}
-    # status/net_w/charger_w/now/baseline_w: unused by resolve_deadline_urgency, just
-    # CycleContext's own other required fields.
+    # net_w/charger_w/now/baseline_w: unused by resolve_deadline_urgency, just CycleContext's
+    # own other required fields.
     ctx = CycleContext(
-        status=STATE_CONNECTED, net_w=0.0, charger_w=0.0, now=0.0, baseline_w=0.0, **ctx_kwargs
+        status=kwargs.pop("status"), net_w=0.0, charger_w=0.0, now=0.0, baseline_w=0.0, **ctx_kwargs
     )
     return resolve_deadline_urgency(
         ctx, DeadlineUrgencyInputs(**kwargs), mode_desired_current=mode_desired_current
@@ -1106,8 +1110,9 @@ def test_resolve_deadline_urgency_no_escalation_when_baseline_already_meets_dead
     The name is historical -- it evidenced ADR-0017's policy extraction and is kept for that
     reason: but since #1078 the 16 A Solar baseline is NOT what keeps
     this out of urgency -- the slack test is, at 0.435 A required against a 25.6 A threshold.
-    The baseline would only matter to the handback, which needs a latch this call does not
-    carry. What the test still pins is the two select() calls agreeing when nothing escalates."""
+    The baseline would only matter to the handback, which needs a pursued occurrence this call
+    does not carry. What the test still pins is the two select() calls agreeing when nothing
+    escalates."""
 
     def fake_mode_desired_current(mode):
         return 16.0 if mode == MODE_SOLAR else 0.0
@@ -1213,16 +1218,18 @@ def test_resolve_deadline_urgency_still_urgent_for_a_genuinely_tight_deadline_to
     assert result.required.required_a != float("inf")
 
 
-def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
-    """`inputs.urgency_latched` reaches `resolve_required_current` (R5, issue #1078).
+def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
+    """`inputs.pursued_occurrence` reaches `resolve_required_current` (R5, issue #1078).
 
     Every other DeadlineUrgencyInputs field has a discriminating test at this tier; this one is
-    the wiring for urgency's latch, so a silent failure to pass it through would make urgency
-    re-derive from the slack test every cycle and duty-cycle the charger.
+    the wiring for urgency's own state, so a silent failure to pass it through would make
+    urgency re-derive from the slack test every cycle and duty-cycle the charger.
 
     Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
-    latch can account for the difference.
+    occurrence can account for the difference. It is the one the deadline below resolves to,
+    and still ahead of `now_dt`, so this is ordinary urgency rather than a missed-deadline hold.
     """
+    # Arrange
     ample_slack = dict(
         deadline_today=time(11, 0),
         ev_soc=50.0,
@@ -1231,8 +1238,76 @@ def test_resolve_deadline_urgency_threads_the_latch_through_to_the_engine():
         escalated_maximum_permitted_rate_a=32.0,
         mode_desired_current=lambda mode: 0.0,
     )
-    assert _resolve_deadline_urgency(urgency_latched=False, **ample_slack).urgent is False
-    assert _resolve_deadline_urgency(urgency_latched=True, **ample_slack).urgent is True
+    pursued = datetime(2026, 7, 27, 11, 0)
+
+    # Act
+    without = _resolve_deadline_urgency(pursued_occurrence=None, **ample_slack)
+    threaded = _resolve_deadline_urgency(pursued_occurrence=pursued, **ample_slack)
+
+    # Assert
+    assert without.urgent is False
+    assert threaded.urgent is True
+
+
+def test_should_release_the_pursued_occurrence_when_the_car_is_disconnected():
+    """A disconnect ends the connected session, so it is a real exit and one of R5's own
+    release conditions (resolution-rules.md's release list; UC05's State model)."""
+    # Arrange / Act -- `deadline_resolvable` False with its CONNECTED half also False.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_DISCONNECTED,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 0),
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence is None
+    assert result.urgent is False
+
+
+def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable():
+    """The other half of the same early return, releasing in the OPPOSITE direction: a cycle on
+    which state of charge is unavailable establishes nothing about the deadline, so "the System
+    holds whichever state it was already in" (UC05's State model; ADR-0024). Collapsing the two
+    halves would release a hold on a cycle that established nothing."""
+    # Arrange / Act -- `deadline_resolvable` False while still connected, which is exactly the
+    # state of charge half failing.
+    pursued = datetime(2026, 7, 27, 9, 0)
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=pursued,
+    )
+
+    # Assert -- the urgency the occurrence implies is held with it ("urgency is in effect for
+    # exactly as long as there is a pursued occurrence", resolution-rules.md), while
+    # `unreachable` stays False: ADR-0042 leaves the flag as it is and gives the clear edge its
+    # own input instead.
+    assert result.required.pursued_occurrence == pursued
+    assert result.urgent is True
+    assert result.required.urgent is True
+    assert result.required.unreachable is False
+
+
+def test_should_release_the_occurrence_when_state_of_charge_is_unavailable_at_the_24_hour_bound():
+    """R5's 24-hour bound needs only the clock and the pursued occurrence, so it applies on a
+    cycle whose state of charge is unavailable as well: at the bound the occurrence is released
+    and urgency with it ("a hold never outlives one deadline cycle", requirements.md R5)."""
+    # Arrange -- `now_dt` is 10:00 on 27 July; the occurrence exactly 24 h earlier.
+    pursued = datetime(2026, 7, 26, 10, 0)
+
+    # Act
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=pursued,
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence is None
+    assert result.urgent is False
+    assert result.required.urgent is False
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---

@@ -173,16 +173,22 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # site, so a fault cycle simply never reaches it and its prior flag is held (see the
         # comments on those two returns).
         self._unreachable_edge = DeadlineUnreachableEdge()
-        # R5 (issue #1078): whether deadline urgency was in effect entering the next cycle --
-        # the third flag threaded across cycles, alongside the solar step-up and (once #1006
-        # lands) the missed-deadline hold. Urgency is ENTERED by the slack test and LEFT by the
-        # handback test, which are not each other's inverse: charging at the escalated rate
-        # closes the gap faster than the clock closes the window, so a latch-free implementation
-        # would revert urgency on the cycle after it engaged and duty-cycle the charger.
-        # Cleared for free on every one of urgency's own clear conditions, because each already
-        # funnels through the resolved `urgent` this is assigned from -- a disconnect and an
-        # unresolvable deadline both short-circuit resolve_deadline_urgency to urgent=False.
-        self._urgency_latched: bool = False
+        # R5's urgency state, threaded across cycles alongside the solar step-up: the departure
+        # occurrence urgency is chasing, or None when it is chasing none. Urgency is in effect
+        # for exactly as long as there is one (system-overview.md's `pursued occurrence`), and
+        # the missed-deadline hold is READ off it -- `pursued is not None and pursued <= now` --
+        # rather than tracked beside it, so there is no second flag to keep in step.
+        #
+        # Held rather than re-derived each cycle because urgency is ENTERED by the slack test and
+        # LEFT by the handback test, which are not each other's inverse: charging at the
+        # escalated rate closes the gap faster than the clock closes the window, so a
+        # latch-free implementation would revert urgency on the cycle after it engaged and
+        # duty-cycle the charger. Released by whatever `resolve_deadline_urgency` resolves: the
+        # engine's successor, or -- on a cycle that never reaches the engine -- its non-resolvable
+        # early return, which releases on a disconnect and on R5's 24-hour backstop. Scoped to the
+        # current connected session and never preserved across a restart (UC05's State model),
+        # which is why it starts at None rather than from the Store.
+        self._pursued_occurrence: datetime | None = None
         # R9/R14 inputs -- read through the Store each cycle (_read_owned_entities,
         # ADR-0018), from switch.smart_charging_home_day / time.smart_charging_departure_*.
         # These constructor defaults (no home day, no configured deadline anywhere) only
@@ -781,7 +787,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 escalated_maximum_permitted_rate_a=self._escalated_maximum_permitted_rate_a(
                     ctx, peak_operand_kw=peak_operand_kw
                 ),
-                urgency_latched=self._urgency_latched,
+                pursued_occurrence=self._pursued_occurrence,
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
@@ -824,8 +830,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             # sys.float_info.max would be. NaN needs no separate branch: it can never reach
             # here since `nan > maximum_permitted_rate_a` is always False, which would leave
             # `unreachable` False and this block unentered.
+            # A missed-deadline hold reaches here with `required_a` None -- no required current
+            # is computed once the occurrence has passed -- and carries the same cap: it is the
+            # saturated case's statement about a deadline that has run out entirely.
             notified_required_a = (
-                self._config.max_current if math.isinf(required.required_a) else required.required_a
+                self._config.max_current
+                if required.required_a is None or math.isinf(required.required_a)
+                else required.required_a
             )
             self.hass.bus.async_fire(
                 EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
@@ -833,15 +844,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             )
 
         urgent = deadline_urgency.urgent
-        # The latch this cycle's resolution leaves behind. Assigned from the resolved `urgent`
-        # rather than from the slack test alone, so the handback -- and every other clear
-        # condition that funnels through it -- releases the latch without a second code path.
+        # The occurrence this cycle's resolution leaves behind, taken from
+        # `deadline_urgency.required` rather than re-derived here: the engine's successor, or the
+        # non-resolvable early return's split (a disconnect or the 24-hour backstop releases, an
+        # unavailable state of charge holds). Either way the occurrence is never re-anchored onto
+        # a later resolution.
         # Both fault early-returns above sit UPSTREAM of this line, so a fault cycle holds
-        # whichever latch it entered with rather than clearing it -- the same reasoning
+        # whichever occurrence it entered with rather than releasing it -- the same reasoning
         # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle
         # that established nothing about the deadline must not decide anything about it either.
-        # A fault is not one of R5's clear conditions, and the cycle forces 0 A regardless.
-        self._urgency_latched = urgent
+        # A fault is not one of R5's release conditions, and the cycle forces 0 A regardless.
+        self._pursued_occurrence = required.pursued_occurrence
         effective_peak_limit_kw = resolve_effective_peak_limit(
             peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
         )
