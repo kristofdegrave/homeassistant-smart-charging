@@ -16,8 +16,9 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         the file it is written in, to an existing path and, where it carries a
                         #fragment, to a heading of that markdown file; every repo-rooted path
                         named in backticks -- a file, or a directory written with its trailing
-                        slash -- exists. A link is resolved whether or not its text wraps onto
-                        a second line. Plus, in CLAUDE.md alone: every routing-table entry
+                        slash -- exists, outside a skill declared `verbatim: true`. A
+                        link is resolved whether or not its text wraps onto a second
+                        line. Plus, in CLAUDE.md alone: every routing-table entry
                         links to a document, and no `###` heading in CLAUDE.md or
                         docs/reference/** appears before its `##`
   3  profile agreement  CLAUDE.md's Model selection table has exactly one row per
@@ -36,7 +37,8 @@ WHICH profile keys count as values (below) -- selections, not copies of anything
                         declared stack, no label without a slot has an overlays/ directory,
                         no overlay is named for an undeclared stack, and every stack a
                         dependency declares has a `stacks` entry; every dependency declared
-                        `installed: repo` is present; every `layer:` frontmatter, where a
+                        `installed: repo` or `vendor` is present, and every file under
+                        .claude/vendor/ sits in a declared copy; every `layer:` frontmatter, where a
                         file carries one, names a known layer; no overlays/ directory sits
                         under a label that is not enabled or under a branch directory
   5  no profile values  no value from profile.yml (owner, repository name, board name, node
@@ -48,7 +50,8 @@ Which layer a file belongs to is a rule, and `layer:` frontmatter is the overrid
 that deviates from it. The defaults: every document under docs/reference/** and every agent
 under .claude/agents/ is method; every markdown file of a skill under .claude/skills/ is
 method unless the profile's `dependencies` declares the skill, in which case it is a vendored
-dependency and belongs to no layer here (it is never scanned, and never edited to say so).
+dependency and belongs to no layer here (it is never scanned, and never edited to say so);
+so does a declared copy under .claude/vendor/.
 A work-type overlay -- docs/reference/work-types/<label>/overlays/<stack>.md -- is stack by
 position: a stack package installs it, and it is never edited to say so either.
 Each file's own frontmatter is what overrides, so a skill's reference file can differ from
@@ -170,6 +173,19 @@ FROZEN_TREES = ("docs/postmortems", "docs/archive")
 # than trusting a list here. The deletion trigger itself is the cleanup skill's transition-period
 # rule, which is one of those hits.
 SNAPSHOT_TREES = FROZEN_TREES + ("docs/adl", "docs/plans")
+# The exclusion the vendored-skill paragraph above leaves open is a dependency row's
+# `verbatim: true`: that copy is byte-identical to upstream at its pin, so its backticked paths
+# describe upstream's layout rather than this tree, and a project skill wrapping it translates
+# them. Such a skill's backticked paths are not resolved; its links still are, since they point
+# inside the copy itself. An adapted port never carries the key, so the `tests/` references
+# above stay checked. The key is trusted, not verified: nothing here compares the copy with
+# upstream.
+VERBATIM_KEY = "verbatim"
+# Where a dependency's copy lives, by its `installed` value. `repo` is Claude Code's skill
+# index; `vendor` is a tree Claude Code does not load, for a copy only its wrapping project
+# skill may start, read there by path. It is keyed by the source's owner, so two sources can
+# ship a skill of the same name. `user` has no copy in this repository.
+VENDOR_TREE = ".claude/vendor"
 # A topic may wrap onto one following line and no more, so a stray `CLAUDE.md's` with no bold
 # nearby cannot swallow a paragraph as its "topic".
 POINTER_RE = re.compile(r"`?CLAUDE\.md`?['’]s\s+\*\*([^*\n]+(?:\n[^*\n]+)?)\*\*")
@@ -375,7 +391,9 @@ def top_level(root: Path) -> set[str]:
     return {entry.name for entry in root.iterdir()}
 
 
-def resolve_references(root: Path, path: Path, top: set[str], findings: Findings) -> None:
+def resolve_references(
+    root: Path, path: Path, top: set[str], findings: Findings, skip_paths: bool = False
+) -> None:
     """Check 2's target resolution for one file: its links and its backticked repo paths.
 
     A markdown link is resolved the way a renderer resolves it -- against the directory of the
@@ -406,7 +424,9 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
     states the intent; and a backticked path with no `/` at all -- a root-level file such as
     `skills-lock.json` -- is not matched, since one bare word in backticks is far more often a
     name than a path. A backticked path needs no glob guard: BACKTICK_PATH_RE cannot capture a
-    `*` in the first place.
+    `*` in the first place. The last skip is by file, not by shape: `skip_paths` is set for a
+    skill its dependency row declares `verbatim: true` (VERBATIM_KEY, above), and then no
+    backticked path in it is resolved.
 
     Every skip named here, and the snapshot trees above, has a fixture that pins it, and, where
     a covered spelling of the same defect exists, one that fails on it. The known limit that is
@@ -450,6 +470,8 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
                     f"{where}:{number}",
                     f"link {target}: no heading in {file_part} has that anchor",
                 )
+    if skip_paths:
+        return
     for m in BACKTICK_PATH_RE.finditer(text):
         target = m.group(1)
         if target in seen:
@@ -463,7 +485,7 @@ def resolve_references(root: Path, path: Path, top: set[str], findings: Findings
             )
 
 
-def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
+def check_inward(root: Path, guide: Guide, profile: dict, findings: Findings) -> None:
     for topic, owner in guide.topics:
         if not LINK_RE.search(owner):
             findings.add(2, "CLAUDE.md", f"routing-table entry **{topic}** links to no document")
@@ -474,8 +496,15 @@ def check_inward(root: Path, guide: Guide, findings: Findings) -> None:
             if any(rel(root, path).startswith(snapshot + "/") for snapshot in SNAPSHOT_TREES):
                 continue
             files.append(path)
+    verbatim = {
+        copy_dir(name, entry)
+        for name, entry in declared_dependencies(profile).items()
+        if entry.get(VERBATIM_KEY) is True and copy_dir(name, entry)
+    }
     for path in files:
-        resolve_references(root, path, top, findings)
+        where = rel(root, path)
+        skip = any(where.startswith(prefix) for prefix in verbatim)
+        resolve_references(root, path, top, findings, skip_paths=skip)
     docs = [root / "CLAUDE.md"] + walk(root, "docs/reference", (".md",))
     for path in docs:
         under_h2 = False
@@ -619,6 +648,15 @@ def declared_dependencies(profile: dict) -> dict[str, dict]:
     return out
 
 
+def copy_dir(name: str, entry: dict) -> str | None:
+    """The repo-relative directory holding a dependency's copy, with a trailing slash."""
+    if entry.get("installed") == "repo":
+        return f".claude/skills/{name}/"
+    if entry.get("installed") == "vendor":
+        return f"{VENDOR_TREE}/{str(entry.get('source', '')).split('/')[0]}/{name}/"
+    return None
+
+
 def stack_dependencies(deps: dict[str, dict]) -> dict[str, dict]:
     return {name: e for name, e in deps.items() if e.get("_group") == STACK_GROUP}
 
@@ -684,7 +722,12 @@ def check_work_type_shape(
                 ".claude/profile.yml",
                 f"dependency `{name}` declares stack `{stack}`, which has no `stacks` entry",
             )
-    method_skills = {name for name, e in deps.items() if e.get("_group") != STACK_GROUP}
+    # An `installed: vendor` copy is outside the skill index: only its wrapper may start it.
+    method_skills = {
+        name
+        for name, e in deps.items()
+        if e.get("_group") != STACK_GROUP and e.get("installed") != "vendor"
+    }
     skills_dir = root / ".claude/skills"
     if skills_dir.is_dir():
         method_skills |= {
@@ -796,15 +839,19 @@ def check_completeness(
                 )
     deps = declared_dependencies(profile)
     for name, entry in sorted(deps.items()):
-        if (
-            entry.get("installed") == "repo"
-            and not (root / ".claude/skills" / name / "SKILL.md").is_file()
-        ):
+        where = copy_dir(name, entry)
+        if where and not (root / where / "SKILL.md").is_file():
             findings.add(
                 4,
-                f".claude/skills/{name}/",
-                f"declared dependency `{name}` is installed: repo but absent",
+                where,
+                f"declared dependency `{name}` is installed: {entry['installed']} but absent",
             )
+    declared = [d for d in (copy_dir(n, e) for n, e in deps.items()) if d]
+    vendor = root / VENDOR_TREE
+    for path in sorted(vendor.rglob("*")) if vendor.is_dir() else []:
+        where = rel(root, path)
+        if path.is_file() and not any(where.startswith(d) for d in declared):
+            findings.add(4, where, "sits in no copy an `installed: vendor` row declares")
     skills = root / ".claude/skills"
     if skills.is_dir():
         for directory in sorted(p for p in skills.iterdir() if p.is_dir()):
@@ -938,7 +985,7 @@ def main(argv: list[str]) -> int:
     guide = Guide(read_text(guide_path))
     findings = Findings()
     check_outward(root, guide, findings)
-    check_inward(root, guide, findings)
+    check_inward(root, guide, profile, findings)
     check_profile_agreement(root, guide, profile, findings)
     layers = check_completeness(root, guide, profile, findings)
     check_profile_values(root, profile, layers, findings)
