@@ -172,8 +172,9 @@ urgency comes to be in effect.
   which follows its own date's departure time until it elapses (R5; see *Clearing urgency* below);
   once it has elapsed, that is the missed-deadline hold below and no required current is computed.
   Otherwise, since the deadline above is the *next future occurrence* of the resolved departure
-  time, the time remaining is always strictly positive: it shrinks as the deadline approaches and, once the deadline passes, jumps to the
-  interval to the following occurrence rather than going negative. When the departure deadline has
+  time, the time remaining is always strictly positive: it shrinks as the deadline approaches
+  and, once the deadline passes, jumps to the interval to the following occurrence rather than
+  going negative. When the departure deadline has
   resolved to "no deadline" — or the deadline capability is absent, so no deadline is resolved at
   all (R18) — no required current is computed and deadline urgency never applies.
 - **[Required current](system-overview.md#ubiquitous-language)** = energy needed ÷ time
@@ -289,9 +290,11 @@ against the moved occurrence from then on. A new time that has already passed le
 occurrence in the past, which is the missed-deadline hold (below). The date resolving to "no
 deadline" is the release above. Whether it has elapsed is judged against the occurrence as it stood
 entering the cycle: once that occurrence is at or before now it is a missed-deadline hold, and no
-change read on that cycle or later moves it. Like the hold beginning, the move needs no state-of-charge
-reading, so it takes effect on any cycle that does not fault. The occurrence **following** the pursued one is still the one
-for the day after the pursued occurrence's date, and the 24 hours run from the moved
+change read on that cycle or later moves it. Like the hold beginning (R5; UC05's State model),
+neither the move nor the release on the date resolving to "no deadline" needs a state-of-charge
+reading, so each takes effect on any cycle that is not a
+[fault](system-overview.md#ubiquitous-language). The occurrence **following** the pursued one is
+still the one for the day after the pursued occurrence's date, and the 24 hours run from the moved
 occurrence, so the backstop moves with it.
 
 **The slack test takes precedence over the handback where both hold on the same cycle**, and they
