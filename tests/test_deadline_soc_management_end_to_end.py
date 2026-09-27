@@ -251,7 +251,9 @@ async def test_uc05_auto_profile_normal_urgent_unreachable_transitions(hass, fre
     assert events[0].data[ATTR_REQUIRED_CURRENT_A] == expected_required_a
 
 
-async def test_should_deliver_the_deadline_unreachable_notice_only_once_while_held(hass, freezer):
+async def test_should_deliver_the_deadline_unreachable_notice_only_once_when_the_hold_persists(
+    hass, freezer
+):
     """T5/R5: M3's notify-once latch (ADR-0024) scopes the *notice* -- the real delivery through
     NotifyAdapter, not the bus event, which fires every cycle `unreachable` stays True (ADR-0011)
     -- to a single occasion, end to end through the real coordinator's pursued-occurrence hold
@@ -285,7 +287,10 @@ async def test_should_deliver_the_deadline_unreachable_notice_only_once_while_he
     await coordinator.async_refresh()
     await hass.async_block_till_done()
 
-    # Assert -- held (required_a None, unreachable True), and only the occasion's one notice.
+    # Assert -- a genuinely successful cycle (not a crash masquerading as a hold -- the coordinator
+    # holds its last state on a raised exception too), held (required_a None, unreachable True),
+    # and only the occasion's one notice.
+    assert coordinator.last_update_success is True
     assert coordinator._required_current.required_a is None
     assert coordinator._required_current.unreachable is True
     assert len(calls) == 1
@@ -294,7 +299,7 @@ async def test_should_deliver_the_deadline_unreachable_notice_only_once_while_he
 async def test_should_rearm_the_notice_when_the_hold_releases(hass, freezer):
     """T5/ADR-0024's paired half: releasing a hold re-arms M3's notify-once latch, so a second
     occasion delivers its own notice rather than staying permanently latched. Same public-route
-    hold entry as the sibling `..._only_once_while_held` test above."""
+    hold entry as the sibling `..._only_once_when_the_hold_persists` test above."""
     # Arrange -- engage, then cross the departure time into a genuine hold (as the sibling test
     # above), and confirm the occasion's one notice has already been delivered.
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
@@ -311,6 +316,7 @@ async def test_should_rearm_the_notice_when_the_hold_releases(hass, freezer):
     freezer.move_to(dt_util.now() + timedelta(minutes=10))
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    assert coordinator.last_update_success is True
     assert coordinator._required_current.required_a is None  # held
     assert len(calls) == 1
 
@@ -354,7 +360,15 @@ async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_m
     `strict=True`: T13 (D-9) builds the fix and removes this marker in the same commit; a plain
     xfail would XPASS silently once that lands, and `xfail_strict` is not set project-wide
     (T12's own integration checkpoint greps for exactly that). Same public-route hold entry as
-    this file's other two-notice tests above."""
+    this file's other two-notice tests above.
+
+    `raises=AssertionError` narrows the xfail to a failing assertion rather than any error, but
+    does not itself distinguish which assertion -- the Arrange guards below share the same
+    exception type as the intended re-arm failure. The two sibling tests above pin the same
+    Arrange, so a regression there would show up as a failure there first, not as a
+    silently-wrong xfail here."""
+    # Arrange -- engage, then cross the departure time into a genuine hold; the occasion's one
+    # notice already delivered.
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
     calls = _register_notify_capture(hass)
     _seed_states(hass, status="Charging", ev_soc=10.0)
@@ -363,15 +377,13 @@ async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_m
     )
     seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
-
-    # Arrange -- engage, then cross the departure time into a genuine hold; the occasion's one
-    # notice already delivered.
     _seed_today_deadline(hass, hours_from_now=0.05)
     await coordinator.async_refresh()
     await hass.async_block_till_done()
     freezer.move_to(dt_util.now() + timedelta(minutes=10))
     await coordinator.async_refresh()
     await hass.async_block_till_done()
+    assert coordinator.last_update_success is True
     assert coordinator._required_current.required_a is None
     assert len(calls) == 1
 

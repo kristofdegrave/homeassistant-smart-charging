@@ -3247,14 +3247,15 @@ async def test_should_notify_at_max_current_when_a_held_cycle_computes_no_requir
     current, which is what the existing infinite-saturation cap already caps to, and NOT the
     escalated maximum permitted rate (the glossary's clamped delivered value, D-6).
 
-    `max_peak_kw=2.3` (~10 A headroom), deliberately below `max_current` (16 A) and NOT ample --
-    an implementation that capped to the escalated maximum permitted rate instead of
-    `max_current` would report ~10 A here, distinguishing the two; ample headroom would make
-    both bounds resolve to the same 16 A and leave this assertion unable to tell them apart."""
+    `max_peak_kw=2.3` (~8 A headroom, once the safety margin is subtracted), deliberately below
+    `max_current` (16 A) and NOT ample -- an implementation that capped to the escalated maximum
+    permitted rate instead of `max_current` would report ~8 A here, distinguishing the two;
+    ample headroom would make both bounds resolve to the same 16 A and leave this assertion
+    unable to tell them apart."""
     # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
-    config = _config(max_peak_kw=2.3)  # CONF_MAX_CURRENT=16.0; escalated rate ~10 A, not ample
+    config = _config(max_peak_kw=2.3)  # CONF_MAX_CURRENT=16.0; escalated rate ~8 A, not ample
     coord = SmartChargingCoordinator(
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
@@ -3263,7 +3264,7 @@ async def test_should_notify_at_max_current_when_a_held_cycle_computes_no_requir
     coord.soc_limit_override = 80.0
     coord.target_current = 10.0
     _seed_today_deadline(coord, hours_from_now=6)
-    coord._pursued_occurrence = dt_util.now() - timedelta(hours=1)  # already elapsed -> held
+    _seed_pursued_occurrence(coord, hours_from_now=-1)  # already elapsed -> held
 
     events = []
 
