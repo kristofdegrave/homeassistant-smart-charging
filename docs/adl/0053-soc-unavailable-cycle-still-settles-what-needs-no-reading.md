@@ -87,15 +87,16 @@ This narrows two clauses of ADR-0042. ADR-0042 stays `Accepted` and its text is 
 
 | On a cycle with no reading | Outcome | Fires | Established |
 | --- | --- | --- | --- |
-| The pursued occurrence lies in the past: it elapsed, or its departure time moved to a moment already past | The missed-deadline hold begins or continues; `Unreachable` | `DeadlineUnreachableNotified`. A notice is sent only if no occasion is already in progress (R5) | Yes |
+| The pursued occurrence passes into the past: it elapses, or its departure time moves to a moment already past | The missed-deadline hold begins; `Unreachable`, entered or remained in | `DeadlineUnreachableNotified`. A notice is sent only if no occasion is already in progress (R5) | Yes |
+| A hold is in effect and its backstop has not passed | The state is held | Nothing | No: the prior flag is already `True` |
 | A hold is in effect and its backstop passes | The hold ends; `Normal` | `DeadlineUnreachableCleared` + `DeadlineUrgencyReverted` | Yes |
 | A pursued occurrence that has not yet elapsed has its own date resolve to "no deadline" | Released; `Normal` | `DeadlineUrgencyReverted`, and `DeadlineUnreachableCleared` from `Unreachable` | Yes |
 | That occurrence's date resolves to a departure time still ahead | The occurrence moves, and the state is held | Nothing | No |
 | Anything that needs a required current: the handback, a crossing between `Urgent` and `Unreachable`, state of charge reaching the active SOC limit | The state is held | Nothing | No |
 
 The *Established* column is ADR-0042's further input to `DeadlineUnreachableEdge`. The detector
-records the hold's `True`, fires the clear on the two releases, and holds its prior flag on the
-other two rows.
+records the hold's `True` when it begins, fires the clear on the two releases when its prior
+flag was `True`, and holds its prior flag on the other three rows.
 
 Everything else in ADR-0042 stands, with "established" read as above: its disconnect row, the
 reach of its fault-cycle hold rule, and its durable rule.
@@ -103,13 +104,13 @@ reach of its fault-cycle hold rule, and its durable rule.
 ## Consequences
 
 - **ADL:** ADR-0042's row is annotated in this record's PR.
-- **Code:** the no-reading early return reports the deadline unreachable while the held
-  occurrence lies in the past, and declares the table's first three rows established. That
+- **Code:** the no-reading early return reports a hold that begins on it, fires nothing for one
+  that continues, and declares the three rows marked *Established* as established. That
   belongs to the task building ADR-0042's detector input. The move and the release on the
   pursued date belong to the no-reading task of the slice that makes a pursued occurrence follow
   its own departure time. The first task comes before the second.
-- **Tests:** a no-reading cycle holding an occurrence already past now reports the deadline
-  unreachable, so the unit test that pins `unreachable is False` for that case flips.
+- **Tests:** the unit test that pins `unreachable is False` for a no-reading cycle holding an
+  occurrence already past is rewritten to the begins and continues rows.
 - **Design:** `system-design.md`'s ADR table gains a row for this record, and its ADR-0042 row
   stops saying such a cycle publishes no clear unconditionally.
 - **No analysis follow-up:** R5, `resolution-rules.md`, UC05 and the glossary already state this
@@ -122,7 +123,7 @@ reach of its fault-cycle hold rule, and its durable rule.
 
 `rg -n 'DeadlineUnreachableEdge|_unreachable_edge|deadline_resolvable|ADR-0042|establish(es|ed)? nothing|ends no occasion|needs? no reading|needing no reading|with or without a (state-of-charge )?reading|never a state-of-charge reading' custom_components/ docs/ tests/ .claude/ .github/ CLAUDE.md`
 
-— 187 hits, 38 of them in this record. It is wide enough because it is keyed on:
+— 188 hits, 39 of them in this record. It is wide enough because it is keyed on:
 - the detector, by class and attribute, and the guard predicate whose early return this record
   rules on;
 - every citation of the record it narrows;
@@ -162,6 +163,7 @@ Out of scope:
   detector "keys on that flag alone": a with-reading release, whose correction ADR-0042 already
   assigns.
 - UC04's one keeps describing the active-SOC-limit stop, a different rule.
-- ADR-0024's six, ADR-0042's 22, and the one each in ADR-0036 and ADR-0046, are immutable.
+- ADR-0024's six, ADR-0042's 22, and the one each in ADR-0036 and ADR-0046, are immutable and
+  keep stating their decisions; the ADL rows carry the narrowing.
 - The 26 in `docs/plans/` record what was planned at their date.
-- This record's own 38, which state the decision.
+- This record's own 39, which state the decision.
