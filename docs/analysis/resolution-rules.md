@@ -137,7 +137,8 @@ what this lookahead serves.
   the past, and so never makes a deadline look unreachable (R5) on that basis alone. This rule always
   rolls forward, with no exception: what changes when a deadline elapses while the car is still short
   of its active SOC limit is not the resolution but what urgency does with it — see the
-  [missed-deadline hold](system-overview.md#ubiquitous-language) in the required-current rule below.
+  [missed-deadline hold](system-overview.md#ubiquitous-language) in the required-current rule below,
+  and, for a pursued occurrence that has not yet elapsed, *Clearing urgency* (R5).
 - The resolved deadline feeds the deadline guarantee (R5) and the plug-in reminder (R12), and is
   the [departure window](system-overview.md#ubiquitous-language) R12 de-dups against.
 - **The same table, evaluated for the [reserved day](system-overview.md#ubiquitous-language)** (that
@@ -167,11 +168,11 @@ urgency comes to be in effect.
 - **Energy needed** = EV battery capacity (R15, sensed or configured) × (active SOC limit −
   current state of charge) ÷ 100.
 - **Time remaining** = the departure deadline above − now. While an occurrence is
-  [pursued](system-overview.md#ubiquitous-language) and has not yet elapsed, the deadline here is
-  that occurrence instead, which follows its own date's departure time (R5; see *Clearing urgency*
-  below). Since either is still ahead of now — the deadline above being the *next future
-  occurrence* of the resolved departure time — the time remaining is always strictly
-  positive: it shrinks as the deadline approaches and, once the deadline passes, jumps to the
+  [pursued](system-overview.md#ubiquitous-language), the deadline here is that occurrence instead,
+  which follows its own date's departure time until it elapses (R5; see *Clearing urgency* below);
+  once it has elapsed, that is the missed-deadline hold below and no required current is computed.
+  Otherwise, since the deadline above is the *next future occurrence* of the resolved departure
+  time, the time remaining is always strictly positive: it shrinks as the deadline approaches and, once the deadline passes, jumps to the
   interval to the following occurrence rather than going negative. When the departure deadline has
   resolved to "no deadline" — or the deadline capability is absent, so no deadline is resolved at
   all (R18) — no required current is computed and deadline urgency never applies.
@@ -286,7 +287,8 @@ urgency engaged. So a change that reaches that date's resolution moves it. The m
 release nor an engagement: neither test runs because of it, and the required current is judged
 against the moved occurrence from then on. A new time that has already passed leaves the
 occurrence in the past, which is the missed-deadline hold (below). The date resolving to "no
-deadline" is the release above. The occurrence **following** the pursued one is still the one
+deadline" is the release above. Whether it has elapsed is judged against the occurrence as it stood
+entering the cycle, so a change read at or after that moment moves nothing. The occurrence **following** the pursued one is still the one
 for the day after the pursued occurrence's date, and the 24 hours run from the moved
 occurrence, so the backstop moves with it.
 
