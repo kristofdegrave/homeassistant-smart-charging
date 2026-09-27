@@ -33,11 +33,13 @@ half-scoped.
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
    per **Tracker mechanics** above.
-3. **Pick the milestone** — a filing field, never left empty: a child of an epic copies the
-   epic's; an epic or a standalone issue takes the one the flow's opening pass placed it on,
-   or a new one where none fits. What a milestone is, and why an unmilestoned issue is a
-   filing defect rather than a neutral state, is **Issue conventions** above; the flag that
-   sets it, and the read-back that confirms the name resolved, are **Tracker mechanics**'.
+3. **Pick the milestone** — a filing field, never left empty on an issue already routed down
+   a track (an `idea` issue, filed before that, has none yet): a child of an epic copies the
+   epic's; an epic or a standalone issue is placed on one here — the slice it belongs to, or
+   a new one where none fits, ranked as **Issue conventions** above says and never by this
+   skill's own choice. What a milestone is, and why an unmilestoned issue is a filing defect
+   rather than a neutral state, is that section's too; the flag that sets it, the call that
+   creates one and the read-back that confirms the name resolved are **Tracker mechanics**'.
 4. **File it** — setting the milestone and whichever of step 5's edges are already known as
    flags on the create call rather than as a second pass — then move on; implementing it is a
    separate, later step.

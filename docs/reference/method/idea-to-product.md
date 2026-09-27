@@ -91,8 +91,8 @@ both entered through `clarify`, own the technique; the idea's shape picks betwee
 - **`brainstorming`** for a narrow one — a single artifact or a single behaviour, where the
   questions are few and the design converges in one pass.
 
-`work-idea` sequences the stage for an `idea` issue: it runs the dialogue and writes the
-outputs to their homes. Two kinds of output, each with its own home:
+`work-idea` sequences the stage for an `idea` issue: it runs the dialogue and writes two
+kinds of output, each to its own home:
 
 - **Decisions** are written down, never left in chat scrollback: on the idea issue while
   brainstorming, then moved into the epic body under a *Decisions so far* heading when the epic
@@ -135,10 +135,10 @@ analysis chain, but **the claim is verified before anything is designed** — th
 `diagnosing-bugs` skill owns that step: reproduce it on the real installation, or as a
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
 reproduced is not a defect yet — say so on the issue and stop, rather than designing a fix
-for a behaviour nobody has seen. The routed issue is placed on a milestone here, before
-its fixing artifact is known — the **Decompose** stage's rule, which a one-slice fix
-otherwise never meets. Once the fixing artifact is known, the issue gains that artifact's
-context label and re-enters the chain at that artifact's stage.
+for a behaviour nobody has seen. A reproduced claim is placed on a milestone at once, before
+its fixing artifact is known; an unreproduced one stays unplaced. Once the fixing artifact
+is known, the issue gains that artifact's context label and re-enters the chain at that
+artifact's stage.
 
 ### Artifact: the chosen track, written on the issue
 
@@ -196,8 +196,8 @@ and the label/field rules that apply to every child; the `gh` commands are
 
 **The pass ends with the strand placed on a milestone** — the epic, or the single issue where
 none is filed — a new one where none fits (ADR-0052); nothing enters the backlog
-unmilestoned. What a milestone is, and how a child inherits its epic's, is **Issue
-conventions**' above.
+unmilestoned. What a milestone is, how a new one is ranked, and how filing copies an epic's
+to its children, is **Issue conventions**' above.
 
 ### The closing step: the epic body is the spec, and its children are the tasks
 

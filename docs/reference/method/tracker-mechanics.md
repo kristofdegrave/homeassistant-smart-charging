@@ -93,10 +93,19 @@ gh issue create --repo $REPO \
 gh project item-add $BOARD --owner $OWNER --url <issue-url> --format json
 ```
 
-A milestone placed or changed later is `gh issue edit <n> --milestone "<title>"`; a new one is
-`gh api -X POST repos/$REPO/milestones -f title="<title>"`. Read the placement back with
-`gh issue view <n> --json milestone --jq .milestone.title` — the create call's exit code says
-nothing about whether the name resolved.
+A milestone placed or changed later is `gh issue edit <n> --repo $REPO --milestone "<title>"`.
+A new one is `gh api -X POST repos/$REPO/milestones -f title="<title>" --jq .number`, the
+`--jq` printing its number as the read-back. An existing one's number — the REST fallback
+below takes the number, not the title — is
+
+```sh
+gh api -X GET -f state=all -f per_page=100 --paginate repos/$REPO/milestones \
+  --jq '.[] | select(.title=="<title>") | .number'
+```
+
+(`state=all` because the listing defaults to open milestones). Read a placement back with
+`gh api repos/$REPO/issues/<n> --jq .milestone.title` — an unknown title fails the create
+call with a not-found error, but the read-back stands under the one rule above.
 
 ```sh
 # 3. set the fields, one call each, by node id

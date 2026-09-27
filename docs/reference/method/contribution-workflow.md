@@ -78,8 +78,8 @@ on autonomous artifact-chaining, and it is per issue, not per step.
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
 exception: `cleanup` is triggered by the human stating that the merge happened, since the
-session does not watch for the merge — no step dispatches it, and the skill itself guards
-against a statement that turns out to be premature.
+session does not watch for the merge — no step dispatches it, and the skill guards against
+a premature statement.
 
 ## Rule C — decisions go through `clarify`
 
@@ -166,8 +166,8 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
-  since the review step never reads human review bodies as findings. The fix step then reads it
-  as it reads any human review body, and the chain runs on from **Fix**. Unmarked, it also
+  since the review step never reads human review bodies as findings. The fix step reads it
+  as any human review body, and the chain runs on from **Fix**. Unmarked, it also
   counts as a human item, which changes nothing: the grant already started a fresh count. The session's reason
   is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
@@ -183,8 +183,8 @@ still carries `needs-approval`.
 - **Resolve only what was actually fixed.** A disputed, deferred or partially addressed thread
   stays open, with the reply saying why.
 - **Resolve after the push, never before.** A failed push would otherwise leave threads closed
-  over work that is not on the branch.
-- **Outdated is not resolved.** A thread the diff no longer shows is still open until it is
+  over work not on the branch.
+- **Outdated is not resolved.** A thread the diff no longer shows is still open until
   resolved explicitly.
 - **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
   gets an issue instead (`file-task-issue`, context label per the artifact it belongs to,
@@ -228,18 +228,17 @@ child is its own issue and its own chain.
 two conditions, step 4 establishes the first — every child closed — and never the second,
 which is an observation on the real installation and the human's: `cleanup` reads the
 epic's open-children count once the linked issue is *done*, and reports it; what the report says at zero is the skill's own step. It never
-closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
-sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
-cannot.
+closes. Nothing else watches for the moment: GitHub does not close a parent whose sub-issues
+are all closed, and a child PR carries `Part of` for its epic so a merge cannot.
 
 Step 4 removes the task's worktree because one left behind is a stale checkout nobody sweeps.
 
 ## Commit & push authorization
 
 Commit and push freely, at any point during the work — no per-commit or per-push approval
-needed. This is a standing authorization the project makes in this document; it does not
-extend to anything destructive or hard to reverse (force-push, rewriting published history,
-`git reset --hard`, etc.), which still follow the general ask-before-acting default. A
+needed. This standing authorization does not extend to anything destructive or hard to
+reverse (force-push, rewriting published history, `git reset --hard`, etc.), which still
+follow the ask-before-acting default. A
 `PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/block-destructive-git.sh`) refuses
 the most common of those before they run.
 
@@ -256,8 +255,8 @@ inserted explicitly into step 0/1 here.
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
 there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
-it to *done* with the same hand that closes it, which step 4's open-children report is there
-to prompt (**Merge and issue closing** above). A child starting under an epic already *in
+it to *done* with the same hand that closes it, which step 4's open-children report prompts
+(**Merge and issue closing** above). A child starting under an epic already *in
 progress* changes nothing.
 
 ## Parallel work and forward dependencies
@@ -298,9 +297,10 @@ session's own footprint by the session's markers, never by author.
   gate. Neither label substitutes for the other, and a kind label adds no Model-selection
   row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
-  filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run)
-  up at least one tier — it takes more reading than raw effort suggests. **Epics get Size only, never Estimate** — an epic's cost is the sum of
-  its children's estimates.
+  filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
+  cross-check an ADR) up at least one tier — it takes more reading than raw effort suggests.
+  **Epics get Size only, never Estimate** — an epic's cost is the sum of its children's
+  estimates.
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
@@ -310,12 +310,13 @@ session's own footprint by the session's markers, never by author.
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
 - **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice, its rank a
-  numeric prefix in the title, never a due date. An epic carries its milestone and a child
-  inherits it through the parent edge, so filing copies the epic's. Nothing
-  enters the backlog unmilestoned by design — [idea-to-product.md](idea-to-product.md)'s
-  **Decompose** stage ends with new work placed on one — and an unmilestoned issue is picked
-  last, never never. The `gh` flag is [tracker-mechanics.md](tracker-mechanics.md)'s
-  **Filing a work item**.
+  numeric prefix in the title, never a due date. An epic carries its milestone and filing
+  copies it to each child. Nothing enters the backlog unmilestoned by design —
+  [idea-to-product.md](idea-to-product.md)'s **Decompose** stage ends with new work placed on
+  one — and an unmilestoned issue is picked last, never skipped. A new milestone is created
+  ranked last — the next free prefix after the highest existing one — and only the human
+  partner reorders: the picker's order is theirs. The `gh` flags are
+  [tracker-mechanics.md](tracker-mechanics.md)'s **Filing a work item**.
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
   shipped behaviour also needs an epic whose body carries the spec to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
