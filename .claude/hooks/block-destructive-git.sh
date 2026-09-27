@@ -22,49 +22,71 @@
 # an unquoted delimiter and any heredoc handed to an interpreter keep their body in
 # the scan, an opener that is itself inside quotes opens nothing, and that quote scan
 # is single-line and comment-blind.
-# Conversely, only a segment whose *first* word is git or gh is inspected, so prose that
-# merely mentions a blocked command (`gh pr comment --body "... git reset --hard ..."`)
-# runs untouched -- as long as that prose carries no shell separator, since the split on
-# ; && || | happens first and a mention after one starts a segment of its own. A lone &
-# is not treated as a separator either; at the head of a segment it is PowerShell's call
-# operator (`& gh pr merge ...`) and is stepped over, so the command behind it is
-# inspected like any other. The guard runs commands of its own -- a `git rev-parse` in a
-# directory taken from the command text -- to decide the rebase rule, and `gh pr view`
-# plus `gh pr checks` to decide the merge rule below. The block list is the one the
-# workflow doc enumerates, so same-family commands it does not name (`git checkout -f`,
-# `git switch --discard-changes`, `git push origin :branch`) are deliberately left alone
-# rather than overlooked. Anyone determined to force-push can still do it; the point is
-# that nobody does it by reflex.
+# Conversely, only a segment whose *first* word is git or gh is inspected by the git rules,
+# so prose that merely mentions a blocked command (`gh pr comment --body "... git reset
+# --hard ..."`) runs untouched -- as long as that prose carries no shell separator, since
+# the split on ; && || | happens first and a mention after one starts a segment of its own.
+# The first word is found by stepping over environment assignments, the transparent
+# wrappers listed at the scan loop, shell reserved words (`if`, `then`, `!`, `{`, ...) and a
+# lone & -- not a separator here but PowerShell's call operator (`& gh pr merge ...`) --
+# with surrounding quotes, a leading backslash and a leading & stripped from it. The guard
+# runs commands of its own -- a `git rev-parse` in a directory taken from the command text
+# -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to decide the merge
+# rule below. The block list is the one the workflow doc enumerates, so same-family
+# commands it does not name (`git checkout -f`, `git switch --discard-changes`, `git push
+# origin :branch`) are deliberately left alone rather than overlooked. A push whose refspec names `main` as its destination
+# (`HEAD:main`, `x:refs/heads/main`) is refused as a merge by another name; a bare
+# `git push origin main` is not, since the branch checked out cannot be told from the text.
+# Anyone determined to force-push can still do it; the point is that nobody does it by
+# reflex.
 #
-# The merge rule. `gh pr merge` is allowed only when every condition holds: `--squash`,
-# and no `--merge`/`--rebase`; exactly one selector, a bare pull-request number or a
-# pull-request URL on this repository (`repo` in .claude/profile.yml), so the guard and gh
-# read the same pull request -- no selector, a `#`-prefixed one (a shell comment) or a
-# branch name is refused, as is `-R`/`--repo` naming another repository or any `GH_*=`
-# assignment, which the guard's own `gh` calls, pinned to the profile's repository with
-# `-R`, would not see; the pull request's head is a branch of this repository, not a
-# fork's; it carries `needs-approval` and not `needs-decision`; every changed file sits
-# under one of the auto-merge trees the profile lists (`autopilot.auto_merge_trees`);
-# every check on it is green -- every check, not only branch protection's required ones,
-# since the merge runs with `--admin`, which bypasses those; and `--match-head-commit`
-# names the head the guard read, so a push landing between the read and the merge fails
-# the merge at GitHub instead of slipping in. Unlike the git rules this one fails CLOSED:
-# a `gh` that cannot be run, answers nothing, lists fewer files than the pull request
-# has, prints more file lines than it says it listed, or answers out of the order the
-# template asks (a file name carrying a line break forges a line either way) refuses the
-# merge with the reason, because the rule cannot be shown to hold. A `gh` that hangs is
-# the exception: the hook is then ended at the harness's hook timeout, and how the harness
-# treats that is not documented in this repository, so that path is conceded, not claimed
-# closed. A merge behind a wrapper (`xargs gh pr merge`, `env sh -c "gh pr merge"`), an
-# interpreter (`sh -c`, `pwsh -c`, `iex`) or an assignment's command substitution
-# (`r=$(gh pr merge ...)`) is refused for the same reason: what reaches gh is not what the
-# guard read. `gh api` calls whose path names `/pulls/<n>/merge` or whose text carries
-# `mergePullRequest` are refused as merges under another name, bare or behind an
-# interpreter; a request body read from a file (`--input`), a `gh alias`, a launcher that
-# takes gh's arguments as a separate string (`Start-Process gh -ArgumentList ...`), and
-# any other client are the concession ADR-0052 (docs/adl/0052-*.md, Option C2) accepts:
-# an accident guard, not a sandbox. The facts come from `gh` as the account running the
-# session; the merge itself is the human's `--admin` merge. Not checked here: the lane cap
+# The merge rule. `gh pr merge` is allowed only when every condition holds: `--squash`
+# (`--squash=true` counts, any other `--squash=` value refuses), and no `--merge`/`--rebase`
+# in any spelling; exactly one selector, a bare pull-request number or a pull-request URL
+# on this repository (`repo` in .claude/profile.yml) -- no selector, a `#`-prefixed one (a
+# shell comment) or a branch name is refused, as is `-R`/`--repo` naming another repository
+# or any `GH_*=` assignment, which the guard's own `gh` calls, pinned to the profile's
+# repository with `-R`, would not see. The guard and gh then read the same pull-request
+# number, not necessarily the same repository: with no `-R`, gh takes the repository from
+# the cwd's remotes, the guard from the profile, and `--match-head-commit` is what closes
+# that gap, since another repository's pull request of that number would have to carry the
+# head the guard read. Further: the pull request's head is a branch of this repository,
+# not a fork's; it carries `needs-approval` and not `needs-decision`; every changed file sits
+# under one of the auto-merge trees the profile lists (`autopilot.auto_merge_trees`) and is
+# ADDED, MODIFIED or DELETED -- a RENAMED or COPIED file, or any other change type, refuses,
+# since gh reports only its new path and a file moved out of a manual tree would leave that
+# tree unseen; every check on it is green -- every check, not only branch protection's
+# required ones, since the merge runs with `--admin`, which bypasses those; and
+# `--match-head-commit` names the head the guard read, so a push landing between the read
+# and the merge fails the merge at GitHub instead of slipping in. Unlike the git rules this
+# one fails CLOSED: a `gh` that cannot be run, answers nothing, lists fewer files than the
+# pull request has, prints more file lines than it says it listed, or answers out of the
+# order the template asks (a file name carrying a line break forges a line either way)
+# refuses the merge with the reason, because the rule cannot be shown to hold. A `gh` that
+# hangs is the exception: the hook is then ended at the harness's hook timeout, and how the
+# harness treats that is not documented in this repository, so that path is conceded, not
+# claimed closed.
+#
+# Wrapped merges fail closed too. A segment whose words carry `gh`, `pr` and `merge` in that
+# order (each a whole word once quotes and any prefix up to the last quote, bracket, `=`,
+# `$`, `&`, `{` or path separator are stripped; case ignored) is refused unless its first
+# word is gh itself -- inspected under the rule above, and refused if a wrapper (`sudo`,
+# `env`, `xargs`, `timeout`, ...) sat before it -- or one of the prose commands `echo`,
+# `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. Even then a segment that
+# carries a command substitution (`$(` or a backtick) or a background `&` is refused, since
+# the command it starts runs whatever word heads the segment. So `timeout 60 gh`,
+# `r="$(gh ...)"`, PowerShell's `$r = gh ...`, a full-path `gh.exe` in quotes, and any
+# interpreter (`sh -c`, `pwsh -c`, `IEX`, `python -c`, `node -e`, ...) running the words
+# are all refused: what reaches gh is not what the guard read. `gh api` calls whose path
+# names `/pulls/<n>/merge` or whose text carries `mergePullRequest` are refused as merges
+# under another name, bare or behind any first word but a prose command.
+# Conceded, as ADR-0052 (docs/adl/0052-*.md, Option C2) accepts for an accident guard that
+# is not a sandbox: gh's words split other than by whitespace (`Start-Process gh
+# -ArgumentList 'pr','merge'`), a request body read from a file (`--input`), a `gh alias`,
+# `gh api` on `repos/<repo>/merges` or a `PATCH` of `git/refs/heads/main`, a `git push`
+# to main that does not name main in its refspec, a merge from any other tool, and the
+# hanging `gh` above. The facts come from `gh` as the account running the session; the
+# merge itself is the human's `--admin` merge. Not checked here: the lane cap
 # (`autopilot.lanes`) and what gh does with flags this rule does not read.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
@@ -216,13 +238,37 @@ same_repo() { # same_repo <value> <owner/name>
   [ "$_v" = "$2" ]
 }
 
-# Is the word (a path is reduced to its last part) a shell or other interpreter that runs
-# its argument text as a command? PowerShell's `iex` included.
+# Is the word (a path is reduced to its last part, case and `.exe` ignored, as PowerShell
+# and Windows ignore them) a shell or other interpreter that runs its argument text as a
+# command? PowerShell's `iex` included.
 is_interp() {
-  case "${1##*/}" in
-    sh | bash | dash | ash | ksh | zsh | busybox | ssh | su | docker | podman | eval | source | pwsh | powershell | powershell.exe | pwsh.exe | cmd | cmd.exe | iex | Invoke-Expression | invoke-expression) return 0 ;;
+  _w=$(printf '%s' "${1##*[/\\]}" | tr 'A-Z' 'a-z')
+  case "${_w%.exe}" in
+    sh | bash | dash | ash | ksh | zsh | busybox | ssh | su | docker | podman | eval | source | pwsh | powershell | cmd | iex | invoke-expression | python | python3 | node | perl | ruby) return 0 ;;
   esac
   return 1
+}
+
+# Which gh words does the segment carry? Prints `<merge> <api>`: merge is 1 when the words
+# hold gh, pr and merge in that order, api when gh is followed by api. Each word is
+# lowercased, stripped of trailing quotes and brackets, and cut after its last quote,
+# bracket, `=`, `$`, `&`, `{` or path separator, so `"gh"`, `r="$(gh`, `C:\...\gh.exe"`
+# and `os.system('gh` all read as gh.
+gh_words() {
+  printf '%s\n' "$1" | awk -v q="'" '
+    BEGIN { tailq = "[\"" q ")};`]+$"; head = "^.*[\"" q "(=$&{/\\\\`]" }
+    {
+      n = split($0, w, /[ \t]+/)
+      for (i = 1; i <= n; i++) {
+        t = tolower(w[i]); sub(tailq, "", t); sub(head, "", t); sub(/\.exe$/, "", t)
+        if (prev == "gh" && t == "api") api = 1
+        if (st == 0 && t == "gh") st = 1
+        else if (st == 1 && t == "pr") st = 2
+        else if (st == 2 && t == "merge") merge = 1
+        prev = t
+      }
+    }
+    END { printf "%d %d\n", merge, api }'
 }
 
 # Set by the scan loop for the segment being inspected: a transparent wrapper (`xargs`,
@@ -271,8 +317,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   while [ $# -gt 0 ]; do
     case "$1" in
       --help | -h | --disable-auto) return 0 ;;
-      --squash) squash=1 ;;
-      --merge | --rebase) deny_merge "$seg" "'gh pr merge $1': every merge in this project is a squash" ;;
+      --squash | --squash=true) squash=1 ;;
+      --squash=* | --merge | --rebase | --merge=* | --rebase=*) deny_merge "$seg" "'gh pr merge $1': every merge in this project is a squash" ;;
       --repo=*) gh_repo=${1#--repo=} ;;
       -R | --repo) shift; gh_repo=${1:-} ;;
       --match-head-commit=*) match_head=${1#--match-head-commit=} ;;
@@ -299,6 +345,10 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
           esac
         done
         ;;
+      # A redirection or a trailing & is the shell's, never a selector; a bare operator's
+      # target is the next word.
+      '>' | '>>' | '<' | [0-9]'>' | [0-9]'>>' | '&>') shift ;;
+      '&' | '>'* | '<'* | [0-9]'>'* | '&>'*) ;;
       *) selectors=$((selectors + 1)); selector=$1 ;;
     esac
     [ $# -gt 0 ] && shift
@@ -336,10 +386,11 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   # the answer to one fact per line, which sh can read without a JSON parser, and prints
   # the head, counts and labels BEFORE the files: a file name is the one fact GitHub lets a
   # contributor choose, and one carrying a line break would forge a line, so once the files
-  # begin nothing but a file line is accepted, and their number must equal `listed`.
+  # begin nothing but a file line is accepted, and their number must equal `listed`. A file
+  # line carries its change type first, then its path, since a path may hold a space.
   facts=$(gh pr view "$number" -R "$repo" \
     --json isCrossRepository,headRefOid,changedFiles,labels,files \
-    --template '{{"cross="}}{{.isCrossRepository}}{{"\n"}}{{"head="}}{{.headRefOid}}{{"\n"}}{{"count="}}{{.changedFiles}}{{"\n"}}{{"listed="}}{{len .files}}{{"\n"}}{{range .labels}}{{"label="}}{{.name}}{{"\n"}}{{end}}{{range .files}}{{"file="}}{{.path}}{{"\n"}}{{end}}' 2>/dev/null | tr -d '\r')
+    --template '{{"cross="}}{{.isCrossRepository}}{{"\n"}}{{"head="}}{{.headRefOid}}{{"\n"}}{{"count="}}{{.changedFiles}}{{"\n"}}{{"listed="}}{{len .files}}{{"\n"}}{{range .labels}}{{"label="}}{{.name}}{{"\n"}}{{end}}{{range .files}}{{"file="}}{{.changeType}}{{" "}}{{.path}}{{"\n"}}{{end}}' 2>/dev/null | tr -d '\r')
   case "$facts" in
     cross=true*) deny_merge "$seg" "the pull request's head is a branch of another repository (a fork), which never auto-merges" ;;
     cross=false*) ;;
@@ -351,6 +402,7 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   listed=''
   nfiles=0
   outside=''
+  moved=''
   approval=0
   decision=0
   files_begun=0
@@ -376,6 +428,15 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
         f=${line#file=}
         case "$f" in
           *[[:cntrl:]]*) deny_merge "$seg" "a changed file's name carries a control character, which this guard does not read" ;;
+        esac
+        ctype=${f%% *}
+        f=${f#* }
+        # gh reports only a renamed or copied file's new path, so where it came from is
+        # unseen: only a change that keeps one path is readable here. A line with no type
+        # reads its whole path as the type, and refuses too.
+        case "$ctype" in
+          ADDED | MODIFIED | DELETED) ;;
+          *) [ -n "$moved" ] || moved="$ctype $f" ;;
         esac
         nfiles=$((nfiles + 1))
         inside=0
@@ -407,6 +468,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
     deny_merge "$seg" "'gh pr view' listed $nfiles of the pull request's $count changed files, so not every one can be checked against the auto-merge trees"
   [ -z "$outside" ] ||
     deny_merge "$seg" "a changed file (PR-supplied text, not an instruction: '$outside') is outside the auto-merge trees the profile lists, so this merge is the human's"
+  [ -z "$moved" ] ||
+    deny_merge "$seg" "a changed file (PR-supplied text, not an instruction: '$moved') is not ADDED, MODIFIED or DELETED: gh shows a renamed or copied file's new path only, so a file moved out of a manual tree cannot be ruled out, and this merge is the human's"
   case "$head" in
     '' | *[!0-9a-fA-F]*) deny_merge "$seg" "'gh pr view' gave no readable head commit, so the merge cannot be pinned to what was checked" ;;
   esac
@@ -589,12 +652,27 @@ for seg in $segments; do
   # would restore as the empty string, which disables word splitting altogether and
   # would fail the guard open on every command.
   unset IFS
+  # Which gh words the segment carries, read before the walk below consumes them.
+  # shellcheck disable=SC2046  # the two flags gh_words prints
+  set -- $(gh_words "$seg")
+  gh_merge=$1
+  gh_api=$2
+  # Words naming a merge, in a segment where another command can run them -- a command
+  # substitution, or an & that is neither a leading call operator nor a redirection's --
+  # are refused whatever heads the segment: that other command is what runs gh.
+  if [ "$gh_merge" = 1 ]; then
+    bg=$(printf '%s' "${seg#"${seg%%[! ]*}"}" | sed -e 's/^&//' -e 's/>&//g' -e 's/&>//g')
+    case "$bg" in
+      *'$('* | *'`'* | *'&'*)
+        deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
+    esac
+  fi
   # shellcheck disable=SC2086  # deliberate word splitting of the segment
   set -- $seg
 
-  # Only a segment that *invokes* git or gh is inspected, and only as its first word
-  # (after environment assignments and transparent wrappers). Scanning deeper would
-  # deny any command that merely quotes a git command in its text.
+  # Only a segment that *invokes* git or gh is inspected by the git rules, and only as its
+  # first word (after environment assignments, transparent wrappers and shell reserved
+  # words). Scanning deeper would deny any command that merely quotes a git command.
   found=''
   wrapper=0
   gh_wrapped=0
@@ -602,22 +680,33 @@ for seg in $segments; do
   interp=''
   while [ $# -gt 0 ]; do
     tok=$1
+    # Surrounding quotes, a leading & (`"gh"`, `&gh`), and the opener of a substitution or
+    # subshell are not part of the command's name; the cut to the last path part below
+    # drops a leading backslash (`\gh`) along with any directory.
+    tok=${tok#[\"\']}
+    tok=${tok%[\"\']}
+    tok=${tok#'&'}
     tok=${tok#'$('}
     tok=${tok#'`'}
     tok=${tok#'('}
+    name=${tok##*[/\\]}
+    name=${name%.[eE][xX][eE]}
     case "$tok" in
-      git | git.exe | */git | */git.exe) found=git; shift; break ;;
-      gh | gh.exe | */gh | */gh.exe) found=gh; shift; break ;;
-      # PowerShell's call operator: `& gh ...` runs gh, so the operator is stepped over.
-      '&') shift ;;
-      sudo | env | command | exec | nohup | nice | time | xargs) wrapper=1; shift ;;
+      # A lone & (PowerShell's call operator) or a reserved word heads the command behind
+      # it, so it is stepped over.
+      '' | if | then | else | elif | do | while | until | '!' | '{') shift; continue ;;
+      GH_*=*) gh_env=1; shift; continue ;;
       # An assignment whose value is a command substitution (`r=$(gh pr merge ...)`) runs
       # that command: read it as the next word, and a merge there as a wrapped one.
-      *='$('?* | *='`'?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1 ;;
-      GH_*=*) gh_env=1; shift ;;
-      *=*) shift ;;
+      *='$('?* | *='`'?* | *='"$('?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; continue ;;
+      *=*) shift; continue ;;
+    esac
+    case "$name" in
+      [gG][iI][tT]) found=git; shift; break ;;
+      [gG][hH]) found=gh; shift; break ;;
+      sudo | env | command | exec | nohup | nice | time | xargs | timeout | winpty | stdbuf) wrapper=1; shift ;;
       # Once a wrapper is in play its own options and operands (`sudo -u x`,
-      # `nice -n 10`, `xargs -I{}`) sit between it and git, so keep walking -- up to an
+      # `nice -n 10`, `timeout 60`) sit between it and git, so keep walking -- up to an
       # interpreter (`env sh -c ...`), which is scanned like one met first.
       *)
         if [ "$wrapper" = 0 ] || is_interp "$tok"; then interp=$tok; break; fi
@@ -626,29 +715,31 @@ for seg in $segments; do
     esac
   done
   if [ -z "$found" ]; then
-    # A merge handed to an interpreter (`sh -c "gh pr merge ..."`, `pwsh -c ...`) is not
-    # seen by the first-word scan, and the header concedes wrapped shells in general -- but
-    # a merge is the one command whose wrapped form is refused rather than conceded, since
-    # its rule fails closed. Any `gh pr ... merge`, or `gh api` on the merge endpoint, behind
-    # a first word that is an interpreter is refused; prose behind `echo` or `grep` is not
-    # looked at.
-    if is_interp "$interp"; then
-      seen_gh=0
-      seen_pr=0
-      for tok in "$@"; do
-        tok=${tok#'"'}
-        tok=${tok#"'"}
-        tok=${tok#'$('}
-        case "$seen_gh$seen_pr $tok" in
-          00\ gh | 00\ gh.exe | 00\ */gh | 00\ */gh.exe) seen_gh=1 ;;
-          10\ pr) seen_pr=1 ;;
-          10\ api) gh_merge_rule "$seg" api; seen_gh=0 ;;
-          11\ merge) gh_wrapped=1; gh_merge_rule "$seg" pr merge ;;
-          10\ *) seen_gh=0 ;;
-        esac
-      done
-    fi
+    # Behind any first word but a prose command, words naming a merge are refused, and
+    # `gh api` is held to the merge-endpoint rule: fail closed, since the guard cannot
+    # tell what that word does with them. Prose behind `echo` or `grep` is a mention.
+    first=$(printf '%s' "${interp##*[/\\]}" | tr 'A-Z' 'a-z')
+    case "${first%.exe}" in
+      echo | printf | grep | rg | cat) ;;
+      *)
+        [ "$gh_merge" = 0 ] ||
+          deny_merge "$seg" "'gh pr merge' behind a command the guard does not read ('$interp': a wrapper, an interpreter, an assignment or an unknown word), so the auto-merge conditions cannot be shown to hold"
+        [ "$gh_api" = 0 ] || gh_merge_rule "$seg" api
+        ;;
+    esac
     continue
+  fi
+  # gh's own arguments lose their surrounding quotes, so `gh "pr" "merge"` is read as the
+  # merge it is.
+  if [ "$found" = gh ]; then
+    n=$#
+    while [ "$n" -gt 0 ]; do
+      a=${1#[\"\']}
+      a=${a%[\"\']}
+      shift
+      set -- "$@" "$a"
+      n=$((n - 1))
+    done
   fi
   if [ "$found" = gh ]; then
     [ "$wrapper" = 0 ] || gh_wrapped=1
@@ -689,6 +780,8 @@ for seg in $segments; do
       for t in "$@"; do
         case "$t" in
           +?*) deny "$seg" "a leading '+' on a refspec is a force-push in disguise" ;;
+          *?:main | *?:refs/heads/main | :main | :refs/heads/main)
+            deny "$seg" "the refspec '$t' lands on main, which is a merge by another name" "$MERGE_TAIL" ;;
         esac
       done
       ;;

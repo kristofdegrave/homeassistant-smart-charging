@@ -133,13 +133,13 @@ never as a loose question in a status report.
 ## Exit labels
 
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. `needs-approval` adds that a human may merge the PR **as it stands**, which is
-why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both exits have one actor: the **review step**, at the end of the pass it
-just posted. After a clean pass it applies `needs-approval` alone, removing a stale
+human decides**. `needs-approval` adds that the PR may be merged **as it stands**, by a human or under the merge
+rule, which is why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both exits have one actor: the **review step**, at the end of its
+pass. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision`. After the last pass the cap allows, with Critical or Major
 still open and no round self-granted, it applies `needs-decision` **alongside**
 `needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
-clean one in any list view while `needs-approval` keeps its single meaning. No other step or
+clean one while `needs-approval` keeps its single meaning. No other step or
 skill applies either label; the one exception is the session putting a PR on hold (below), which a checklist's
 exit check can also do at the exit.
 Neither label is a merge (**Merge and issue closing** below).

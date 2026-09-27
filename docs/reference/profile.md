@@ -62,7 +62,7 @@ be stating a profile value, which the method check refuses:
 - `In progress` — the *in progress* role: writing has actually started, in a worktree on the
   issue's branch.
 - `In review` — the *in review* role: a PR is open; it stays here through every review/fix
-  round and the human's merge decision.
+  round and the merge decision (the human's, or a session's under the merge rule).
 - `Done` — the *done* role: merged and cleaned up.
 
 **Size** (`board.fields.size`) is a five-tier T-shirt estimate of reading-plus-writing effort;

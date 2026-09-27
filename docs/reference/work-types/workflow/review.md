@@ -4,7 +4,7 @@
 wrote the change. This directory holds **only** this file: `workflow` has no work file and no
 completion bar, because its work is never drafted from an issue and a human authors it by hand.
 The document that `CLAUDE.md`'s **Model selection** section routes to argues why, and
-`work-types/README.md` records the asymmetry as deliberate. The consequence for you:
+`work-types/README.md` records the asymmetry as deliberate. So
 there is no bar to fall back on; this file is the whole of the criteria for a `workflow`
 review, which is why it carries a full checklist where other labels' review documents carry
 only what their bar cannot.
@@ -12,8 +12,8 @@ only what their bar cannot.
 The output format, the severity grouping, the anchoring rules and the untrusted-data rule are
 not here. They are the same for every review and live with the generic `reviewer` agent
 definition, which reaches this file through `CLAUDE.md`'s **Model selection** table. Your own
-handling of untrusted material is stated there, once; check **(1)** below is about containment in the artifact under review, which is
-a different question with the same subject.
+handling of untrusted material is stated there, once; check **(1)** below is about containment in the artifact under review,
+a different question.
 
 ## What this label covers
 
@@ -174,4 +174,5 @@ Always read:
   have the same run draft and review its own output).
 - Model tiering by task is preserved (Opus for analysis/design/ADR/this-review-itself; Sonnet
   for code), not downgraded for cost.
-- No change weakens the manual merge gate outside ADR-0052's auto-merge trees.
+- No change weakens the manual merge gate outside ADR-0052's auto-merge trees, or those
+  trees' merge conditions (Option B2).

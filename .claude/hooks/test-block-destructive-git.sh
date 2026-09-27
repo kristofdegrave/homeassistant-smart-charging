@@ -291,16 +291,17 @@ export PROFILE
 STUB_SEL=1234
 STUB_REPO=o/r
 # Facts under which the merge passes; each blocked case below breaks exactly one. The
-# head, count and labels come before the files, in the order the hook's template asks.
+# head, count and labels come before the files, in the order the hook's template asks,
+# and each file line carries its change type before its path.
 GOOD_VIEW='cross=false
 head=abc123
 count=3
 listed=3
 label=development
 label=needs-approval
-file=custom_components/smart_charging/coordinator.py
-file=tests/test_coordinator.py
-file=docs/design/system-design.md'
+file=MODIFIED custom_components/smart_charging/coordinator.py
+file=ADDED tests/test_coordinator.py
+file=DELETED docs/design/system-design.md'
 GOOD_CHECKS='check=pass lint
 check=pass test
 check=skipping perf
@@ -330,13 +331,44 @@ run ALLOW 'gh pr view 1234 --json labels'
 run ALLOW 'gh pr comment 1234 --body "run gh pr merge --squash once it is green"'
 run ALLOW 'gh api repos/o/r/pulls/1234/comments -f body=x'   # an api call that merges nothing
 run ALLOW 'echo "gh pr merge is guarded"'                     # prose behind a non-interpreter
+run ALLOW 'echo "gh pr merge 1234"'
+run ALLOW 'git commit -m "gh pr merge notes"'                 # git's own rules read it, not the merge rule
+run ALLOW 'gh pr merge 1234 --squash=true --match-head-commit abc123'
+run ALLOW 'gh pr merge 1234 --squash --match-head-commit abc123 2>&1'   # a redirection is no selector
+run ALLOW 'gh pr merge 1234 --squash --match-head-commit abc123 > /tmp/out.txt'
+run ALLOW 'if gh pr merge 1234 --squash --match-head-commit abc123; then echo merged; fi'  # a reserved word is stepped over
+run ALLOW '"gh" "pr" "merge" 1234 --squash --match-head-commit abc123'  # quotes are not part of the words
 TOOL=PowerShell
 run ALLOW '& gh pr merge 1234 --squash --admin --match-head-commit abc123'  # PowerShell's call operator
+run ALLOW 'gh pr merge 1234 --squash --match-head-commit abc123 2>$null'
 run BLOCK '& gh pr merge 1234 --admin'                                       # ... and the rule still bites behind it
 run BLOCK '& git push --force'                                               # ... as do the git rules
 run BLOCK 'iex "gh pr merge 1234 --squash --admin"'                          # PowerShell's interpreters
 run BLOCK 'Invoke-Expression "gh pr merge 1234 --squash --admin"'
+run BLOCK 'IEX "gh pr merge 1234 --squash --match-head-commit abc123"'       # in any case
+run BLOCK '$r = gh pr merge 1234 --squash --match-head-commit abc123'        # an assignment's command
+run BLOCK '& "C:\Program Files\GitHub CLI\gh.exe" pr merge 1234 --squash --match-head-commit abc123'  # a quoted full path
 TOOL=Bash
+# Wrapped merges fail closed: words naming a merge behind anything but gh or prose.
+run BLOCK 'timeout 60 gh pr merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'timeout 60 git push --force'                                     # timeout is a wrapper for the git rules too
+run BLOCK 'if gh pr merge 1234 --admin; then echo merged; fi'
+run BLOCK '! gh pr merge 1234 --admin'
+run BLOCK '{ gh pr merge 1234 --admin; }'
+run BLOCK 'r="$(gh pr merge 1234 --squash --match-head-commit abc123)"'
+run BLOCK '"gh" pr merge 1234 --admin'
+run BLOCK 'gh "pr" "merge" 1234 --admin'                  # gh's own words lose their quotes too
+run BLOCK '\gh pr merge 1234 --admin'
+run BLOCK "python -c \"__import__('os').system('gh pr merge 1234 --squash --match-head-commit abc123')\""
+run BLOCK "node -e \"require('child_process').execSync('gh pr merge 1234 --squash --match-head-commit abc123')\""
+run BLOCK 'echo "$(gh pr merge 1234 --squash --match-head-commit abc123)"'    # prose running a substitution
+run BLOCK 'echo hi & gh pr merge 1234 --squash --match-head-commit abc123'    # a background & starts another command
+run BLOCK 'GH_REPO=$(cat repo.txt) gh pr merge 1234 --squash --match-head-commit abc123'
+# A push that lands on main is a merge by another name.
+run BLOCK 'git push origin HEAD:main'
+run BLOCK 'git push origin some-branch:refs/heads/main'
+run BLOCK 'git push origin :main'
+run ALLOW 'git push origin HEAD:some-branch'
 run BLOCK 'gh pr merge 1234 --admin --match-head-commit abc123'          # not a squash
 run BLOCK 'gh pr merge 1234 --merge --match-head-commit abc123'
 run BLOCK 'gh pr merge 1234 --rebase --admin --match-head-commit abc123'
@@ -346,6 +378,11 @@ run BLOCK 'gh pr merge 1234 -Afoo@users.noreply.github.com --match-head-commit a
 run BLOCK 'gh pr merge 1234 --merge -Afoo@users.noreply.github.com --match-head-commit abc123'
 run BLOCK 'gh pr merge -bs 1234 --match-head-commit abc123'               # -b takes "s" as its value
 run BLOCK 'gh pr merge 1234 -Ajess@x.io --match-head-commit abc123'        # the s in -A's value is no squash
+run BLOCK 'gh pr merge 1234 --squash --merge --match-head-commit abc123'  # a squash alongside does not excuse --merge
+run BLOCK 'gh pr merge 1234 -sr --match-head-commit abc123'               # ... nor -r in a cluster
+run BLOCK 'gh pr merge 1234 --squash --rebase=true --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 --squash --merge=true --match-head-commit abc123'
+run BLOCK 'gh pr merge 1234 -s --squash=false --match-head-commit abc123'  # the last word on --squash is false
 run BLOCK 'echo hi; gh pr merge 1234'          # a separator starts a segment of its own
 # Which pull request: exactly one selector, by number or URL, on the profile's repository.
 run BLOCK 'gh pr merge --squash --admin --match-head-commit abc123'      # no selector
@@ -363,7 +400,7 @@ run BLOCK 'gh pr -R o/r merge 1234 --admin --match-head-commit abc123'   # -R wa
 run BLOCK 'gh pr merge 1234 -Ro/r --admin --match-head-commit abc123'
 run BLOCK 'GH_REPO=o/r gh pr merge 1234 --squash --match-head-commit abc123'   # a GH_* assignment, even to the same repo
 run BLOCK 'GH_HOST=ghe.example gh pr merge 1234 --squash --match-head-commit abc123'
-run BLOCK 'echo 1234 | xargs gh pr merge --squash --match-head-commit abc123'  # a wrapper
+run BLOCK 'xargs gh pr merge 1234 --squash --match-head-commit abc123'  # a wrapper
 run BLOCK 'sudo gh pr merge 1234 --squash --match-head-commit abc123'
 run BLOCK 'sh -c "gh pr merge 1234 --squash --admin --match-head-commit abc123"'   # an interpreter
 run BLOCK "bash -c 'gh pr -R o/r merge 1234 --squash'"
@@ -385,14 +422,14 @@ head=abc123
 count=1
 listed=1
 label=needs-approval
-file=tests/test_x.py'
+file=MODIFIED tests/test_x.py'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # the head is a fork's branch
 GH_VIEW='cross=false
 head=abc123
 count=1
 listed=1
 label=development
-file=tests/test_x.py'
+file=MODIFIED tests/test_x.py'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # no needs-approval
 GH_VIEW='cross=false
 head=abc123
@@ -400,37 +437,37 @@ count=1
 listed=1
 label=needs-approval
 label=needs-decision
-file=tests/test_x.py'
+file=MODIFIED tests/test_x.py'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # needs-decision alongside
 GH_VIEW='cross=false
 head=abc123
 count=2
 listed=2
 label=needs-approval
-file=tests/test_x.py
-file=docs/analysis/requirements.md'
+file=MODIFIED tests/test_x.py
+file=MODIFIED docs/analysis/requirements.md'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a file outside the auto-merge trees
 GH_VIEW='cross=false
 head=abc123
 count=2
 listed=2
 label=needs-approval
-file=tests/test_x.py
-file=CLAUDE.md'
+file=MODIFIED tests/test_x.py
+file=MODIFIED CLAUDE.md'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a rules file at the root
 GH_VIEW='cross=false
 head=abc123
 count=1
 listed=1
 label=needs-approval
-file=tests_extra/test_x.py'
+file=MODIFIED tests_extra/test_x.py'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a prefix match must not straddle a directory name
 GH_VIEW='cross=false
 head=abc123
 count=101
 listed=1
 label=needs-approval
-file=tests/test_x.py'
+file=MODIFIED tests/test_x.py'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # gh listed fewer files than the PR has
 GH_VIEW='cross=false
 head=abc123
@@ -445,38 +482,56 @@ head=abc123
 count=1
 listed=1
 label=development
-file=tests/x
+file=MODIFIED tests/x
 label=needs-approval'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a forged label after the files began
 GH_VIEW='cross=false
 head=abc123
 count=2
 listed=1
+count=1
 label=needs-approval
-file=tests/x
-count=1'
-run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a forged count: the first count stands, and the line is refused
+file=MODIFIED tests/x'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a second count before the files: the first stands
 GH_VIEW='cross=false
 head=abc123
 count=2
 listed=1
 label=needs-approval
-file=tests/x
-file=tests/y'
+file=MODIFIED tests/x
+file=MODIFIED tests/y'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a forged file line: more file lines than gh listed
 GH_VIEW="cross=false
 head=abc123
 count=1
 listed=1
 label=needs-approval
-file=tests/x${tab}y"
+file=MODIFIED tests/x${tab}y"
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a control character in a name
 GH_VIEW='cross=false
 count=1
 listed=1
 label=needs-approval
+file=MODIFIED tests/test_x.py'
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit='  # no head to pin to, and an empty pin does not match it
+# gh names a renamed or copied file by its new path only, so only a change that keeps one
+# path is readable; any other change type, or none, refuses.
+for ctype in RENAMED COPIED CHANGED; do
+  GH_VIEW="cross=false
+head=abc123
+count=1
+listed=1
+label=needs-approval
+file=$ctype tests/block-destructive-git.sh"
+  run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a file moved or copied into the trees
+done
+GH_VIEW='cross=false
+head=abc123
+count=1
+listed=1
+label=needs-approval
 file=tests/test_x.py'
-run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # no head to pin to
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a file line with no change type
 GH_VIEW=$GOOD_VIEW
 GH_CHECKS='check=pass lint
 check=fail test'
