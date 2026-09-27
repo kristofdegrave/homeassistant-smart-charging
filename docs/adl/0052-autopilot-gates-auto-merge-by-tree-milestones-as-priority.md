@@ -64,8 +64,7 @@ trigger. At most two tree-disjoint lanes in flight.
 All files under `custom_components/`, `tests/` or `docs/design/`, the head a branch of this
 repository, `needs-approval` without `needs-decision`, CI green; any other tree waits.
 
-- Pro: decided from the diff and labels alone, over trees a human reads again at the
-  epic-body gate or verify live.
+- Pro: decided from the diff and labels alone, over trees a human reads again later.
 - Con: a design change reaches the flow's *approved* state without a human merge.
 - Con: a fork's pull request never auto-merges.
 
@@ -156,7 +155,7 @@ rg -n --hidden --glob '!.git/' \
   --glob '!docs/adl/**' --glob '!docs/postmortems/**' --glob '!docs/archive/**' \
   --glob '!docs/plans/**' --glob '!CHANGELOG.md' \
   -e 'Rule B\b' -e 'next issue' -e 'artifact-chaining' \
-  -e '[Mm]erge is always manual|[Mm]anual merge|merged, manually|manually, by the maintainer|no Claude session can merge|never auto-merged' \
+  -e '[Mm]erge is always manual|[Mm]anual merge|merged, manually|manually, by the maintainer|no Claude session can merge|never auto-merged|manual approval|auto-approve|auto-merge' \
   -e '[Mm]erge is the human|human may merge|human.s merge|watch for the merge|merge happened|human stating' \
   -e 'not yet standardized' -e '[Mm]ilestone' -e '`Ready`' -e 'approved (slice of )?`project-plan' \
   -e 'gh pr merge|block list is the one|[Dd]estructive git|Commit & push|commit/push authorization|first word|Table-driven test for block' \
@@ -173,7 +172,7 @@ Design gate's *approved*, the milestone sentence and filing's list, `Ready`, the
 block list, scope, tests and authorization, branch protection's gates, rows without a work
 file, the label vocabulary and row set, the exit labels' scope and actor, the bot identity,
 the closing step's go, the design index, the interactive qualifier and the cap's keys.
-**109** hits.
+**113** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
@@ -184,10 +183,11 @@ the closing step's go, the design index, the interactive qualifier and the cap's
 | `docs/reference/method/contribution-workflow.md:54`, `:80`, `:81`; `.claude/skills/cleanup/SKILL.md:3`, `:9`, `:14` | `cleanup` waits for the human's statement | Triggered by the autopilot's own merge |
 | `docs/reference/method/contribution-workflow.md:145` | Neither label replaces manual merge approval | The auto-merge class's merge condition |
 | `docs/reference/method/contribution-workflow.md:136`, `:137`, `:142`; `docs/reference/method/ci-pipeline.md:142`; `.claude/profile.yml:71`, `:74` | A pull request's, with one actor | Widened to issues and the autopilot |
-| `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73` | Enumerate the context labels and rows | Gain `decompose`; `epic` and `paused` join the labels |
+| `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73` | Enumerate the context labels and rows | Gain `decompose`; `epic` joins the labels |
 | `docs/reference/work-types/workflow/review.md:177`; `.claude/skills/submit-pr-review/SKILL.md:12`; `.claude/skills/review/SKILL.md:107` | The manual gate is sole and non-negotiable | Narrowed to the manual-merge trees |
-| `docs/reference/method/idea-to-product.md:215`, `:416` | *Approved*, meaning merged, gates the spec | Met by the auto-merge condition |
-| `docs/reference/method/idea-to-product.md:210` | The human says go on | The `decompose` park; go is the label's removal |
+| `docs/reference/method/ai-authoring.md:523`, `:524`; `.github/dependabot.yml:5` | No merge without manual approval, never auto-merge; Dependabot like any other PR | Narrowed to the manual-merge trees; Dependabot's stay manual |
+| `docs/reference/method/idea-to-product.md:215`, `:416` | *Approved* gates the spec | Met by the auto-merge condition |
+| `docs/reference/method/idea-to-product.md:210` | The human says go on | The `decompose` park |
 | `.claude/skills/file-task-issue/SKILL.md:63` | Filing's done-when list has no milestone | Gains the epic's milestone |
 | `.github/workflows/ci.yml:90`, `:91`, `:133`; `docs/reference/method/ci-pipeline.md:163`, `:180` | Block only as branch protection's required checks | Reach the merge rule, or are promoted |
 | `.claude/hooks/block-destructive-git.sh:2`, `:3`, `:4`, `:30`, `:38`, `:100`, `:294`; `.claude/hooks/test-block-destructive-git.sh:2` | Refuse and test destructive git, on `git` segments | Gain the `gh pr merge` rule, its cases, and a wider header |
@@ -196,10 +196,10 @@ the closing step's go, the design index, the interactive qualifier and the cap's
 | `docs/reference/profile.md:23` | Says there is no separate bot account | True once the commit identity goes |
 | `docs/reference/method/idea-to-product.md:195` | Not yet standardized | Replaced by the milestone rule |
 | `.claude/skills/implement/SKILL.md:3`, `:13`; `.claude/skills/review/SKILL.md:3`, `:14`; `.claude/skills/fix/SKILL.md:3`; `.claude/skills/resolve-review-thread/SKILL.md:3` | Interactive-only, with why | Widened to the unattended dispatch |
-| `.claude/skills/clarify/SKILL.md:3`; `docs/reference/method/contribution-workflow.md:86` | Blocks on a human; Rule C sends decisions there | Parks the question instead |
-| `.claude/skills/research/SKILL.md:3`, `:17` | Refuses a non-interactive run for want of grants | The autopilot's dispatch states what it grants |
+| `.claude/skills/clarify/SKILL.md:3`; `docs/reference/method/contribution-workflow.md:86` | Rule C sends decisions there; it blocks | Parks the question instead |
+| `.claude/skills/research/SKILL.md:3`, `:17` | Refuses a run without grants | The dispatch states its grants |
 
-22 hits conform: `contribution-workflow.md:91`, `:95`, `:112`, `.claude/profile.yml:175`,
+23 hits conform: `use-case.yml:13`, `contribution-workflow.md:91`, `:95`, `:112`, `.claude/profile.yml:175`,
 `:177`, `:179`, `handoff/SKILL.md:11`, `:12`, `check-authoring-rules.sh:26`,
 `check-method.py:103`, `ci.yml:6`, `:7`, `:12`, `:16`, `profile.md:49`, `CLAUDE.md:44`,
 `work-types/README.md:134`, `model-selection.md:81`, `definition-of-done.md:34`,
