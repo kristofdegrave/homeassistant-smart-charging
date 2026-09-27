@@ -4826,20 +4826,22 @@ async def test_should_release_the_pursued_occurrence_when_the_car_disconnects(ha
     assert coord._pursued_occurrence is None
 
 
-async def test_should_keep_the_hold_when_todays_deadline_resolves_to_no_deadline(hass, freezer):
+async def test_should_keep_the_hold_when_the_next_occurrence_resolves_to_no_deadline(hass, freezer):
     """R14's "no deadline" resolution never ends a missed-deadline hold -- it is anchored to the
     occurrence already pursued, not to whatever a later date resolves to
     (resolution-rules.md's Missed-deadline hold section; requirements.md R14's rolled-forward-AC
     footnote; UC05's `Unreachable` row). `test_deadline.py`'s
     `test_should_keep_the_hold_when_a_later_occurrence_resolves_to_no_deadline` pins this in the
     pure engine (T2 case 3); this is the same behaviour end to end, through the coordinator that
-    threads `deadline_today` in -- the direction the coordinator, not the engine, can get wrong on
-    its own by re-deriving urgency from today's resolution instead of the held occurrence.
+    threads `deadline_today`/`deadline_tomorrow` in -- the direction the coordinator, not the
+    engine, can get wrong on its own by re-deriving urgency from the next occurrence's own
+    resolution instead of the held occurrence.
 
-    Set up in `Power`, as the other direct-construction hold tests above are, and with no
-    departure_dow_defaults seeded at all -- the coordinator's own default (`None` for every
-    weekday, coordinator.py's `dict.fromkeys(range(7))`) already resolves today to "no deadline",
-    so this needs no explicit no-deadline seeding of its own.
+    "No deadline" is both today's and tomorrow's resolution -- `resolve_next_occurrence`
+    (engines/deadline.py) needs both None to yield `deadline_at=None` -- so both are seeded
+    explicitly in Arrange rather than left to the coordinator's own construction-time default;
+    a future default no longer seeding every weekday to `None` must not silently stop this test
+    from testing the ordering it names.
     """
     # Arrange -- a live hold, and a maximum peak above the floor so a dropped hold would show as
     # a lowered effective peak limit.
@@ -4852,6 +4854,7 @@ async def test_should_keep_the_hold_when_todays_deadline_resolves_to_no_deadline
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
+    coord.departure_dow_defaults = dict.fromkeys(range(7))  # every day resolves to no deadline
     held = dt_util.now() - timedelta(hours=1)
     coord._pursued_occurrence = held
 
@@ -4865,44 +4868,10 @@ async def test_should_keep_the_hold_when_todays_deadline_resolves_to_no_deadline
     assert coord._required_current.unreachable is True
     assert result.effective_peak_limit_kw == 7.0
 
-
-async def test_should_not_survive_a_reload_mid_hold(hass, freezer):
-    """R18: withdrawing the deadline capability is a reconfigure that updates `entry.data`, so
-    the entry reloads, the coordinator is re-created and `_pursued_occurrence` starts at `None`
-    -- the release already happens, by reload, with no code of its own (design doc D-7, this
-    task's issue). This doubles as T11's sibling restart AC: a pursued occurrence is scoped to
-    the connected session and is never preserved across a restart
-    (system-overview.md's `pursued occurrence` entry; UC05; R5's AC).
-
-    There is no config-entry reload to drive directly from this file's direct-construction
-    style (same reasoning `_seed_today_deadline` gives), so this pins the same fact at the
-    level that matters: a freshly constructed coordinator -- what a reload or restart leaves
-    behind -- never inherits a hold an earlier instance was carrying, whatever the store holds.
-    """
-    # Arrange -- an old coordinator instance mid-hold, sharing the same store a reload would
-    # hand to its successor.
-    freezer.move_to("2026-01-15 12:00:00")
-    store = _FakeStore({})
-    old = SmartChargingCoordinator(
-        hass,
-        adapters=_adapters(status=STATE_CHARGING, ev_soc=70.0),
-        config=_config(),
-        interval_s=30,
-        store=store,
-    )
-    old._pursued_occurrence = dt_util.now() - timedelta(hours=1)
-    assert old._pursued_occurrence is not None
-
-    # Act -- what a reconfigure-triggered reload or a Home Assistant restart does: a fresh
-    # coordinator, built the same way __init__.py builds one on setup, off the same store.
-    reloaded = SmartChargingCoordinator(
-        hass,
-        adapters=_adapters(status=STATE_CHARGING, ev_soc=70.0),
-        config=_config(),
-        interval_s=30,
-        store=store,
-    )
-
-    # Assert -- the occurrence does not survive: the new instance starts released, regardless
-    # of what the prior instance -- or the store -- was carrying.
-    assert reloaded._pursued_occurrence is None
+    # R18's absence needs no code (design doc D-7) and is not asserted at this direct-
+    # construction level: a fake reload built from two bare constructor calls sharing one
+    # store cannot exercise the reload itself, since `_pursued_occurrence` is a per-instance
+    # attribute the store never carries. The genuine, public-route assertion --
+    # `test_should_release_the_pursued_occurrence_across_a_reload_mid_hold` -- lives in
+    # tests/test_deadline_soc_management_end_to_end.py, driven through a real
+    # `hass.config_entries.async_reload`; it also doubles as T11's sibling restart AC.
