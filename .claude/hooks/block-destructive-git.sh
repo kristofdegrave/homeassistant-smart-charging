@@ -1,7 +1,8 @@
 #!/bin/sh
-# PreToolUse(Bash) guard: refuse the destructive git commands that
+# PreToolUse guard on the shell tools (Bash, PowerShell): refuse the destructive git commands that
 # docs/reference/method/contribution-workflow.md's "Commit & push authorization" section
-# excludes from the project's standing commit/push authorization.
+# excludes from the project's standing commit/push authorization, and refuse a
+# `gh pr merge` outside the auto-merge rule the same section states.
 #
 # Contract: reads the PreToolUse payload on stdin; exit 0 with no output allows the
 # call. A denial writes the PreToolUse "deny" decision to stdout *and* the same
@@ -21,21 +22,37 @@
 # an unquoted delimiter and any heredoc handed to an interpreter keep their body in
 # the scan, an opener that is itself inside quotes opens nothing, and that quote scan
 # is single-line and comment-blind.
-# Conversely, only a segment whose *first* word is git is inspected, so prose that
+# Conversely, only a segment whose *first* word is git or gh is inspected, so prose that
 # merely mentions a blocked command (`gh pr comment --body "... git reset --hard ..."`)
 # runs untouched -- as long as that prose carries no shell separator, since the split on
 # ; && || | happens first and a mention after one starts a segment of its own. A lone &
-# is not treated as a separator either. The guard runs one command of its own -- a
+# is not treated as a separator either. The guard runs commands of its own -- a
 # `git rev-parse` in a directory taken from the command text -- to decide the rebase
-# rule. The block list is the one the workflow doc enumerates, so same-family commands
-# it does not name (`git checkout -f`, `git switch --discard-changes`,
-# `git push origin :branch`) are deliberately left alone rather than overlooked.
-# Anyone determined to force-push can still do it; the point is that nobody does it by
-# reflex.
+# rule, and `gh pr view` plus `gh pr checks` to decide the merge rule below. The block
+# list is the one the workflow doc enumerates, so same-family commands it does not name
+# (`git checkout -f`, `git switch --discard-changes`, `git push origin :branch`) are
+# deliberately left alone rather than overlooked. Anyone determined to force-push can
+# still do it; the point is that nobody does it by reflex.
+#
+# The merge rule. `gh pr merge` is allowed only when every condition holds: `--squash`;
+# the pull request's head is a branch of this repository, not a fork's; it carries
+# `needs-approval` and not `needs-decision`; every changed file sits under one of the
+# auto-merge trees .claude/profile.yml lists (`autopilot.auto_merge_trees`); and every
+# check on it is green -- every check, not only branch protection's required ones,
+# since the merge runs with `--admin`, which bypasses those. Unlike the git rules this
+# one fails CLOSED: a `gh` that cannot be run, answers nothing, or lists fewer files
+# than the pull request has, refuses the merge with the reason, because the rule cannot
+# be shown to hold. The facts come from `gh` as the account running the session, so
+# they are as current as its answer and no more; the merge itself is the human's
+# `--admin` merge. What is not checked here -- a mixed-tree change waits for the human,
+# the lane limit, the merge method gh applies -- is the workflow document's.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
 DOC='docs/reference/method/contribution-workflow.md, section "Commit & push authorization"'
+# The profile the merge rule reads its trees from. Overridable for the test suite only,
+# the same way .github/profile-env.sh takes it.
+PROFILE=${PROFILE:-$(dirname "$0")/../profile.yml}
 
 payload=$(cat)
 
@@ -71,10 +88,10 @@ extract() {
 
 cmd=$(extract command)
 if [ -z "$cmd" ]; then
-  # Fail open, but not silently: a payload that carries a Bash tool_input and still
+  # Fail open, but not silently: a payload that carries a shell tool_input and still
   # yields no command means this guard has stopped understanding its own input.
   case "$payload" in
-    *'"tool_name"'*'"Bash"'*)
+    *'"tool_name"'*'"Bash"'* | *'"tool_name"'*'"PowerShell"'*)
       echo "block-destructive-git.sh: could not read tool_input.command from the payload; allowing the call unchecked" >&2 ;;
   esac
   exit 0
@@ -91,14 +108,15 @@ json_escape() {
     awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }'
 }
 
-deny() {
+deny() { # deny <segment> <reason> [closing paragraph]
+  tail=${3:-"This command is destructive or rewrites published history, so it falls outside the
+standing commit/push authorization granted in $DOC.
+Ask the human partner to run it, or choose a non-destructive alternative."}
   message="BLOCKED by .claude/hooks/block-destructive-git.sh: $1
 
 Reason: $2
 
-This command is destructive or rewrites published history, so it falls outside the
-standing commit/push authorization granted in $DOC.
-Ask the human partner to run it, or choose a non-destructive alternative."
+$tail"
 
   printf '%s\n' "$message" >&2
   printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$(json_escape "$message")"
@@ -136,6 +154,140 @@ has_short_flag() { # a single-dash (non "--") argument carrying that letter
     esac
   done
   return 1
+}
+
+# --- the merge rule: `gh pr merge` outside the auto-merge conditions is refused ---
+
+MERGE_TAIL="A merge outside the auto-merge rule is the human partner's, at their gate; the rule
+and its conditions are in $DOC.
+Fix the failing condition, or leave the merge to them."
+
+deny_merge() { deny "$1" "$2" "$MERGE_TAIL"; }
+
+# The auto-merge trees, one per line, from the profile's `autopilot.auto_merge_trees`
+# list. Read with awk rather than a YAML parser (none is guaranteed here), so the key
+# has to keep the plain block-list shape the profile gives it.
+auto_merge_trees() {
+  awk '
+    /^[^ \t#]/ { top = ($0 ~ /^autopilot:/); list = 0 }
+    top && /^  auto_merge_trees:/ { list = 1; next }
+    top && list && /^    - / { t = $0; sub(/^    - */, "", t); sub(/[ \t]+(#.*)?$/, "", t); gsub(/["'"'"']/, "", t); if (t != "") print t; next }
+    top && list && /^  [^ ]/ { list = 0 }
+  ' "$PROFILE" 2>/dev/null
+}
+
+gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
+  seg=$1
+  shift
+  # Only `gh pr merge` is the merge; any other gh command, `gh pr merge --help` included,
+  # merges nothing and is left alone.
+  [ "${1:-}" = pr ] || return 0
+  shift
+  [ "${1:-}" = merge ] || return 0
+  shift
+  selector=''
+  gh_repo=''
+  squash=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --help | -h) return 0 ;;
+      --squash) squash=1 ;;
+      --repo=*) gh_repo=${1#--repo=} ;;
+      -R | --repo) shift; gh_repo=${1:-} ;;
+      # Flags that take a value: skip it so a value is never read as a selector or flag.
+      -b | --body | -t | --subject | -F | --body-file | -A | --author-email | --match-head-commit) shift ;;
+      --*) ;;
+      # gh (cobra) clusters short flags: `-sd` is `--squash --delete-branch`.
+      -?*) case "$1" in *s*) squash=1 ;; esac ;;
+      *) [ -n "$selector" ] || selector=$1 ;;
+    esac
+    [ $# -gt 0 ] && shift
+  done
+  [ "$squash" = 1 ] ||
+    deny_merge "$seg" "'gh pr merge' without --squash: every merge in this project is a squash"
+
+  trees=$(auto_merge_trees)
+  [ -n "$trees" ] ||
+    deny_merge "$seg" "$PROFILE lists no auto-merge trees under autopilot.auto_merge_trees, so no tree is auto-mergeable"
+
+  # The selector is forwarded as typed (a number, a URL or a branch; none means the
+  # branch checked out in the payload's cwd), so the guard reads the pull request the
+  # merge would act on. The template keeps the answer to one fact per line, which sh
+  # can read without a JSON parser.
+  # shellcheck disable=SC2086  # $selector and $gh_repo are single words, deliberately unquoted when empty
+  facts=$(cd "$cwd" 2>/dev/null && gh pr view ${selector:+"$selector"} ${gh_repo:+-R "$gh_repo"} \
+    --json isCrossRepository,changedFiles,files,labels \
+    --template '{{"cross="}}{{.isCrossRepository}}{{"\n"}}{{"count="}}{{.changedFiles}}{{"\n"}}{{range .files}}{{"file="}}{{.path}}{{"\n"}}{{end}}{{range .labels}}{{"label="}}{{.name}}{{"\n"}}{{end}}' 2>/dev/null | tr -d '\r')
+  case "$facts" in
+    cross=true*) deny_merge "$seg" "the pull request's head is a branch of another repository (a fork), which never auto-merges" ;;
+    cross=false*) ;;
+    *) deny_merge "$seg" "'gh pr view' could not read the pull request's head, files and labels, so the auto-merge conditions cannot be shown to hold" ;;
+  esac
+
+  count=''
+  nfiles=0
+  outside=''
+  approval=0
+  decision=0
+  IFS='
+'
+  for line in $facts; do
+    case "$line" in
+      count=*) count=${line#count=} ;;
+      label=needs-approval) approval=1 ;;
+      label=needs-decision) decision=1 ;;
+      file=*)
+        f=${line#file=}
+        nfiles=$((nfiles + 1))
+        inside=0
+        for tree in $trees; do
+          case "$f" in "$tree"*) inside=1 ;; esac
+        done
+        [ "$inside" = 1 ] || outside=$f
+        ;;
+    esac
+  done
+  unset IFS
+
+  [ "$approval" = 1 ] ||
+    deny_merge "$seg" "the pull request does not carry needs-approval: no review pass has found it clean"
+  [ "$decision" = 0 ] ||
+    deny_merge "$seg" "the pull request carries needs-decision: a reason not to merge is still open"
+  [ "$nfiles" -gt 0 ] ||
+    deny_merge "$seg" "the pull request lists no changed files, so nothing shows every one is under an auto-merge tree"
+  case "$count" in
+    *[!0-9]* | '') deny_merge "$seg" "'gh pr view' gave no readable changed-file count, so the file list cannot be known to be complete" ;;
+  esac
+  [ "$count" -le "$nfiles" ] ||
+    deny_merge "$seg" "'gh pr view' listed $nfiles of the pull request's $count changed files, so not every one can be checked against the auto-merge trees"
+  [ -z "$outside" ] ||
+    deny_merge "$seg" "$outside is outside the auto-merge trees the profile lists, so this merge is the human's"
+
+  # `gh pr checks` reports one line per check name, the most recent run of each, with
+  # gh's own bucket: pass, fail, pending, skipping or cancel. Every check counts, not
+  # only the required ones. A skipped check is a job the change did not reach (a
+  # path-filtered test job on a docs change), not a red one.
+  # shellcheck disable=SC2086
+  checks=$(cd "$cwd" 2>/dev/null && gh pr checks ${selector:+"$selector"} ${gh_repo:+-R "$gh_repo"} \
+    --json name,bucket --template '{{range .}}{{"check="}}{{.bucket}}{{" "}}{{.name}}{{"\n"}}{{end}}' 2>/dev/null | tr -d '\r')
+  [ -n "$checks" ] ||
+    deny_merge "$seg" "'gh pr checks' reported no checks on the pull request, so none is known to be green"
+  IFS='
+'
+  for line in $checks; do
+    case "$line" in
+      check=pass\ * | check=skipping\ *) ;;
+      check=*)
+        state=${line#check=}
+        name=${state#* }
+        state=${state%% *}
+        deny_merge "$seg" "check '$name' is $state, not green -- every check on the pull request has to be"
+        ;;
+      *) deny_merge "$seg" "'gh pr checks' gave an unreadable answer ($line), so no check is known to be green" ;;
+    esac
+  done
+  unset IFS
+  return 0
 }
 
 # Blank out the body of every quoted-delimiter heredoc (`<<'EOF'`, `<<"EOF"`, `<<\EOF`,
@@ -291,10 +443,10 @@ for seg in $segments; do
   # shellcheck disable=SC2086  # deliberate word splitting of the segment
   set -- $seg
 
-  # Only a segment that *invokes* git is inspected, and only as its first word
+  # Only a segment that *invokes* git or gh is inspected, and only as its first word
   # (after environment assignments and transparent wrappers). Scanning deeper would
   # deny any command that merely quotes a git command in its text.
-  found=0
+  found=''
   wrapper=0
   while [ $# -gt 0 ]; do
     tok=$1
@@ -302,7 +454,8 @@ for seg in $segments; do
     tok=${tok#'`'}
     tok=${tok#'('}
     case "$tok" in
-      git | git.exe | */git | */git.exe) found=1; shift; break ;;
+      git | git.exe | */git | */git.exe) found=git; shift; break ;;
+      gh | gh.exe | */gh | */gh.exe) found=gh; shift; break ;;
       sudo | env | command | exec | nohup | nice | time | xargs) wrapper=1; shift ;;
       *=*) shift ;;
       # Once a wrapper is in play its own options and operands (`sudo -u x`,
@@ -310,7 +463,11 @@ for seg in $segments; do
       *) [ "$wrapper" = 1 ] || break; shift ;;
     esac
   done
-  [ "$found" = 1 ] || continue
+  [ -n "$found" ] || continue
+  if [ "$found" = gh ]; then
+    gh_merge_rule "$seg" "$@"
+    continue
+  fi
 
   # Skip git's own global options to reach the subcommand, remembering -C so the
   # rebase probe below can ask about the repository the command actually targets.

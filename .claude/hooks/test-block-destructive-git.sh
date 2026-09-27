@@ -6,13 +6,30 @@
 #
 # The two tables are the block list and the never-block list from the hook's own
 # contract in docs/reference/method/contribution-workflow.md -- add a case here before
-# changing a matching rule.
+# changing a matching rule. The merge-rule cases at the end never reach GitHub: a stub
+# `gh` on PATH answers `pr view` and `pr checks` from the canned facts each case sets.
 
 HOOK=$(dirname "$0")/block-destructive-git.sh
 [ -f "$HOOK" ] || { echo "cannot find $HOOK" >&2; exit 1; }
 
 CWD=$(cd "$(dirname "$0")/../.." && pwd)
 fail=0
+
+# The stub gh: `pr view` prints $GH_VIEW, `pr checks` prints $GH_CHECKS, anything else
+# nothing; GH_FAIL=1 makes every call fail the way an unauthenticated or absent gh does.
+STUB=$(mktemp -d)
+trap 'rm -rf "$STUB"' EXIT
+cat > "$STUB/gh" <<'EOF'
+#!/bin/sh
+[ "${GH_FAIL:-0}" = 1 ] && exit 1
+case "$1 $2" in
+  "pr view") printf '%s\n' "$GH_VIEW" ;;
+  "pr checks") printf '%s\n' "$GH_CHECKS" ;;
+esac
+EOF
+chmod +x "$STUB/gh"
+PATH="$STUB:$PATH"
+export PATH GH_VIEW GH_CHECKS GH_FAIL
 
 # The rebase rule keys off "the checked-out branch has an upstream", so state plainly
 # when the checkout cannot exercise it instead of failing four cases obscurely.
@@ -254,6 +271,101 @@ git clean -f
 cat <<'B'
 prose
 B"
+
+echo
+echo "=== the merge rule: gh pr merge only under every auto-merge condition ==="
+# Facts under which the merge passes; each blocked case below breaks exactly one.
+GOOD_VIEW='cross=false
+count=3
+file=custom_components/smart_charging/coordinator.py
+file=tests/test_coordinator.py
+file=docs/design/system-design.md
+label=development
+label=needs-approval'
+GOOD_CHECKS='check=pass lint
+check=pass test
+check=skipping perf
+check=pass method'
+GH_VIEW=$GOOD_VIEW
+GH_CHECKS=$GOOD_CHECKS
+GH_FAIL=0
+run ALLOW 'gh pr merge 1234 --squash --admin'
+run ALLOW 'gh pr merge --squash --delete-branch 1234'
+run ALLOW 'gh pr merge -sd 1234'
+run ALLOW 'gh pr merge 1234 -R owner/name --squash'
+run ALLOW 'gh pr merge --squash --admin --body-file /tmp/msg.md 1234'
+run ALLOW 'gh pr merge --squash'  # no selector: gh resolves the checked-out branch
+run ALLOW 'gh pr merge --help'
+run ALLOW 'gh pr view 1234 --json labels'
+run ALLOW 'gh pr comment 1234 --body "run gh pr merge --squash once it is green"'
+run BLOCK 'gh pr merge 1234 --admin'          # not a squash
+run BLOCK 'gh pr merge 1234 --merge'
+run BLOCK 'gh pr merge 1234 --rebase --admin'
+run BLOCK 'echo hi; gh pr merge 1234'          # a separator starts a segment of its own
+GH_VIEW='cross=true
+count=1
+file=tests/test_x.py
+label=needs-approval'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # the head is a fork's branch
+GH_VIEW='cross=false
+count=1
+file=tests/test_x.py
+label=development'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # no needs-approval
+GH_VIEW='cross=false
+count=1
+file=tests/test_x.py
+label=needs-approval
+label=needs-decision'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # needs-decision alongside
+GH_VIEW='cross=false
+count=2
+file=tests/test_x.py
+file=docs/analysis/requirements.md
+label=needs-approval'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # a file outside the auto-merge trees
+GH_VIEW='cross=false
+count=2
+file=tests/test_x.py
+file=CLAUDE.md
+label=needs-approval'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # a rules file at the root
+GH_VIEW='cross=false
+count=101
+file=tests/test_x.py
+label=needs-approval'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # gh listed fewer files than the PR has
+GH_VIEW='cross=false
+count=0
+label=needs-approval'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # no files at all
+GH_VIEW=$GOOD_VIEW
+GH_CHECKS='check=pass lint
+check=fail test'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # a red check
+GH_CHECKS='check=pass lint
+check=pending test'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # a check still running
+GH_CHECKS='check=cancel lint
+check=pass test'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # a cancelled check
+GH_CHECKS=''
+run BLOCK 'gh pr merge 1234 --squash --admin'  # no checks reported
+GH_CHECKS='not what gh prints'
+run BLOCK 'gh pr merge 1234 --squash --admin'  # an unreadable checks answer
+GH_CHECKS=$GOOD_CHECKS
+GH_FAIL=1
+run BLOCK 'gh pr merge 1234 --squash --admin'  # gh itself fails: closed, not open
+GH_FAIL=0
+GH_VIEW=''
+run BLOCK 'gh pr merge 1234 --squash --admin'  # gh answers nothing
+GH_VIEW=$GOOD_VIEW
+printf 'autopilot:\n  lanes: 2\n' > "$STUB/profile.yml"
+PROFILE=$STUB/profile.yml
+export PROFILE
+run BLOCK 'gh pr merge 1234 --squash --admin'  # a profile with no trees
+unset PROFILE
+run ALLOW 'gh pr merge 1234 --squash --admin'  # and the real profile still passes
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

@@ -212,8 +212,10 @@ the `Closes` reference is the one that names it.
 
 ## Merge and issue closing
 
-**Merge is always manual** (how this project enforces that is [profile.md](../profile.md)'s
-**Merge strategy**) — never auto-merged or self-approved. Merging auto-closes the linked issue
+**Merge is manual, except for the auto-merge class.** A PR whose changed files all sit under
+the auto-merge trees is merged by the session under **Commit & push authorization**'s merge
+rule below, and every other PR by the human, never self-approved (how this project enforces
+the split is [profile.md](../profile.md)'s **Merge strategy**). Merging auto-closes the linked issue
 via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
 fully clean verification-only task — closing is left to that reference, which fires on merge.
 
@@ -241,6 +243,16 @@ extend to anything destructive or hard to reverse (force-push, rewriting publish
 `git reset --hard`, etc.), which still follow the general ask-before-acting default. A
 `PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/block-destructive-git.sh`) refuses
 the most common of those before they run.
+
+**The merge rule.** A session may run `gh pr merge` only when all of these hold: the merge is
+a `--squash`; the PR's head is a branch of this repository, not a fork's; the PR carries
+`needs-approval` and not `needs-decision`; every changed file is under one of the auto-merge
+trees `.claude/profile.yml`'s `autopilot.auto_merge_trees` lists; and every check on the PR
+is green — every check, not only branch protection's required ones, since the merge runs as
+the human with `--admin`, which bypasses those. The same hook mechanizes this rule and fails
+closed: a condition it cannot read is a condition that does not hold. A PR failing any of
+them is the human's to merge. `autopilot.lanes` in the same profile is the most issues an
+unattended loop keeps in flight at once, on disjoint trees.
 
 ## Project board
 

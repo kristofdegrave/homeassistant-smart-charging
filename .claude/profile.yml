@@ -178,6 +178,20 @@ review:
   # routes here for this number rather than stating it.
   interactive_ceiling: 5
 
+# The autopilot's two numbers, from the merge rule docs/reference/method/contribution-workflow.md's
+# **Commit & push authorization** states and docs/reference/profile.md's **Merge strategy**
+# explains. `auto_merge_trees` is read by .claude/hooks/block-destructive-git.sh, which refuses
+# a `gh pr merge` with any changed file outside them: a plain block list of path prefixes,
+# each with its trailing slash, since the hook reads it with awk and no YAML parser. `lanes` is
+# how many issues' chains may be in flight at once, on disjoint trees; the skill that runs the
+# loop reads it.
+autopilot:
+  auto_merge_trees:
+    - custom_components/
+    - tests/
+    - docs/design/
+  lanes: 2
+
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
 word_budgets:

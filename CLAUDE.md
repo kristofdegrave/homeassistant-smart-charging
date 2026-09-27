@@ -15,11 +15,12 @@ table plus the few rules that must be known before any skill or document is chos
   documents, and in what order: the **Document structure** and **Writing order** topics.
 - **Every unit of work has an issue before work starts** — no exception for small or
   typo-level changes. From that issue to the merge: the **Contribution workflow** topic.
-- **Destructive git is refused mechanically.** Committing and pushing on a task branch is
-  standing-authorized; what that excludes is refused by a `PreToolUse` guard
+- **Destructive git, and a merge outside the auto-merge rule, are refused mechanically.**
+  Committing and pushing on a task branch is standing-authorized; what that excludes, and a
+  `gh pr merge` whose PR fails any auto-merge condition, is refused by a `PreToolUse` guard
   (`.claude/hooks/block-destructive-git.sh`, wired in `.claude/settings.json`). The
-  commit-and-push rule under **Contribution workflow** defines both, and the script is the
-  authority on what it refuses — read it when a git command comes back refused.
+  commit-and-push rule under **Contribution workflow** defines all three, and the script is
+  the authority on what it refuses — read it when a git or gh command comes back refused.
 
 Only rules of this kind survive here: the two early process failures — a PR reaching the human
 without `needs-approval`, and a PR opened only once all the work was done — were cured by a
