@@ -3236,6 +3236,55 @@ async def test_deadline_unreachable_notified_fires_while_required_current_exceed
     assert len(events) == 2
 
 
+async def test_should_notify_at_max_current_when_a_held_cycle_computes_no_required_current(
+    hass, freezer
+):
+    """T5/D-6: a missed-deadline hold computes no required current (`required_a` None, since
+    engines/deadline.py's hold branch stops computing one once the pursued occurrence has
+    passed) yet is unreachable by definition -- issue #650's `math.isinf` payload cap must also
+    guard the `None` it can now see, or T2's own case 1 crashes the cycle the moment it reaches
+    the coordinator. Capped to `self._config.max_current` -- C1's configured maximum charging
+    current, which is what the existing infinite-saturation cap already caps to, and NOT the
+    escalated maximum permitted rate (the glossary's clamped delivered value, D-6).
+
+    `max_peak_kw=2.3` (~8 A headroom, once the safety margin is subtracted), deliberately below
+    `max_current` (16 A) and NOT ample -- an implementation that capped to the escalated maximum
+    permitted rate instead of `max_current` would report ~8 A here, distinguishing the two;
+    ample headroom would make both bounds resolve to the same 16 A and leave this assertion
+    unable to tell them apart."""
+    # Arrange
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = _config(max_peak_kw=2.3)  # CONF_MAX_CURRENT=16.0; escalated rate ~8 A, not ample
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    coord.target_current = 10.0
+    _seed_today_deadline(coord, hours_from_now=6)
+    _seed_pursued_occurrence(coord, hours_from_now=-1)  # already elapsed -> held
+
+    events = []
+
+    @callback
+    def _record(event):
+        events.append(event)
+
+    hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- reaches the notification block without raising, `required_a` None guarded, and
+    # capped to `max_current` specifically (not the lower escalated rate this fixture creates).
+    assert coord._required_current.required_a is None
+    assert result.fault is False
+    assert len(events) == 1
+    assert events[0].data[ATTR_REQUIRED_CURRENT_A] == pytest.approx(config.max_current)
+
+
 async def test_deadline_unreachable_notified_caps_saturated_required_a_at_max_current(
     hass, freezer
 ):
