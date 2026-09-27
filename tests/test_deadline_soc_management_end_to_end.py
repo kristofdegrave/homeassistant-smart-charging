@@ -338,6 +338,47 @@ async def test_should_rearm_the_notice_when_the_hold_releases(hass, freezer):
     assert len(calls) == 2
 
 
+async def test_should_start_without_a_pursued_occurrence_when_the_entry_reloads_mid_hold(
+    hass, freezer
+):
+    """R18/D-7 (issue #1192, T6): withdrawing the deadline capability is a reconfigure that
+    updates `entry.data`, so the entry reloads and a fresh coordinator is built with
+    `_pursued_occurrence` starting at `None` -- never re-derived from whatever the prior
+    instance was carrying, the design doc's stated reason no code of its own is needed. This
+    doubles as T11's sibling restart AC: a pursued occurrence is scoped to the connected
+    session and is never preserved across a restart (system-overview.md's `pursued occurrence`
+    entry; UC05; R5's AC).
+
+    Same public-route hold entry as the notify-once siblings above -- a real, tight deadline
+    crossed by the frozen clock, never a direct `coordinator._pursued_occurrence` write -- so
+    what this test reloads is a hold the coordinator itself entered, not one seeded by the
+    test."""
+    # Arrange -- a genuine hold, entered through the public route.
+    freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
+    _seed_states(hass, status="Charging", ev_soc=10.0)
+    coordinator = await _setup(hass)
+    seed_owned_entity(hass, "select.smart_charging_profile", PROFILE_MANUAL)
+    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    _seed_today_deadline(hass, hours_from_now=0.05)
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    freezer.move_to(dt_util.now() + timedelta(minutes=10))
+    await coordinator.async_refresh()
+    await hass.async_block_till_done()
+    assert coordinator._pursued_occurrence is not None  # a genuine hold, not yet reloaded
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+
+    # Act -- what a reconfigure withdrawing the deadline capability (R18) or a Home Assistant
+    # restart does: the entry reloads and a fresh coordinator replaces this one.
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    # Assert -- the occurrence does not survive: the reloaded coordinator starts released.
+    reloaded = entry.runtime_data.coordinator
+    assert reloaded is not coordinator
+    assert reloaded._pursued_occurrence is None
+
+
 @pytest.mark.xfail(
     strict=True,
     raises=AssertionError,

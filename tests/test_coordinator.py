@@ -4824,3 +4824,46 @@ async def test_should_release_the_pursued_occurrence_when_the_car_disconnects(ha
 
     # Assert
     assert coord._pursued_occurrence is None
+
+
+async def test_should_keep_the_hold_when_the_next_occurrence_resolves_to_no_deadline(hass, freezer):
+    """R14's "no deadline" resolution never ends a missed-deadline hold -- it is anchored to the
+    occurrence already pursued, not to whatever a later date resolves to
+    (resolution-rules.md's Missed-deadline hold section; requirements.md R14's rolled-forward-AC
+    footnote; UC05's `Unreachable` row). `test_deadline.py`'s
+    `test_should_keep_the_hold_when_a_later_occurrence_resolves_to_no_deadline` pins this in the
+    pure engine (T2 case 3); this is the same behaviour end to end, through the coordinator that
+    threads `deadline_today`/`deadline_tomorrow` in -- the direction the coordinator, not the
+    engine, can get wrong on its own by re-deriving urgency from the next occurrence's own
+    resolution instead of the held occurrence.
+
+    "No deadline" is both today's and tomorrow's resolution -- `resolve_next_occurrence`
+    (engines/deadline.py) needs both None to yield `deadline_at=None` -- so both are seeded
+    explicitly in Arrange rather than left to the coordinator's own construction-time default;
+    a future default no longer seeding every weekday to `None` must not silently stop this test
+    from testing the ordering it names.
+    """
+    # Arrange -- a live hold, and a maximum peak above the floor so a dropped hold would show as
+    # a lowered effective peak limit.
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
+    config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    coord.departure_dow_defaults = dict.fromkeys(range(7))  # every day resolves to no deadline
+    held = dt_util.now() - timedelta(hours=1)
+    coord._pursued_occurrence = held
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- still held, not released by today's resolution coming back "no deadline".
+    assert result.fault is False
+    assert coord._pursued_occurrence == held
+    assert coord._required_current.urgent is True
+    assert coord._required_current.unreachable is True
+    assert result.effective_peak_limit_kw == 7.0
