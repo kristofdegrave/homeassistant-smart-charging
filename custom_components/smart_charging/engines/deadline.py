@@ -183,6 +183,26 @@ def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
     return (later - earlier).total_seconds() / 3600
 
 
+def missed_deadline_backstop_fired(
+    pursued_occurrence: datetime,
+    now: datetime,
+    following_occurrence: datetime | None = None,
+) -> bool:
+    """R5's backstop on a missed-deadline hold: the occurrence following the pursued one has
+    elapsed, or 24 hours have passed since the pursued occurrence, whichever comes first.
+
+    Its own function because both arms need only the clock and the occurrences, so the backstop
+    also applies on a cycle whose state of charge is unavailable, where this engine is never
+    called (`coordinator_cycle.resolve_deadline_urgency`).
+    `_absolute_hours_between` rather than wall-clock arithmetic: a 24-hour span crosses midnight
+    by construction and so straddles both DST transitions, which is the hazard that helper
+    exists for.
+    """
+    return (following_occurrence is not None and following_occurrence <= now) or (
+        _absolute_hours_between(now, pursued_occurrence) >= MISSED_DEADLINE_HOLD_BACKSTOP_HOURS
+    )
+
+
 def resolve_required_current(
     deadline_at: datetime | None,
     now: datetime,
@@ -270,13 +290,7 @@ def resolve_required_current(
     #    resolving to "no deadline" must not end it -- the hold is anchored to the occurrence
     #    already missed (requirements.md R5).
     if pursued_occurrence is not None and pursued_occurrence <= now and not soc_at_active_limit:
-        # The backstop, whose two arms fire on whichever comes first. `_absolute_hours_between`
-        # rather than wall-clock arithmetic: a 24-hour span crosses midnight by construction and
-        # so straddles both DST transitions, which is the hazard that helper exists for.
-        backstop_fired = (following_occurrence is not None and following_occurrence <= now) or (
-            _absolute_hours_between(now, pursued_occurrence) >= MISSED_DEADLINE_HOLD_BACKSTOP_HOURS
-        )
-        if backstop_fired:
+        if missed_deadline_backstop_fired(pursued_occurrence, now, following_occurrence):
             # Releasing the pursued occurrence ends the hold and urgency together -- they were
             # never two things -- "and from the NEXT cycle the required current above governs
             # normally again" (resolution-rules.md, 'Missed-deadline hold'). Both halves of

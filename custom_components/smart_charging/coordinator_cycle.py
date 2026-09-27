@@ -28,6 +28,7 @@ from .const import (
 from .engines.capability_gate import resolve_available_modes
 from .engines.deadline import (
     RequiredCurrentResult,
+    missed_deadline_backstop_fired,
     resolve_next_occurrence,
     resolve_required_current,
 )
@@ -652,9 +653,9 @@ def resolve_deadline_urgency(
     coordinator already branches on that exact predicate to decide whether to even read
     today's deadline/sensed battery capacity (both async, HA-bound), so a second, separately
     written copy of the same condition on this side of the module boundary would be exactly
-    the kind of lockstep-editing hazard this design exists to remove. Without it (disconnected, or a
-    non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring R14's
-    own "no deadline resolved -> urgency never applies" shape. All adapter/HA reads (today's
+    the kind of lockstep-editing hazard this design exists to remove. Without it (disconnected,
+    or the state of charge unavailable), no required current can be computed; the early return
+    below says what each half does to the pursued occurrence. All adapter/HA reads (today's
     resolved deadline, the sensed battery capacity) happen in the coordinator before this is
     called -- this function only ever receives already-resolved plain values, per
     ADR-0009/0010's HA-free boundary.
@@ -701,7 +702,12 @@ def resolve_deadline_urgency(
         # follows it, and the effective peak limit stays raised. The connected half is read off
         # `ctx.status` rather than carried in: the hazard the docstring names is a second copy
         # of the combined predicate, not this one-condition half `ctx` already holds.
+        #
+        # R5's backstop still applies: it needs only the clock, so the hold never outlives its
+        # 24-hour bound whether the reading is available or not (requirements.md R5).
         held = inputs.pursued_occurrence if ctx.status in CHARGEABLE_STATES else None
+        if held is not None and missed_deadline_backstop_fired(held, inputs.now_dt):
+            held = None
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(
                 required_a=None,

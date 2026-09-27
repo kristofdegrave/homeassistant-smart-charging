@@ -571,7 +571,7 @@ def test_mixed_naive_and_aware_raises_rather_than_guessing_a_timezone():
         )
 
 
-# --- R5 slack test, latch and handback (issue #1078) --------------------------------------
+# --- R5 slack test, held occurrence and handback (issue #1078) ----------------------------
 
 
 def test_idle_baseline_with_ample_slack_is_not_urgent():
@@ -596,8 +596,8 @@ def test_idle_baseline_with_ample_slack_is_not_urgent():
     assert result.unreachable is False
 
 
-def test_latched_urgency_persists_once_charging_has_closed_the_gap():
-    """Urgency latches: charging at the escalated rate drives the required current back below
+def test_should_keep_urgency_when_charging_has_closed_the_gap_and_an_occurrence_is_pursued():
+    """Urgency is held: charging at the escalated rate drives the required current back below
     the slack threshold within a cycle, and re-deriving the engage test there would revert
     urgency and duty-cycle the charger (resolution-rules.md, 'Clearing urgency')."""
     result = resolve_required_current(
@@ -609,7 +609,7 @@ def test_latched_urgency_persists_once_charging_has_closed_the_gap():
     assert result.urgent is True
 
 
-def test_handback_clears_latched_urgency_when_baseline_meets_required():
+def test_should_release_the_pursued_occurrence_when_the_baseline_meets_required():
     """The ordinary policy will now meet the deadline unaided -- e.g. the low tariff has opened
     and `Auto`'s own overnight row would charge anyway -- so the levers have nothing to add."""
     result = resolve_required_current(
@@ -635,7 +635,7 @@ def test_slack_test_takes_precedence_over_handback():
     assert result.urgent is True
 
 
-def test_soc_reaching_the_active_limit_clears_latched_urgency():
+def test_should_release_the_pursued_occurrence_when_soc_reaches_the_active_limit():
     """Required current is 0 A, so the handback holds for any baseline and the slack test
     cannot fire -- urgency clears even with nothing else changing."""
     result = resolve_required_current(
@@ -667,7 +667,7 @@ def test_unreachable_is_a_strict_subset_of_urgent_by_construction():
     assert result.urgent is True
 
 
-def test_no_deadline_clears_a_latch_that_was_already_set():
+def test_should_release_the_pursued_occurrence_when_no_deadline_resolves():
     """The deadline resolving to 'no deadline' (R14, or the deadline capability going absent,
     R18) is one of urgency's own clear conditions."""
     result = resolve_required_current(

@@ -2830,11 +2830,12 @@ async def test_urgency_engages_when_the_slack_test_fires(hass, freezer):
 
 
 async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass, freezer):
-    """R5's handback: latched urgency clears once the baseline mode's own desired current
+    """R5's handback: held urgency clears once the baseline mode's own desired current
     reaches the required current -- the ordinary policy will meet the deadline unaided.
 
-    Latched on entry (issue #1078), because post-#1078 the revert case IS the handback and
-    nothing else at this tier covers it clearing. Without the latch this test was inert: at
+    Held on entry (issue #1078), because post-#1078 the revert case IS the handback and
+    nothing else at this tier covers it clearing. Without the held occurrence this test was
+    inert: at
     ~3.26 A required against a 12.8 A slack threshold, `target_current` could be set to 0.0 and
     it would still have passed."""
     freezer.move_to("2026-01-15 12:00:00")
@@ -2854,7 +2855,7 @@ async def test_urgency_reverts_when_baseline_alone_would_meet_the_deadline(hass,
 
     # The handback fired: Power's own 5.0 A request covers the ~3.26 A required.
     assert coord._required_current.urgent is False
-    # And the latch was released, not merely reported False for this cycle.
+    # And the occurrence was released, not merely reported False for this cycle.
     assert coord._pursued_occurrence is None
 
 
@@ -2864,7 +2865,7 @@ async def test_handback_uses_rows_3_5_not_the_escalated_mode(hass, freezer):
     escalated mode's own (already-maximum) desired current there would clear urgency the instant
     it engaged and re-engage it the next cycle, for ever.
 
-    Urgency is latched on entry here, exactly as it would be one cycle after engaging, with
+    Urgency is held on entry here, exactly as it would be one cycle after engaging, with
     Captar already dispatched from that escalation. Auto's baseline rows still resolve to Off
     (no solar capability, sun up), so the handback must not fire and urgency must hold."""
     freezer.move_to("2026-01-15 12:00:00")
@@ -2905,7 +2906,7 @@ async def test_baseline_dry_run_ignores_has_charged_after_escalation_deadlock(ha
     Under the pre-#1078 rule that made `required_a > baseline_desired_a` permanently True for any
     positive requirement. The rule has since changed -- urgency engages on R5's slack test, not on
     the baseline -- but the deadlock did not go away with it: a baseline pinned at 0 A can never
-    satisfy the HANDBACK either, so once urgency latches, Auto still cannot revert from Captar
+    satisfy the HANDBACK either, so once urgency is held, Auto still cannot revert from Captar
     back to Solar however far the deadline pressure drops. The regression this test guards is the
     same one; only the mechanism it would break through has moved."""
     freezer.move_to("2026-01-15 12:00:00")
@@ -3553,7 +3554,7 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
-    # Latched on entry (issue #1078): the handback, not the engage test, is what these
+    # Held on entry (issue #1078): the handback, not the engage test, is what these
     # tariff tests discriminate through -- see the row-4 test's docstring.
     _seed_pursued_occurrence(coord, hours_from_now=3)
     _seed_today_deadline(coord, hours_from_now=3)
@@ -3566,10 +3567,10 @@ async def test_low_tariff_defaults_active_when_role_unmapped(hass, freezer):
 
 async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     """With ROLE_LOW_TARIFF mapped and reading False, row 4 never matches -- baseline falls
-    through to Off (0 A), which can never satisfy R5's handback, so latched urgency holds.
+    through to Off (0 A), which can never satisfy R5's handback, so held urgency holds.
 
     Since #1078 the baseline no longer decides whether urgency ENGAGES, so this pair of tests
-    discriminates through the handback instead: urgency is latched on entry and the question is
+    discriminates through the handback instead: urgency is held on entry and the question is
     whether the baseline row 4 resolves to something that can take over. That is a sharper test
     of "which row matched" than the old one, which could pass merely because urgency fired.
     """
@@ -3586,7 +3587,7 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
     coord.active_profile = PROFILE_AUTO
     coord.active_mode = MODE_OFF
     coord.soc_limit_override = 80.0
-    # Latched on entry (issue #1078): the handback, not the engage test, is what these
+    # Held on entry (issue #1078): the handback, not the engage test, is what these
     # tariff tests discriminate through -- see the row-4 test's docstring.
     _seed_pursued_occurrence(coord, hours_from_now=3)
     _seed_today_deadline(coord, hours_from_now=3)
@@ -3600,9 +3601,9 @@ async def test_low_tariff_inactive_withholds_baseline_row4(hass, freezer):
 async def test_low_tariff_mapped_true_matches_default(hass, freezer):
     """A mapped ROLE_LOW_TARIFF reading True behaves the same as the unmapped default: row 4
     matches, the baseline is `Captar`, and its maximum-current request satisfies R5's handback
-    so latched urgency clears.
+    so held urgency clears.
 
-    Latched on entry for the same reason as its two siblings (issue #1078) -- without it this
+    Held on entry for the same reason as its two siblings (issue #1078) -- without it this
     test passed whether or not row 4 matched, since ~10.87 A required is under the 12.8 A slack
     threshold either way, and it would have read identically with `low_tariff=False`."""
     freezer.move_to("2026-01-15 12:00:00")
@@ -4392,57 +4393,12 @@ async def test_read_owned_entities_applies_every_table_driven_read(hass):
     assert coord.departure_home_day_override == time_of_day(8, 0)
 
 
-async def test_should_keep_urgency_when_a_later_slack_test_would_not_re_engage(hass, freezer):
-    """R5's held occurrence, driven naturally across two cycles rather than seeded (issue #1078).
-
-    Cycle 1 engages urgency on a tight deadline. Cycle 2 moves the deadline far enough out that
-    the slack test would NOT fire on its own, with a baseline of `Off` that can never satisfy the
-    handback -- urgency must still be in effect, and `_pursued_occurrence` must still be set.
-
-    This is the test that makes the held occurrence real: with the `self._pursued_occurrence`
-    assignment gone from the coordinator, every other urgency test still passes, because they
-    all seed the occurrence by hand and run a single cycle.
-    """
-    freezer.move_to("2026-01-15 12:00:00")
-    # low_tariff mapped False so Auto's row 4 (Overnight top-up) cannot match: the baseline falls
-    # through to Off (0 A), which can never satisfy the handback. With row 4 matching, the
-    # baseline would be Captar's 16 A and cycle 2 below would legitimately hand back.
-    adapters = _adapters(
-        status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON, low_tariff=False
-    )
-    config = _config()
-    config = dataclasses.replace(config, solar_available=False)
-    coord = SmartChargingCoordinator(
-        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
-    )
-    coord.active_profile = PROFILE_AUTO
-    coord.active_mode = MODE_OFF
-    coord.soc_limit_override = 80.0
-    _seed_ample_peak_headroom(coord)
-
-    # Cycle 1: 7.5 kWh over 1.25 h at 230 V = ~26.09 A required. That is over the 12.8 A slack
-    # threshold AND over the 16 A escalated rate, so this cycle is Unreachable -- which is still
-    # urgency in effect (Unreachable is a strict subset of Urgent), and what this test needs is
-    # simply that an occurrence is pursued.
-    _seed_today_deadline(coord, hours_from_now=1.25)
-    await coord._async_update_data()
-    assert coord._required_current.urgent is True
-    assert coord._pursued_occurrence is not None
-
-    # Cycle 2: 6 h out, ~5.43 A required -- far under the 12.8 A threshold, so the slack test
-    # alone would leave this Normal. The held occurrence, and an `Off` baseline that cannot hand
-    # back (0 A < 5.43 A), are the only reasons urgency survives.
-    _seed_today_deadline(coord, hours_from_now=6)
-    await coord._async_update_data()
-    assert coord._required_current.urgent is True
-    assert coord._pursued_occurrence is not None
-
-
 async def test_should_hold_the_pursued_occurrence_across_an_ev_soc_fault_cycle(hass, freezer):
     """A fault cycle establishes nothing about the deadline, so it must not decide anything
     about it either -- the same reasoning `_role_readings_at` and `_unreachable_edge` carry
     through these early returns (ADR-0024). A fault is not one of R5's release conditions.
     """
+    # Arrange -- Solar is SOC-gated, so a missing ev_soc is a fault, not a clean idle.
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0, sun_state=SUN_STATE_BELOW_HORIZON)
     config = _config()
@@ -4451,15 +4407,17 @@ async def test_should_hold_the_pursued_occurrence_across_an_ev_soc_fault_cycle(h
         hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
     )
     coord.active_profile = PROFILE_AUTO
-    coord.active_mode = MODE_SOLAR  # SOC-gated: a missing ev_soc is a fault, not a clean idle
+    coord.active_mode = MODE_SOLAR
     coord.soc_limit_override = 80.0
     _seed_ample_peak_headroom(coord)
     _seed_today_deadline(coord, hours_from_now=1.25)
     held = _seed_pursued_occurrence(coord, hours_from_now=1.25)
-
     adapters[ROLE_EV_SOC]._value = None
+
+    # Act
     result = await coord._async_update_data()
 
+    # Assert
     assert result.fault is True
     assert coord._pursued_occurrence == held  # held, not released
 
@@ -4658,7 +4616,16 @@ async def test_should_thread_one_pursued_occurrence_across_engage_hold_and_relea
     await coord._async_update_data()
     assert coord._required_current.urgent is False
     assert coord._pursued_occurrence is None
-    # The boolean it replaces is gone, not kept alongside (D-8).
+
+
+async def test_should_not_keep_the_boolean_urgency_flag_when_the_occurrence_replaces_it(hass):
+    """D-8: the pursued occurrence replaces `_urgency_latched` rather than sitting beside it."""
+    # Arrange / Act
+    coord = SmartChargingCoordinator(
+        hass, adapters=_adapters(), config=_config(), interval_s=30, store=_FakeStore({})
+    )
+
+    # Assert
     assert not hasattr(coord, "_urgency_latched")
 
 
@@ -4700,6 +4667,47 @@ async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavai
     assert result.effective_peak_limit_kw == 7.0
 
 
+async def test_should_release_a_hold_past_the_24_hour_bound_when_state_of_charge_is_unavailable(
+    hass, freezer
+):
+    """R5's 24-hour bound is what makes "a hold never outlives one deadline cycle"
+    unconditional, so it holds on a cycle whose state of charge is unavailable too: urgency is
+    held up to the bound (UC05's State model) and released once the bound passes, the effective
+    peak limit falling back from the maximum peak with it.
+
+    Set up in `Power`, not a solar mode, for the reason its sibling above gives.
+    """
+    # Arrange -- a hold 23 h old, the state of charge unavailable, a maximum peak above the floor.
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    held = dt_util.now() - timedelta(hours=23)
+    coord._pursued_occurrence = held
+
+    # Act -- one cycle inside the bound, then one past it.
+    inside = await coord._async_update_data()
+    urgent_inside = coord._required_current.urgent
+    held_inside = coord._pursued_occurrence
+    freezer.tick(timedelta(hours=2))
+    past = await coord._async_update_data()
+
+    # Assert -- held inside the bound; released past it, reading or not.
+    assert inside.fault is False
+    assert urgent_inside is True
+    assert held_inside == held
+    assert inside.effective_peak_limit_kw == 7.0
+    assert past.fault is False
+    assert coord._required_current.urgent is False
+    assert coord._pursued_occurrence is None
+    assert past.effective_peak_limit_kw == 2.5
+
+
 async def test_should_keep_charging_when_the_pursued_occurrence_has_passed(hass, freezer):
     """A missed-deadline hold computes no required current (`required_a` None) yet is
     unreachable by definition, so it enters the unreachable-notification block. That block must
@@ -4738,8 +4746,8 @@ async def test_should_release_the_pursued_occurrence_when_the_car_disconnects(ha
     session and is a real exit, so it releases the occurrence (resolution-rules.md's release
     list; UC05's State model, "A disconnect is different in kind").
 
-    The same `Power` fixture as its sibling above, so the two differ only in the half of
-    `deadline_resolvable` that fails.
+    Set up in `Power`, as the state-of-charge sibling above is, so the disconnect is what
+    reaches the non-resolvable early return rather than a fault.
     """
     # Arrange
     freezer.move_to("2026-01-15 12:00:00")

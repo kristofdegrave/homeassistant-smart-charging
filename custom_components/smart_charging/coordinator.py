@@ -173,7 +173,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # site, so a fault cycle simply never reaches it and its prior flag is held (see the
         # comments on those two returns).
         self._unreachable_edge = DeadlineUnreachableEdge()
-        # R5 (issue #1078): whether deadline urgency was in effect entering the next cycle --
         # R5's urgency state, threaded across cycles alongside the solar step-up: the departure
         # occurrence urgency is chasing, or None when it is chasing none. Urgency is in effect
         # for exactly as long as there is one (system-overview.md's `pursued occurrence`), and
