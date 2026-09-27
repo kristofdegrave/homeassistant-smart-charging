@@ -712,7 +712,7 @@ def resolve_deadline_urgency(
         # not (requirements.md R5).
         held = inputs.pursued_occurrence if ctx.status in CHARGEABLE_STATES else None
         if held is not None and missed_deadline_backstop_fired(
-            held, inputs.now_dt, inputs.following_occurrence
+            held, inputs.now_dt, following_occurrence=inputs.following_occurrence
         ):
             held = None
         return DeadlineUrgencyResult(

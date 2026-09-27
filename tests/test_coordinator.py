@@ -4917,12 +4917,14 @@ async def test_should_keep_the_hold_when_the_day_after_the_pursued_occurrence_ha
     to end through the coordinator, not only in the pure engine (`test_deadline.py`'s
     `test_should_release_the_hold_on_the_24_hour_arm_when_no_following_occurrence_resolves`).
 
-    Set up entirely within the 24-hour bound, with no departure default for the day after the
-    pursued occurrence -- every weekday's own default starts at `None` -- so the hold must
-    persist: a crash, or a wrongly-elapsed comparison against `None`, would show up here as an
-    early release.
+    Set up so the pursued occurrence falls THIS morning, making the day after it TOMORROW --
+    a different weekday than the pursued occurrence's own date -- with a departure seeded on
+    the pursued day's own weekday (already elapsed) but tomorrow's own weekday left at its
+    default `None`. An implementation that resolved the wrong date (today's own, rather than
+    the day after the pursued occurrence) would see that elapsed departure and wrongly release;
+    only the correct date, left unresolved, keeps the hold on the 24-hour arm alone.
     """
-    # Arrange
+    # Arrange -- pursued occurrence this morning (elapsed 6h ago, short of the 24-hour bound).
     freezer.move_to("2026-01-15 20:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=70.0)
     config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
@@ -4932,14 +4934,16 @@ async def test_should_keep_the_hold_when_the_day_after_the_pursued_occurrence_ha
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
     coord.soc_limit_override = 80.0
-    _seed_ample_peak_headroom(coord)
-    held = dt_util.now() - timedelta(hours=13)
+    now_dt = dt_util.now()
+    held = now_dt - timedelta(hours=6)
     coord._pursued_occurrence = held
+    # The pursued day's own weekday default -- NOT the day after it -- already elapsed by noon.
+    coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(6, 0)
 
     # Act
     result = await coord._async_update_data()
 
-    # Assert -- still held; the following day's own "no deadline" resolution cannot release it.
+    # Assert -- still held; tomorrow's own "no deadline" default cannot release it.
     assert result.fault is False
     assert coord._pursued_occurrence == held
     assert coord._required_current.urgent is True

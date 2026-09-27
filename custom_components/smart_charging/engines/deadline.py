@@ -36,8 +36,10 @@ threshold and UC05's `Urgent` band disappears entirely.
 MISSED_DEADLINE_HOLD_BACKSTOP_HOURS = 24.0
 """R5's outer bound on a missed-deadline hold, in hours since the pursued occurrence -- the
 backstop releases on WHICHEVER of its two arms fires first, so this bound alone is not
-"unconditional": the following occurrence's own elapse (the first arm) can, and typically does,
-release the hold earlier.
+"unconditional": the following occurrence's own elapse (the first arm) can release the hold
+earlier -- the common case is both arms landing on the same instant (the following day sharing
+the pursued one's own departure time), and across a fall-back DST transition the 24-hour arm
+can even fire first.
 
 It is what makes "a hold never outlives one deadline cycle" a guarantee rather than a hope
 regardless (requirements.md R5, resolution-rules.md's release list): R14 lets any day resolve
@@ -190,6 +192,7 @@ def _absolute_hours_between(later: datetime, earlier: datetime) -> float:
 def missed_deadline_backstop_fired(
     pursued_occurrence: datetime,
     now: datetime,
+    *,
     following_occurrence: datetime | None = None,
 ) -> bool:
     """R5's backstop on a missed-deadline hold: the occurrence following the pursued one has
@@ -217,6 +220,7 @@ def resolve_required_current(
     baseline_desired_a: float,
     escalated_maximum_permitted_rate_a: float,
     pursued_occurrence: datetime | None = None,
+    *,
     following_occurrence: datetime | None = None,
 ) -> RequiredCurrentResult:
     """R5/R15's required-current formula (resolution-rules.md 'Required current for the
@@ -294,7 +298,9 @@ def resolve_required_current(
     #    resolving to "no deadline" must not end it -- the hold is anchored to the occurrence
     #    already missed (requirements.md R5).
     if pursued_occurrence is not None and pursued_occurrence <= now and not soc_at_active_limit:
-        if missed_deadline_backstop_fired(pursued_occurrence, now, following_occurrence):
+        if missed_deadline_backstop_fired(
+            pursued_occurrence, now, following_occurrence=following_occurrence
+        ):
             # Releasing the pursued occurrence ends the hold and urgency together -- they were
             # never two things -- "and from the NEXT cycle the required current above governs
             # normally again" (resolution-rules.md, 'Missed-deadline hold'). Both halves of

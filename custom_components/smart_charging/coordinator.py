@@ -468,10 +468,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ctx.low_tariff_active = low_tariff_reading
 
         # R14's four-row table, evaluated for a given calendar date -- shared by today's
-        # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule) and the
-        # reserved day's (R9's precondition, UC07), so the other six args can never drift apart
-        # between call sites. NF14: the home-day row is looked up for THIS date alone, never
-        # for "whichever the flag was last read for".
+        # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule), the
+        # reserved day's (R9's precondition, UC07) and the day after the pursued occurrence's
+        # (R5's backstop, T7's `_resolve_following_occurrence`), so the other six args can
+        # never drift apart between call sites. NF14: the home-day row is looked up for THIS
+        # date alone, never for "whichever the flag was last read for".
         def resolve_deadline_for(target_date: date) -> time_of_day | None:
             return resolve_departure_deadline(
                 external_configured,
