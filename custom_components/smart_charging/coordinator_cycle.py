@@ -28,6 +28,7 @@ from .const import (
 from .engines.capability_gate import resolve_available_modes
 from .engines.deadline import (
     RequiredCurrentResult,
+    missed_deadline_backstop_fired,
     resolve_next_occurrence,
     resolve_required_current,
 )
@@ -628,9 +629,10 @@ class DeadlineUrgencyInputs:
     # limit raised to the maximum peak -- resolved by the coordinator every cycle whether or not
     # urgency is actually in effect, which is what stops the test moving the moment it fires.
     escalated_maximum_permitted_rate_a: float
-    # Whether urgency was in effect entering this cycle. Urgency latches: re-deriving it from
-    # the slack test each cycle would revert it the moment charging closed the gap.
-    urgency_latched: bool
+    # The occurrence urgency was chasing entering this cycle, or None. Urgency is in effect for
+    # exactly as long as there is one, and it is held rather than re-derived from the slack test
+    # each cycle, which would revert it the moment charging closed the gap.
+    pursued_occurrence: datetime | None
     auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
@@ -651,9 +653,9 @@ def resolve_deadline_urgency(
     coordinator already branches on that exact predicate to decide whether to even read
     today's deadline/sensed battery capacity (both async, HA-bound), so a second, separately
     written copy of the same condition on this side of the module boundary would be exactly
-    the kind of lockstep-editing hazard this design exists to remove. Without it (disconnected, or a
-    non-SOC-gated mode with the role unconfigured), urgency can't be computed, mirroring R14's
-    own "no deadline resolved -> urgency never applies" shape. All adapter/HA reads (today's
+    the kind of lockstep-editing hazard this design exists to remove. Without it (disconnected,
+    or the state of charge unavailable), no required current can be computed; the early return
+    below says what each half does to the pursued occurrence. All adapter/HA reads (today's
     resolved deadline, the sensed battery capacity) happen in the coordinator before this is
     called -- this function only ever receives already-resolved plain values, per
     ADR-0009/0010's HA-free boundary.
@@ -681,9 +683,39 @@ def resolve_deadline_urgency(
     the two calls.
     """
     if not inputs.deadline_resolvable:
+        # The two halves of `deadline_resolvable` release in OPPOSITE directions, so this
+        # return cannot answer them together (UC05's State model):
+        #
+        # - DISCONNECTED -- a release condition R5 names outright. It ends the connected session
+        #   and the use-case's own precondition, so it is a real exit.
+        # - STATE OF CHARGE UNAVAILABLE -- deliberately NOT an exit. No required current can be
+        #   computed, so the cycle establishes nothing about the deadline and "the System holds
+        #   whichever state it was already in". Collapsing the two would release a hold on a
+        #   cycle that established nothing.
+        #
+        # This is reachable with a live hold: the ev_soc fault gate upstream is itself gated on
+        # `is_soc_gated`, which is False for `Off` and `Power` (below), so those modes arrive
+        # here with a missing reading rather than faulting.
+        #
+        # Holding the occurrence holds the urgency it implies -- "urgency is in effect for
+        # exactly as long as there is a pursued occurrence" (resolution-rules.md) -- so `urgent`
+        # follows it, and the effective peak limit stays raised. The connected half is read off
+        # `ctx.status` rather than carried in: the hazard the docstring names is a second copy
+        # of the combined predicate, not this one-condition half `ctx` already holds.
+        #
+        # R5's backstop still applies: it needs only the clock, so the hold never outlives its
+        # 24-hour bound whether the reading is available or not (requirements.md R5).
+        held = inputs.pursued_occurrence if ctx.status in CHARGEABLE_STATES else None
+        if held is not None and missed_deadline_backstop_fired(held, inputs.now_dt):
+            held = None
         return DeadlineUrgencyResult(
-            required=RequiredCurrentResult(required_a=None, urgent=False, unreachable=False),
-            urgent=False,
+            required=RequiredCurrentResult(
+                required_a=None,
+                urgent=held is not None,
+                unreachable=False,
+                pursued_occurrence=held,
+            ),
+            urgent=held is not None,
             resolved_mode=None,
         )
 
@@ -732,7 +764,7 @@ def resolve_deadline_urgency(
         # stopped being true when R5's engage condition became a comparison against this rate:
         # it is now the threshold urgency itself turns on, not just the notification's.
         escalated_maximum_permitted_rate_a=inputs.escalated_maximum_permitted_rate_a,
-        urgency_latched=inputs.urgency_latched,
+        pursued_occurrence=inputs.pursued_occurrence,
     )
 
     # R5/R16: Unreachable still requests the same escalated mode/peak-limit raise as
