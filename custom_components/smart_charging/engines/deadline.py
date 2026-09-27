@@ -34,12 +34,16 @@ threshold and UC05's `Urgent` band disappears entirely.
 """
 
 MISSED_DEADLINE_HOLD_BACKSTOP_HOURS = 24.0
-"""R5's unconditional bound on a missed-deadline hold, in hours since the pursued occurrence.
+"""R5's outer bound on a missed-deadline hold, in hours since the pursued occurrence -- the
+backstop releases on WHICHEVER of its two arms fires first, so this bound alone is not
+"unconditional": the following occurrence's own elapse (the first arm) can, and typically does,
+release the hold earlier.
 
-The second arm of the backstop, and the one that makes "a hold never outlives one deadline
-cycle" a guarantee rather than a hope (requirements.md R5, resolution-rules.md's release list):
-R14 lets any day resolve to "no deadline", so the FOLLOWING occurrence the first arm waits for
-does not always exist. A domain rule, not a configurable value.
+It is what makes "a hold never outlives one deadline cycle" a guarantee rather than a hope
+regardless (requirements.md R5, resolution-rules.md's release list): R14 lets any day resolve
+to "no deadline", so the FOLLOWING occurrence the first arm waits for does not always exist,
+and this arm alone still bounds the hold when it doesn't. A domain rule, not a configurable
+value.
 """
 
 
