@@ -207,29 +207,26 @@ the freshly fetched prior branch — never from a stale local `main`.
 The PR description references the linked issue with `Closes #<issue-number>` so merging
 auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>` on every PR
 except the one that finishes the issue. A task PR normally carries both — `Closes` for its own
-task issue and `Part of` for the epic — and where anything needs to resolve a PR to one issue,
-the `Closes` reference is the one that names it.
+task issue and `Part of` for the epic — and `Closes` is the reference that resolves a PR to
+one issue.
 
 ## Merge and issue closing
 
-**Merge is manual, except for the auto-merge class.** A PR whose changed files all sit under
-the auto-merge trees is merged by the session under **Commit & push authorization**'s merge
-rule below, and every other PR by the human, never self-approved (how this project enforces
-the split is [profile.md](../profile.md)'s **Merge strategy**). Merging auto-closes the linked issue
-via the PR's `Closes #N` reference, or leaves it open if the PR only used `Part of #N`. Never close the linked issue directly (`gh issue close`), even on a
-fully clean verification-only task — closing is left to that reference, which fires on merge.
+**Merge is the human's, except under the merge rule** (**Commit & push authorization** below;
+its enforcement is [profile.md](../profile.md)'s **Merge strategy**) — never self-approved.
+Merging auto-closes the linked issue via `Closes #N` (not via `Part of #N`); never close it
+directly (`gh issue close`).
 
-**An epic's body is the spec, and its children are the tasks.** The spec doesn't implement
-itself — the `development`/`testing` children are filed as part of the decomposition that wrote
-the epic body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic
-routes to — so the work actually gets picked up. Implementing each child is its own issue and its own chain.
+**An epic's body is the spec, and its children are the tasks**, filed by the decomposition
+that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**
+topic routes to. Implementing each child is its own issue and its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
-[idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there and not here; of its
+[idea-to-product.md](idea-to-product.md)'s **Close** stage's, stated there, not here; of its
 two conditions, step 4 establishes the first — every child closed — and never the second,
-which is an observation on the real installation and the human's: `cleanup` reads the
-epic's open-children count once the linked issue is *done*, and reports it; what the report says at zero is the skill's own step. It never
-closes. Nothing watches for the moment otherwise: GitHub does not close a parent whose
+an observation on the real installation, the human's: `cleanup` reads the
+epic's open-children count once the linked issue is *done* and reports it; what the report
+says at zero is the skill's own step. It never closes: GitHub does not close a parent whose
 sub-issues are all closed, and a child PR carries `Part of` for its epic precisely so a merge
 cannot.
 
@@ -237,22 +234,17 @@ Step 4 removes the task's worktree because one left behind is a stale checkout n
 
 ## Commit & push authorization
 
-Commit and push freely, at any point during the work — no per-commit or per-push approval
-needed. This is a standing authorization the project makes in this document; it does not
-extend to anything destructive or hard to reverse (force-push, rewriting published history,
-`git reset --hard`, etc.), which still follow the general ask-before-acting default. A
-`PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/block-destructive-git.sh`) refuses
-the most common of those before they run.
+Commit and push freely, at any point — a standing authorization this document makes, with no
+per-commit or per-push approval. It does not extend to anything destructive or hard to reverse
+(force-push, rewriting published history, `git reset --hard`, etc.), which keeps the
+ask-before-acting default; a `PreToolUse` hook (`.claude/settings.json` →
+`.claude/hooks/block-destructive-git.sh`) refuses the most common of those before they run.
 
-**The merge rule.** A session may run `gh pr merge` only when all of these hold: the merge is
-a `--squash`; the PR's head is a branch of this repository, not a fork's; the PR carries
-`needs-approval` and not `needs-decision`; every changed file is under one of the auto-merge
-trees `.claude/profile.yml`'s `autopilot.auto_merge_trees` lists; and every check on the PR
-is green — every check, not only branch protection's required ones, since the merge runs as
-the human with `--admin`, which bypasses those. The same hook mechanizes this rule and fails
-closed: a condition it cannot read is a condition that does not hold. A PR failing any of
-them is the human's to merge. `autopilot.lanes` in the same profile is the most issues an
-unattended loop keeps in flight at once, on disjoint trees.
+**The merge rule.** A session runs `gh pr merge` only when all hold: `--squash`; the head a
+branch of this repository, not a fork's; `needs-approval` on and `needs-decision` off; every
+changed file under a tree in `.claude/profile.yml`'s `autopilot.auto_merge_trees`; every
+check green — all of them, since the human's `--admin` merge bypasses the required ones. The
+same hook mechanizes it and fails closed; any other PR is the human's.
 
 ## Project board
 
