@@ -173,18 +173,18 @@ Design gate's *approved*, the milestone sentence and filing's list, `Ready`, the
 block list, scope, tests and authorization, branch protection's gates, rows without a work
 file, the label vocabulary and row set, the exit labels' scope and actor, the bot identity,
 the closing step's go, the design index, the interactive qualifier and the cap's keys.
-**108** hits.
+**109** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
 | `docs/reference/method/contribution-workflow.md:69`, `:75`, `:76`; `.claude/skills/implement/SKILL.md:60` | Rule B forbids starting the next issue | The sentence goes |
-| `docs/reference/method/contribution-workflow.md:4`, `:275`; `.claude/profile.yml:170`; `.claude/skills/implement/SKILL.md:8`; `.claude/skills/review/SKILL.md:8`; `.claude/skills/fix/SKILL.md:8` | Say interactive | Hold unattended too |
-| `CLAUDE.md:112` | Says interactive; `cleanup` starts from the human | Holds unattended; the autopilot's merge triggers it too |
+| `docs/reference/method/contribution-workflow.md:4`, `:275`; `.claude/profile.yml:171`; `.claude/skills/implement/SKILL.md:8`; `.claude/skills/review/SKILL.md:8`; `.claude/skills/fix/SKILL.md:8` | Say interactive | Hold unattended too |
+| `CLAUDE.md:113` | Says interactive; `cleanup` starts from the human | Holds unattended; the autopilot's merge triggers it too |
 | `docs/reference/method/contribution-workflow.md:46`, `:215`, `:216`; `docs/reference/profile.md:34`, `:35`, `:55`; `.github/CODEOWNERS:2`, `:5` | Every merge is the human's, by branch protection | Narrowed to the manual-merge trees |
 | `docs/reference/method/contribution-workflow.md:54`, `:80`, `:81`; `.claude/skills/cleanup/SKILL.md:3`, `:9`, `:14` | `cleanup` waits for the human's statement | Triggered by the autopilot's own merge |
 | `docs/reference/method/contribution-workflow.md:145` | Neither label replaces manual merge approval | The auto-merge class's merge condition |
 | `docs/reference/method/contribution-workflow.md:136`, `:137`, `:142`; `docs/reference/method/ci-pipeline.md:142`; `.claude/profile.yml:71`, `:74` | A pull request's, with one actor | Widened to issues and the autopilot |
-| `.claude/profile.yml:78`, `:114`, `:122`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73` | Enumerate the context labels and rows | Gain `decompose`; `epic` and `paused` join the labels |
+| `.claude/profile.yml:78`, `:114`, `:123`; `CLAUDE.md:30`; `docs/reference/method/ci-pipeline.md:93`; `docs/reference/method/contribution-workflow.md:282`, `:327`; `docs/reference/method/definition-of-done.md:123`; `docs/reference/profile.md:65`, `:73` | Enumerate the context labels and rows | Gain `decompose`; `epic` and `paused` join the labels |
 | `docs/reference/work-types/workflow/review.md:177`; `.claude/skills/submit-pr-review/SKILL.md:12`; `.claude/skills/review/SKILL.md:107` | The manual gate is sole and non-negotiable | Narrowed to the manual-merge trees |
 | `docs/reference/method/idea-to-product.md:215`, `:416` | *Approved*, meaning merged, gates the spec | Met by the auto-merge condition |
 | `docs/reference/method/idea-to-product.md:210` | The human says go on | The `decompose` park; go is the label's removal |
@@ -199,11 +199,12 @@ the closing step's go, the design index, the interactive qualifier and the cap's
 | `.claude/skills/clarify/SKILL.md:3`; `docs/reference/method/contribution-workflow.md:86` | Blocks on a human; Rule C sends decisions there | Parks the question instead |
 | `.claude/skills/research/SKILL.md:3`, `:17` | Refuses a non-interactive run for want of grants | The autopilot's dispatch states what it grants |
 
-22 hits conform: `contribution-workflow.md:91`, `:95`, `:112`, `.claude/profile.yml:174`,
-`:176`, `:178`, `handoff/SKILL.md:11`, `:12`, `check-authoring-rules.sh:26`,
-`check-method.py:100`, `ci.yml:6`, `:7`, `:12`, `:16`, `profile.md:49`, `CLAUDE.md:44`,
+22 hits conform: `contribution-workflow.md:91`, `:95`, `:112`, `.claude/profile.yml:175`,
+`:177`, `:179`, `handoff/SKILL.md:11`, `:12`, `check-authoring-rules.sh:26`,
+`check-method.py:103`, `ci.yml:6`, `:7`, `:12`, `:16`, `profile.md:49`, `CLAUDE.md:44`,
 `work-types/README.md:134`, `model-selection.md:81`, `definition-of-done.md:34`,
 `implement/SKILL.md:23`, `workflow/review.md:53`, `resolving-merge-conflicts/SKILL.md:20`.
-Out of scope: the 3 hits in `grilling/SKILL.md` and `diagnosing-bugs/SKILL.md`, which keep
-refusing to run unattended, and `test-check-method.sh:40`, `:82`, `:90`, `:99`, fixtures.
+Out of scope: the 4 hits in `grilling/SKILL.md`, `diagnosing-bugs/SKILL.md` and
+`improve-architecture/SKILL.md`, which keep refusing to run unattended, and
+`test-check-method.sh:40`, `:82`, `:90`, `:99`, fixtures.
 Excluded trees keep their dated text.
