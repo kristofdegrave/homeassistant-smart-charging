@@ -4655,12 +4655,16 @@ async def test_urgency_is_judged_against_the_escalated_rate_not_c1(hass, freezer
 # criterion) ------------------------------------------------------------------------------
 
 
-async def test_escalated_rate_bounds_read_smoothed_while_clamps_and_readout_stay_raw(
+async def test_should_fit_both_escalated_bounds_to_the_smoothed_baseline_when_it_differs_from_raw(
     hass, monkeypatch
 ):
     """A single-cycle household spike, with the smoothed and raw readings deliberately
     different, asserted in one place -- the defect this guards against is the two operands
-    collapsing back onto one, which a test per consumer would still pass with.
+    collapsing back onto one, which a test per consumer would still pass with (the plan's own
+    "one test" instruction, `docs/plans/2026-09-14-r5-pursued-occurrence.md#T10`): a test per
+    consumer would still fail on either direction of a collapse (onto raw, or onto smoothed),
+    so it is kept as one test here to follow that instruction, not because a split would be
+    unable to catch the defect.
 
     Spies on the module-level helpers `coordinator.py` calls, rather than inferring the
     operand from the final `min()` result, so this pins the actual argument each call site
@@ -4676,6 +4680,13 @@ async def test_escalated_rate_bounds_read_smoothed_while_clamps_and_readout_stay
       the `sensor.smart_charging_peak_headroom_a` readout's) -- call order distinguishes them,
       since only the first is gated on `_peak_clamp_would_run()`.
     """
+    # Arrange -- spy every module-level helper coordinator.py calls that either bound could
+    # route through; smoothing_window=4, three steady priming cycles (household net-of-charger
+    # load at 1000 W each, with a non-zero 500 W charger draw so the C4 clamp's own charger_w
+    # operand is never accidentally 0.0 -- the mutation "pass ctx.charger_w instead of the
+    # literal 0.0" into the escalated bound below must be able to fail) fill the window.
+    # CapTar is available and Off is active (neither Power nor its R17 opt-out), so
+    # `_peak_clamp_would_run()` is True and the peak bound is composed.
     calls: dict[str, list[dict]] = {
         "peak_headroom_a": [],
         "ceiling_headroom_a": [],
@@ -4693,41 +4704,38 @@ async def test_escalated_rate_bounds_read_smoothed_while_clamps_and_readout_stay
     for name in calls:
         monkeypatch.setattr(coordinator_module, name, _spy(name, getattr(coordinator_module, name)))
 
-    # smoothing_window=4: three steady priming cycles (household net-of-charger load at
-    # 1000 W each) fill the window, then a fourth cycle spikes it to 5000 W -- sized so the
-    # raw (debounced immediately, since a HIGHER baseline is the safety-conservative
-    # direction) and smoothed (2000 W, three parts of the old mean to one of the new) readings
-    # genuinely differ. CapTar is available and Off is active (neither Power nor its R17
-    # opt-out), so `_peak_clamp_would_run()` is True and the peak bound is composed.
     config = dataclasses.replace(_config(), smoothing_window=4, max_peak_kw=4.0)
     coord = SmartChargingCoordinator(
         hass,
-        adapters=_adapters(net_w=1000.0, charger_w=0.0),
+        adapters=_adapters(net_w=1500.0, charger_w=500.0),
         config=config,
         interval_s=30,
         store=_FakeStore({}),
     )
     coord.active_mode = MODE_OFF
     _seed_ample_peak_headroom(coord)
-
     for _ in range(3):
         await coord._async_update_data()
-    coord._adapters = _adapters(net_w=5000.0, charger_w=0.0)
+
+    # Act -- a fourth cycle spikes the household to 5000 W (charger draw held at the same
+    # 500 W), sized so the raw (debounced immediately, since a HIGHER baseline is the
+    # safety-conservative direction) and smoothed (2000 W, three parts of the old mean to one
+    # of the new) readings genuinely differ.
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
     result = await coord._async_update_data()
 
-    # The spike cycle's raw, debounced baseline is the spike itself (5000 W); the smoothed
-    # mean is (1000*3 + 5000) / 4 = 2000 W -- genuinely different operands.
+    # Assert -- the spike cycle's raw, debounced baseline is the spike itself
+    # (5500 - 500 = 5000 W); the smoothed mean is (1000*3 + 5000) / 4 = 2000 W. The real R3/C4
+    # clamps and the readout stay on the raw operand; only the escalated rate's own two calls
+    # (index -2/-1 of the spike cycle's `peak_headroom_a` pair, since the readout's own call
+    # -- the LAST one, per this test's own docstring -- runs after it) move to the smoothed one.
     assert calls["apply_peak_clamp"][-1]["baseline_w"] == 5000.0
-    assert calls["clamp_to_ceiling"][-1]["net_w"] == 5000.0
-    assert calls["clamp_to_ceiling"][-1]["charger_w"] == 0.0
-    # The readout (the LAST peak_headroom_a call of the cycle -- see the ordering note in this
-    # test's own docstring) stays raw, and matches the CoordinatorData field it feeds.
+    assert calls["clamp_to_ceiling"][-1]["net_w"] == 5500.0
+    assert calls["clamp_to_ceiling"][-1]["charger_w"] == 500.0
     assert calls["peak_headroom_a"][-1]["baseline_w"] == 5000.0
     # floor((4000 - 250 - 5000) / 230) = floor(-5.43) = -6 -- the raw-based readout, unmoved
     # by this task (control-cycle.md step 5, R21's own AC).
     assert result.peak_headroom_a == -6.0
-    # The escalated rate's own calls (index 0 of the spike cycle's pair -- the readout's is
-    # index 1) fit both bounds to the smoothed 2000 W instead.
     escalated_peak_call, escalated_ceiling_call = (
         calls["peak_headroom_a"][-2],
         calls["ceiling_headroom_a"][-1],
@@ -4737,13 +4745,15 @@ async def test_escalated_rate_bounds_read_smoothed_while_clamps_and_readout_stay
     assert escalated_ceiling_call["charger_w"] == 0.0
 
 
-async def test_escalated_rate_c4_bound_reads_smoothed_when_captar_capability_absent(
+async def test_should_keep_the_c4_bound_smoothed_and_skip_the_real_peak_clamp_when_captar_is_absent(
     hass, monkeypatch
 ):
     """R3 AC1/R18's second case (`_peak_clamp_would_run()` False): with CapTar absent, the
     peak bound is never composed at all, but C4 still is (C4 has no opt-out) -- so its own
     bound must still be smoothed, and `apply_peak_clamp` (the real clamp, gated on the same
-    predicate) must never be called."""
+    predicate) must never be called. Both assertions are the one behaviour this test names:
+    what the shared `_peak_clamp_would_run` predicate does and does not gate."""
+    # Arrange
     calls: dict[str, list[dict]] = {"ceiling_headroom_a": [], "apply_peak_clamp": []}
 
     def _spy(name, real):
@@ -4756,28 +4766,33 @@ async def test_escalated_rate_c4_bound_reads_smoothed_when_captar_capability_abs
     for name in calls:
         monkeypatch.setattr(coordinator_module, name, _spy(name, getattr(coordinator_module, name)))
 
+    # Non-zero 500 W charger draw throughout (same reason as the spike test above): the C4
+    # bound's own literal `charger_w=0.0` must stay distinguishable from a mutation that
+    # passed `ctx.charger_w` instead.
     config = dataclasses.replace(_config(), smoothing_window=4, captar_available=False)
     coord = SmartChargingCoordinator(
         hass,
-        adapters=_adapters(net_w=1000.0, charger_w=0.0),
+        adapters=_adapters(net_w=1500.0, charger_w=500.0),
         config=config,
         interval_s=30,
         store=_FakeStore({}),
     )
     coord.active_mode = MODE_CAPTAR  # even Captar's own mode is bound by C1/C4 alone, R18
     _seed_ample_peak_headroom(coord)
-
     for _ in range(3):
         await coord._async_update_data()
-    coord._adapters = _adapters(net_w=5000.0, charger_w=0.0)
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
     await coord._async_update_data()
 
+    # Assert
     assert calls["apply_peak_clamp"] == []  # R3 AC1: never engages with the capability absent.
     assert calls["ceiling_headroom_a"][-1]["net_w"] == 2000.0
     assert calls["ceiling_headroom_a"][-1]["charger_w"] == 0.0
 
 
-async def test_escalated_rate_unchanged_across_a_charger_current_step_and_the_window_turnover(
+async def test_should_keep_the_escalated_rate_unchanged_when_a_charger_current_step_crosses_the_window(  # noqa: E501
     hass, monkeypatch
 ):
     """R5 `:92`'s admitted-mean baseline (R10's admission rule, ADR-0049): a charger-current
@@ -4786,7 +4801,10 @@ async def test_escalated_rate_unchanged_across_a_charger_current_step_and_the_wi
     move the escalated rate, on the step cycle or through the window's own turnover, because
     `net_w - charger_w` (the household's own load) is invariant to the charger's own
     actuation by construction, and R10's admission rule shields the one cycle a slow sensor
-    can otherwise transiently distort.
+    can otherwise transiently distort. One test bundling three lag variants (a loop, not
+    `pytest.mark.parametrize`, since each variant re-primes its own coordinator from the same
+    steady state and shares `rate_before_step`) -- each variant's own `# Act`/`# Assert` pair
+    is one behaviour: this lag shape does not move the rate.
 
     Primed for 6 steady charging cycles (comfortably past both the mode's first two current
     writes and smoothing_window=4's own turnover) before the step, then run 4 more (the
@@ -4794,6 +4812,7 @@ async def test_escalated_rate_unchanged_across_a_charger_current_step_and_the_wi
     C1) the one that binds, so a wrongly-admitted transient sample would actually move the
     asserted rate rather than being absorbed by slack C1/C4 bounds.
     """
+    # Arrange -- the shared primed state and spy every variant reuses.
     captured = []
     real_escalated = SmartChargingCoordinator._escalated_maximum_permitted_rate_a
 
@@ -4842,9 +4861,9 @@ async def test_escalated_rate_unchanged_across_a_charger_current_step_and_the_wi
         return rate
 
     for label, lagged_reading in variants.items():
-        # Re-run from the same primed state for each variant -- a fresh coordinator, primed
-        # identically, rather than threading one coordinator through all three (the step must
-        # be each variant's own first departure from steady).
+        # Act -- re-prime from the same steady state for each variant (a fresh coordinator,
+        # rather than threading one through all three, so the step is each variant's own
+        # first departure from steady), then step the charger current through it.
         variant_coord = None
         for _ in range(6):
             variant_coord, _ = await _run_mode(
@@ -4874,15 +4893,20 @@ async def test_escalated_rate_unchanged_across_a_charger_current_step_and_the_wi
             soc_limit_override=80.0,
             coord=variant_coord,
         )
-        for _ in range(4):
+        for cycle_index in range(4):
             reading = (
                 lagged_reading()
-                if _ == 0
+                if cycle_index == 0
                 else _adapters(status=STATE_CHARGING, ev_soc=80.0, net_w=500.0, charger_w=0.0)
             )
             variant_coord, _ = await _run_mode(
                 hass, reading, config, MODE_CAPTAR, soc_limit_override=80.0, coord=variant_coord
             )
+
+        # Assert -- the step cycle plus its 4 following cycles all ran (the spy was actually
+        # exercised, so this can't pass on an empty list), and every one of them resolved the
+        # same rate as before the step.
+        assert len(variant_captured) == 5, f"{label}: expected 5 captured cycles"
         assert variant_captured == [rate_before_step] * len(variant_captured), (
             f"{label}: the escalated rate moved across the charger-current step"
         )

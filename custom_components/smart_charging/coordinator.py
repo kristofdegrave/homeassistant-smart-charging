@@ -1763,16 +1763,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         state -- the baseline-mode comparison needs a candidate mode's request
         without actually charging on it.
 
-        `net_w`/`charger_w`/`baseline_w` are deliberately 0.0/0.0/0.0 here, not threaded from
-        the caller: none of the five `ModeHandler.desired_current` implementations reads
-        `ctx.net_w`/`ctx.charger_w`/`ctx.baseline_w` (only `ctx.surplus_w`/`ctx.voltage`/
+        `net_w`/`charger_w`/`baseline_w`/`smoothed_baseline_w` are deliberately
+        0.0/0.0/0.0/0.0 here, not threaded from the caller: none of the five
+        `ModeHandler.desired_current` implementations reads `ctx.net_w`/`ctx.charger_w`/
+        `ctx.baseline_w`/`ctx.smoothed_baseline_w` (only `ctx.surplus_w`/`ctx.voltage`/
         `ctx.now`/`ctx.status`), and this dry-run ctx is never passed to
-        `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue #719) --
-        only the real `_run_cycle`-constructed ctx is. `baseline_w=0.0` here is otherwise the
-        exact placeholder issue #990's own `CycleContext.baseline_w` field docstring warns
-        against -- safe ONLY because of the "never reaches `_apply_peak_clamp`" guarantee above;
-        if a future ModeHandler needs any of the three, thread the real values from `_run_cycle`
-        at that point, not before."""
+        `_apply_peak_clamp`/`_apply_grid_ceiling_clamp`/`_escalated_maximum_permitted_rate_a`
+        (the three real consumers, issue #719 and #1189/T10) -- only the real
+        `_run_cycle`-constructed ctx is. `baseline_w=0.0` here is otherwise the exact
+        placeholder issue #990's own `CycleContext.baseline_w` field docstring warns against --
+        safe ONLY because of the "never reaches `_apply_peak_clamp`" guarantee above; if a
+        future ModeHandler needs any of the four, thread the real values from `_run_cycle` at
+        that point, not before."""
         if status not in CHARGEABLE_STATES:
             return 0.0
         if self._mode_handlers[mode].is_soc_gated and ev_soc >= active_soc_limit:
@@ -1786,7 +1788,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             baseline_w=0.0,
             # Issue #1189/T10: same placeholder-is-safe guarantee as `baseline_w=0.0` above --
             # this ctx never reaches `_apply_peak_clamp`/`_escalated_maximum_permitted_rate_a`
-            # (see the docstring below), so a placeholder here decides nothing.
+            # (see this method's own docstring above), so a placeholder here decides nothing.
             smoothed_baseline_w=0.0,
             ev_soc=ev_soc,
             surplus_w=surplus_w,

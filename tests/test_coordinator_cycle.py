@@ -58,8 +58,9 @@ def _config(**overrides) -> SmartChargingConfig:
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
     """CycleContext (ADR-0012) exposes all defaulted fields with their documented starting
-    values -- the required fields (status/net_w/charger_w/voltage/now/baseline_w, issue #990)
-    construct with no defaults. `surplus_w` starts at a meaningful zero-surplus value (the value
+    values -- the required fields (status/net_w/charger_w/voltage/now/baseline_w/
+    smoothed_baseline_w, issues #990 and #1189/T10) construct with no defaults. `surplus_w`
+    starts at a meaningful zero-surplus value (the value
     _run_cycle's old loose locals used to start with); the four bool fields keep their original,
     genuinely-correct starting values (only ever read via plain truthiness, so `None` would buy
     no fail-loudness and would silently invert `low_tariff_active`'s documented-correct `True`
@@ -1030,7 +1031,9 @@ def _resolve_deadline_urgency(**overrides):
     mode_desired_current = kwargs.pop("mode_desired_current")
     ctx_kwargs = {name: kwargs.pop(name) for name in _CTX_FIELD_NAMES}
     # net_w/charger_w/now/baseline_w/smoothed_baseline_w: unused by resolve_deadline_urgency,
-    # just CycleContext's own other required fields.
+    # just CycleContext's own other required fields -- this ctx exercises neither of
+    # coordinator.py's two production construction sites (issue #1189/T10's own dry-run-site
+    # comment), so no placeholder value here stands in for either.
     ctx = CycleContext(
         status=kwargs.pop("status"),
         net_w=0.0,

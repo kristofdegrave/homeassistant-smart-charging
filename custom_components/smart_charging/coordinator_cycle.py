@@ -63,8 +63,8 @@ class CycleContext:
 
     status: str
     net_w: float  # raw, not the smoothed reading (coordinator.py's separate, joint
-    # smoothed_household_w, ADR-0049) -- read by coordinator.py's two clamps, off this same ctx
-    # (issue #719)
+    # smoothed_household_w, ADR-0049 -- also carried on this ctx as smoothed_baseline_w below,
+    # issue #1189/T10) -- read by coordinator.py's two clamps, off this same ctx (issue #719)
     charger_w: float  # read by coordinator.py's two clamps, off this same ctx (issue #719)
     voltage: float
     now: float
