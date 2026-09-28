@@ -4938,13 +4938,16 @@ async def test_should_follow_a_pending_pursued_occurrence_to_its_dates_new_depar
     pattern), so urgency can never clear via the handback and only R5's own move/hold/release
     machinery is on trial.
 
-    Three cycles: engage for today's 07:00; at 06:00 re-seed today's departure to 09:00, which
-    must move the pursued occurrence rather than hold it against the old time; at 07:00:30 --
-    after the OLD 07:00 has passed -- the System must still be judging the MOVED 09:00
-    occurrence, not sitting in a missed-deadline hold for the time that was replaced.
+    Three cycles, using relative offsets from `now` rather than fixed clock times (R5's own
+    example, restated in those terms): engage for a departure 66 minutes out; 6 minutes later,
+    re-seed that SAME date's departure to 3 hours out, which must move the pursued occurrence
+    rather than hold it against the old time; 30 seconds after the OLD (engaged) occurrence's
+    own time has passed, the System must still be judging the MOVED occurrence, not sitting in
+    a missed-deadline hold for the time that was replaced.
 
-    Fails on main: the occurrence stays 07:00 (`deadline.py`'s "Preserved, never re-anchored"),
-    so cycle 3 reaches the hold branch at 07:00:30 instead of following the move.
+    A wrong implementation that left the occurrence at its engaged value (`deadline.py`'s
+    former "Preserved, never re-anchored") would reach the hold branch on cycle 3 instead of
+    following the move -- unreachable, with `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` firing.
     """
     # Arrange -- 75 kWh * (80-75)% = 3.75 kWh, chosen so the required current at each cycle
     # sits between the slack-engage threshold and the escalated ceiling (12.8 A / 16 A here),
@@ -4970,19 +4973,18 @@ async def test_should_follow_a_pending_pursued_occurrence_to_its_dates_new_depar
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    # Act -- cycle 1 (today's "07:00"): today's departure is 66 min out -- 3750 Wh / 1.1 h /
-    # 230 V ~= 14.82 A, over the 12.8 A slack threshold and under the 16 A escalated ceiling.
-    # Engages.
+    # Act -- cycle 1: today's departure is 66 min out -- 3750 Wh / 1.1 h / 230 V ~= 14.82 A,
+    # over the 12.8 A slack threshold and under the 16 A escalated ceiling. Engages.
     _seed_today_deadline(coord, hours_from_now=1.1)
     await coord._async_update_data()
     engaged_occurrence = dt_util.now() + timedelta(hours=1.1)
     assert coord._required_current.urgent is True
     assert coord._pursued_occurrence == engaged_occurrence
 
-    # Act -- cycle 2 (today's "06:00", 6 min later): today's departure is re-seeded to 3 h out
-    # -- past the engaged occurrence's own old time -- still ahead of `now`. The move is
-    # neither a release nor an engagement -- `urgent` stays True (baseline is Off, so the
-    # handback can never fire on its own) -- but the pursued occurrence follows to the new
+    # Act -- cycle 2, 6 minutes later: the SAME date's departure is re-seeded to 3 h out from
+    # this new `now` -- past the engaged occurrence's own old time, still ahead of `now`. The
+    # move is neither a release nor an engagement -- `urgent` stays True (baseline is Off, so
+    # the handback can never fire on its own) -- but the pursued occurrence follows to the new
     # time.
     freezer.move_to(dt_util.now() + timedelta(hours=0.1))
     _seed_today_deadline(coord, hours_from_now=3.0)
@@ -4992,9 +4994,9 @@ async def test_should_follow_a_pending_pursued_occurrence_to_its_dates_new_depar
     assert coord._pursued_occurrence != engaged_occurrence
     assert coord._required_current.urgent is True
 
-    # Act -- cycle 3, 30 s after the OLD (engaged) occurrence has passed. On main this reaches
-    # the hold branch (unreachable) because the occurrence never moved; here it must still be
-    # judging the MOVED occurrence, well ahead of `now`.
+    # Act -- cycle 3, 30 s after the OLD (engaged) occurrence's own time has passed. The
+    # System must still be judging the MOVED occurrence, well ahead of `now`, rather than
+    # holding on the replaced time.
     freezer.move_to(engaged_occurrence + timedelta(seconds=30))
     await coord._async_update_data()
 
@@ -5008,7 +5010,7 @@ async def test_should_follow_a_pending_pursued_occurrence_to_its_dates_new_depar
     assert events == []
 
 
-async def test_should_thread_one_pursued_occurrence_across_engage_hold_and_release(hass, freezer):
+async def test_should_thread_one_pursued_occurrence_across_engage_move_and_release(hass, freezer):
     """R5's urgency state is the occurrence being chased, owned and threaded by the Coordinator
     (control-cycle.md's Trigger section; resolution-rules.md, 'Clearing urgency').
 
@@ -5086,23 +5088,25 @@ def _following_coord(hass, ev_soc=75.0):
     return coord
 
 
-async def test_should_release_at_the_gap_when_tomorrows_own_occurrence_is_unreachable(
+async def test_should_release_when_the_pursued_dates_own_no_deadline_leaves_tomorrow_unreachable(
     hass, freezer
 ):
     """The epic's own gap case (#1451): the pursued occurrence's own date resolving to "no
     deadline" releases through THAT release outright, never falling through to pick up
-    tomorrow's occurrence on the SAME cycle -- however tight that one would be
-    (resolution-rules.md, scope item 4: "it cannot re-engage on another date on the same
-    cycle"). `resolve_next_occurrence` is patched to hand back a near-future occurrence
-    directly -- what a genuinely tight tomorrow would resolve to -- decoupling the assertion
-    from the day-of-week table's own calendar arithmetic (the same technique
-    `test_deadline_unreachable_notified_caps_saturated_required_a_at_max_current` uses)."""
-    # Arrange -- a huge SOC gap, so ANY short window (like the patched near-future occurrence
-    # below) would be unreachable if it were judged.
-    freezer.move_to("2026-01-15 12:00:00")
+    tomorrow's occurrence on the SAME cycle even though that one would be unreachable if it
+    were judged. `now` sits a few minutes before midnight and tomorrow's own default a few
+    minutes after it, so `next_occurrence` genuinely IS tight (a huge SOC gap over ~7 minutes)
+    -- a real arrangement, not a patched return value, so a wrong implementation that fell
+    through to `next_occurrence` would show up as `unreachable=True` rather than the release
+    this test pins."""
+    # Arrange -- a huge SOC gap, so tomorrow's real 7-minute-out occurrence would be
+    # unreachable if it were judged; today's own date resolves "no deadline"
+    # (departure_dow_defaults left unset for it).
+    freezer.move_to("2026-01-15 23:55:00")
     coord = _following_coord(hass, ev_soc=0.0)
-    coord._pursued_occurrence = dt_util.now() + timedelta(hours=1)  # today, still ahead
-    # Today's own date resolves "no deadline" -- departure_dow_defaults left unset for it.
+    coord._pursued_occurrence = dt_util.now() + timedelta(minutes=3)  # today, still ahead
+    tomorrow_weekday = (dt_util.now().weekday() + 1) % 7
+    coord.departure_dow_defaults[tomorrow_weekday] = time_of_day(0, 2)
 
     events = []
 
@@ -5112,14 +5116,8 @@ async def test_should_release_at_the_gap_when_tomorrows_own_occurrence_is_unreac
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    tight_tomorrow = dt_util.now() + timedelta(minutes=5)  # would be unreachable if judged
-
     # Act
-    with patch(
-        "custom_components.smart_charging.coordinator_cycle.resolve_next_occurrence",
-        return_value=tight_tomorrow,
-    ):
-        result = await coord._async_update_data()
+    result = await coord._async_update_data()
 
     # Assert -- released, not re-engaged on the tight occurrence; the effective peak limit
     # falls back to its Normal row (the floor, since nothing is seeded).
@@ -5136,10 +5134,18 @@ async def test_should_release_from_unreachable_when_the_pursued_dates_own_resolu
     """ADR-0024: a release from `Unreachable` -- here via the pursued date's own resolution
     going to "no deadline" rather than the ordinary handback -- fires
     `EVENT_DEADLINE_UNREACHABLE_CLEARED` exactly once, off the same edge every other exit
-    shares."""
+    shares.
+
+    Tomorrow's own default is seeded to a real time (18:00, ~30 h out from cycle 2's `now`,
+    comfortably reachable) and left set throughout: if the release were merely the ordinary
+    `resolve_next_occurrence`-is-None path rather than the pursued date's OWN resolution being
+    withdrawn, tomorrow's real default would make `next_occurrence` resolve to something other
+    than None, and this test would then fail instead of passing for the wrong reason.
+    """
     freezer.move_to("2026-01-15 12:00:00")
     coord = _following_coord(hass, ev_soc=0.0)
     weekday = dt_util.now().weekday()
+    coord.departure_dow_defaults[(weekday + 1) % 7] = time_of_day(18, 0)
     cleared = _listen_cleared(hass)
 
     # Act -- cycle 1: a huge SOC gap over a 1 h window is unreachable outright, and pursues.
@@ -5148,7 +5154,8 @@ async def test_should_release_from_unreachable_when_the_pursued_dates_own_resolu
     assert coord._required_current.unreachable is True
     assert len(cleared) == 0
 
-    # Act -- cycle 2: today's own date is cleared to "no deadline" -- released.
+    # Act -- cycle 2: today's own date is cleared to "no deadline" -- released, even though
+    # tomorrow's own default (still set) resolves to a real, reachable time.
     coord.departure_dow_defaults[weekday] = None
     await coord._async_update_data()
 
@@ -5196,7 +5203,14 @@ async def test_should_take_urgent_to_unreachable_and_notify_on_an_earlier_still_
     """An earlier move that is STILL AHEAD of `now` (not a hold) can nonetheless tighten the
     window enough to cross into `Unreachable` on this same cycle, firing
     `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` off `unreachable`'s own True->True re-fire (every
-    cycle it holds, not only the edge, per UC05's domain-events section)."""
+    cycle it holds, not only the edge, per UC05's domain-events section).
+
+    Also asserts `coord._pursued_occurrence` moved to the new, earlier time: the freezer never
+    advances between cycles, so `resolve_next_occurrence` alone would recompute the SAME tight
+    `deadline_at` from the freshly re-seeded default even without `follow_pursued_occurrence`
+    threading the moved value through as its own successor -- only the pursued-occurrence
+    assertion tells the two apart.
+    """
     freezer.move_to("2026-01-15 12:00:00")
     coord = _following_coord(hass)
 
@@ -5217,17 +5231,23 @@ async def test_should_take_urgent_to_unreachable_and_notify_on_an_earlier_still_
     # Act -- cycle 2: today's departure moves earlier, to 12 minutes out -- still ahead of
     # `now`, but far too tight (3750 Wh / 0.2 h / 230 V ~= 81.5 A).
     _seed_today_deadline(coord, hours_from_now=0.2)
+    moved_occurrence = dt_util.now() + timedelta(hours=0.2)
     await coord._async_update_data()
 
     # Assert
     assert coord._required_current.unreachable is True
+    assert coord._pursued_occurrence == moved_occurrence
     assert len(events) == 1
 
 
 async def test_should_take_unreachable_to_urgent_and_clear_on_a_later_move(hass, freezer):
     """The mirror of the case above: a later move that brings the window back within the
     escalated ceiling takes `Unreachable` back to `Urgent` and fires
-    `EVENT_DEADLINE_UNREACHABLE_CLEARED` exactly once (ADR-0024)."""
+    `EVENT_DEADLINE_UNREACHABLE_CLEARED` exactly once (ADR-0024).
+
+    Also asserts `coord._pursued_occurrence` moved to the new, later time, for the same reason
+    the earlier-move test above does.
+    """
     freezer.move_to("2026-01-15 12:00:00")
     coord = _following_coord(hass)
     cleared = _listen_cleared(hass)
@@ -5241,11 +5261,13 @@ async def test_should_take_unreachable_to_urgent_and_clear_on_a_later_move(hass,
     # Act -- cycle 2: today's departure moves out to 6 h -- ~5.43 A, comfortably reachable,
     # though still Urgent (Off baseline never hands back on its own).
     _seed_today_deadline(coord, hours_from_now=6)
+    moved_occurrence = dt_util.now() + timedelta(hours=6)
     await coord._async_update_data()
 
     # Assert
     assert coord._required_current.unreachable is False
     assert coord._required_current.urgent is True
+    assert coord._pursued_occurrence == moved_occurrence
     assert len(cleared) == 1
 
 
@@ -5266,6 +5288,39 @@ async def test_should_move_nothing_when_the_pursued_occurrence_has_already_elaps
     # Assert -- unmoved.
     assert coord._required_current.pursued_occurrence == elapsed
     assert coord._pursued_occurrence == elapsed
+
+
+async def test_should_move_a_pursued_occurrence_dated_tomorrow_to_tomorrows_own_new_time(
+    hass, freezer
+):
+    """`_resolve_departure_on_pursued_date` (coordinator.py) resolves R14 for
+    `self._pursued_occurrence.date()` -- the pursued occurrence's OWN date, not today's. Every
+    other test in this section pursues an occurrence dated today, where that distinction is
+    invisible; this one pursues an occurrence dated TOMORROW, still comfortably ahead of `now`
+    so only the move (not a hold) is on trial, and re-seeds TOMORROW's own default -- not
+    today's, which stays unset ("no deadline") throughout. A mutation that resolved
+    `today_date` instead of the pursued occurrence's own date would look up today's unset
+    default and wrongly release, rather than following tomorrow's own re-seeded time."""
+    # Arrange -- pursued for tomorrow at 06:00, ~18 h ahead of `now`.
+    freezer.move_to("2026-01-15 12:00:00")
+    coord = _following_coord(hass)
+    tomorrow_date = dt_util.now().date() + timedelta(days=1)
+    coord._pursued_occurrence = datetime.combine(
+        tomorrow_date, time_of_day(6, 0), tzinfo=dt_util.now().tzinfo
+    )
+    tomorrow_weekday = tomorrow_date.weekday()
+
+    # Act -- tomorrow's OWN default (the pursued date) is re-seeded to a later time on the
+    # same date. Today's own default (a `today_date` mutation's target) is never set.
+    coord.departure_dow_defaults[tomorrow_weekday] = time_of_day(9, 0)
+    moved_occurrence = datetime.combine(
+        tomorrow_date, time_of_day(9, 0), tzinfo=dt_util.now().tzinfo
+    )
+    await coord._async_update_data()
+
+    # Assert -- followed onto tomorrow's own new time, not released.
+    assert coord._pursued_occurrence == moved_occurrence
+    assert coord._required_current.urgent is True
 
 
 async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable(

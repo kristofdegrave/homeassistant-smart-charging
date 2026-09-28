@@ -1315,14 +1315,15 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     occurrence can account for the difference. It is the one the deadline below resolves to,
     and still ahead of `now_dt`, so this is ordinary urgency rather than a missed-deadline hold.
 
-    `departure_on_pursued_date` is set to that same 11:00, since the pursued occurrence's own
-    date is today (D1/D2, #1481): otherwise `follow_pursued_occurrence` would read its default
-    `None` as "no deadline" and release rather than hold.
+    `departure_on_pursued_date` is passed only for the `threaded` call, set to that same 11:00
+    since the pursued occurrence's own date is today (D1/D2, #1481): otherwise
+    `follow_pursued_occurrence` would read its default `None` as "no deadline" and release
+    rather than hold. Left at its own `None` default for `without`, matching the field's
+    contract ("`None` whenever nothing is pursued") since `pursued_occurrence=None` there.
     """
     # Arrange
     ample_slack = dict(
         deadline_today=time(11, 0),
-        departure_on_pursued_date=time(11, 0),
         ev_soc=50.0,
         active_soc_limit=80.0,
         effective_battery_capacity_kwh=10.0,
@@ -1333,7 +1334,9 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
 
     # Act
     without = _resolve_deadline_urgency(pursued_occurrence=None, **ample_slack)
-    threaded = _resolve_deadline_urgency(pursued_occurrence=pursued, **ample_slack)
+    threaded = _resolve_deadline_urgency(
+        pursued_occurrence=pursued, departure_on_pursued_date=time(11, 0), **ample_slack
+    )
 
     # Assert
     assert without.urgent is False
@@ -1341,29 +1344,32 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
 
 
 def test_should_release_on_the_pursued_dates_no_deadline_even_when_tomorrow_would_be_unreachable():
-    """D1/D3/#1481: the pursued occurrence's own date resolving to "no deadline" releases
-    through `resolve_required_current`'s ordinary `deadline_at is None` branch -- `Normal` on
-    THIS cycle -- rather than falling through to tomorrow's occurrence, however tight that one
-    is (resolution-rules.md, scope item 4: "it cannot re-engage on another date on the same
-    cycle"). `deadline_tomorrow` is set tight enough to be unreachable on its own, so a wrong
-    implementation that re-derived urgency from `resolve_next_occurrence` here would show up as
-    `unreachable=True` instead of the release this test pins.
+    """D1/D3/#1481 (epic #1451's scope item 4): the pursued occurrence's own date resolving to
+    "no deadline" releases through `resolve_required_current`'s ordinary `deadline_at is None`
+    branch -- `Normal` on THIS cycle -- rather than falling through to tomorrow's occurrence,
+    however tight that one is. `now_dt` is placed a few minutes before midnight and
+    `deadline_tomorrow` a few minutes after it, so `next_occurrence` genuinely IS tight
+    (~7.5 kWh over 7 minutes) if a wrong implementation used it as `deadline_at` instead of
+    discarding it -- that mutation would show up as `unreachable=True` in place of the release
+    this test pins. (An earlier version of this test placed `now_dt`/`deadline_tomorrow` ~24 h
+    apart, which produced a harmless required current either way and could not have caught
+    that mutation.)
     """
-    # Arrange -- pursued for today at 11:00, still ahead of `now_dt`; today's own resolution is
-    # withdrawn (`departure_on_pursued_date=None`); tomorrow's departure is 6 minutes out, an
-    # impossible window for any positive SOC gap.
-    pursued = datetime(2026, 7, 27, 11, 0)
+    # Arrange -- pursued for today (2026-07-27) at 23:58, still ahead of `now_dt`; today's own
+    # resolution is withdrawn (`departure_on_pursued_date=None`); tomorrow's departure is 7
+    # minutes out from `now_dt`, an impossible window for this SOC gap.
+    pursued = datetime(2026, 7, 27, 23, 58)
 
     # Act
     released = _resolve_deadline_urgency(
         pursued_occurrence=pursued,
         departure_on_pursued_date=None,
-        deadline_today=time(11, 0),
-        deadline_tomorrow=time(10, 6),
-        now_dt=datetime(2026, 7, 27, 10, 0),
+        deadline_today=None,
+        deadline_tomorrow=time(0, 2),
+        now_dt=datetime(2026, 7, 27, 23, 55),
         ev_soc=50.0,
         active_soc_limit=80.0,
-        effective_battery_capacity_kwh=10.0,
+        effective_battery_capacity_kwh=100.0,
         escalated_maximum_permitted_rate_a=32.0,
     )
 

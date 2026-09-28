@@ -181,9 +181,10 @@ def follow_pursued_occurrence(
       no change read on that cycle or later moves it" (resolution-rules.md) -- the existing
       guard this task does not touch.
     - **Its date resolves to "no deadline"** (`departure_on_pursued_date is None`):
-      `(None, None)`. `resolve_required_current`'s own `deadline_at is None` branch returns
-      `Normal`, so the release goes "through the 'no deadline' release above" -- it cannot
-      re-engage on another date on the same cycle (resolution-rules.md).
+      `(None, None)`. `resolve_required_current`'s own `deadline_at is None` branch then
+      returns `Normal` -- "the date resolving to 'no deadline' is the release above"
+      (resolution-rules.md) -- and it cannot re-engage on another date on the same cycle
+      (epic #1451's own scope item 4), since `next_occurrence` is discarded entirely here.
     - **Otherwise**: the pursued occurrence's own date, combined with today's freshly resolved
       departure time for that date -- `moved = datetime.combine(pursued_occurrence.date(),
       departure_on_pursued_date, tzinfo=pursued_occurrence.tzinfo)` -- returned as
@@ -407,12 +408,13 @@ def resolve_required_current(
         # or imminent deadline carries no urgency regardless of time remaining.
         required_a = 0.0
     elif remaining_hours <= 0:
-        # Near-unreachable from the control cycle: `resolve_next_occurrence` returns an
-        # occurrence strictly after `now` by wall clock, which is also after it absolutely
-        # except inside a fall-back repeated hour (see that function's docstring). Kept both
-        # for that corner and because this is a public pure function -- an elapsed
-        # `deadline_at` passed in directly saturates to maximum urgency rather than raising
-        # ZeroDivisionError.
+        # Near-unreachable from the control cycle: `deadline_at` is either
+        # `resolve_next_occurrence`'s result -- strictly after `now` by wall clock, which is
+        # also after it absolutely except inside a fall-back repeated hour (see that
+        # function's docstring) -- or `follow_pursued_occurrence`'s `moved`, which a still-past
+        # `now` reaches the hold branch above for instead. Kept both for that corner and
+        # because this is a public pure function -- an elapsed `deadline_at` passed in directly
+        # saturates to maximum urgency rather than raising ZeroDivisionError.
         required_a = float("inf")
     else:
         power_w = (energy_needed_kwh * 1000) / remaining_hours

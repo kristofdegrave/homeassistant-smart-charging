@@ -447,10 +447,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
         bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
         flag currently applies to (at most today's and tomorrow's at once). Resolving today's,
-        calendar tomorrow's, the reserved day's and the day-after-the-pursued-occurrence's
-        deadline are four separate calls to the same closure, one per date, so each reads the
-        home-day flag for its own date and none can leak into another -- which is what fixes the
-        flag set in the evening for tomorrow also overriding today's resolution."""
+        calendar tomorrow's, the reserved day's, the day-after-the-pursued-occurrence's and the
+        pursued occurrence's own date's deadline are five separate calls to the same closure,
+        one per date, so each reads the home-day flag for its own date and none can leak into
+        another -- which is what fixes the flag set in the evening for tomorrow also
+        overriding today's resolution."""
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
@@ -470,10 +471,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # R14's four-row table, evaluated for a given calendar date -- shared by today's
         # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule), the
-        # reserved day's (R9's precondition, UC07) and the day after the pursued occurrence's
-        # (R5's backstop, T7's `_resolve_following_occurrence`), so the other six args can
-        # never drift apart between call sites. NF14: the home-day row is looked up for THIS
-        # date alone, never for "whichever the flag was last read for".
+        # reserved day's (R9's precondition, UC07), the day after the pursued occurrence's
+        # (R5's backstop, T7's `_resolve_following_occurrence`) and the pursued occurrence's
+        # own date's (R5's following-its-own-date rule, `_resolve_departure_on_pursued_date`,
+        # #1481), so the other six args can never drift apart between call sites. NF14: the
+        # home-day row is looked up for THIS date alone, never for "whichever the flag was
+        # last read for".
         def resolve_deadline_for(target_date: date) -> time_of_day | None:
             return resolve_departure_deadline(
                 external_configured,
