@@ -28,6 +28,7 @@ from .const import (
 from .engines.capability_gate import resolve_available_modes
 from .engines.deadline import (
     RequiredCurrentResult,
+    follow_pursued_occurrence,
     missed_deadline_backstop_fired,
     resolve_next_occurrence,
     resolve_required_current,
@@ -649,6 +650,11 @@ class DeadlineUrgencyInputs:
     # R5's backstop reads this alongside the 24-hour bound -- the hold releases as soon as
     # EITHER arm fires, whichever comes first (missed_deadline_backstop_fired, below).
     following_occurrence: datetime | None
+    # The R14 table's own resolution for the pursued occurrence's OWN date, or None -- fed
+    # into `follow_pursued_occurrence` (D1) so a pending pursued occurrence follows its own
+    # date's departure time (resolution-rules.md). Not gated on `deadline_resolvable`: F2
+    # (#1482) needs it on a no-reading cycle too. `None` whenever nothing is pursued.
+    departure_on_pursued_date: time | None
     auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
@@ -765,12 +771,25 @@ def resolve_deadline_urgency(
     # which is exactly what `datetime.combine` needs. This deliberately replaces the earlier
     # strip-to-naive approach: now that the window can span midnight it routinely straddles
     # 02:00, so a DST transition inside it stopped being a twice-a-year same-day edge case.
-    required = resolve_required_current(
-        resolve_next_occurrence(
+    #
+    # D3: `follow_pursued_occurrence` (R5) decides which occurrence `resolve_required_current`
+    # judges against -- `resolve_next_occurrence`'s result while nothing is pursued or a hold
+    # is live, or the pursued occurrence's own date's freshly resolved departure time while it
+    # is still pending. Both of its outputs are threaded straight into
+    # `resolve_required_current`'s `deadline_at`/`pursued_occurrence` parameters -- it is the
+    # one call that decides which occurrence each carries this cycle.
+    deadline_at, pursued_occurrence = follow_pursued_occurrence(
+        pursued_occurrence=inputs.pursued_occurrence,
+        departure_on_pursued_date=inputs.departure_on_pursued_date,
+        next_occurrence=resolve_next_occurrence(
             deadline_today=inputs.deadline_today,
             deadline_tomorrow=inputs.deadline_tomorrow,
             now=inputs.now_dt,
         ),
+        now=inputs.now_dt,
+    )
+    required = resolve_required_current(
+        deadline_at,
         inputs.now_dt,
         soc=ctx.ev_soc,
         active_soc_limit=ctx.active_soc_limit,
@@ -783,7 +802,7 @@ def resolve_deadline_urgency(
         # stopped being true when R5's engage condition became a comparison against this rate:
         # it is now the threshold urgency itself turns on, not just the notification's.
         escalated_maximum_permitted_rate_a=inputs.escalated_maximum_permitted_rate_a,
-        pursued_occurrence=inputs.pursued_occurrence,
+        pursued_occurrence=pursued_occurrence,
         following_occurrence=inputs.following_occurrence,
     )
 

@@ -4,11 +4,14 @@ Departure-deadline resolution (R14): a four-row priority table -- external senso
 holiday override -> home-day override -> day-of-week default. Any row, including the
 terminal default, may resolve to `None` ("no deadline").
 
-`resolve_next_occurrence` turns R14's per-day resolutions into the single *next* occurrence
-the urgency criteria are judged against (requirements.md R5: "never an occurrence that has
-already passed today"), and `resolve_required_current` implements R5/R15's required-current
-formula and the Normal/Urgent/Unreachable state boundaries (UC05's state model) against
-that already-resolved datetime.
+`resolve_next_occurrence` turns R14's per-day resolutions into the occurrence urgency ENGAGES
+on (requirements.md R5: "never an occurrence that has already passed today"). Once a pursued
+occurrence exists, `follow_pursued_occurrence` is what it is judged against instead, for as
+long as it has not elapsed -- its own date's departure time, re-resolved every cycle
+(resolution-rules.md, 'A pursued occurrence that has not yet elapsed follows its own date's
+departure time'). `resolve_required_current` implements R5/R15's required-current formula and
+the Normal/Urgent/Unreachable state boundaries (UC05's state model) against whichever of the
+two a caller resolves and passes in as `deadline_at`.
 
 Splitting the two is what fixes issue #1005. `resolve_required_current` used to take a bare
 `time` and combine it with `now`'s own calendar date, with no next-day rollover: a departure
@@ -135,11 +138,12 @@ def resolve_next_occurrence(
     length of the repeated hour, and the saturation is capped before it reaches any user-facing
     payload -- but it is reachable, not impossible.
 
-    R5's missed-deadline hold -- the one documented case that keeps pursuing the occurrence
-    that has just elapsed -- is deliberately not modelled here: this function always resolves
-    the NEXT occurrence, and the hold is read off the pursued occurrence that
-    `resolve_required_current` carries, which cannot be inferred from these two readings
-    alone.
+    R5's missed-deadline hold -- one of two cases that keep pursuing an occurrence other than
+    the next one, the other being a pending pursued occurrence following its own date's
+    departure time (`follow_pursued_occurrence`, below) -- is deliberately not modelled here:
+    this function always resolves the NEXT occurrence, and the hold is read off the pursued
+    occurrence that `resolve_required_current` carries, which cannot be inferred from these two
+    readings alone.
     """
     if deadline_today is not None:
         today_at = datetime.combine(now.date(), deadline_today, tzinfo=now.tzinfo)
@@ -150,6 +154,59 @@ def resolve_next_occurrence(
             now.date() + timedelta(days=1), deadline_tomorrow, tzinfo=now.tzinfo
         )
     return None
+
+
+def follow_pursued_occurrence(
+    pursued_occurrence: datetime | None,
+    departure_on_pursued_date: time | None,
+    next_occurrence: datetime | None,
+    now: datetime,
+) -> tuple[datetime | None, datetime | None]:
+    """R5, authoritative: "A pursued occurrence that has not yet elapsed follows its own
+    date's departure time" (resolution-rules.md). While an occurrence is pursued and has not
+    elapsed, it is not `resolve_next_occurrence`'s result that `resolve_required_current`
+    should judge against -- it is R14's own table, re-resolved for THAT occurrence's calendar
+    date on this cycle. This function is that re-resolution, called every cycle whether or not
+    anything is pursued; its caller feeds both outputs straight into
+    `resolve_required_current`'s `deadline_at`/`pursued_occurrence` parameters.
+
+    Returns `(deadline_at, pursued_occurrence)`:
+
+    - **No occurrence pursued** (`pursued_occurrence is None`): `(next_occurrence, None)` --
+      nothing to follow, so R5's ordinary next-occurrence rule governs unchanged.
+    - **Elapsed entering the cycle** (`pursued_occurrence <= now`, the same comparison
+      `resolve_required_current`'s hold branch makes): `(next_occurrence, pursued_occurrence)`,
+      unchanged. "Whether it has elapsed is judged against the occurrence as it stood entering
+      the cycle... once that occurrence is at or before now it is a missed-deadline hold, and
+      no change read on that cycle or later moves it" (resolution-rules.md) -- the existing
+      guard this task does not touch.
+    - **Its date resolves to "no deadline"** (`departure_on_pursued_date is None`):
+      `(None, None)`. `resolve_required_current`'s own `deadline_at is None` branch returns
+      `Normal`, so the release goes "through the 'no deadline' release above" -- it cannot
+      re-engage on another date on the same cycle (resolution-rules.md).
+    - **Otherwise**: the pursued occurrence's own date, combined with today's freshly resolved
+      departure time for that date -- `moved = datetime.combine(pursued_occurrence.date(),
+      departure_on_pursued_date, tzinfo=pursued_occurrence.tzinfo)` -- returned as
+      `(moved, moved)`. Feeding `moved` back in as `pursued_occurrence` too is what makes the
+      move "neither a release nor an engagement" (resolution-rules.md): `resolve_required_current`
+      threads it straight through as its own successor rather than re-anchoring to
+      `next_occurrence`. A `moved` at or before `now` reaches the hold branch on this very
+      cycle -- a new time already past begins the missed-deadline hold (resolution-rules.md) --
+      and the backstop's 24 hours are then measured from `moved`, not the original occurrence.
+
+    `combine` with `fold=0` has the DST behaviour `resolve_next_occurrence`'s docstring already
+    documents.
+    """
+    if pursued_occurrence is None:
+        return next_occurrence, None
+    if pursued_occurrence <= now:
+        return next_occurrence, pursued_occurrence
+    if departure_on_pursued_date is None:
+        return None, None
+    moved = datetime.combine(
+        pursued_occurrence.date(), departure_on_pursued_date, tzinfo=pursued_occurrence.tzinfo
+    )
+    return moved, moved
 
 
 @dataclass(frozen=True)
@@ -232,9 +289,10 @@ def resolve_required_current(
         time_remaining = deadline_at - now
         required_a = energy_needed / time_remaining, W -> A via `voltage`
 
-    `deadline_at` is the already-chosen next occurrence (`resolve_next_occurrence`), not a
-    bare time-of-day this function has to guess a date for -- see the module docstring for why
-    that guess was wrong.
+    `deadline_at` is an already-chosen datetime -- `resolve_next_occurrence`'s result while
+    nothing is pursued or a hold is live, `follow_pursued_occurrence`'s while a pending pursued
+    occurrence is being followed -- never a bare time-of-day this function has to guess a date
+    for; see the module docstring for why that guess was wrong.
 
     `time_remaining` is an ABSOLUTE duration, normalised to UTC first when both sides are
     aware. Subtracting two aware datetimes that share a tzinfo object does NOT do this on its
@@ -370,10 +428,14 @@ def resolve_required_current(
     else:
         urgent = slack_test_holds
 
-    # Preserved, never re-anchored: `resolve_next_occurrence` always yields an occurrence
-    # strictly after `now`, so re-deriving this from `deadline_at` each cycle would make a
-    # missed-deadline hold unreachable in production (resolution-rules.md, 'It is anchored to
-    # the occurrence already missed').
+    # `pursued_occurrence` is threaded straight through as this function's own successor
+    # rather than re-derived from `deadline_at` -- the caller (`follow_pursued_occurrence`) is
+    # what decides which occurrence the two parameters carry each cycle, including moving both
+    # together onto a pending pursued occurrence's own newly resolved departure time
+    # (resolution-rules.md, 'A pursued occurrence that has not yet elapsed follows its own
+    # date's departure time'). Falling back to `deadline_at` covers the plain engage case,
+    # where nothing was pursued entering the cycle and `deadline_at` is
+    # `resolve_next_occurrence`'s own result.
     successor = (
         (pursued_occurrence if pursued_occurrence is not None else deadline_at) if urgent else None
     )

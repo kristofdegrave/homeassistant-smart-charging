@@ -1036,6 +1036,7 @@ def _resolve_deadline_urgency(**overrides):
         escalated_maximum_permitted_rate_a=32.0,
         pursued_occurrence=None,
         following_occurrence=None,
+        departure_on_pursued_date=None,
         # Read by the non-resolvable early return, whose connected half releases the pursued
         # occurrence in the opposite direction to its state-of-charge half -- see the split's
         # own tests below.
@@ -1313,10 +1314,15 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
     occurrence can account for the difference. It is the one the deadline below resolves to,
     and still ahead of `now_dt`, so this is ordinary urgency rather than a missed-deadline hold.
+
+    `departure_on_pursued_date` is set to that same 11:00, since the pursued occurrence's own
+    date is today (D1/D2, #1481): otherwise `follow_pursued_occurrence` would read its default
+    `None` as "no deadline" and release rather than hold.
     """
     # Arrange
     ample_slack = dict(
         deadline_today=time(11, 0),
+        departure_on_pursued_date=time(11, 0),
         ev_soc=50.0,
         active_soc_limit=80.0,
         effective_battery_capacity_kwh=10.0,
@@ -1332,6 +1338,39 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     # Assert
     assert without.urgent is False
     assert threaded.urgent is True
+
+
+def test_should_release_on_the_pursued_dates_no_deadline_even_when_tomorrow_would_be_unreachable():
+    """D1/D3/#1481: the pursued occurrence's own date resolving to "no deadline" releases
+    through `resolve_required_current`'s ordinary `deadline_at is None` branch -- `Normal` on
+    THIS cycle -- rather than falling through to tomorrow's occurrence, however tight that one
+    is (resolution-rules.md, scope item 4: "it cannot re-engage on another date on the same
+    cycle"). `deadline_tomorrow` is set tight enough to be unreachable on its own, so a wrong
+    implementation that re-derived urgency from `resolve_next_occurrence` here would show up as
+    `unreachable=True` instead of the release this test pins.
+    """
+    # Arrange -- pursued for today at 11:00, still ahead of `now_dt`; today's own resolution is
+    # withdrawn (`departure_on_pursued_date=None`); tomorrow's departure is 6 minutes out, an
+    # impossible window for any positive SOC gap.
+    pursued = datetime(2026, 7, 27, 11, 0)
+
+    # Act
+    released = _resolve_deadline_urgency(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=None,
+        deadline_today=time(11, 0),
+        deadline_tomorrow=time(10, 6),
+        now_dt=datetime(2026, 7, 27, 10, 0),
+        ev_soc=50.0,
+        active_soc_limit=80.0,
+        effective_battery_capacity_kwh=10.0,
+        escalated_maximum_permitted_rate_a=32.0,
+    )
+
+    # Assert
+    assert released.urgent is False
+    assert released.required.unreachable is False
+    assert released.required.pursued_occurrence is None
 
 
 def test_should_keep_the_hold_when_no_following_occurrence_resolves():

@@ -576,6 +576,24 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             following_date, following_time, tzinfo=self._pursued_occurrence.tzinfo
         )
 
+    def _resolve_departure_on_pursued_date(
+        self, resolve_deadline_for: Callable[[date], time_of_day | None]
+    ) -> time_of_day | None:
+        """D2/F1: R14's table, evaluated for the pursued occurrence's OWN date -- the fifth
+        call to `resolve_deadline_for` (today's, calendar tomorrow's, the reserved day's and
+        the day after the pursued one being the other four), so this one date's resolution
+        cannot drift from those either. Feeds `follow_pursued_occurrence` (D1,
+        coordinator_cycle.py), which is what makes a pending pursued occurrence follow its own
+        date's departure time (resolution-rules.md).
+
+        Not gated on `deadline_resolvable`: F2 (#1482) needs this on a no-reading cycle too,
+        same shape as `_resolve_following_occurrence` above.
+
+        None whenever there is no pursued occurrence to follow -- nothing to resolve."""
+        if self._pursued_occurrence is None:
+            return None
+        return resolve_deadline_for(self._pursued_occurrence.date())
+
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
         now_dt = dt_util.now()
@@ -823,6 +841,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 ),
                 pursued_occurrence=self._pursued_occurrence,
                 following_occurrence=self._resolve_following_occurrence(resolve_deadline_for),
+                departure_on_pursued_date=self._resolve_departure_on_pursued_date(
+                    resolve_deadline_for
+                ),
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
@@ -882,8 +903,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # The occurrence this cycle's resolution leaves behind, taken from
         # `deadline_urgency.required` rather than re-derived here: the engine's successor, or the
         # non-resolvable early return's split (a disconnect or the 24-hour backstop releases, an
-        # unavailable state of charge holds). Either way the occurrence is never re-anchored onto
-        # a later resolution.
+        # unavailable state of charge holds). While a pursued occurrence is pending it now DOES
+        # move onto its own date's freshly resolved departure time each cycle
+        # (`follow_pursued_occurrence`, D1) -- what stays true is that the move is never a
+        # release or an engagement of its own (resolution-rules.md).
         # Both fault early-returns above sit UPSTREAM of this line, so a fault cycle holds
         # whichever occurrence it entered with rather than releasing it -- the same reasoning
         # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle
