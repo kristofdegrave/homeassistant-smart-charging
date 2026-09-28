@@ -98,7 +98,7 @@ The deadline being reached does not, on its own, move the System toward Normal. 
 | --- | --- | --- |
 | Normal | Dispatched mode's own desired current, unmodified | required current > escalated max permitted rate ÷ 1.25 and ≤ that rate → Urgent (`DeadlineUrgencyEngaged`) · required current > escalated max permitted rate → Unreachable (`DeadlineUnreachableNotified`) |
 | Urgent | `Captar`'s maximum-current request clamped to the maximum permitted rate (`Auto` with CapTar capability, 3a) — or `Power`'s configured target-current request, clamped likewise, best-effort (`Auto` without CapTar capability, 3a′) — or the active mode's own request, clamped to the (raised) maximum permitted rate, not guaranteed to reach the required current (`Manual` with CapTar capability, 3b) — or, without the CapTar capability, that same request bounded only by C1 and C4, unchanged from `Normal` because the raise is a no-op with no peak clamp to widen (`Manual`, 3b′) | handback: baseline's desired current ≥ required current, slack test not holding → Normal (revert) (`DeadlineUrgencyReverted`) · required current > escalated max permitted rate → Unreachable (`DeadlineUnreachableNotified`) · the pursued occurrence elapses, or is moved to a moment already past (5a), with SOC still below the active SOC limit → Unreachable (missed-deadline hold begins) (`DeadlineUnreachableNotified`) · a disconnect, state of charge reaching the active SOC limit, or the resolved deadline — the pursued occurrence's own date (5a) — becoming "no deadline" (including the deadline capability becoming absent, R18) → Normal (`DeadlineUrgencyReverted`) · a cycle on which state of charge is unavailable is not an exit, whether or not it faults: urgency is held and no event fires — though on a cycle that does not fault, the pursued occurrence elapsing, or being moved into the past (5a), still begins the hold above, and its own date resolving to "no deadline" still releases (prose above) |
-| Unreachable | Maximum permitted rate; user notified | required current ≤ escalated max permitted rate → Urgent (`DeadlineUnreachableCleared`) · the handback cannot fire from this state at all — the slack test necessarily holds here and takes precedence, so the deadline must become reachable again first · a disconnect, state of charge reaching the active SOC limit, or the resolved deadline — the pursued occurrence's own date (5a) — becoming "no deadline" (including the deadline capability becoming absent, R18) → Normal (`DeadlineUnreachableCleared` + `DeadlineUrgencyReverted`) · **while a missed-deadline hold is in effect, the required-current exit and the "no deadline" exit do not apply** (no required current is computed, and the hold is anchored to the occurrence already missed): the only exits are then state of charge reaching the active SOC limit, a disconnect, the deadline capability becoming absent (R18), or the backstop — the following occurrence elapses or 24 hours pass since the pursued occurrence, whichever comes first, on a cycle with or without a state of charge but never on a fault cycle → Normal (`DeadlineUnreachableCleared` + `DeadlineUrgencyReverted`) · a cycle on which state of charge is unavailable is not otherwise an exit, whether or not it faults: the state is held and no event fires — though on a cycle that does not fault, the pursued occurrence's own date resolving to "no deadline" before it elapses still ends it → Normal (`DeadlineUnreachableCleared` + `DeadlineUrgencyReverted`) (prose above, ADR-0042) |
+| Unreachable | Maximum permitted rate; user notified | required current ≤ escalated max permitted rate → Urgent (`DeadlineUnreachableCleared`) · the handback cannot fire from this state at all — the slack test necessarily holds here and takes precedence, so the deadline must become reachable again first · a disconnect, state of charge reaching the active SOC limit, or the resolved deadline — the pursued occurrence's own date (5a) — becoming "no deadline" (including the deadline capability becoming absent, R18) → Normal (`DeadlineUnreachableCleared` + `DeadlineUrgencyReverted`) · **while a missed-deadline hold is in effect, the required-current exit and the "no deadline" exit do not apply** (no required current is computed, and the hold is anchored to the occurrence already missed): the only exits are then state of charge reaching the active SOC limit, a disconnect, the deadline capability becoming absent (R18), or the backstop — the following occurrence elapses or 24 hours pass since the pursued occurrence, whichever comes first, on a cycle with or without a state of charge but never on a fault cycle → Normal (`DeadlineUnreachableCleared` + `DeadlineUrgencyReverted`) · a cycle on which state of charge is unavailable is not otherwise an exit, whether or not it faults: the state is held and no transition fires (no exit, no `DeadlineUnreachableCleared`) — yet on a cycle that does not fault, while the pursued occurrence lies in the past (a missed-deadline hold beginning or continuing), `DeadlineUnreachableNotified` still fires, as the onset event does on every cycle its condition holds, sending no second notice; otherwise it does not fire (ADR-0053) — and on a cycle that does not fault, the pursued occurrence's own date resolving to "no deadline" before it elapses still ends it → Normal (`DeadlineUnreachableCleared` + `DeadlineUrgencyReverted`) (prose above, ADR-0042) |
 
 ## Domain events produced
 
@@ -171,12 +171,18 @@ stateDiagram-v2
         exits to Normal, never on Unreachable -> Urgent.
         A cycle with state of charge unavailable is
         not an exit, whether or not it faults: the
-        state is held, urgency included, and nothing
-        fires (ADR-0042). A hold's backstop needs
-        no reading, so it still ends the hold on
-        any cycle that does not fault, and so does
-        the pursued date resolving to no deadline
-        before the occurrence elapses.
+        state is held, urgency included, and no
+        transition fires (ADR-0042). On a cycle that
+        does not fault, while the pursued occurrence
+        lies in the past (a hold beginning or
+        continuing), the onset event
+        DeadlineUnreachableNotified still fires,
+        with no second notice; otherwise it does not
+        fire (ADR-0053). A hold's backstop needs no
+        reading, so it still ends the hold on any
+        cycle that does not fault, and so does the
+        pursued date resolving to no deadline before
+        the occurrence elapses.
     end note
 ```
 
