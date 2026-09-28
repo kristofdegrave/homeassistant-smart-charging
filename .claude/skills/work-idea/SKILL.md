@@ -16,6 +16,9 @@ the spec gate, what a child issue is, and when the idea issue closes — are def
 flow document `CLAUDE.md`'s **Idea-to-product flow** topic routes to. Read it first; this skill
 only sequences those stages and says which skill performs each. Cite it, never restate it.
 
+Every comment this skill posts on an issue starts with `fix`'s `<!-- ai-fix-note -->` marker, by the
+marker rule under `CLAUDE.md`'s **Contribution workflow** section.
+
 ## The cycle
 
 1. **Read the idea issue** — title, body, and anything it links to (docs, related issues). An

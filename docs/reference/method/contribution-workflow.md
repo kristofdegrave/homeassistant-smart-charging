@@ -71,8 +71,8 @@ is gone.
 The chain runs **unattended** from the step it is entered at: implement → review → fix →
 review … → a clean pass or the cap, with no check-in between steps. The session stops at two
 points — a clean pass, or the cap with Critical or Major findings still open and no round
-self-granted — both found by step 2 at the end of its pass, and reports; an unattended run has
-a third, the park `clarify` makes (**Rule C**).
+self-granted — both found by step 2 at the end of its pass, and reports; a run its dispatch says
+is unattended has a third, the park `clarify` makes (**Rule C**).
 It never starts the next issue off the back of the one just finished: the control on
 autonomous artifact-chaining, per issue, not per step.
 
@@ -124,14 +124,12 @@ question with no issue to park on, in its shape.
   own markers (the local round, `ai-fix-`, escalation, self-grant and `autopilot-parked`
   markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
   `unlabeled` one. Every session post carries one — a review's inline comments via its body,
-  else `fix`'s note marker — bar the hold-reason review (**Exit labels** below); an issue
-  comment the session posts carries one too, so a parked question's reader can tell the
-  human's answer. Nothing else
+  else `fix`'s note marker — bar the hold-reason review (**Exit labels** below); every
+  comment the session posts on an issue starts with one, `fix`'s note marker where no other
+  fits, so a parked question's reader can tell the human's answer. Nothing else
   resets the count, a self-grant comment included; no reset event means counting from the
   PR's first review. This is the rule's only statement — the `review` skill's *Count the
   rounds* item is its one procedure.
-  So a round the human grants, or a human review, is never refused by a cap it did not ask
-  for.
 
 ## Exit labels
 
@@ -158,8 +156,9 @@ whichever is then correct.
 On an **issue** the same two labels park work for the human, as ADR-0052 decided:
 `needs-decision` is applied, among others, by `clarify`'s parking rule, in an unattended run,
 and means a question waits for the human's answer; `needs-approval` on an epic asks for a go.
-The human takes an issue's label off, or the next run does on reading the answer — the
-removal is the go. An issue's label says nothing about any PR.
+The human takes an issue's label off; a run removes only `needs-decision`, on an answer
+passing `clarify`'s test, and never an epic's `needs-approval`, whose removal is the human's
+go. An issue's label says nothing about any PR.
 
 **A blocking reason found after the exit puts the PR on hold.** When the session learns, before
 the merge, that a PR carrying `needs-approval` should not merge as it stands:
