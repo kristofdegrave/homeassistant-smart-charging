@@ -113,7 +113,9 @@ temporary log with a unique prefix — `[DEBUG-a4f2]` — so cleanup is one grep
 
 Stop here and report:
 
-1. **Confirmed or refuted**, with the one command and its output.
+1. **Confirmed or refuted**, with the one command and its output. A confirmed claim is placed
+   on a milestone now — on the issue the milestone rule under `CLAUDE.md`'s **Issue
+   conventions** says carries one.
 2. **The minimal reproduction** and the captured symptom.
 3. **The cause** — which hypothesis survived, which were eliminated.
 4. **Where else this shape lives** — the same wrong assumption at sibling call sites, roles or

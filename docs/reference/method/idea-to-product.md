@@ -136,8 +136,8 @@ analysis chain, but **the claim is verified before anything is designed** — th
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
 reproduced is not a defect yet — say so on the issue and stop, rather than designing a fix
 for a behaviour nobody has seen. A reproduced claim is placed on a milestone at once, before
-its fixing artifact is known — on the issue that goes to work, never an `idea` issue; an
-unreproduced one stays unplaced. Once the fixing artifact is known, the issue gains that
+its fixing artifact is known; which issue carries it is the milestone rule in
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Once the fixing artifact is known, the issue gains that
 artifact's context label and re-enters the chain at that artifact's stage.
 
 ### Artifact: the chosen track, written on the issue
@@ -280,7 +280,7 @@ one child per task.
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
 The opening pass's own gate: nothing downstream starts without an issue to run against, and
-what is filed is milestoned. The closing step's: step 2's pass and step 3's read, both
+what is filed for work is milestoned. The closing step's: step 2's pass and step 3's read, both
 complete before any child is filed, and then every task in the body having an issue, filed as
 step 4 says. The **Implementation** stage starts from those issues and from nothing else.
 

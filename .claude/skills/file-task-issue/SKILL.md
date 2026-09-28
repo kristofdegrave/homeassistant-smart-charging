@@ -33,11 +33,10 @@ half-scoped.
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
    per **Tracker mechanics** above.
-3. **Pick the milestone** — a filing field, never left empty on an issue routed to work, as
-   the milestone rule under **Issue conventions** above scopes it: a child of an epic copies the
-   epic's; an epic or a standalone issue is placed on one here — the slice it belongs to, or
-   a new one where none fits, ranked as **Issue conventions** above says and never by this
-   skill's own choice. What a milestone is, and why an unmilestoned issue is a filing defect
+3. **Pick the milestone** — a filing field, set on every issue the milestone rule under
+   **Issue conventions** above says carries one: a child takes its epic's; an epic or a
+   standalone issue the slice it belongs to, or a new one where none fits, ranked as that
+   section says and never by this skill's own choice. What a milestone is, and why an unmilestoned issue is a filing defect
    rather than a neutral state, is that section's too; the flag that sets it, the call that
    creates one and the read-back that confirms the name resolved are **Tracker mechanics**'.
 4. **File it** — setting the milestone and whichever of step 5's edges are already known as
@@ -82,8 +81,7 @@ this skill's own:
 - Stopping after the create call — Size/Estimate are a second step (item 2), and an edge not
   passed as a flag is a second step too (item 5); an issue missing them reads as filed and is
   not.
-- Filing a child without its epic's milestone (item 3) — it then sorts last in the pick
-  order, behind work its epic outranks.
+- Filing a child without its epic's milestone (item 3).
 - Filing a decomposition's children before the agent pass and the human read above. The pass is
   there to catch what lives between tasks, and a task already filed is one it can no longer
   cheaply change.

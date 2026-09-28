@@ -50,9 +50,7 @@ only sequences those stages and says which skill performs each. Cite it, never r
    or the single issue — placed on a milestone, creating one where none fits; which issues
    carry one, and a new one's rank, are the milestone rule under `CLAUDE.md`'s **Issue
    conventions**. A shipped-behaviour issue is placed once its claim is reproduced, per the
-   verification rule under `CLAUDE.md`'s **Idea-to-product flow** — the milestone goes on the
-   issue this step files for it, the one that goes to work, never on the `idea` issue step 8
-   closes.
+   verification rule under `CLAUDE.md`'s **Idea-to-product flow**.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
