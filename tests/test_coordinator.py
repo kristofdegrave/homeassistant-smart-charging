@@ -3223,8 +3223,10 @@ async def test_should_engage_the_solar_reserve_cap_while_a_pursued_occurrence_is
     `resolution-rules.md` calls out as one neither R9 precondition speaks to). Companion to the
     held/released test above: same setup, but the pursued occurrence is still ahead of `now`, so
     the cap must engage on the very first cycle rather than waiting for a hold to release."""
-    # Arrange -- identical to the held/released test above, except the pursued occurrence is
-    # still pending (hours_from_now positive) rather than already elapsed.
+    # Arrange -- same conditions as the held/released test above (profile, mode, sun, forecast,
+    # home day), except the pursued occurrence is still pending (hours_from_now positive rather
+    # than already elapsed) and the SOC is an arbitrary value below the default limit -- SOC is
+    # irrelevant to this case (unlike the held/released test, no release is meant to happen).
     freezer.move_to(dt_util.as_utc(datetime(2026, 1, 15, 20, 0, 0)))
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, sun_state=SUN_STATE_BELOW_HORIZON)
     adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
