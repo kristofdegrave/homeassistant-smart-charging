@@ -64,7 +64,7 @@ author's context. What corrupts a review is the *reviewer* carrying that context
 session: the session that wrote the work may run step 2, because it only dispatches to agents
 that cannot see what it saw and relays what they return. The moment it judges the work itself
 — screening findings before posting, or "checking the reviewer missed nothing" — the separation
-is gone. A fresh **agent**, not a fresh session.
+is gone.
 
 ## Rule B — stop-and-report, per issue
 
@@ -72,8 +72,8 @@ The chain runs **unattended** from the step it is entered at: implement → revi
 review … → a clean pass or the cap, with no check-in between steps. The session stops at exactly
 two points — a clean pass, or the cap with Critical or Major findings still open and no round
 self-granted — both found by step 2 at the end of its pass, and reports.
-It never starts the next issue off the back of the one that just finished; that is the control
-on autonomous artifact-chaining, and it is per issue, not per step.
+It never starts the next issue off the back of the one that just finished; it is per issue, not
+per step.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
@@ -256,8 +256,7 @@ inserted explicitly into step 0/1 here.
 → done**: the session running step 1 moves it to *in progress* when its first child goes
 there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
 it to *done* with the same hand that closes it, which step 4's open-children report prompts
-(**Merge and issue closing** above). A child starting under an epic already *in
-progress* changes nothing.
+(**Merge and issue closing** above).
 
 ## Parallel work and forward dependencies
 
@@ -289,8 +288,7 @@ session's own footprint by the session's markers, never by author.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
-  orthogonal because a defect's fix is not always code: an entity-catalog row claiming a
-  Read-by it does not earn is a `bug` fixed in `docs/analysis/**`. So an issue carries the kind label
+  orthogonal because a defect's fix is not always code. So an issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
@@ -329,8 +327,7 @@ session's own footprint by the session's markers, never by author.
   says the body was cut from a reviewed decomposition rather than typed straight into an issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
-**Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
-(`adr`, `uc`, `requirement`, `development`, `testing`, `workflow`, `documentation`),
+**Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
