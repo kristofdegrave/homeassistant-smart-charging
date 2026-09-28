@@ -139,8 +139,9 @@ are defined in exactly one place the name rule above turns up — `.claude/profi
 `labels`. The same grep returns more hits, in guidance text telling a human what a label means;
 a rename there is a wording fix rather than a sync obligation. What binds instead is the place
 that *applies* them: the lifecycle's two exits, reached through `CLAUDE.md`'s **Contribution
-workflow** section, whose doc names in its **Exit labels** section the one step that applies
-them — so a rename is checked there rather than assumed from here.
+workflow** section, whose doc names in its **Exit labels** section the appliers — the review
+step on a PR, and the parking a work file or skill does on an issue — so a rename is checked
+there rather than assumed from here.
 
 The **kind-of-work labels** (`bug`, `enhancement`) are defined in `.claude/profile.yml`'s
 `labels` and get no `docs/reference/work-types/<label>/` directory, which a kind label never

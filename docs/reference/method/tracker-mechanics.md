@@ -1,14 +1,12 @@
 # Tracker mechanics
 
 The concrete commands for driving this project's tracker — GitHub issues, pull requests,
-review threads, labels, and the project board — in one place, so no artifact has to
-re-derive them and no agent has to rediscover the failure modes below the hard way.
+review threads, labels, and the project board.
 
 **Mechanics only: the how, never the when or the why.** Which work gets an issue, what a
 label means, when a PR is opened, when `needs-approval` goes on — all of that belongs to
 [contribution-workflow.md](contribution-workflow.md) (the lifecycle) and
-[idea-to-product.md](idea-to-product.md) (the stages either side of it). This file assumes the
-decision is already made and answers only "what do I type".
+[idea-to-product.md](idea-to-product.md) (the stages either side of it).
 
 Throughout, the project's own values — repository, board, field and option ids — are **never
 spelled here**. They are `.claude/profile.yml`'s (`repo`, `board`), and the recipes name them
@@ -63,16 +61,12 @@ exists. Two operations have **no** REST equivalent and can only be waited out:
 `gh project item-add` / `item-edit` (board fields) and `resolveReviewThread`.
 
 **Recovering from a refusal.** Two behaviours seen on 2026-09-08 with the limiter tripped.
-Unlike every other recipe in this file they are **reported, not re-executed**: deliberately
-re-tripping the limiter would block whatever else is running against this repo, so neither
-was re-verified when it was written down.
+Unlike every other recipe in this file they are **reported, not re-executed**.
 
 - *The wait is minutes.* The block lifted after roughly **nine minutes**. Retry the call you
   actually need on a 60-second loop rather than parking the work for an hour.
 - *A write can land while its read-back is still refused.* A `gh project item-edit` returned
-  success and the `item-list` meant to confirm it was refused in the same minute — the board
-  pair above, where neither half has a REST fallback to drop to, so the refusal caught the
-  read rather than the write. That is the one state the read-back rule leaves open.
+  success and the `item-list` meant to confirm it was refused in the same minute.
   **Retry the read; do not retry the write.** A board-field edit is idempotent and a blind
   retry of it is merely wasted, but the same middle state reaches writes that are not — a
   comment, a review reply, a sub-issue edge — where the retry posts a duplicate. One rule
@@ -164,11 +158,9 @@ gh api -X PATCH repos/$REPO/issues/<n> \
   -F body=@<path> --jq '.body'
 ```
 
-The body goes in a file, not inline, for the reason *Windows and Git Bash* below gives — and
-`-F body=@<path>` reads the markdown as-is, where `--input <payload.json>` would mean
-hand-escaping it into JSON first. Reach for `--input` here only when the same call is also
-setting `title`, `state` or `labels`. `--jq '.body'` on the PATCH prints the stored body, so
-the call is its own read-back; the independent one is
+The body goes in a file (*Windows and Git Bash* below). Reach for `--input` here only when
+the same call is also setting `title`, `state` or `labels`. `--jq '.body'` on the PATCH prints
+the stored body, so the call is its own read-back; the independent one is
 `gh api repos/$REPO/issues/<n> --jq '.body'`.
 
 ## Finding a work item by its body text
@@ -195,9 +187,7 @@ gh api -X GET search/issues -f per_page=100 --paginate \
   --jq '.items[] | "\(.number) \(.state) \(.title)"'
 ```
 
-`per_page` and `--paginate` are as mandatory here as `--limit` is above, and less obviously so:
-without them this repo's `workflow in:title` search returned 30 items against a `total_count`
-of 89, and a body-text lookup is exactly where a short page reads as "no such issue exists".
+`per_page` and `--paginate` are as mandatory here as `--limit` is above.
 
 `<query>` is the one piece of free text in either recipe, and it goes through the shell in
 both. Pick a distinctive substring that has no apostrophe or em-dash in it rather than pasting
@@ -257,17 +247,13 @@ gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues \
   --jq '.[] | {number, state, title}'
 ```
 
-The second is a listing, so `--paginate` is mandatory here as everywhere in this file — the
-open-children count it feeds is only as complete as the pages read, and a first page that
-happens to be all closed would report zero over open work; the filter is a stream, one object
-per child, for the per-page reason given under *Commenting*.
+The second is a listing, so `--paginate` is mandatory here as everywhere in this file; the
+filter is a stream, one object per child, for the per-page reason given under *Commenting*.
 
 An issue with no parent makes the first call fail with a 404 rather than return an empty
 object — and so does an issue that does not exist, so the status alone cannot say which. The
 message can: `No parent issue found` is a readable issue with no parent, and is "no epic";
-`Not Found` is the issue itself, so report it rather than count on. Both messages were read
-off this repository — an epic, which has no parent, returned the first, and a number past the
-tracker's range returned the second.
+`Not Found` is the issue itself, so report it rather than count on.
 
 ## Commenting on a work item
 
@@ -302,6 +288,24 @@ path — plain `-f` turns the read into a write attempt and comes back `422 "bod
 supplied`. And `--paginate` applies `--jq` per page, so the filter must emit a stream
 (`.[].body`) rather than index into one page.
 
+## Reading a work item's comments by author
+
+Who wrote a comment decides whether a run may act on it; which rule admits one is the work
+file's that reads it. The listing is REST, and the association comes with each item:
+
+```sh
+gh api repos/$REPO/issues/<n>/comments \
+  --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
+```
+
+`author_association` is `OWNER` for the owner, `COLLABORATOR` for a collaborator, `MEMBER`
+for an organization's member on its repositories, and anything else for anyone else; it is
+the platform's answer, so a login typed into a comment's text spoofs nothing. The read-back rule
+is the listing's: `--paginate`, a streaming filter, and the marker test on each body
+([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**) — the
+session posts under the owner's login too, so its own comments pass the author test and fail
+only the marker test.
+
 ## Applying a label
 
 ```sh
@@ -334,6 +338,19 @@ These recipes apply an existing label; they never create or rename one. Which la
 and what they mean is [contribution-workflow.md](contribution-workflow.md)'s **Issue
 conventions**, and the places that vocabulary is baked into are
 [ci-pipeline.md](ci-pipeline.md)'s **Label vocabulary sync**.
+
+## Closing a work item
+
+Only an issue with no pull request is closed by hand — which ones, and by whom, is
+[contribution-workflow.md](contribution-workflow.md)'s **Merge and issue closing**. Post the
+closing comment first (*Commenting* above), then close over REST, which the limiter cannot
+refuse — `gh issue close` is GraphQL and fails silently under it, as *Applying a label* does:
+
+```sh
+gh api -X PATCH repos/$REPO/issues/<n> -f state=closed -f state_reason=completed
+```
+
+Read back with `gh api repos/$REPO/issues/<n> --jq '.state'`, which must print `closed`.
 
 ## Opening a change request
 
