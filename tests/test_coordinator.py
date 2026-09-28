@@ -5632,3 +5632,75 @@ async def test_should_release_the_hold_when_the_day_after_has_elapsed_and_soc_is
     assert coord._pursued_occurrence is None
     assert coord._required_current.urgent is False
     assert result.effective_peak_limit_kw == 2.5
+
+
+async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_already_elapsed(
+    hass, freezer
+):
+    """T11/requirements.md R5's AC: a car connecting AFTER today's departure deadline has
+    already elapsed is never held for it -- it never pursued that occurrence in the first
+    place, since `_pursued_occurrence` starts `None` (`__init__`) and nothing seeds it to a
+    past value on connect. `UC05`'s State model scopes the pursued occurrence to the current
+    connected session, never preserved across a restart or a reload (NF14).
+
+    This is really the coordinator's very first cycle (already `STATE_CHARGING`, no
+    disconnected-to-connected transition modelled) -- equivalent to a genuine connect today,
+    since a disconnect already releases the occurrence
+    (`test_should_release_the_pursued_occurrence_when_the_car_disconnects`) and `__init__`
+    starts it `None` either way.
+
+    Today's own default resolves to a departure time already behind `now`, so a coordinator
+    that (wrongly) fed that stale time straight into `resolve_required_current` as `deadline_at`
+    -- instead of `resolve_next_occurrence` rolling it forward to tomorrow's occurrence, R15 --
+    would see a non-positive `remaining_hours` and saturate `required_a` to infinity, engaging
+    urgency and latching that already-elapsed time as `pursued_occurrence` on the very first
+    connected cycle. A real, sizeable SOC gap (not one already at the active limit) is used so
+    that shortcut would actually show up as urgency, rather than being masked by
+    `soc_at_active_limit`'s own zero-required-current branch. Asserting `required_a` against
+    tomorrow's occurrence (not just the negatives below) is what tells that apart from a
+    regression that dropped the deadline into "no deadline resolved" instead -- the negatives
+    alone read the same in both cases.
+
+    Set up in `Power`, matching this file's other direct-construction deadline tests; the mode
+    plays no part in reaching `deadline_resolvable=True` (`coordinator.py`'s
+    `status in CHARGEABLE_STATES and ev_soc is not None` is mode-independent) -- `Power` is
+    simply this suite's plain baseline for a test that isn't about mode selection.
+    """
+    # Arrange -- freezer.move_to takes a UTC instant; this harness's local zone is US/Pacific
+    # (UTC-8 in January), so 06:00 UTC on the 16th is 22:00 local on the 15th. Today's own
+    # default (17:00) is already elapsed at that local time; tomorrow's (09:00) is a
+    # comfortable ~11h out. The 30-point SOC gap over that ~11h window needs ~8.9A, well under
+    # the 12.8A slack threshold (`max_current=16.0` / (1 + DEADLINE_URGENCY_MARGIN),
+    # config_factory.py's shared factory default) that would engage urgency.
+    ev_battery_capacity_kwh = 75.0
+    voltage = 230.0
+    freezer.move_to("2026-01-16 06:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, voltage=voltage)
+    coord = SmartChargingCoordinator(
+        hass,
+        adapters=adapters,
+        config=_config(ev_battery_capacity_kwh=ev_battery_capacity_kwh),
+        interval_s=30,
+        store=_FakeStore({}),
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(17, 0)  # already past
+    coord.departure_dow_defaults[(now_dt.weekday() + 1) % 7] = time_of_day(9, 0)  # ~11h out
+
+    # Act -- this coordinator's very first cycle: nothing was ever pursued before it.
+    result = await coord._async_update_data()
+
+    # Assert -- never engaged, let alone held on the elapsed time; the required current pins
+    # that tomorrow's 09:00 occurrence is the one actually judged (75kWh * 30% / 11h / 230V),
+    # not merely that nothing went wrong.
+    assert result.fault is False
+    assert coord._pursued_occurrence is None
+    assert coord._required_current.urgent is False
+    assert coord._required_current.unreachable is False
+    assert coord._required_current.required_a == pytest.approx(
+        ev_battery_capacity_kwh * (80.0 - 50.0) / 100 * 1000 / 11 / voltage
+    )
