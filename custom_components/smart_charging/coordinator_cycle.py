@@ -592,11 +592,15 @@ def resolve_solar_reserve_gate(
     activate the cap otherwise -- the engine's own comparison is strict, so 0.0 was never a
     problem).
 
-    `missed_deadline_hold` is R9's sixth precondition (T9/resolution-rules.md's "hold excludes
+    `missed_deadline_hold` is R9's sixth precondition (resolution-rules.md's "hold excludes
     the solar-reserve cap"), threaded straight through to the wrapped engine call -- read by
     the caller (coordinator.py's `_resolve_deadline_and_reserve`) off the pursued occurrence as
     it stood ENTERING the cycle, before that same cycle's urgency call may release it. Defaults
-    to False so a caller that does not yet supply it keeps today's behaviour (D-8's pattern)."""
+    to False, matching `resolve_solar_reserve_active`'s own default (T8) -- the one production
+    caller (above) always supplies the real value, but the plain-pytest tests of this wrapper
+    (tests/test_coordinator_cycle.py) still omit it for every case that does not need to prove
+    it is threaded, so the default stays rather than forcing every one of those call sites to
+    spell out `missed_deadline_hold=False`."""
     if forecast_kwh is None:
         return False
     return resolve_solar_reserve_active(
