@@ -93,10 +93,12 @@ gh issue create --repo $REPO \
 gh project item-add $BOARD --owner $OWNER --url <issue-url> --format json
 ```
 
-A milestone placed or changed later is `gh issue edit <n> --repo $REPO --milestone "<title>"`.
-A new one is `gh api -X POST repos/$REPO/milestones -f title="<title>" --jq .number`, the
-`--jq` printing its number as the read-back. An existing one's number — the REST fallback
-below takes the number, not the title — is
+A milestone placed or changed later is `gh issue edit <n> --repo $REPO --milestone "<title>"`,
+or over REST
+`gh api -X PATCH repos/$REPO/issues/<n> -F milestone=<number> --jq .milestone.title`. A new
+one is `gh api -X POST repos/$REPO/milestones -f title="<title>" --jq .number`, the `--jq`
+printing its number as the read-back. An existing one's number — REST takes the number, not
+the title — is
 
 ```sh
 gh api -X GET -f state=all -f per_page=100 --paginate repos/$REPO/milestones \

@@ -136,9 +136,9 @@ analysis chain, but **the claim is verified before anything is designed** — th
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
 reproduced is not a defect yet — say so on the issue and stop, rather than designing a fix
 for a behaviour nobody has seen. A reproduced claim is placed on a milestone at once, before
-its fixing artifact is known; an unreproduced one stays unplaced. Once the fixing artifact
-is known, the issue gains that artifact's context label and re-enters the chain at that
-artifact's stage.
+its fixing artifact is known — on the issue that goes to work, never an `idea` issue; an
+unreproduced one stays unplaced. Once the fixing artifact is known, the issue gains that
+artifact's context label and re-enters the chain at that artifact's stage.
 
 ### Artifact: the chosen track, written on the issue
 
@@ -195,9 +195,9 @@ and the label/field rules that apply to every child; the `gh` commands are
 [tracker-mechanics.md](tracker-mechanics.md)'s.
 
 **The pass ends with the strand placed on a milestone** — the epic, or the single issue where
-none is filed — a new one where none fits (ADR-0052); nothing enters the backlog
-unmilestoned. What a milestone is, how a new one is ranked, and how filing copies an epic's
-to its children, is **Issue conventions**' above.
+none is filed — a new one where none fits (ADR-0052). The milestone rules — which issues
+carry one, ranking, copying to children — are
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**.
 
 ### The closing step: the epic body is the spec, and its children are the tasks
 

@@ -33,8 +33,8 @@ half-scoped.
    that issue ends up with, and when, is the two-axis rule in that same section. Size/Estimate
    are board fields, not labels: setting them is its own step after the issue is on the board,
    per **Tracker mechanics** above.
-3. **Pick the milestone** — a filing field, never left empty on an issue already routed down
-   a track (an `idea` issue, filed before that, has none yet): a child of an epic copies the
+3. **Pick the milestone** — a filing field, never left empty on an issue routed to work, as
+   the milestone rule under **Issue conventions** above scopes it: a child of an epic copies the
    epic's; an epic or a standalone issue is placed on one here — the slice it belongs to, or
    a new one where none fits, ranked as **Issue conventions** above says and never by this
    skill's own choice. What a milestone is, and why an unmilestoned issue is a filing defect

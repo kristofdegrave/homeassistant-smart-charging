@@ -298,9 +298,7 @@ session's own footprint by the session's markers, never by author.
   row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
-  cross-check an ADR) up at least one tier — it takes more reading than raw effort suggests.
-  **Epics get Size only, never Estimate** — an epic's cost is the sum of its children's
-  estimates.
+  cross-check an ADR) up at least one tier. **Epics get Size only, never Estimate.**
 - **Epic-first for multi-artifact strands**: see [idea-to-product.md](idea-to-product.md)'s
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
@@ -309,13 +307,14 @@ session's own footprint by the session's markers, never by author.
   read-backs that confirm an edge landed, are [tracker-mechanics.md](tracker-mechanics.md)'s.
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N" (would auto-close the epic).
-- **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice, its rank a
-  numeric prefix in the title, never a due date. An epic carries its milestone and filing
-  copies it to each child. Nothing enters the backlog unmilestoned by design —
-  [idea-to-product.md](idea-to-product.md)'s **Decompose** stage ends with new work placed on
-  one — and an unmilestoned issue is picked last, never skipped. A new milestone is created
-  ranked last — the next free prefix after the highest existing one — and only the human
-  partner reorders: the picker's order is theirs. The `gh` flags are
+- **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice ranked by a
+  numeric title prefix — lower first, unprefixed after every prefixed one — never a due date.
+  An epic carries its milestone and filing copies it to each child. Every issue routed to
+  work carries one; an `idea` issue and an unreproduced claim are not work yet
+  ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say when
+  each is placed). Whoever picks the next issue takes an unmilestoned one last, never skips
+  it. A new milestone is ranked last — one past the highest prefix, 1 while none has one —
+  and only the human partner reorders. The `gh` flags are
   [tracker-mechanics.md](tracker-mechanics.md)'s **Filing a work item**.
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
   shipped behaviour also needs an epic whose body carries the spec to exist for it — see
