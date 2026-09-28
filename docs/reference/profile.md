@@ -36,8 +36,18 @@ threads and labels on it, driven with the recipes in
 
 ## Merge strategy
 
-Every PR is **squash-merged, manually**, by the maintainer — `CODEOWNERS` covers every tree and
-branch protection on `main` requires that approval, so no Claude session can merge. **Why the
+Every PR is **squash-merged**. Whose merge it is depends on its trees: a PR whose changed
+files all sit under the auto-merge trees `profile.yml`'s `autopilot.auto_merge_trees` lists
+may be merged by a Claude session, as the maintainer's own account, under the conditions
+[contribution-workflow.md](method/contribution-workflow.md)'s **Commit & push authorization**
+states; every other PR is merged by the maintainer by hand — `CODEOWNERS` covers every tree and
+branch protection on `main` requires that approval, which a session's `--admin` merge
+bypasses. **Why those trees:** they are read by a human later, at the epic-body
+read and at verify live; the analysis, the records and the rules a run works under are the spec
+and stay at the human's gate. **The known limit:** the rule is enforced locally, by the
+`PreToolUse` guard in a Claude session of this repository — not by the platform, which has no
+rule keyed on labels and files; the guard is an accident guard and not a sandbox. That is the
+trade for running merges as one account instead of a bot's. **Why the
 squash matters:** it rewrites the merged branch into one commit, which orphans any branch
 stacked on it. That is the reason [contribution-workflow.md](method/contribution-workflow.md)'s **Base `main` and stacking** has every
 PR base `main` directly, however the work was branched locally.
@@ -58,7 +68,7 @@ be stating a profile value, which the method check refuses:
   issue's branch — or, for an issue with no worktree (an epic, a `decompose` issue), its work
   has.
 - `In review` — the *in review* role: a PR is open; it stays here through every review/fix
-  round and the human's merge decision.
+  round and the merge decision (the human's, or a session's under the merge rule).
 - `Done` — the *done* role: merged and cleaned up — or, for an issue with no PR, closed by
   its owner's hand.
 

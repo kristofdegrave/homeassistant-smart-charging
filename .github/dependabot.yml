@@ -1,8 +1,9 @@
 # Dependabot configuration.
 # Docs: https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
 #
-# Note: per the repo merge policy (CLAUDE.md), Dependabot PRs are never
-# auto-merged — they require explicit manual approval like any other PR.
+# Note: Dependabot PRs stay the maintainer's manual merge — their files sit outside the
+# auto-merge trees ADR-0052 decides, so the merge rule (CLAUDE.md's Contribution workflow)
+# refuses a session's merge of one.
 
 version: 2
 updates:
