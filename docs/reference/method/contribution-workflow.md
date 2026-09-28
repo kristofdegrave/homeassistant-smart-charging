@@ -275,15 +275,15 @@ producer's logic.
 ## Git identity
 
 Whose account the interactive session acts under is [profile.md](../profile.md)'s **Repository
-and git identity**. This chain relies only on its being **one account, shared with the
-human partner**.
+and git identity**. **Rounds and the cap** above relies only on its being **one account,
+shared with the human partner**.
 
 ## Issue conventions
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
   (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
-  `decompose` (an epic's body read, at most one open per epic with a spec). The label set
+  `decompose` (an epic's body read, at most one per epic with a spec). The label set
   itself — every name, colour and description, and which context labels this project enables
   — is `.claude/profile.yml`'s `labels` and `work_types`, and `.github/setup-labels.sh` writes
   it to the repository. Adding or renaming a label: [ci-pipeline.md](ci-pipeline.md) lists

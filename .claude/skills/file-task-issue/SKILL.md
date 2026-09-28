@@ -47,19 +47,10 @@ half-scoped.
    later finding fits — attach it as a **native sub-issue** of that epic, and add a
    **blocked-by edge** to each already-filed issue it cannot start before, rather than leaving
    it untracked or its order implied by body text; the epic takes a blocked-by edge to it too,
-   per **Issue conventions**. An `adr`, `uc`, `requirement` or `documentation` issue filed
-   after the epic's opening pass also blocks the epic's `decompose` child — the open one, or a
-   new one filed with that edge where it has closed — as **Idea-to-product flow** says. Where
-   a park stands on the epic, post a not-ready park on it (**Tracker mechanics**, *Commenting
-   on a work item*): the five parts of the park in the `decompose` row's work file (**Model
-   selection**), the children part `none` — not ready, blocked on the new issue by number —
-   and each other part `none` with why, ending on the parking marker. The "label is on" in
-   that file's *Out of the body* binds its own run only; this filer never touches
-   `needs-approval`. All these edges can be set while creating the issue or added afterwards;
-   **Tracker mechanics** above routes to the commands and to the read-back that confirms each
-   edge exists. Done when every edge and the park read back. Don't touch the epic's other
-   children, its `decompose` child aside, while doing this: their state is a call for whoever
-   owns the epic, not a side effect of filing one issue.
+   per **Issue conventions**. These edges can be set while creating the issue or added
+   afterwards; **Tracker mechanics** above routes to the commands and to the read-back that
+   confirms each edge exists. Don't touch the epic's other children while doing this: their
+   state is a call for whoever owns the epic, not a side effect of filing one issue.
 
 ## Filing an epic's opening issues
 

@@ -190,13 +190,6 @@ tasks, a method epic, has no spec, so no child and no closing step; its children
 directly. A `development` or `testing` issue is always a spec epic's child, per **Task
 issues** in [contribution-workflow.md](contribution-workflow.md).
 
-**A later `adr`, `uc`, `requirement` or `documentation` issue blocks the open `decompose` child
-too.** Wherever a park comment stands on the epic, whatever `needs-approval`'s state, its filer
-also posts a not-ready park naming it, in the `decompose` work file's *Out of the body* form
-(children part `none`); where the child has closed, a new one is filed with that edge and that
-park. The filer never applies or removes `needs-approval`: with it off, only the human
-re-applying it resumes the run.
-
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** owns those rules

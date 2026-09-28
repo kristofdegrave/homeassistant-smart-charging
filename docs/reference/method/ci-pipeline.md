@@ -159,8 +159,8 @@ documents that name the label in passing.
 The **structure label** (`epic`) binds the same way: defined in `.claude/profile.yml`'s
 `labels`, given no directory and no row, and owned by
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Its other hits
-are where it is applied or excluded, so a rename runs the same greps for the backticked label
-and fixes every applier and excluder they turn up, since one that misses it silently files or
+are where it is applied or excluded, so a rename runs the same greps for the label and
+fixes every applier and excluder they turn up, since one that misses it silently files or
 picks an epic as a task.
 
 ## The docs-only close guard
