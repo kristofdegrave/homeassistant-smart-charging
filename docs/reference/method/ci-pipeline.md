@@ -173,8 +173,8 @@ up sit in the `requirement` work type's propagate step and the Code-backing item
 completion bar its row names.
 
 It is deliberately a status check rather than a review checklist item: a checklist item is a
-reviewer's judgement on the PR, and gates no merge. It is equally deliberately not a job in
-`ci.yml`, where the project's other required
+reviewer's judgement on the PR, which can withhold a session's merge but never blocks the
+human's. It is equally deliberately not a job in `ci.yml`, where the project's other required
 status checks live: it needs the `edited` trigger, since the state it refuses is created by
 editing a PR body, and putting `edited` on `ci.yml` would re-run the whole build matrix on
 every body or title edit and cancel in-flight test runs through that file's concurrency group.
@@ -184,8 +184,9 @@ body, an `owner/repo#n` reference, a full issue URL and a link made in the PR's 
 sidebar all count. It is evaluated as of the last push or edit, though: a sidebar link emits no
 `pull_request` event, so one added after the last event is caught only by the next one.
 
-It reports a status on every PR, but only blocks a merge once `docs-only-close-guard` is listed
-in branch protection's required checks on `main`.
+It reports a status on every PR, but only blocks the human's merge once `docs-only-close-guard`
+is listed in branch protection's required checks on `main`; a session merge counts it already,
+as the merge guard counts every check.
 
 ## The upstream-pin drift check
 

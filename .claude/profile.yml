@@ -68,7 +68,7 @@ labels:
   action:
     - name: needs-approval
       color: b60205
-      description: "No automated work pending — a maintainer may merge a PR as it stands; an epic asks for a go"
+      description: "No automated work pending — a PR merges by a human or under the merge rule; an epic asks for a go"
     - name: needs-decision
       color: e4e669
       description: "A human decides — a PR has findings open or is on hold; an issue has a parked question"
@@ -188,6 +188,20 @@ review:
   # recent reset event as interactive_cap is. The same section defines the self-grant and
   # routes here for this number rather than stating it.
   interactive_ceiling: 5
+
+# The autopilot's two settings, from the merge rule docs/reference/method/contribution-workflow.md's
+# **Commit & push authorization** states and docs/reference/profile.md's **Merge strategy**
+# explains. `auto_merge_trees` is read by .claude/hooks/block-destructive-git.sh, which refuses
+# a `gh pr merge` with any changed file outside them: a plain block list of path prefixes, since
+# the hook reads it with awk and no YAML parser (it adds a missing trailing slash). `lanes` is
+# the lane cap ADR-0052 decides: how many issues' chains may be in flight at once, on disjoint
+# trees.
+autopilot:
+  auto_merge_trees:
+    - custom_components/
+    - tests/
+    - docs/design/
+  lanes: 2
 
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.

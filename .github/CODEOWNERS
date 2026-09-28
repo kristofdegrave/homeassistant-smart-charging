@@ -1,8 +1,10 @@
-# Code owners — every change requires review/approval from the repo owner.
+# Code owners — the repo owner approves every change outside the auto-merge class (below).
 # Enforced only when the `main` branch protection rule has
 # "Require review from Code Owners" enabled (see repo Settings → Branches).
 #
-# This is the manual merge gate: nothing reaches `main` without the owner's approval.
+# This is the human's gate outside the auto-merge class ADR-0052 decides. It binds no --admin
+# merge, and a session's merge runs as the owner with --admin: the local guard is what keeps a
+# session inside that class.
 
 *                       @kristofdegrave
 
