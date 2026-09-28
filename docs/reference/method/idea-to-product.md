@@ -37,9 +37,7 @@ chain.
 The stages are the method's; several of their rules name what this project fills them with —
 the harness seam an ADR of this project assigns at **Route**, the analysis files and their
 order at **Analysis**, every tree under **Document structure**. Those are this project's
-instance of the method's slots, carried here until the stack overlays take them, the way the
-work-type files still carry their stack-specific sentences (`CLAUDE.md`'s **Authoring AI
-artifacts** topic concedes as much for those). A project porting the flow replaces the named
+instance of the method's slots. A project porting the flow replaces the named
 documents and keeps the stages; a deviation is for a stage, not for a document name.
 
 ### Every artifact stage runs through the contribution workflow
@@ -82,8 +80,7 @@ it means the `idea` issue is the first thing that exists, not the epic.
 ## 2. Brainstorm
 
 **Mandatory, whatever form the idea arrived in** — a one-line thought, a filed `idea` issue, a
-bug report that turns out to be a feature. An idea decomposed without the human partner's
-buy-in relocates the ambiguity into the child issues, so no idea skips this stage. Two skills,
+bug report that turns out to be a feature. Two skills,
 both entered through `clarify`, own the technique; the idea's shape picks between them:
 
 - **`grilling`** for a branch-heavy idea — one where settling a decision
@@ -101,8 +98,7 @@ kinds of output, each to its own home:
 - **Facts are the agent's job, never the user's.** A question of fact goes to the `research`
   skill, which owns which sources count, what the comment contains and how a durable finding
   is cited; what it produces is a comment **on the issue that needed it**. There is
-  deliberately no research folder — a second store of facts would rot beside the analysis
-  docs.
+  no research folder.
 
 ### Artifact: the decisions, on the issue
 
@@ -134,8 +130,7 @@ yet, because the fixing artifact is not known until the claim is verified) → s
 analysis chain, but **the claim is verified before anything is designed** — the
 `diagnosing-bugs` skill owns that step: reproduce it on the real installation, or as a
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
-reproduced is not a defect yet — say so on the issue and stop, rather than designing a fix
-for a behaviour nobody has seen. A reproduced claim's own issue is placed on a milestone at once, before
+reproduced is not a defect yet — say so on the issue and stop. A reproduced claim's own issue is placed on a milestone at once, before
 its fixing artifact is known, per the milestone rule in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Once the fixing artifact is known, the issue gains that
 artifact's context label and re-enters the chain at that artifact's stage.
@@ -156,22 +151,21 @@ gate does not apply; the track written on the issue is enough.
 ## 4. Decompose
 
 Every issue a strand gets is filed here — the epic, the issues the artifact stages run
-against, and one child per task of the spec. A strand that needs no epic files one issue and
+against, the epic's `decompose` child, and one child per task of the spec. A strand that needs no epic files one issue and
 stops; which strands those are is the first bullet set below.
 
 The stage is **entered twice, with the artifact stages in between**: the issues those stages
 run against must exist before they start, and the spec derives from what they merged. The
-**opening pass** runs straight after **Route**; the **closing step** runs once the `decompose`
-child is unblocked. An issue that surfaces after both still belongs here — the opening pass
-says where. Until the opening pass files that child with its edges, the human files it and the
-**Design** stage's gate below holds the closing step.
+**opening pass** runs straight after **Route**, and files a `decompose` child blocked by those
+stages' issues; the **closing step** runs once that child is unblocked. An issue that surfaces
+after both still belongs here — the opening pass says where.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
 
-Where the bullets below call for an epic, it is filed first, Size only. If the idea started
-as an issue, link it from the epic body and close the idea issue once it is fully captured —
-never relabel it as the epic, which stays open tracking children long after the idea is
-decomposed. The brainstormed decisions move into its body under
+Where the bullets below call for an epic, it is filed first, Size only, labelled `epic` and
+no context label ([contribution-workflow.md](contribution-workflow.md)'s **Issue
+conventions**). If the idea started as an issue, link it from the epic body and close the idea
+issue once it is fully captured — never relabel it as the epic. The brainstormed decisions move into its body under
 *Decisions so far* (**Brainstorm** above).
 
 Whether the strand needs an epic is settled here and written on the issue, so it is not
@@ -188,6 +182,13 @@ and any already-scoped `uc`, `requirement`, `documentation` or `workflow` issue.
 surfacing later that belongs to the strand — a bug found mid-implementation, a follow-up — is
 attached as a sub-issue too; epic membership needs no context label, and `file-task-issue`
 covers which label such a child takes.
+
+**The last issue the pass files is the `decompose` child**, one per epic: titled
+`decompose: <epic title>`, labelled `decompose`, a sub-issue of the epic, and blocked by every
+artifact-stage issue the pass filed — the `adr`, `uc`, `requirement`, `documentation` and
+`workflow` issues above. An artifact-stage issue filed against the epic later blocks its
+`decompose` child the same way: the open one, or — where that has closed — a new one filed
+with it.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
@@ -274,14 +275,15 @@ only statement until one owns it.
 
 ### Artifact: the epic, and one issue per task
 
-Or the single issue, where the idea is one artifact. The opening pass leaves the epic and the
-issues the artifact stages run against; the closing step leaves the spec in the epic's body and
-one child per task.
+Or the single issue, where the idea is one artifact. The opening pass leaves the epic, the
+issues the artifact stages run against and the epic's `decompose` child; the closing step
+leaves the spec in the epic's body and one child per task.
 
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
-The opening pass's own gate: nothing downstream starts without an issue to run against, and
-what is filed for work is milestoned. The closing step's: step 2's pass and step 3's parked
+The opening pass's own gate: nothing downstream starts without an issue to run against, what
+is filed for work is milestoned, and each epic has its `decompose` child, blocked by every
+artifact-stage issue filed against it. The closing step's: step 2's pass and step 3's parked
 read, both complete before any child is filed, and then every task in the body having an issue,
 filed as step 4 says. The **Implementation** stage starts from those issues and from nothing
 else.
@@ -389,9 +391,7 @@ artifact-specific additions, and this rule is the first of them:
 `needs-approval` until the epic that will carry its spec exists for it.** The epic, not the
 written body: the opening pass files it at **Decompose**, while the body is written at the
 closing step once the `decompose` child is unblocked — so requiring the body here would ask for
-an artifact this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
-filed long before its plan was drafted. Without it, an
-analysis document can merge describing behaviour the code does not have.
+an artifact this stage cannot yet have. Without it, an analysis document can merge describing behaviour the code does not have.
 The review step applies that label on a clean pass and knows nothing about child issues, so
 the same condition is checked by whoever approves the merge. The epic is the earliest artifact that can
 carry that obligation — a `development`/`testing` child cannot, because it is cut from that

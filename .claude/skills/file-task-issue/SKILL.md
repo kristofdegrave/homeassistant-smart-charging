@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of filing a decomposition's children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, its decompose child last, and a decomposition's children.
 ---
 
 # File a task issue
@@ -24,9 +24,8 @@ half-scoped.
 1. **Is it scoped enough to file yet?** If the work is still fuzzy (spans multiple artifacts,
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
-2. **Pick the one context label**, set Size/Estimate, and — for a child of a decomposition —
-   write the anchored `Source:` lines. What each entry's sources name, and how finely, is the
-   closing step's, under `CLAUDE.md`'s **Idea-to-product flow**; the line's own format belongs
+2. **Pick the one context label** — for an epic, `epic` and none — set Size/Estimate, and —
+   for a child of a decomposition — write the anchored `Source:` lines. What each entry's sources name, and how finely, is the closing step's, under `CLAUDE.md`'s **Idea-to-product flow**; the line's own format belongs
    to **Issue conventions** and is not stated there yet, so follow the shape the epic body's
    **Sources** key already uses. **Issue conventions** covers the other fields. A finding against
    already-shipped behaviour also takes a **kind label** (`bug`/`enhancement`); which labels
@@ -45,10 +44,22 @@ half-scoped.
 5. **If the issue belongs to an epic** — one being decomposed now, or an already-open one a
    later finding fits — attach it as a **native sub-issue** of that epic, and add a
    **blocked-by edge** to each already-filed issue it cannot start before, rather than leaving
-   it untracked or its order implied by body text. Both edges can be set while creating the
-   issue or added afterwards; **Tracker mechanics** above routes to the commands and to the
+   it untracked or its order implied by body text; the epic takes a blocked-by edge to it too,
+   per **Issue conventions**. An artifact-stage issue filed against an epic after its opening
+   pass also blocks the epic's `decompose` child — the open one, or a new one filed with it
+   where none is open — as the opening pass under **Idea-to-product flow** says. Both edges
+   can be set while creating the issue or added afterwards; **Tracker mechanics** above routes to the commands and to the
    read-back that confirms each edge exists. Don't touch the epic's other children while doing
    this: their state is a call for whoever owns the epic, not a side effect of filing one issue.
+
+## Filing an epic's opening issues
+
+Which issues an epic gets at the flow's opening pass is the flow's, per **Idea-to-product
+flow** above. File them in this order: the epic, then each artifact-stage issue, then the
+`decompose` child last — so every one of its blocked-by edges names an issue that already
+exists and goes on as a flag of its create call. Each goes through the checklist at the top of
+this file. Done when the child's edges read back one per artifact-stage issue the pass filed,
+and the epic's one per child.
 
 ## Filing the children of a decomposition
 
@@ -77,6 +88,11 @@ this skill's own:
   passed as a flag is a second step too (item 5); an issue missing them reads as filed and is
   not.
 - Filing a child without its epic's milestone (item 3).
+- Filing an epic with a context label, or without `epic` (item 2) — the label is how an epic is
+  told from a task.
+- Leaving an epic without its `decompose` child, or that child short of an edge to one of the
+  artifact-stage issues it waits on: the closing step then starts before what it derives from
+  has merged.
 - Filing a decomposition's children before the pass and the human read that the `decompose`
   row of `CLAUDE.md`'s **Model selection** runs. The pass is there to catch what lives between
   tasks, and a task already filed is one it can no longer cheaply change.

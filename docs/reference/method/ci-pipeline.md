@@ -156,6 +156,14 @@ one means updating the profile's `labels` (and re-running `setup-labels.sh`) and
 and then checking the handful of
 documents that name the label in passing.
 
+The **structure label** (`epic`) binds the same way: defined in `.claude/profile.yml`'s
+`labels`, given no directory and no row, and owned by
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Its other hits
+are where it is applied or excluded — the flow's **Decompose** opening pass, `file-task-issue`,
+and whatever picks the next issue — so a rename runs the same greps for the backticked label
+and fixes every applier and excluder they turn up, since one that misses it silently files or
+picks an epic as a task.
+
 ## The docs-only close guard
 
 `.github/workflows/close-guard.yml` fails a PR whose changed files are all under `docs/` and

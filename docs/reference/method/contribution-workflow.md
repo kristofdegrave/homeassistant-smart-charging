@@ -87,8 +87,6 @@ question with no issue to park on, in its shape.
 
 ## Rounds and the cap
 
-- **The cap exists because the chain runs through with no check-in** (**Rule B**): a finding no fix
-  resolves would otherwise loop forever.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
@@ -230,8 +228,7 @@ issue and its own chain.
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4 establishes the first — every child closed — and never the second,
 which is an observation on the real installation and the human's: `cleanup` reads the
 epic's open-children count once the linked issue is *done*, and reports it; what the report says at zero is the skill's own step. It never
-closes. Nothing else watches for the moment: GitHub does not close a parent whose sub-issues
-are all closed, and a child PR carries `Part of` for its epic so a merge cannot.
+closes.
 
 ## Commit & push authorization
 
@@ -273,8 +270,7 @@ reimplementation of the producer's logic.
 
 Whose account the interactive session acts under is [profile.md](../profile.md)'s **Repository
 and git identity**. This chain relies only on its being **one account, shared with the
-human partner** — which is why **Rounds and the cap** above tells a human item from the
-session's own footprint by the session's markers, never by author.
+human partner**.
 
 ## Issue conventions
 
@@ -294,6 +290,9 @@ session's own footprint by the session's markers, never by author.
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
   gate. Neither label substitutes for the other, and a kind label adds no Model-selection
   row.
+- **The `epic` label** marks an epic — a parent tracking its children, not a unit of work — so
+  an epic carries no context label and is never picked as a task. A genuine kind label stays
+  beside it (a bug epic keeps `bug`); `epic` adds no Model-selection row and makes no branch.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
@@ -301,7 +300,8 @@ session's own footprint by the session's markers, never by author.
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**. Neither is body text — `gh` supports both — the commands and the
+  relationship**, and the epic a blocked-by edge to each child — a convention for the UI,
+  which lists its open work; nothing gates on it. Neither is body text — `gh` supports both — the commands and the
   read-backs that confirm an edge landed are in [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N".
