@@ -64,8 +64,7 @@ _<YYYY-MM-DD> · needed by: <the decision this unblocks>_
 
 Rules for it:
 
-- **The first line is the session's catch-all marker** — `fix` defines it — because every
-  comment the session posts on an issue carries one, by the marker rule under `CLAUDE.md`'s
+- **The first line is `fix`'s catch-all marker**, per the marker rule under `CLAUDE.md`'s
   **Contribution workflow**; without it, a later run would read this comment as the human's
   answer to a question `clarify` parked on the same issue.
 - **`Not confirmed` is never omitted.** If everything was confirmed, say "nothing outstanding"
