@@ -34,8 +34,8 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    implement step is the work file's to override — except for a row whose work file makes
    no branch and no PR, which item 3 states.
 2. Take the task from the issue itself: its body is the task text, and where the issue is a
-   child of an epic, that epic's body is what it was cut from — which artifact that is, and
-   which issues are cut from one, are the closing step of the flow `CLAUDE.md`'s
+   child of an epic with a spec, that epic's body is what it was cut from — which artifact that
+   is, and which issues are cut from one, are the closing step of the flow `CLAUDE.md`'s
    **Idea-to-product flow** topic routes to. Where the issue carries anchored `Source:` lines,
    resolve them before dispatching and read what they name; where it carries none, the work
    file's own instruction to go and find the sources stands. The line's format, which issues

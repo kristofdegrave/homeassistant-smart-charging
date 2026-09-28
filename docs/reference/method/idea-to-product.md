@@ -182,14 +182,15 @@ surfacing later that belongs to the strand — a bug found mid-implementation, a
 attached as a sub-issue too; epic membership needs no context label, and `file-task-issue`
 covers which label such a child takes.
 
-**The last issue the pass files is the `decompose` child**, for an epic whose tasks will
-include `development` or `testing` work cut from a `project-plan.md` slice — its spec is
-derived from that slice, and a multi-slice code fix's epic is included: titled
+**The last issue the pass files is the `decompose` child**, only for an epic whose tasks will
+be cut from a `project-plan.md` slice — a multi-artifact idea that passes **Design**: titled
 `decompose: <epic title>`, labelled `decompose`, a sub-issue of the epic, blocked by every
-`adr`, `uc`, `requirement` and `documentation` issue the pass filed. An epic of `workflow`
-tasks, a method epic, has no spec, so no child and no closing step; its children are filed
-directly. A `development` or `testing` issue is always a spec epic's child, per **Task
-issues** in [contribution-workflow.md](contribution-workflow.md).
+`adr`, `uc`, `requirement` and `documentation` issue the pass filed. A method epic of
+`workflow` tasks and a bug-track epic get no child and no closing step; their children are
+filed directly, a bug-track epic's from the fix, as a one-slice fix goes straight to work. A
+`development` or `testing` issue is a child of the epic whose spec it was cut from where there
+is one; a bug fix's, one-slice or a bug-track epic's, are cut from no spec — **Task issues**
+in [contribution-workflow.md](contribution-workflow.md).
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
@@ -266,12 +267,12 @@ entry carries these keys, one item per key:
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
   `none` and why in one line. Written now, not after deployment.
 
-Each child issue is then filed with that entry as its body, its context label, board fields
-and the epic's milestone, its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and the
-anchored `Source:` lines naming the entry's sources. The other fields are
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**'; the `Source:`
-line's format is ADR-0044's, not yet written into a method document, so that record is its
-only statement until one owns it.
+Each child issue is then filed with that entry as its body, its context label, board fields and
+the epic's milestone, its native sub-issue edge to the epic and the epic's blocked-by edge to
+it, a blocked-by edge per id the entry names, and the anchored `Source:` lines naming the
+entry's sources. The other fields are [contribution-workflow.md](contribution-workflow.md)'s
+**Issue conventions**'; the `Source:` line's format is ADR-0044's, not yet written into a
+method document, so that record is its only statement until one owns it.
 
 ### Artifact: the epic, and one issue per task
 
@@ -281,12 +282,11 @@ leaves the spec in the epic's body and one child per task.
 
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
-The opening pass's own gate: nothing downstream starts without an issue to run against, what
-is filed for work is milestoned, and each epic whose tasks will include `development` or
-`testing` work has its `decompose` child, with its edges. The closing step's: step 2's pass and step 3's parked
-read, both complete before any child is filed, and then every task in the body having an issue,
-filed as step 4 says. The **Implementation** stage starts from those issues and from nothing
-else.
+The opening pass's own gate: nothing downstream starts without an issue to run against, what is
+filed for work is milestoned, and each epic the opening pass gives a `decompose` child has it,
+with its edges. The closing step's: step 2's pass and step 3's parked read, both complete
+before any child is filed, and then every task in the body having an issue, filed as step 4
+says. The **Implementation** stage starts from those issues and from nothing else.
 
 ### Skills
 

@@ -299,8 +299,9 @@ shared with the human partner**.
   gate. Neither label substitutes for the other, and a kind label adds no Model-selection
   row.
 - **The `epic` label** marks an epic — a parent tracking its children, not a unit of work — so
-  an epic carries no context label and is never picked as a task. A genuine kind label stays
-  beside it (a bug epic keeps `bug`); `epic` adds no Model-selection row and makes no branch.
+  an epic carries no context label and is never picked as a task. A kind label naming the
+  epic's own work stays beside it (a bug-track epic keeps `bug`); `epic` adds no
+  Model-selection row and makes no branch.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
@@ -330,11 +331,10 @@ shared with the human partner**.
   shipped behaviour also needs an epic whose body carries the spec to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
   condition.
-- **Task issues** (`development`/`testing` label) are **children of the epic whose body
-  carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
-  issue is filed as a native sub-issue of that epic, never standing alone. Get the edge on at
-  filing time; adding it afterwards works (**Epic-first for multi-artifact strands** above has
-  both forms).
+- **Task issues** (`development`/`testing` label) cut from a spec are **children of the epic
+  whose body carries it**, each one's body its task — ADR-0044; a bug fix's are cut from none.
+  Such an issue is a native sub-issue of that epic, its edge set at filing time or after
+  (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
 number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying

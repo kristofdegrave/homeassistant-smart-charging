@@ -11,7 +11,7 @@ body:
         implementation task. It'll be worked with the `work-idea` skill: brainstormed
         interactively and decomposed into one or more properly context-labeled follow-up
         issues (`uc`, `requirement`, `adr`, `development`, `testing`, `documentation`, `workflow`,
-        `decompose`).
+        `decompose`) and, where it needs one, an epic labelled `epic`.
 
         Don't force a context label onto this issue yourself — that decision happens
         during decomposition, not at filing time.

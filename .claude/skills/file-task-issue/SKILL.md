@@ -56,10 +56,10 @@ half-scoped.
 
 Which issues an epic gets at the flow's opening pass, their order and their edges, a
 `decompose` child included or not, are the flow's, per **Idea-to-product flow** above. File
-them in that order, any child last so every one of its blocked-by edges names an issue that
-already exists and goes on as a flag of its create call. Each goes through the checklist at
-the top of this file. Done when every edge the flow names for them reads back, and the epic's
-one per child.
+them in that order, any `decompose` child last so every one of its blocked-by edges names an
+issue that already exists and goes on as a flag of its create call. Each goes through the
+checklist at the top of this file. Done when every edge the flow names for them reads back, and
+the epic's one per child.
 
 ## Filing the children of a decomposition
 
@@ -67,13 +67,13 @@ The closing step's four steps, their order and what the epic body must contain a
 per **Idea-to-product flow** above — don't re-derive them here. Drafting the body, running its
 review pass and parking the epic are the work file of the `decompose` row in `CLAUDE.md`'s
 **Model selection**, which reaches this section for the flow's step 4 once the human has said
-go. Each child goes through the
-checklist at the top of this file: its own task text as the body, its `Source:` lines, the
-epic's milestone, its native sub-issue edge to the epic, and a blocked-by edge to each child it
-cannot start before.
+go. Each child goes through the checklist at the top of this file: its own task text as the
+body, its `Source:` lines, the epic's milestone, its native sub-issue edge to the epic, the
+epic's blocked-by edge to it, and a blocked-by edge to each child it cannot start before.
 
 Done when every task in the epic body has an issue carrying its label, Size/Estimate, the
-epic's milestone, `Source:` lines and edges, and no task in that body is left without one.
+epic's milestone, `Source:` lines and edges, the epic's to it included, and no task in that
+body is left without one.
 
 ## Common mistakes
 
@@ -88,9 +88,9 @@ mistakes that are this skill's own:
   passed as a flag is a second step too (item 5); an issue missing them reads as filed and is
   not.
 - Filing a child without its epic's milestone (item 3).
-- Leaving an epic whose tasks will include `development` or `testing` work without a
-  `decompose` child, or that child short of an edge to an artifact-stage issue the pass
-  filed: the closing step then starts before what it derives from has merged.
+- Leaving an epic the flow's opening pass gives a `decompose` child without one, or that child
+  short of an edge to an artifact-stage issue the pass filed: the closing step then never
+  starts, or starts before what it derives from has merged.
 - Filing a decomposition's children before the pass and the human read that the `decompose`
   row of `CLAUDE.md`'s **Model selection** runs. The pass is there to catch what lives between
   tasks, and a task already filed is one it can no longer cheaply change.
