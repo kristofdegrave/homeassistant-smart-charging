@@ -200,9 +200,8 @@ These five are the rule; `resolve-review-thread` applies them per thread, and
 The PR always bases `main` directly — never another work branch, even one it is logically
 stacked on, because this project's merge strategy ([profile.md](../profile.md)'s **Merge
 strategy**) orphans stacked branches. Branching off a prior task's branch locally is fine; the
-PR is `--base main` from the start, and the new branch is cut from a fetched `origin/main` —
-or, when deliberately stacking, from the freshly fetched prior branch — never a stale local
-`main`.
+new branch is cut from a fetched `origin/main` — or, when deliberately stacking, from the
+freshly fetched prior branch — never a stale local `main`.
 
 ## `Closes` and `Part of`
 
@@ -365,7 +364,7 @@ recommends can be argued from evidence; once they land, it stays as the record o
   documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies. That
   rule does not reach this directory: a post-mortem's entire evidentiary value
   is the specific PRs, issues, commits and review comments it cites, at the dates it cites
-  them — don't "fix" these.
+  them.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis
   tree's own review checklist do not govern it; it quotes the analysis docs as evidence
   rather than asserting behaviour.
