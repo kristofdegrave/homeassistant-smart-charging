@@ -146,7 +146,7 @@ def test_clears_when_no_longer_solar_charging():
     assert state.stepped_pct is None
 
 
-# --- resolve_solar_reserve_active: R9/UC07's five-way AND ---
+# --- resolve_solar_reserve_active: R9/UC07's six-way AND ---
 
 
 def test_reserve_active_when_all_conditions_hold():
@@ -232,3 +232,37 @@ def test_reserve_inactive_while_sun_is_up():
         )
         is False
     )
+
+
+def test_should_not_activate_solar_reserve_when_missed_deadline_hold_in_effect():
+    # R9's sixth precondition (R5): a missed-deadline hold takes priority over the cap even
+    # when the other five conditions all hold.
+    # Arrange / Act
+    active = resolve_solar_reserve_active(
+        profile=PROFILE_AUTO,
+        home_day_flag=True,
+        sun_is_down=True,
+        forecast_kwh=15.0,
+        forecast_threshold_kwh=12.0,
+        deadline_reserved_day_resolved=False,
+        missed_deadline_hold=True,
+    )
+
+    # Assert
+    assert active is False
+
+
+def test_should_activate_solar_reserve_when_no_missed_deadline_hold_and_other_conditions_met():
+    # Arrange / Act
+    active = resolve_solar_reserve_active(
+        profile=PROFILE_AUTO,
+        home_day_flag=True,
+        sun_is_down=True,
+        forecast_kwh=15.0,
+        forecast_threshold_kwh=12.0,
+        deadline_reserved_day_resolved=False,
+        missed_deadline_hold=False,
+    )
+
+    # Assert
+    assert active is True
