@@ -24,9 +24,9 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
      `origin/main` (**Base `main` and stacking** below).
    - Board **Status** → the *in progress* column when writing actually starts, not at filing
-     time. The issue's epic, if it has one, moves there with it unless it already is — the
-     child's start is the epic's start (**Project board** below; the parent read is
-     [tracker-mechanics.md](tracker-mechanics.md)'s **Parent/sub-issue and blocked-by edges**).
+     time. The issue's epic, if it has one, moves there with it unless it already is
+     (**Project board** below; the parent read is [tracker-mechanics.md](tracker-mechanics.md)'s
+     **Parent/sub-issue and blocked-by edges**).
    - Self-check against the [Definition of Done](definition-of-done.md); then push and open
      the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`
      and `Part of`** below).
@@ -42,8 +42,8 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
      open on the last pass the cap allows, no round self-granted → both exit labels and one
      escalation comment; Critical or Major open
      with passes left, or a round self-granted → no label, the findings are the fix step's.
-   - Board **Status** stays *in review*. Merge is the human's, always (**Merge and issue
-     closing** below).
+   - Board **Status** stays *in review*. Whose the merge is: **Merge and issue closing**
+     below.
 3. **Fix** (`fix`, then `review` again).
    - Every finding gets a fix and a reply on its thread, or a reply saying why not; threads
      close per **Thread discipline** below.
@@ -77,7 +77,7 @@ It never starts the next issue off the back of the one just finished.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
-exception: `cleanup` is triggered by the human stating that the merge happened.
+exception (**The chain** above).
 
 ## Rule C — decisions go through `clarify`
 
@@ -130,16 +130,18 @@ question with no issue to park on, in its shape.
 
 ## Exit labels
 
-`needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. On a PR, `needs-approval` adds that a human may merge it **as it stands**; `needs-decision` adds that a reason not to merge is still open. Both PR exits have one actor: the **review step**, at the end of the pass it
-just posted. After a clean pass it applies `needs-approval` alone, removing a stale
-`needs-decision`. After the last pass the cap allows, with Critical or Major
-still open and no round self-granted, it applies `needs-decision` **alongside**
-`needs-approval` and posts the one escalation comment **Rounds and the cap** describes, so a capped PR is told from a
-clean one in any list view and `needs-approval` keeps one meaning. No other step or
-skill applies either label to a PR, bar the session putting one on hold (below), which a checklist's
-exit check can also do at the exit.
-Neither label replaces manual merge approval (**Merge and issue closing** below).
+`needs-approval` and `needs-decision` both mean **no automated review/fix work is pending**.
+On a PR, `needs-approval` adds that it may be merged **as it stands**, by a human or under the
+merge rule; `needs-decision` adds that a reason not to merge is still open, for a human to
+decide. Both PR exits have one actor: the **review step**, at the end of its pass. After a
+clean pass it applies `needs-approval` alone, removing a stale `needs-decision`.
+After the last pass the cap allows, with Critical or Major still open and no round
+self-granted, it applies `needs-decision` **alongside** `needs-approval` and posts the one
+escalation comment **Rounds and the cap** describes, so a capped PR is told from a clean one
+and `needs-approval` keeps one meaning. No other step or skill applies either label to a PR,
+bar the session putting one on hold (below), which a checklist's exit check can also do at the
+exit.
+Neither label is a merge (**Merge and issue closing** below).
 
 On a PR, a human item (**Rounds and the cap** above) posted **while** either label is on makes it
 false, and so does a round the human grants: both labels come off no later than the review step's
@@ -199,48 +201,53 @@ These five are the rule; `resolve-review-thread` applies them per thread, and
 The PR always bases `main` directly — never another work branch, even one it is logically
 stacked on, because this project's merge strategy ([profile.md](../profile.md)'s **Merge
 strategy**) orphans stacked branches. Branching off a prior task's branch locally is fine; the
-PR is `--base main` from the start, and the new branch is cut from a fetched `origin/main` —
-or, when deliberately stacking, from the freshly fetched prior branch — never a stale local
-`main`.
+new branch is cut from a fetched `origin/main` — or, when deliberately stacking, from the
+freshly fetched prior branch — never a stale local `main`.
 
 ## `Closes` and `Part of`
 
 The PR description references the linked issue with `Closes #<issue-number>` so merging
 auto-closes it; if the issue needs more than one PR, use `Part of #<issue-number>` on every PR
 except the one that finishes the issue. A task PR normally carries both — `Closes` for its own
-task issue and `Part of` for the epic — and whatever resolves a PR to one issue reads the
-`Closes` reference.
+task issue and `Part of` for the epic — and `Closes` is the reference that resolves a PR to
+one issue.
 
 ## Merge and issue closing
 
-**Merge is always manual** (enforced per [profile.md](../profile.md)'s **Merge strategy**) —
-never auto-merged or self-approved. Merging auto-closes the linked issue via the PR's
-`Closes #N` reference, or leaves it open under `Part of #N`. Never close the linked issue
-directly, even on a verification-only task — that reference fires on merge. Only a
-`decompose` issue or an idea, having no PR, is closed by the work file or skill that ran it,
-once its filings exist, with a closing comment listing them
-([tracker-mechanics.md](tracker-mechanics.md)'s **Closing a work item**).
+**Merge is the human's, except under the merge rule** (**Commit & push authorization** below;
+its enforcement is [profile.md](../profile.md)'s **Merge strategy**) — never self-approved.
+Merging auto-closes the linked issue via `Closes #N` (not via `Part of #N`); never close it
+directly (`gh issue close`), even on a verification-only task. Only a `decompose` issue or an
+idea, having no PR, is closed by the work file or skill that ran it, once its filings exist,
+with a closing comment listing them ([tracker-mechanics.md](tracker-mechanics.md)'s **Closing
+a work item**).
 
-**An epic's body is the spec, and its children are the tasks.** The `development`/`testing`
-children are filed by the decomposition that wrote the epic body — the closing step of the
-flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to; implementing each is its own
-issue and its own chain.
+**An epic's body is the spec, and its children are the tasks**, filed by the decomposition
+that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**
+topic routes to. Each child is its own issue, implemented in its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
-[idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4 establishes the first — every child closed — and never the second,
-which is an observation on the real installation and the human's: `cleanup` reads the
-epic's open-children count once the linked issue is *done*, and reports it; what the report says at zero is the skill's own step. It never
-closes. Nothing else watches for the moment: GitHub does not close a parent whose sub-issues
-are all closed, and a child PR carries `Part of` for its epic so a merge cannot.
+[idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4
+establishes the first — every child closed — and never the second, an observation on the real
+installation, the human's: `cleanup` reads the epic's open-children count once the linked issue
+is *done* and reports it; what the report says at zero is the skill's own step. It never closes:
+GitHub does not close a parent whose sub-issues are all closed, and a child PR carries `Part of`
+for its epic so a merge cannot.
 
 ## Commit & push authorization
 
-Commit and push freely, at any point — no per-commit or per-push approval needed. This
-standing authorization does not extend to anything destructive or hard to reverse
-(force-push, rewriting published history, `git reset --hard`, etc.), which still follow the
-ask-before-acting default. A
-`PreToolUse` hook (`.claude/settings.json` → `.claude/hooks/block-destructive-git.sh`) refuses
-the most common of those before they run.
+Commit and push freely, at any point — a standing authorization this document makes, with no
+per-commit or per-push approval. It does not extend to anything destructive or hard to reverse
+(force-push, rewriting published history, `git reset --hard`, etc.), which keeps the
+ask-before-acting default; a `PreToolUse` hook (`.claude/settings.json` →
+`.claude/hooks/block-destructive-git.sh`) refuses the most common of those before they run.
+
+**The merge rule.** A session runs `gh pr merge` only when all hold: `--squash`; the head a
+branch of this repository, not a fork's; `needs-approval` on and `needs-decision` off; every
+changed file under a tree in `.claude/profile.yml`'s `autopilot.auto_merge_trees`; every
+check green, required or not. A push landing on `main` is a merge by another name, and
+refused. The same hook mechanizes it and fails closed — its header is the authority on the
+exact conditions — and any other PR is the human's.
 
 ## Project board
 
@@ -254,20 +261,19 @@ step 0/1 here.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
-there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
-it to *done* with the same hand that closes it, which step 4's open-children report prompts
-(**Merge and issue closing** above). A `decompose` issue, having no PR, takes the same
-shorter path.
+there, it is never *in review*, and the human partner moves it to *done* with the same hand
+that closes it, which step 4's open-children report prompts (**Merge and issue closing**
+above). A `decompose` issue, having no PR, takes the same shorter path.
 
 ## Parallel work and forward dependencies
 
-Tasks may proceed in parallel. When one needs something a not-yet-built task will produce (an
-entity, an event, a function signature), neither block nor invent the missing piece: pin down
-the **contract** — exact name/id, value semantics/unit, a shared constant both sides code
-against — in the relevant spec/`const.py`/ADR, and mark the producing side as a dependency for
-its own later task. The producer implements the real thing; the consumer adds only the
-signature and tests against a stubbed instance of the contract, never a private
-reimplementation of the producer's logic.
+Tasks may proceed in parallel. When one needs something a not-yet-built task will produce,
+neither block nor invent the missing piece: pin down the **contract** — exact name/id, value
+semantics/unit, a shared constant both sides code against — in the relevant
+spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task.
+The producer implements the real thing; the consumer adds only the signature and tests
+against a stubbed instance of the contract, never a private reimplementation of the
+producer's logic.
 
 ## Git identity
 
@@ -288,7 +294,8 @@ session's own footprint by the session's markers, never by author.
   sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
-  the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue carries the kind label
+  the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue
+  carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
@@ -301,8 +308,8 @@ session's own footprint by the session's markers, never by author.
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**. Neither is body text — `gh` supports both — the commands and the
-  read-backs that confirm an edge landed are in [tracker-mechanics.md](tracker-mechanics.md).
+  relationship**. Neither is body text; the commands and the read-backs that confirm an edge
+  landed are in [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N".
 - **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice ranked by a
@@ -328,14 +335,14 @@ session's own footprint by the session's markers, never by author.
   issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
-**Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label, number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying only a kind label** (`bug`,
+**Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
+number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches for this kind of work used `dev/` and `fix/`; both
-spellings are historical, not alternatives (`development/<n>` keeps its meaning above). When both
-axes are present the **context label wins**. If extra work on the same issue needs a second
-PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
-(e.g. `development/142/followup`).
+defined segment. Earlier branches used `dev/` and `fix/`; both spellings are historical, not
+alternatives (`development/<n>` keeps its meaning above). When both axes are present the
+**context label wins**. If extra work on the same issue needs a second PR, suffix a third
+segment describing the split: `<context-label>/<issue-number>/<slug>`.
 
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
 its row — may override the number segment for a concrete reason to key the branch off the
@@ -362,7 +369,7 @@ recommends can be argued from evidence; once they land, it stays as the record o
   documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies. That
   rule does not reach this directory: a post-mortem's entire evidentiary value
   is the specific PRs, issues, commits and review comments it cites, at the dates it cites
-  them — don't "fix" these.
+  them.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis
   tree's own review checklist do not govern it; it quotes the analysis docs as evidence
   rather than asserting behaviour.
