@@ -78,6 +78,16 @@ class CycleContext:
     # raw ctx.net_w/ctx.charger_w above -- a separate clamp, with the same staleness exposure
     # tracked separately (issue #992), out of #990's own scope.
     baseline_w: float
+    # Issue #1189/T10, R5's third smoothed-baseline criterion: the admitted mean in household
+    # sign (`net_w - charger_w`, ADR-0049's `smooth_household_w`) -- both of the escalated
+    # maximum permitted rate's baseline-dependent bounds (`_escalated_maximum_permitted_rate_a`'s
+    # peak and C4 operands) fit to this, never to `baseline_w`/`net_w`/`charger_w` above, which
+    # stay the R3/C4 clamps' and the peak-headroom readout's own raw (debounced) operands. A
+    # named field rather than `-ctx.surplus_w`: the two are the same value by design, and the name
+    # keeps the forecast's operand visible at the call site (D-3). Required, not defaulted, for
+    # the same #990 reason `baseline_w` above is required -- a forgotten construction site must
+    # fail loudly, not fall open onto a permissive placeholder that decides a forecast.
+    smoothed_baseline_w: float
     ev_soc: float | None = None
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
     # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)
