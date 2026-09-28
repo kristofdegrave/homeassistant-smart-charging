@@ -1304,6 +1304,27 @@ def test_resolve_deadline_urgency_still_urgent_for_a_genuinely_tight_deadline_to
     assert result.required.required_a != float("inf")
 
 
+AMPLE_SLACK_KWARGS = dict(
+    deadline_today=time(11, 0),
+    ev_soc=50.0,
+    active_soc_limit=80.0,
+    effective_battery_capacity_kwh=10.0,
+    escalated_maximum_permitted_rate_a=32.0,
+    mode_desired_current=lambda mode: 0.0,
+)
+AMPLE_SLACK_PURSUED = datetime(2026, 7, 27, 11, 0)
+
+
+def test_should_not_be_urgent_when_nothing_is_pursued_despite_ample_slack():
+    """The baseline half of the pair below: with ample slack and nothing pursued, the slack
+    test alone governs and does not engage."""
+    # Arrange/Act
+    result = _resolve_deadline_urgency(pursued_occurrence=None, **AMPLE_SLACK_KWARGS)
+
+    # Assert
+    assert result.urgent is False
+
+
 def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     """`inputs.pursued_occurrence` reaches `resolve_required_current` (R5, issue #1078).
 
@@ -1311,36 +1332,24 @@ def test_should_keep_urgency_when_a_pursued_occurrence_is_threaded_in():
     the wiring for urgency's own state, so a silent failure to pass it through would make
     urgency re-derive from the slack test every cycle and duty-cycle the charger.
 
-    Same inputs either way -- a deadline with ample slack and a 0 A baseline -- so only the
-    occurrence can account for the difference. It is the one the deadline below resolves to,
-    and still ahead of `now_dt`, so this is ordinary urgency rather than a missed-deadline hold.
+    Same slack-test inputs as the "nothing pursued" case above -- ample slack, a 0 A baseline
+    -- so only the occurrence can account for `urgent` coming back True here instead. It is
+    the one the deadline resolves to, and still ahead of `now_dt`, so this is ordinary urgency
+    rather than a missed-deadline hold.
 
-    `departure_on_pursued_date` is passed only for the `threaded` call, set to that same 11:00
-    since the pursued occurrence's own date is today (D1/D2, #1481): otherwise
-    `follow_pursued_occurrence` would read its default `None` as "no deadline" and release
-    rather than hold. Left at its own `None` default for `without`, matching the field's
-    contract ("`None` whenever nothing is pursued") since `pursued_occurrence=None` there.
+    `departure_on_pursued_date` is set to that same 11:00 since the pursued occurrence's own
+    date is today (D1/D2, #1481): otherwise `follow_pursued_occurrence` would read its default
+    `None` as "no deadline" and release rather than hold.
     """
-    # Arrange
-    ample_slack = dict(
-        deadline_today=time(11, 0),
-        ev_soc=50.0,
-        active_soc_limit=80.0,
-        effective_battery_capacity_kwh=10.0,
-        escalated_maximum_permitted_rate_a=32.0,
-        mode_desired_current=lambda mode: 0.0,
-    )
-    pursued = datetime(2026, 7, 27, 11, 0)
-
-    # Act
-    without = _resolve_deadline_urgency(pursued_occurrence=None, **ample_slack)
-    threaded = _resolve_deadline_urgency(
-        pursued_occurrence=pursued, departure_on_pursued_date=time(11, 0), **ample_slack
+    # Arrange/Act
+    result = _resolve_deadline_urgency(
+        pursued_occurrence=AMPLE_SLACK_PURSUED,
+        departure_on_pursued_date=time(11, 0),
+        **AMPLE_SLACK_KWARGS,
     )
 
     # Assert
-    assert without.urgent is False
-    assert threaded.urgent is True
+    assert result.urgent is True
 
 
 def test_should_release_on_the_pursued_dates_no_deadline_even_when_tomorrow_would_be_unreachable():
@@ -1349,11 +1358,9 @@ def test_should_release_on_the_pursued_dates_no_deadline_even_when_tomorrow_woul
     branch -- `Normal` on THIS cycle -- rather than falling through to tomorrow's occurrence,
     however tight that one is. `now_dt` is placed a few minutes before midnight and
     `deadline_tomorrow` a few minutes after it, so `next_occurrence` genuinely IS tight
-    (~7.5 kWh over 7 minutes) if a wrong implementation used it as `deadline_at` instead of
+    (30 kWh over 7 minutes) if a wrong implementation used it as `deadline_at` instead of
     discarding it -- that mutation would show up as `unreachable=True` in place of the release
-    this test pins. (An earlier version of this test placed `now_dt`/`deadline_tomorrow` ~24 h
-    apart, which produced a harmless required current either way and could not have caught
-    that mutation.)
+    this test pins.
     """
     # Arrange -- pursued for today (2026-07-27) at 23:58, still ahead of `now_dt`; today's own
     # resolution is withdrawn (`departure_on_pursued_date=None`); tomorrow's departure is 7

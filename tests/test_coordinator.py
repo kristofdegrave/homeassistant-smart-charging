@@ -5142,17 +5142,17 @@ async def test_should_release_from_unreachable_when_the_pursued_dates_own_resolu
     withdrawn, tomorrow's real default would make `next_occurrence` resolve to something other
     than None, and this test would then fail instead of passing for the wrong reason.
     """
+    # Arrange -- cycle 1: a huge SOC gap over a 1 h window is unreachable outright, and
+    # pursues. Tomorrow's own default is seeded now so it stays set across both cycles.
     freezer.move_to("2026-01-15 12:00:00")
     coord = _following_coord(hass, ev_soc=0.0)
     weekday = dt_util.now().weekday()
     coord.departure_dow_defaults[(weekday + 1) % 7] = time_of_day(18, 0)
     cleared = _listen_cleared(hass)
-
-    # Act -- cycle 1: a huge SOC gap over a 1 h window is unreachable outright, and pursues.
     _seed_today_deadline(coord, hours_from_now=1)
     await coord._async_update_data()
-    assert coord._required_current.unreachable is True
-    assert len(cleared) == 0
+    assert coord._required_current.unreachable is True  # precondition
+    assert len(cleared) == 0  # precondition
 
     # Act -- cycle 2: today's own date is cleared to "no deadline" -- released, even though
     # tomorrow's own default (still set) resolves to a real, reachable time.
@@ -5181,11 +5181,11 @@ async def test_should_begin_the_hold_and_notify_when_a_move_lands_in_the_past(ha
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    # Act -- cycle 1 engages ordinarily (66 min out, ~14.82 A -- Urgent, not Unreachable).
+    # Arrange -- cycle 1 engages ordinarily (66 min out, ~14.82 A -- Urgent, not Unreachable).
     _seed_today_deadline(coord, hours_from_now=1.1)
     await coord._async_update_data()
-    assert coord._required_current.unreachable is False
-    assert len(events) == 0
+    assert coord._required_current.unreachable is False  # precondition
+    assert len(events) == 0  # precondition
 
     # Act -- cycle 2: today's departure moves to 6 minutes AGO, still without advancing `now`.
     _seed_today_deadline(coord, hours_from_now=-0.1)
@@ -5222,11 +5222,11 @@ async def test_should_take_urgent_to_unreachable_and_notify_on_an_earlier_still_
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    # Act -- cycle 1 engages ordinarily (66 min out, ~14.82 A -- Urgent, not Unreachable).
+    # Arrange -- cycle 1 engages ordinarily (66 min out, ~14.82 A -- Urgent, not Unreachable).
     _seed_today_deadline(coord, hours_from_now=1.1)
     await coord._async_update_data()
-    assert coord._required_current.unreachable is False
-    assert len(events) == 0
+    assert coord._required_current.unreachable is False  # precondition
+    assert len(events) == 0  # precondition
 
     # Act -- cycle 2: today's departure moves earlier, to 12 minutes out -- still ahead of
     # `now`, but far too tight (3750 Wh / 0.2 h / 230 V ~= 81.5 A).
@@ -5252,13 +5252,13 @@ async def test_should_take_unreachable_to_urgent_and_clear_on_a_later_move(hass,
     coord = _following_coord(hass)
     cleared = _listen_cleared(hass)
 
-    # Act -- cycle 1: 12 minutes out is far too tight (~81.5 A) -- Unreachable.
+    # Arrange -- cycle 1: 12 minutes out is far too tight (~81.5 A) -- Unreachable.
     _seed_today_deadline(coord, hours_from_now=0.2)
     await coord._async_update_data()
-    assert coord._required_current.unreachable is True
-    assert len(cleared) == 0
+    assert coord._required_current.unreachable is True  # precondition
+    assert len(cleared) == 0  # precondition
 
-    # Act -- cycle 2: today's departure moves out to 6 h -- ~5.43 A, comfortably reachable,
+    # Act -- cycle 2: today's departure moves out to 6 h -- ~2.72 A, comfortably reachable,
     # though still Urgent (Off baseline never hands back on its own).
     _seed_today_deadline(coord, hours_from_now=6)
     moved_occurrence = dt_util.now() + timedelta(hours=6)

@@ -557,7 +557,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         """T7: the occurrence for the day AFTER the pursued one, from the same R14 table
         `today_date`/`deadline_tomorrow`/`deadline_reserved_day` above already evaluate (the
         comment at `resolve_deadline_for`'s own definition counts this as the fourth call site)
-        -- one more call to the same closure, so none of the four can drift apart from another.
+        -- one more call to the same closure, so none of the five can drift apart from another.
         Feeds R5's backstop (`missed_deadline_backstop_fired`, coordinator_cycle.py) alongside
         the 24-hour bound.
 
@@ -589,8 +589,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         coordinator_cycle.py), which is what makes a pending pursued occurrence follow its own
         date's departure time (resolution-rules.md).
 
-        Not gated on `deadline_resolvable`: F2 (#1482) needs this on a no-reading cycle too,
-        same shape as `_resolve_following_occurrence` above.
+        Not gated on `deadline_resolvable`: it runs, and is threaded through, on a no-reading
+        cycle too -- unused there today (the non-resolvable early return in
+        `resolve_deadline_urgency` does not read it), but needed once F2 (#1482) does. Same
+        shape as `_resolve_following_occurrence` above.
 
         None whenever there is no pursued occurrence to follow -- nothing to resolve."""
         if self._pursued_occurrence is None:
@@ -876,15 +878,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if required.unreachable:
             # engines/deadline.py saturates required_a to float('inf') for a deadline at or
             # before `now` -- still the pure engine's own documented contract, and since issue
-            # #1005 all but unreachable from this cycle: resolve_next_occurrence yields an
-            # occurrence after `now`, except inside a fall-back repeated hour where a fold=1
-            # `now` can wall-clock-precede a fold=0 occurrence that is absolutely earlier. So
-            # the cap below still guards a real (if once-a-year) path, not only a future
-            # regression. float('inf') must never
-            # cross this boundary: it doesn't round-trip through HA's JSON websocket encoding,
-            # and notification_manager.py formats it straight into user-facing text (issue
-            # #650). Cap it to maximum_permitted_rate_a -- the same bound the engine compared
-            # required_a against to set `unreachable` in the first place, so "would need at
+            # #1005 all but unreachable from this cycle: `deadline_at` (resolve_next_occurrence's
+            # result, or follow_pursued_occurrence's `moved`, #1481) yields an occurrence after
+            # `now`, except inside a fall-back repeated hour where a fold=1 `now` can
+            # wall-clock-precede a fold=0 occurrence that is absolutely earlier -- both sources
+            # share that same `combine`-with-`fold=0` construction. So the cap below still
+            # guards a real (if once-a-year) path, not only a future regression.
+            # float('inf') must never cross this boundary: it doesn't round-trip through HA's
+            # JSON websocket encoding, and notification_manager.py formats it straight into
+            # user-facing text (issue #650). Cap it to maximum_permitted_rate_a -- the same
+            # bound the engine compared required_a against to set `unreachable` in the first
+            # place, so "would need at
             # least max_current A" is exactly true, not an arbitrary numeric artifact like
             # sys.float_info.max would be. NaN needs no separate branch: it can never reach
             # here since `nan > maximum_permitted_rate_a` is always False, which would leave

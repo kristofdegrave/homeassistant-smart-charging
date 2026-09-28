@@ -652,8 +652,9 @@ class DeadlineUrgencyInputs:
     following_occurrence: datetime | None
     # The R14 table's own resolution for the pursued occurrence's OWN date, or None -- fed
     # into `follow_pursued_occurrence` (D1) so a pending pursued occurrence follows its own
-    # date's departure time (resolution-rules.md). Not gated on `deadline_resolvable`: F2
-    # (#1482) needs it on a no-reading cycle too. `None` whenever nothing is pursued.
+    # date's departure time (resolution-rules.md). Not gated on `deadline_resolvable`: carried
+    # on a no-reading cycle too, unused there today (the non-resolvable early return below
+    # never reads it) until F2 (#1482) does. `None` whenever nothing is pursued.
     departure_on_pursued_date: time | None
     auto_dispatchable: bool
     solar_available: bool
