@@ -92,10 +92,9 @@ Fixing is re-authoring — work with the same context the original author had:
    `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. A review body
    has no thread — account for it in the summary instead, mentioning the reviewer by `@login`.
 
-Any other thread reply or PR comment the session posts, in any step, that no other marker of
-the session's fits starts with `<!-- ai-fix-note -->`, which marks nothing handled. Which posts
-carry a marker is the **Rounds and the cap** rule (routed from `CLAUDE.md`'s **Contribution
-workflow** section).
+A post the marker rule marks, where no other marker fits, starts with `<!-- ai-fix-note -->`,
+which marks nothing handled — the marker rule is the **Rounds and the cap** rule (routed from
+`CLAUDE.md`'s **Contribution workflow** section).
 
 ## 6. Then once, for the run
 
