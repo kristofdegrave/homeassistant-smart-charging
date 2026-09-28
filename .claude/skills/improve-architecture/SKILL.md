@@ -36,7 +36,9 @@ generic repository. Where this skill differs from them, this skill wins:
    Brainstorm stage, held to that flow's gate for it; each question of fact goes to the
    `research` skill. The skill ends when that gate is met, or when the human partner stops
    the loop: then each unsettled decision is written to the issue as open, never dropped, and
-   every question of fact is still closed by its `research` comment first. If the partner
+   every question of fact is still closed by its `research` comment first. Whatever it writes
+   to the issue carries a session marker, per the marker rule under `CLAUDE.md`'s
+   **Contribution workflow**. If the partner
    rejects the candidate, the reason is the issue's decision, and closing the issue is theirs.
    This run does not continue into `work-idea`: a later session works the issue with it, from
    the decisions already there. A candidate is never a direct code change. If no candidate is

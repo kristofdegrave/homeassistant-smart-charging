@@ -121,8 +121,8 @@ question with no issue to park on, in its shape.
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
-  own markers (the local round, `ai-fix-`, escalation, self-grant and `autopilot-parked`
-  markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
+  own markers (the local round, `ai-fix-`, escalation, self-grant and `clarify`'s
+  `autopilot-parked` markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
   `unlabeled` one. Every session post carries one — a review's inline comments via its body,
   else `fix`'s note marker — bar the hold-reason review (**Exit labels** below); every
   comment the session posts on an issue carries one, `fix`'s note marker where no other
