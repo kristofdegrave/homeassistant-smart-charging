@@ -434,8 +434,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         purpose (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
         (`resolve_reserved_day`, coordinator_cycle.py), a separate call through the same
         closure, so a future change to either one cannot silently move the other's date with
-        it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) also
-        calls, for today's deadline. is_holiday is
+        it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) and
+        `_resolve_following_occurrence` (T7, below) also call, for today's deadline and the day
+        after the pursued occurrence respectively. is_holiday is
         hardcoded False -- R14's public-holiday source is not wired in yet, so row 2 of R14's
         table never matches. Each optional-role read here goes through `_read_role` (issue
         #717), which caches into `self._role_readings` (ADR-0021) as part of the same guarded
@@ -446,10 +447,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
         bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
         flag currently applies to (at most today's and tomorrow's at once). Resolving today's,
-        calendar tomorrow's and the reserved day's deadline are three separate calls to the
-        same closure, one per date, so each reads the home-day flag for its own date and none
-        can leak into another -- which is what fixes the flag set in the evening for tomorrow
-        also overriding today's resolution."""
+        calendar tomorrow's, the reserved day's and the day-after-the-pursued-occurrence's
+        deadline are four separate calls to the same closure, one per date, so each reads the
+        home-day flag for its own date and none can leak into another -- which is what fixes the
+        flag set in the evening for tomorrow also overriding today's resolution."""
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
@@ -468,10 +469,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             ctx.low_tariff_active = low_tariff_reading
 
         # R14's four-row table, evaluated for a given calendar date -- shared by today's
-        # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule) and the
-        # reserved day's (R9's precondition, UC07), so the other six args can never drift apart
-        # between call sites. NF14: the home-day row is looked up for THIS date alone, never
-        # for "whichever the flag was last read for".
+        # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule), the
+        # reserved day's (R9's precondition, UC07) and the day after the pursued occurrence's
+        # (R5's backstop, T7's `_resolve_following_occurrence`), so the other six args can
+        # never drift apart between call sites. NF14: the home-day row is looked up for THIS
+        # date alone, never for "whichever the flag was last read for".
         def resolve_deadline_for(target_date: date) -> time_of_day | None:
             return resolve_departure_deadline(
                 external_configured,
@@ -545,6 +547,34 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             effective_battery_capacity_kwh = self._config.ev_battery_capacity_kwh
         deadline_today = resolve_deadline_for(today_date) if deadline_resolvable else None
         return deadline_today, effective_battery_capacity_kwh
+
+    def _resolve_following_occurrence(
+        self, resolve_deadline_for: Callable[[date], time_of_day | None]
+    ) -> datetime | None:
+        """T7: the occurrence for the day AFTER the pursued one, from the same R14 table
+        `today_date`/`deadline_tomorrow`/`deadline_reserved_day` above already evaluate (the
+        comment at `resolve_deadline_for`'s own definition counts this as the fourth call site)
+        -- one more call to the same closure, so none of the four can drift apart from another.
+        Feeds R5's backstop (`missed_deadline_backstop_fired`, coordinator_cycle.py) alongside
+        the 24-hour bound.
+
+        None whenever there is no pursued occurrence to hold (nothing to release, so nothing to
+        resolve), and equally None when that day's own R14 resolution is "no deadline" -- both
+        are ordinary values here, not errors.
+
+        Deliberately NOT `resolve_next_occurrence`'s output (D-4): that always yields an
+        occurrence strictly after `now`, whereas this operand is relative to the *pursued*
+        occurrence, which while held has already elapsed -- fed the next-occurrence call's
+        result instead, `following_occurrence <= now` would be unreachable in production."""
+        if self._pursued_occurrence is None:
+            return None
+        following_date = self._pursued_occurrence.date() + timedelta(days=1)
+        following_time = resolve_deadline_for(following_date)
+        if following_time is None:
+            return None
+        return datetime.combine(
+            following_date, following_time, tzinfo=self._pursued_occurrence.tzinfo
+        )
 
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
@@ -788,6 +818,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                     ctx, peak_operand_kw=peak_operand_kw
                 ),
                 pursued_occurrence=self._pursued_occurrence,
+                following_occurrence=self._resolve_following_occurrence(resolve_deadline_for),
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
