@@ -5641,7 +5641,13 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     already elapsed is never held for it -- it never pursued that occurrence in the first
     place, since `_pursued_occurrence` starts `None` (`__init__`) and nothing seeds it to a
     past value on connect. `UC05`'s State model scopes the pursued occurrence to the current
-    connected session, never preserved across anything that isn't itself a live hold.
+    connected session, never preserved across a restart or a reload (NF14).
+
+    This is really the coordinator's very first cycle (already `STATE_CHARGING`, no
+    disconnected-to-connected transition modelled) -- equivalent to a genuine connect today,
+    since a disconnect already releases the occurrence
+    (`test_should_release_the_pursued_occurrence_when_the_car_disconnects`) and `__init__`
+    starts it `None` either way.
 
     Today's own default resolves to a departure time already behind `now`, so a coordinator
     that (wrongly) fed that stale time straight into `resolve_required_current` as `deadline_at`
@@ -5650,17 +5656,21 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     urgency and latching that already-elapsed time as `pursued_occurrence` on the very first
     connected cycle. A real, sizeable SOC gap (not one already at the active limit) is used so
     that shortcut would actually show up as urgency, rather than being masked by `soc_at_active_
-    limit`'s own zero-required-current branch.
+    limit`'s own zero-required-current branch. Asserting `required_a` against tomorrow's
+    occurrence (not just the negatives below) is what tells that apart from a regression that
+    dropped the deadline into "no deadline resolved" instead -- the negatives alone read the
+    same in both cases.
 
-    Set up in `Power`, as `test_should_release_the_pursued_occurrence_when_the_car_disconnects`
-    is, so this reaches the ordinary `deadline_resolvable=True` path rather than the non-
-    resolvable early return.
+    Set up in `Power`, matching this file's other direct-construction deadline tests; the mode
+    plays no part in reaching `deadline_resolvable=True` (`coordinator.py`'s
+    `status in CHARGEABLE_STATES and ev_soc is not None` is mode-independent) -- `Power` is
+    simply this suite's plain baseline for a test that isn't about mode selection.
     """
     # Arrange -- freezer.move_to takes a UTC instant; this harness's local zone is US/Pacific
     # (UTC-8 in January), so 06:00 UTC on the 16th is 22:00 local on the 15th. Today's own
     # default (17:00) is already elapsed at that local time; tomorrow's (09:00) is a
-    # comfortable ~11h out. 30-point SOC gap over that window needs far less current than the
-    # escalated rate (resolved off `max_peak_kw=100.0`) permits.
+    # comfortable ~11h out. The 30-point SOC gap over that ~11h window needs ~8.9A, well under
+    # this suite's `max_current=16.0` ceiling on the escalated rate (config_factory.py).
     freezer.move_to("2026-01-16 06:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
     coord = SmartChargingCoordinator(
@@ -5677,8 +5687,13 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     # Act -- this coordinator's very first cycle: nothing was ever pursued before it.
     result = await coord._async_update_data()
 
-    # Assert -- never engaged, let alone held on the elapsed time.
+    # Assert -- never engaged, let alone held on the elapsed time; the required current pins
+    # that tomorrow's 09:00 occurrence is the one actually judged (75kWh * 30% / 11h / 230V),
+    # not merely that nothing went wrong.
     assert result.fault is False
     assert coord._pursued_occurrence is None
     assert coord._required_current.urgent is False
     assert coord._required_current.unreachable is False
+    assert coord._required_current.required_a == pytest.approx(
+        75.0 * (80.0 - 50.0) / 100 * 1000 / 11 / 230.0
+    )
