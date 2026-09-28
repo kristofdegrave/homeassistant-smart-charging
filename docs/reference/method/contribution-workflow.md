@@ -1,16 +1,14 @@
 # Contribution workflow
 
 Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a design, or
-code. Five steps, each naming the skill an interactive session runs it through; the rules the
-steps rest on follow the chain. The artifact-specific additions for analysis documents and ADRs
+code. Five steps, each naming the skill an interactive session runs it through. The artifact-specific additions for analysis documents and ADRs
 (`CLAUDE.md`'s **Review protocol for analysis documents** and **Architecture Decision Records
 (ADRs)** topics) layer their own template and quality-check steps on top of this, never
 replacing it.
 
 Beside this lifecycle: the stages either side of it are
 [idea-to-product.md](idea-to-product.md)'s, and the **Definition of Done** an author checks before
-the PR is [definition-of-done.md](definition-of-done.md)'s — the project-wide floor, with commit
-message conventions and the route to a row's per-type *completion bar*.
+the PR is [definition-of-done.md](definition-of-done.md)'s.
 
 ## The chain
 
@@ -41,7 +39,7 @@ message conventions and the route to a row's per-type *completion bar*.
    - Then the pass's exit, this step's alone (**Exit labels** below): a clean pass →
      `needs-approval`, with the PR confirmed to be based on `main`; Critical or Major still
      open on the last pass the cap allows, no round self-granted → both exit labels and one
-     escalation comment handing the disagreement to the human partner; Critical or Major open
+     escalation comment; Critical or Major open
      with passes left, or a round self-granted → no label, the findings are the fix step's.
    - Board **Status** stays *in review*. Merge is the human's, always (**Merge and issue
      closing** below).
@@ -73,8 +71,7 @@ implement → review → fix → review … → a clean pass or the cap. The ses
 points — a clean pass, or the cap with Critical or Major findings still open and no round
 self-granted — both found by step 2 at the end of its pass, and reports; a run its dispatch says
 is unattended has a third, the park `clarify` makes (**Rule C**).
-It never starts the next issue off the back of the one just finished: the control on
-autonomous artifact-chaining, per issue, not per step.
+It never starts the next issue off the back of the one just finished.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
@@ -134,8 +131,7 @@ question with no issue to park on, in its shape.
 ## Exit labels
 
 `needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. On a PR, `needs-approval` adds that a human may merge it **as it stands**, which is
-why a hold takes it off; `needs-decision` adds that a reason not to merge is still open. Both PR exits have one actor: the **review step**, at the end of the pass it
+human decides**. On a PR, `needs-approval` adds that a human may merge it **as it stands**; `needs-decision` adds that a reason not to merge is still open. Both PR exits have one actor: the **review step**, at the end of the pass it
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision`. After the last pass the cap allows, with Critical or Major
 still open and no round self-granted, it applies `needs-decision` **alongside**
@@ -166,8 +162,7 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
 - It takes `needs-approval` off, and puts `needs-decision` on alone. `needs-decision` alone
   means the PR is **on hold**: no automated work is running on it, and a human decides.
 - It posts the reason on the PR as an escalation comment ending in the escalation marker. That
-  comment is a reset event (**Rounds and the cap** above), so a round the human partner grants
-  starts a fresh count. The label operations and the comment follow
+  comment is a reset event (**Rounds and the cap** above). The label operations and the comment follow
   [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
 - It does no further work on the PR. The human partner merges as is, or grants a round.
 - On a granted round, the session's first act posts the hold reason as a PR review of its own:
@@ -175,8 +170,7 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
   since the review step never reads human review bodies as findings. The fix step reads it as
-  any human review body, and the chain runs on from **Fix**. Unmarked, it also
-  counts as a human item, which changes nothing: the grant already started a fresh count. The session's reason
+  any human review body, and the chain runs on from **Fix**. The session's reason
   is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
   `needs-approval`.
@@ -260,8 +254,7 @@ step 0/1 here.
 → done**: the session running step 1 moves it to *in progress* when its first child goes
 there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
 it to *done* with the same hand that closes it, which step 4's open-children report prompts
-(**Merge and issue closing** above). A child starting under an epic already *in
-progress* changes nothing.
+(**Merge and issue closing** above).
 
 ## Parallel work and forward dependencies
 
@@ -291,9 +284,7 @@ session's own footprint by the session's markers, never by author.
   stay in sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
-  the work exists — a defect in, or an improvement to, already-shipped behaviour. They are
-  orthogonal because a defect's fix is not always code: an entity-catalog row claiming a
-  Read-by it does not earn is a `bug` fixed in `docs/analysis/**`. So an issue carries the kind label
+  the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue carries the kind label
   **alone** at the shipped-behaviour track's entry point, where the claim has not been verified
   and the fixing artifact is not yet known, and gains a context label once it is —
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
@@ -333,9 +324,7 @@ session's own footprint by the session's markers, never by author.
   issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
-**Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
-(`adr`, `uc`, `requirement`, `development`, `testing`, `workflow`, `documentation`),
-number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
+**Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label, number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
 defined segment. Earlier branches for this kind of work used `dev/` and `fix/`; both
