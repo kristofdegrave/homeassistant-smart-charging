@@ -112,7 +112,7 @@ One entry per settled question, plus a `research` comment per question of fact.
 
 The idea is scoped enough to route and split — not designed in detail; that belongs to each
 child's own stage. A question of fact still open is answered by a `research` comment before
-the stage ends, not carried forward as an assumption.
+the stage ends.
 
 ### Skills
 
@@ -159,11 +159,12 @@ Every issue a strand gets is filed here — the epic, the issues the artifact st
 against, and one child per task of the spec. A strand that needs no epic files one issue and
 stops; which strands those are is the first bullet set below.
 
-The stage is **entered twice, with the artifact stages in between**, the way the **ADR** stage
-is: the issues those stages run against must exist before they start, and the spec derives
-from what they merged. The **opening pass** runs straight after **Route**; the
-**closing step** runs once **Design** has merged. An issue that surfaces after both still
-belongs here — the opening pass says where it attaches.
+The stage is **entered twice, with the artifact stages in between**: the issues those stages
+run against must exist before they start, and the spec derives from what they merged. The
+**opening pass** runs straight after **Route**; the **closing step** runs once the `decompose`
+child is unblocked. An issue that surfaces after both still belongs here — the opening pass
+says where. Until the opening pass files that child with its edges, the human files it and the
+**Design** stage's gate below holds the closing step.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
 
@@ -201,19 +202,21 @@ carry one, ranking, copying to children — are
 
 ### The closing step: the epic body is the spec, and its children are the tasks
 
-Once **Design** has merged, the spec for one build slice is written into the epic's body and
-the children are cut from it. Four steps, each finishing before the next starts; the mechanics
-of running each — the scratch file, the dispatch, the `gh` calls, the per-child filing
-checklist — are `file-task-issue`'s.
+Once the `decompose` child is unblocked, the spec for one build slice is written into the
+epic's body and the children are cut from it. Four steps, each finishing before the next
+starts; the `decompose` row's work file runs all four as one issue, and step 4's per-child
+filing checklist is `file-task-issue`'s.
 
-1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. Nothing
-   else has to be written first, and no child exists yet to be cut from it.
+1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. No
+   child exists yet.
 2. **One fresh-agent pass over that body**, against the [decomposition
    checklist](decomposition-checklist.md), while the decomposition is still cheap to change.
    Its findings are fixed in the body.
-3. **The human partner reads the fixed body** and says to go on. The pass is one agent run
-   then that read — not repeated, with no round cap, so a finding it raises is answered
-   before the read.
+3. **The human partner reads the fixed body** and says to go on — the parked gate: the
+   `decompose` work file parks the epic under `needs-approval`, and removing it is the go. The
+   pass is one agent run, then that read — never repeated over one draft, carrying no round
+   cap, so its findings are answered first; a fresh draft after the work file's *Out of the
+   body* stop gets its own.
 4. **The children are filed**, in build order, one issue per task.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` into concrete
@@ -260,9 +263,7 @@ entry carries these keys, one item per key:
   the worker re-derive the reading; anchoring so tightly that the surrounding text is needed
   is the same fault mirrored.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
-  `none` and why in one line. Written now, not after deployment — a list written once the build
-  exists records what the build produced rather than what the task promised, and nothing
-  downstream can tell them apart.
+  `none` and why in one line. Written now, not after deployment.
 
 Each child issue is then filed with that entry as its body, its context label, board fields
 and the epic's milestone, its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and the
@@ -280,14 +281,14 @@ one child per task.
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
 The opening pass's own gate: nothing downstream starts without an issue to run against, and
-what is filed for work is milestoned. The closing step's: step 2's pass and step 3's read, both
-complete before any child is filed, and then every task in the body having an issue, filed as
-step 4 says. The **Implementation** stage starts from those issues and from nothing else.
+what is filed for work is milestoned. The closing step's: step 2's pass and step 3's parked
+read, both complete before any child is filed, and then every task in the body having an issue,
+filed as step 4 says. The **Implementation** stage starts from those issues and from nothing
+else.
 
 ### Skills
 
-`file-task-issue`; `brainstorming` — scoping the slice boundary and the deferrals before the
-body is drafted.
+`file-task-issue`, `clarify`, the `decompose` work file.
 
 ## 5. ADR
 
@@ -387,8 +388,8 @@ artifact-specific additions, and this rule is the first of them:
 **A `requirement` or `uc` change that touches shipped behaviour does not get
 `needs-approval` until the epic that will carry its spec exists for it.** The epic, not the
 written body: the opening pass files it at **Decompose**, while the body is written at the
-closing step once **Design** has merged — so requiring the body here would ask for an artifact
-this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
+closing step once the `decompose` child is unblocked — so requiring the body here would ask for
+an artifact this stage cannot yet have. That is the same bar the retired `specs` issue set, which was
 filed long before its plan was drafted. Without it, an
 analysis document can merge describing behaviour the code does not have.
 The review step applies that label on a clean pass and knows nothing about child issues, so

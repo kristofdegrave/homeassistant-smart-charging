@@ -55,10 +55,12 @@ be stating a profile value, which the method check refuses:
   workflow, so nothing moves an item into it. If it gains one later (say, dependencies resolved
   and pickable), the contribution workflow's chain is where it gets inserted, explicitly.
 - `In progress` — the *in progress* role: writing has actually started, in a worktree on the
-  issue's branch.
+  issue's branch — or, for an issue with no worktree (an epic, a `decompose` issue), its work
+  has.
 - `In review` — the *in review* role: a PR is open; it stays here through every review/fix
   round and the human's merge decision.
-- `Done` — the *done* role: merged and cleaned up.
+- `Done` — the *done* role: merged and cleaned up — or, for an issue with no PR, closed by
+  its owner's hand.
 
 **Size** (`board.fields.size`) is a five-tier T-shirt estimate of reading-plus-writing effort;
 **Estimate** (`board.fields.estimate`) is story points in a plain number field. Both are board
