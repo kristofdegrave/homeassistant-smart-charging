@@ -86,8 +86,8 @@ and against a different standard:
   decomposition that wrote the epic body, per `CLAUDE.md`'s **Idea-to-product flow** — so a
   missing or unusable list is a finding
   against the spec, caught when the spec is reviewed rather than when this pass is run.
-- **The result is a comment on the epic** — the session's comment starts with `fix`'s
-  `<!-- ai-fix-note -->` marker: the observed value for each item on that list, plus a log excerpt or dashboard
+- **The result is a comment on the epic**, marked per the marker rule under `CLAUDE.md`'s
+  **Contribution workflow**: the observed value for each item on that list, plus a log excerpt or dashboard
   screenshot. Where the work has no epic — a single-artifact idea,
   or a one-slice fix — the comment goes on the task issue instead.
 - **The first slice of a strand is verified live before slice two starts.**
