@@ -113,9 +113,7 @@ temporary log with a unique prefix — `[DEBUG-a4f2]` — so cleanup is one grep
 
 Stop here and report:
 
-1. **Confirmed or refuted**, with the one command and its output. A confirmed claim is placed
-   on a milestone now — on the issue the milestone rule under `CLAUDE.md`'s **Issue
-   conventions** says carries one.
+1. **Confirmed or refuted**, with the one command and its output.
 2. **The minimal reproduction** and the captured symptom.
 3. **The cause** — which hypothesis survived, which were eliminated.
 4. **Where else this shape lives** — the same wrong assumption at sibling call sites, roles or
@@ -127,6 +125,11 @@ Stop here and report:
    replicate the chain that triggers the defect — that is itself the finding.** Record it on the
    issue; a regression test at the wrong seam is false confidence.
 6. **Any `[DEBUG-…]` probes or throwaway files still in the tree.**
+
+A confirmed claim is then placed on a milestone chosen with the human partner — on the claim's
+issue, filed first if the report arrived without one. That it carries one now is the milestone
+rule under `CLAUDE.md`'s **Issue conventions**; the command is `CLAUDE.md`'s **Tracker
+mechanics**'.
 
 The fix is then ordinary work: file it as a `development` issue and run it through this project's
 contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named

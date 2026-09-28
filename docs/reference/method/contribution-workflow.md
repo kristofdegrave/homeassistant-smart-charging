@@ -231,7 +231,7 @@ epic's open-children count once the linked issue is *done*, and reports it; what
 closes. Nothing else watches for the moment: GitHub does not close a parent whose sub-issues
 are all closed, and a child PR carries `Part of` for its epic so a merge cannot.
 
-Step 4 removes the task's worktree because one left behind is a stale checkout nobody sweeps.
+Step 4 removes the task's worktree.
 
 ## Commit & push authorization
 
@@ -306,20 +306,22 @@ session's own footprint by the session's markers, never by author.
   relationship**. Neither is body text — `gh` supports both directly; the commands, and the
   read-backs that confirm an edge landed, are [tracker-mechanics.md](tracker-mechanics.md)'s.
   Child issue bodies still say "Part of #N" for the epic, never
-  "Closes #N" (would auto-close the epic).
+  "Closes #N".
 - **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice ranked by a
   numeric title prefix — lower first, unprefixed after every prefixed one — never a due date.
-  An epic carries its milestone and filing copies it to each child routed to work. Every
-  issue routed to work carries one; an `idea` issue and an unreproduced claim are not work yet
-  ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say when
-  each is placed). Whoever picks the next issue takes an unmilestoned one last, never skips
-  it. A new milestone takes one past the highest prefix — 1 while none has one — and
-  only the human partner reorders. The `gh` flags are
+  Unprefixed milestones do not rank against each other: a picker facing a tie puts the choice
+  to the human partner through `clarify` (**Rule C**). A new milestone stays unprefixed until
+  the human partner prefixes them all in the roadmap session, and only the human partner
+  reorders. An epic carries its milestone and filing copies it to each child routed to work.
+  Every issue routed to work carries one; an `idea` issue and an unreproduced claim are not
+  work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
+  when the work they become is placed). Whoever picks the next issue takes an unmilestoned
+  issue routed to work last, never skips it. The `gh` flags are
   [tracker-mechanics.md](tracker-mechanics.md)'s **Filing a work item**.
 - **One extra condition on `needs-approval`**: a `requirement`/`uc` change that touches
   shipped behaviour also needs an epic whose body carries the spec to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
-  condition and explains why the automatic label cannot enforce it.
+  condition.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
   issue is filed as a native sub-issue of that epic, never standing alone: the parent edge
@@ -360,8 +362,8 @@ why and is not revised.
 ### Two rules that apply elsewhere do not apply here
 
 - **Tracking refs are required, not forbidden.** `CLAUDE.md`'s *Review protocol for analysis
-  documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies, because
-  they rot. That rule does not reach this directory: a post-mortem's entire evidentiary value
+  documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies. That
+  rule does not reach this directory: a post-mortem's entire evidentiary value
   is the specific PRs, issues, commits and review comments it cites, at the dates it cites
   them — don't "fix" these.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis

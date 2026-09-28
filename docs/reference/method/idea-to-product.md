@@ -180,7 +180,7 @@ re-argued:
 - **Bug track**: an epic only when brainstorming yields more than one slice. A one-slice fix
   goes straight from the routed issue to work.
 - **A single-artifact idea**: no epic, so no spec and no closing step — one issue, filed
-  directly, and the stage ends there.
+  directly (`file-task-issue`), and the stage ends there.
 
 Everything already decidable is filed now: the `adr` issue if a structural decision surfaced,
 and any already-scoped `uc`, `requirement`, `documentation` or `workflow` issue. Anything

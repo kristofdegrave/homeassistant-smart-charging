@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of a decomposition's closing step — running its review pass, and filing its children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of a decomposition's closing step — running its review pass, and filing its children.
 ---
 
 # File a task issue
@@ -36,9 +36,10 @@ half-scoped.
 3. **Pick the milestone** — a filing field, set on every issue the milestone rule under
    **Issue conventions** above says carries one: a child takes its epic's; an epic or a
    standalone issue the slice it belongs to, or a new one where none fits, ranked as that
-   section says and never by this skill's own choice. What a milestone is, and why an unmilestoned issue is a filing defect
-   rather than a neutral state, is that section's too; the flag that sets it, the call that
-   creates one and the read-back that confirms the name resolved are **Tracker mechanics**'.
+   section says and never by this skill's own choice. What a milestone is, and how an issue
+   routed to work that lacks one is picked, are that section's too; the flag that sets it, the
+   call that creates one and the read-back that confirms the name resolved are **Tracker
+   mechanics**'.
 4. **File it** — setting the milestone and whichever of step 5's edges are already known as
    flags on the create call rather than as a second pass — then move on; implementing it is a
    separate, later step.
