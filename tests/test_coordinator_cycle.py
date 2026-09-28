@@ -87,6 +87,25 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
     assert ctx.solar_reserve_active is False
 
 
+def test_should_raise_when_smoothed_baseline_w_is_omitted_at_construction():
+    """Issue #1189/T10: `smoothed_baseline_w` is required, no default, for the same #990
+    rationale `baseline_w` already carries -- a forgotten construction site must fail loudly
+    (a `TypeError` at construction) rather than silently default onto a permissive placeholder
+    that decides a forecast. Companion to
+    `test_cycle_context_constructs_with_required_fields_and_defaults` above, which only pins
+    that the field construct successfully when given; this pins that omitting it is not
+    silently tolerated."""
+    with pytest.raises(TypeError):
+        CycleContext(
+            status=STATE_CHARGING,
+            net_w=100.0,
+            charger_w=1000.0,
+            voltage=230.0,
+            now=1.0,
+            baseline_w=-900.0,
+        )
+
+
 def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use():
     """issue #564: the whole point of `None` over a same-typed placeholder for the two
     numeric fields resolved partway through _run_cycle -- a hypothetical future ModeHandler

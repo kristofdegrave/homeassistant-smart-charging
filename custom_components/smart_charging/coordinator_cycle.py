@@ -79,7 +79,8 @@ class CycleContext:
     # tracked separately (issue #992), out of #990's own scope.
     baseline_w: float
     # Issue #1189/T10, R5's third smoothed-baseline criterion: the admitted mean in household
-    # sign (`net_w - charger_w`, ADR-0049's `smooth_household_w`) -- both of the escalated
+    # sign (`net_w - charger_w`, `smooth_household_baseline`'s `smoothed_household_w`,
+    # ADR-0051) -- both of the escalated
     # maximum permitted rate's baseline-dependent bounds (`_escalated_maximum_permitted_rate_a`'s
     # peak and C4 operands) fit to this, never to `baseline_w`/`net_w`/`charger_w` above, which
     # stay the R3/C4 clamps' and the peak-headroom readout's own raw (debounced) operands. A
