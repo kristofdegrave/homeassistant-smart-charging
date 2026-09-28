@@ -725,6 +725,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             voltage=voltage,
             now=now,
             baseline_w=baseline_w,
+            # Issue #1189/T10: the same admitted mean `surplus_w` above negates -- both of
+            # `_escalated_maximum_permitted_rate_a`'s baseline-dependent bounds fit to it, in
+            # household sign (surplus_w is negated, this is not).
+            smoothed_baseline_w=smoothed_household_w,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             # R11/issue #757: mirrors this cycle's has-charged flag onto ctx so
@@ -1538,6 +1542,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         bounds fitted to the peak headroom under an effective peak limit raised to the maximum
         peak.
 
+        Both baseline-dependent bounds (peak, C4) are fitted to `ctx.smoothed_baseline_w` --
+        R5's own forecast, not a clamp -- rather than the raw `ctx.baseline_w`/`ctx.net_w`/
+        `ctx.charger_w` the real R3/C4 clamps and the `peak_headroom_a` readout still use
+        (issue #1189/T10, R5's third smoothed-baseline criterion; ADR-0051, which narrows
+        ADR-0006 step 2's raw-charger clause for this forecast specifically). The forecast is
+        fitted to R10's admitted joint mean, which already folds `net_w - charger_w` for the
+        solar modes' own step 6 (ADR-0049) -- this reuses that same value rather than a second,
+        net-only mean.
+
         Resolved on every cycle whether or not urgency is actually in effect, which is the whole
         point of it: a test written against the rate CURRENTLY in force would move the moment
         urgency raised it, so engaging urgency would immediately make the deadline look
@@ -1573,9 +1586,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         """
         bounds = [
             self._config.max_current,
+            # Issue #1189/T10, R5's third smoothed-baseline criterion: fitted to the admitted
+            # mean (`ctx.smoothed_baseline_w`), not the raw `ctx.net_w`/`ctx.charger_w` C4 itself
+            # clamps against -- `charger_w=0.0` because `ctx.smoothed_baseline_w` is already the
+            # household's own load net of the charger; the helper reads only the two operands'
+            # difference.
             ceiling_headroom_a(
-                net_w=ctx.net_w,
-                charger_w=ctx.charger_w,
+                net_w=ctx.smoothed_baseline_w,
+                charger_w=0.0,
                 voltage=ctx.voltage,
                 ceiling_a=self._config.grid_ceiling_a,
                 offset_a=self._config.grid_safety_offset_a,
@@ -1589,8 +1607,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 urgent=True,
             )
             bounds.append(
+                # Issue #1189/T10: same admitted-mean operand as C4's bound above -- fitted to
+                # `ctx.smoothed_baseline_w`, not the raw `ctx.baseline_w` the real R3 clamp
+                # (`_apply_peak_clamp`) and the `peak_headroom_a` readout still clamp/report
+                # against.
                 peak_headroom_a(
-                    baseline_w=ctx.baseline_w,
+                    baseline_w=ctx.smoothed_baseline_w,
                     voltage=ctx.voltage,
                     effective_peak_limit_kw=escalated_peak_limit_kw,
                     safety_margin_w=self._config.safety_margin_w,
@@ -1743,16 +1765,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         state -- the baseline-mode comparison needs a candidate mode's request
         without actually charging on it.
 
-        `net_w`/`charger_w`/`baseline_w` are deliberately 0.0/0.0/0.0 here, not threaded from
-        the caller: none of the five `ModeHandler.desired_current` implementations reads
-        `ctx.net_w`/`ctx.charger_w`/`ctx.baseline_w` (only `ctx.surplus_w`/`ctx.voltage`/
+        `net_w`/`charger_w`/`baseline_w`/`smoothed_baseline_w` are deliberately
+        0.0/0.0/0.0/0.0 here, not threaded from the caller: none of the five
+        `ModeHandler.desired_current` implementations reads `ctx.net_w`/`ctx.charger_w`/
+        `ctx.baseline_w`/`ctx.smoothed_baseline_w` (only `ctx.surplus_w`/`ctx.voltage`/
         `ctx.now`/`ctx.status`), and this dry-run ctx is never passed to
-        `_apply_peak_clamp`/`_apply_grid_ceiling_clamp` (the two real consumers, issue #719) --
-        only the real `_run_cycle`-constructed ctx is. `baseline_w=0.0` here is otherwise the
-        exact placeholder issue #990's own `CycleContext.baseline_w` field docstring warns
-        against -- safe ONLY because of the "never reaches `_apply_peak_clamp`" guarantee above;
-        if a future ModeHandler needs any of the three, thread the real values from `_run_cycle`
-        at that point, not before."""
+        `_apply_peak_clamp`/`_apply_grid_ceiling_clamp`/`_escalated_maximum_permitted_rate_a`
+        (the three real consumers, issue #719 and #1189/T10) -- only the real
+        `_run_cycle`-constructed ctx is. `baseline_w=0.0` here is otherwise the exact
+        placeholder issue #990's own `CycleContext.baseline_w` field docstring warns against --
+        safe ONLY because of the "never reaches `_apply_peak_clamp`" guarantee above; if a
+        future ModeHandler needs any of the four, thread the real values from `_run_cycle` at
+        that point, not before."""
         if status not in CHARGEABLE_STATES:
             return 0.0
         if self._mode_handlers[mode].is_soc_gated and ev_soc >= active_soc_limit:
@@ -1764,6 +1788,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             voltage=voltage,
             now=now,
             baseline_w=0.0,
+            # Issue #1189/T10: same placeholder-is-safe guarantee as `baseline_w=0.0` above --
+            # this ctx never reaches `_apply_peak_clamp`/`_escalated_maximum_permitted_rate_a`
+            # (see this method's own docstring above), so a placeholder here decides nothing.
+            smoothed_baseline_w=0.0,
             ev_soc=ev_soc,
             surplus_w=surplus_w,
             active_soc_limit=active_soc_limit,
