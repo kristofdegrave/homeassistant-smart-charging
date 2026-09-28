@@ -65,8 +65,7 @@ _<YYYY-MM-DD> · needed by: <the decision this unblocks>_
 Rules for it:
 
 - **The first line is `fix`'s catch-all marker**, per the marker rule under `CLAUDE.md`'s
-  **Contribution workflow**; without it, a later run would read this comment as the human's
-  answer to a question `clarify` parked on the same issue.
+  **Contribution workflow**.
 - **`Not confirmed` is never omitted.** If everything was confirmed, say "nothing outstanding"
   explicitly. A silent section reads as "not checked".
 - A question that could not be answered at all still gets the comment. The negative result —
