@@ -171,7 +171,7 @@ issue once it is fully captured — never relabel it as the epic. The brainstorm
 Whether the strand needs an epic is settled here and written on the issue, so it is not
 re-argued:
 
-- **New behaviour**: always an epic, so there is always a body for the spec.
+- **New behaviour**: always an epic, so a spec, where one is cut, always has a body.
 - **Bug track**: an epic only when brainstorming yields more than one slice. A one-slice fix
   goes straight from the routed issue to work.
 - **A single-artifact idea**: no epic, so no spec and no closing step — one issue, filed
@@ -183,15 +183,20 @@ surfacing later that belongs to the strand — a bug found mid-implementation, a
 attached as a sub-issue too; epic membership needs no context label, and `file-task-issue`
 covers which label such a child takes.
 
-**The last issue the pass files is the `decompose` child**, for an epic that will carry a
-spec cut from a slice of `project-plan.md`: titled `decompose: <epic title>`, labelled
-`decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
-`documentation` issue the pass filed. An epic with no spec — a method epic of `workflow`
-tasks, a bug-track epic spanning slices — gets none, as a single-artifact idea has no closing
-step; its children are filed directly as tasks. A later artifact-stage issue blocks the open
-child too, and its filer posts on a parked epic a not-ready park naming it, in the `decompose`
-work file's *Out of the body* form; where the child has closed, a new one is filed with that
-edge and that park.
+**The last issue the pass files is the `decompose` child**, for an epic of product behaviour
+whose tasks will be cut from a slice of `project-plan.md`: titled `decompose: <epic title>`,
+labelled `decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
+`documentation` issue the pass filed. A method epic of `workflow` tasks or a bug-track epic
+gets none: it has no spec to cut, so no closing step, and its `workflow` and kind-labelled
+children are filed directly (a task issue still needs a spec epic, per **Task issues** in
+[contribution-workflow.md](contribution-workflow.md)).
+
+**A later artifact-stage issue blocks the open `decompose` child too.** Wherever a park
+comment stands on the epic, whatever `needs-approval`'s state, its filer also posts a
+not-ready park naming it, in the `decompose` work file's *Out of the body*
+form (children part `none`); where the child has closed, a new one is filed with that edge and
+that park. The filer never applies or removes `needs-approval`: with it off, only the human
+re-applying it resumes the run.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.

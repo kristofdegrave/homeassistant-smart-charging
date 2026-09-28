@@ -100,8 +100,8 @@ in a finding of the pass (step 4):
    dropped, a Size changed), never a question to raise.
 2. **File the children**, in build order, one issue per task, through `file-task-issue`'s
    *Filing the children of a decomposition*, which owns what each carries. This file's
-   convention for the children it files: each title starts `T<n>:`, its task id; a re-run
-   skips a task whose `T<n>:` starts the title of a sub-issue it filed.
+   convention for the children it files: each title starts `T<n>:`, its task id; a run
+   skips a task whose `T<n>:` starts the title of the epic's sub-issue, whichever child filed it.
 3. **Close the `decompose` issue** with a comment listing the children by number, why a
    child's Size differs from the summary's, how each comment step 1 read was applied, and
    what **Rules** reports (**Tracker mechanics**, *Closing a work item*); move it to *done*

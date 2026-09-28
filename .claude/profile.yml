@@ -111,7 +111,7 @@ labels:
     - name: enhancement
       color: a2eeef
       description: "Improvement to already-shipped behaviour — pair with a context label once the artifact is known"
-  # An issue's place in the tree, orthogonal to both groups above: an epic is a parent tracking
+  # An issue's place in the tree, orthogonal to the context and kind groups: an epic is a parent tracking
   # its children, never a task. It takes no context label, sits beside a genuine kind label, and
   # adds no work type — so no Model selection row and no directory.
   structure:

@@ -283,7 +283,7 @@ human partner**.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow` (CI/skill/agent-authoring
   changes), `documentation` (design-doc changes, `docs/design/**`), `decompose` (an epic's
-  body read, one child per epic). The label set itself — every name, colour and description,
+  body read, at most one per epic with a spec). The label set itself — every name, colour and description,
   and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
   `work_types`, and `.github/setup-labels.sh` writes it to the repository. Adding or renaming
   a label: [ci-pipeline.md](ci-pipeline.md) lists every place this vocabulary must stay in
@@ -317,7 +317,7 @@ human partner**.
   Unprefixed milestones do not rank against each other: a picker facing a tie puts the choice
   to the human partner through `clarify` (**Rule C**). Within one milestone, between milestones
   sharing a prefix, or among unmilestoned issues, it takes the lowest-numbered (oldest)
-  unblocked issue. The roadmap session is one the human partner holds to prefix every
+  unblocked issue not labelled `epic`. The roadmap session is one the human partner holds to prefix every
   milestone; a new milestone stays unprefixed until then, and only the human partner reorders. An epic carries its milestone and filing copies it to each child routed to work.
   Every issue routed to work carries one; an `idea` issue and an unreproduced claim are not
   work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
@@ -330,9 +330,7 @@ human partner**.
   condition.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
-  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge
-  says the body was cut from a reviewed decomposition rather than typed straight into an
-  issue. Get the edge on at filing time; adding it afterwards works
+  issue is filed as a native sub-issue of that epic, never standing alone. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,

@@ -48,7 +48,7 @@ half-scoped.
    **blocked-by edge** to each already-filed issue it cannot start before, rather than leaving
    it untracked or its order implied by body text; the epic takes a blocked-by edge to it too,
    per **Issue conventions**. An artifact-stage issue filed after the epic's opening pass also
-   takes the `decompose` edge and park that pass, under **Idea-to-product flow**, gives it.
+   blocks the epic's open `decompose` child, with the park **Idea-to-product flow** gives.
    Both edges can be set while creating the issue or added afterwards; **Tracker mechanics**
    above routes to the commands and to the read-back that confirms each edge exists. Don't
    touch the epic's other children while doing this: their state is a call for whoever owns
@@ -81,7 +81,7 @@ epic's milestone, `Source:` lines and edges, and no task in that body is left wi
 
 The conventions are `CLAUDE.md`'s **Issue conventions**, not this list — except the `Source:`
 lines, whose owner is item 2 above; the ones this skill's users trip on most are the context
-label, those lines, Size and Estimate, the milestone, and epic edges. The mistakes that are
+label, the `epic` label, those lines, Size and Estimate, the milestone, and epic edges. The mistakes that are
 this skill's own:
 
 - Forcing a context label onto work that is still fuzzy instead of filing it as an `idea`
@@ -90,8 +90,6 @@ this skill's own:
   passed as a flag is a second step too (item 5); an issue missing them reads as filed and is
   not.
 - Filing a child without its epic's milestone (item 3).
-- Filing an epic with a context label, or without `epic` (item 2) — the label is how an epic is
-  told from a task.
 - Leaving an epic the opening pass gives a `decompose` child without one, or that child short
   of an edge to an artifact-stage issue it waits on: the closing step then starts before what
   it derives from has merged.
