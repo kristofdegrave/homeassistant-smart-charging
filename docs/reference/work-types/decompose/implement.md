@@ -31,13 +31,13 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
   human has not answered. Its children part is `none` (*Out of the body*) → re-enter
   **Entry 1** at step 1, a fresh draft, applying as a change every counting comment newer
   than the newest park whose children part is not `none`. Otherwise a counting comment
-  newer than it is a change request: re-enter at step 1's gate, then step 3, fix the body as
-  it asks, and park again with a fresh summary — the pass is not re-run. None → stop and
-  report the epic as still parked.
+  newer than it is a change request: re-enter at the gate (step 1), then drafting (step 3),
+  fix the body as it asks, and park again with a fresh summary — the pass is not re-run.
+  None → stop and report the epic as still parked.
 - One does, its children part is not `none`, and the epic's label timeline (**Tracker
-  mechanics**, *Reading a change request's label events*) shows `needs-approval` on when it
-  was posted and removed after it by a login not ending in `[bot]` → **Entry 2**: that
-  removal is the go.
+  mechanics**, *Reading a change request's label events and its review/comment timeline*)
+  shows `needs-approval` on when it was posted and removed after it by a login not ending
+  in `[bot]` → **Entry 2**: that removal is the go.
 - Otherwise → stop and report the epic's state, and that only the human re-applying
   `needs-approval` resumes it; file nothing.
 
@@ -60,7 +60,8 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
 4. **Run the pass** — step 2. Write the body to a scratch file — the `reviewer` agent reaches
    no tracker — and spawn that agent **once**, naming the file's absolute path and the
    checklist `CLAUDE.md`'s **Decomposition checklist** topic routes to. Fix every finding in
-   the body itself, then read the body back.
+   the body itself, save what *Out of the body* sends elsewhere, then read the body
+   back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
    *Applying a label*, with its read-back), then post the executive summary on the epic as
    the parking comment (*Commenting on a work item*), in that order. The summary carries five
@@ -80,8 +81,8 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
 ### Out of the body
 
 Each case *Derive, don't design* sends elsewhere — a disagreeing source, a rule no document
-states, a service or call direction the design does not name — met at step 3 or in a step-4
-finding:
+states, a service or call direction the design does not name — met while drafting (step 3) or
+in a finding of the pass (step 4):
 
 - **File it** against the owning document (`file-task-issue`).
 - **The unstated rule** keeps its text: park, naming the issue in the summary.
@@ -98,10 +99,9 @@ finding:
    while `needs-approval` was on. Such a comment is a change to apply before filing (a task
    dropped, a Size changed), never a question to raise.
 2. **File the children**, in build order, one issue per task, through `file-task-issue`'s
-   *Filing the children of a decomposition*: the label, board fields, the epic's milestone,
-   `Source:` lines, sub-issue edge and blocked-by edges are that skill's and `CLAUDE.md`'s
-   **Issue conventions**'. Each child's title starts `T<n>:`, its task id; skip a task whose `T<n>:`
-   already starts a sub-issue's title. Read back every edge.
+   *Filing the children of a decomposition*, which owns what each carries. This file's
+   convention for the children it files: each title starts `T<n>:`, its task id; a re-run
+   skips a task whose `T<n>:` starts the title of a sub-issue it filed.
 3. **Close the `decompose` issue** with a comment listing the children by number, why a
    child's Size differs from the summary's, how each comment step 1 read was applied, and
    what **Rules** reports (**Tracker mechanics**, *Closing a work item*); move it to *done*
@@ -131,8 +131,7 @@ finding:
 
 ### Skills
 
-`file-task-issue` for the children and *Out of the body*'s issues; `clarify` per the rule above. No
-stack skill.
+`file-task-issue`; `clarify` per the rule above. No stack skill.
 
 ## Common mistakes
 

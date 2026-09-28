@@ -152,7 +152,7 @@ work file makes over the body, against the decomposition checklist, is the revie
 runs before the human's read because that read is what follows it. The row still names all
 three files, so it reads like every other: the checklist states where the review happens and
 routes to the pass's criteria, and the bar scores what the pass cannot see — that it ran once,
-and what the run left on the tracker. The author applies the bar before parking; a reviewer
+and what the run left on the tracker. The author applies the bar before the run stops; a reviewer
 applies it only if a dispatch ever reaches the row, which the checklist tells it was a
 misrouting.
 

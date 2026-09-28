@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Use in an interactive session to run this project's contribution workflow's implement step for one issue (/implement #N) — worktree, delegate to the work file for the issue's context label, Definition of Done, PR against main.
+description: Use in an interactive session to run this project's contribution workflow's implement step for one issue (/implement #N) — delegate to the work file for the issue's context label, then, unless that file opens no PR, worktree, Definition of Done, PR against main.
 ---
 
 # Implement an issue

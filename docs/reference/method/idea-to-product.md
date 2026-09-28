@@ -288,7 +288,7 @@ else.
 
 ### Skills
 
-`file-task-issue`.
+`file-task-issue`, `clarify`, the `decompose` work file.
 
 ## 5. ADR
 
