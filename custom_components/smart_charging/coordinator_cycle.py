@@ -578,6 +578,7 @@ def resolve_solar_reserve_gate(
     forecast_kwh: float | None,
     forecast_threshold_kwh: float,
     deadline_reserved_day_resolved: bool,
+    missed_deadline_hold: bool = False,
 ) -> bool:
     """R9 solar-reserve-cap gating (ADR-0023) -- a thin wrapper over
     engines/soc_target.py::resolve_solar_reserve_active. A plain function, not a class,
@@ -589,7 +590,13 @@ def resolve_solar_reserve_gate(
     unavailable ROLE_SOLAR_FORECAST_TODAY -- either way the forecast condition must not hold,
     whatever the configured threshold happens to be (a negative threshold would wrongly
     activate the cap otherwise -- the engine's own comparison is strict, so 0.0 was never a
-    problem)."""
+    problem).
+
+    `missed_deadline_hold` is R9's sixth precondition (T9/resolution-rules.md's "hold excludes
+    the solar-reserve cap"), threaded straight through to the wrapped engine call -- read by
+    the caller (coordinator.py's `_resolve_deadline_and_reserve`) off the pursued occurrence as
+    it stood ENTERING the cycle, before that same cycle's urgency call may release it. Defaults
+    to False so a caller that does not yet supply it keeps today's behaviour (D-8's pattern)."""
     if forecast_kwh is None:
         return False
     return resolve_solar_reserve_active(
@@ -599,6 +606,7 @@ def resolve_solar_reserve_gate(
         forecast_kwh=forecast_kwh,
         forecast_threshold_kwh=forecast_threshold_kwh,
         deadline_reserved_day_resolved=deadline_reserved_day_resolved,
+        missed_deadline_hold=missed_deadline_hold,
     )
 
 

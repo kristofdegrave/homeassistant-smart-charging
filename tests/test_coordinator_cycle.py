@@ -1586,6 +1586,24 @@ def test_resolve_solar_reserve_gate_inactive_when_deadline_resolved_for_reserved
     )
 
 
+def test_resolve_solar_reserve_gate_inactive_under_a_missed_deadline_hold():
+    """T9/R9's sixth precondition: proves `missed_deadline_hold` is actually threaded through
+    to the wrapped engine call (engines/soc_target.py::resolve_solar_reserve_active), not just
+    accepted and ignored -- every other test here omits it (defaults False) or passes False."""
+    assert (
+        resolve_solar_reserve_gate(
+            profile=PROFILE_AUTO,
+            home_day_flag=True,
+            sun_is_down=True,
+            forecast_kwh=15.0,
+            forecast_threshold_kwh=12.0,
+            deadline_reserved_day_resolved=False,
+            missed_deadline_hold=True,
+        )
+        is False
+    )
+
+
 # --- resolve_reserved_day (#1422, R9 AC2) ---
 
 

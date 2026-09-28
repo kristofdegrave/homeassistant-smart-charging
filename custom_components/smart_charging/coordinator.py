@@ -517,6 +517,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         reserved_day_forecast_kwh = (
             forecast_today_kwh if now_dt.date() == reserved_day else forecast_kwh
         )
+        # T9/R9's sixth precondition: read as it stood ENTERING this cycle, before the urgency
+        # call (`resolve_deadline_urgency`, below `:661`) may release it this same cycle --
+        # this runs well before that call, so no ordering trick is needed to keep the two apart.
+        missed_deadline_hold = (
+            self._pursued_occurrence is not None and self._pursued_occurrence <= now_dt
+        )
         ctx.solar_reserve_active = resolve_solar_reserve_gate(
             profile=self.active_profile,
             home_day_flag=reserved_day in self.home_day_dates,
@@ -524,6 +530,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             forecast_kwh=reserved_day_forecast_kwh,
             forecast_threshold_kwh=self._config.solar_forecast_threshold_kwh,
             deadline_reserved_day_resolved=deadline_reserved_day is not None,
+            missed_deadline_hold=missed_deadline_hold,
         )
         return deadline_tomorrow, resolve_deadline_for
 

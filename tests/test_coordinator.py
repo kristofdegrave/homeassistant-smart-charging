@@ -3162,6 +3162,48 @@ async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass, freezer):
     assert result.active_soc_limit == 80.0  # tomorrow deadline resolved -> reserve lifted
 
 
+async def test_missed_deadline_hold_suppresses_the_solar_reserve_cap_for_that_cycle_only(
+    hass, freezer
+):
+    """T9/R9's sixth precondition (resolution-rules.md): a missed-deadline hold read as it
+    stood ENTERING the cycle suppresses the solar-reserve cap for that cycle, even though every
+    other R9 condition holds -- and the cap resumes on the very next cycle once the urgency call
+    (`resolve_required_current`, engines/deadline.py) releases the hold within this same first
+    cycle (state of charge reaching the active SOC limit releases regardless of the hold, ahead
+    of the hold branch -- see that function's own ordering note). This assertion pins the
+    ORDERING (`coordinator.py:410` reads `self._pursued_occurrence` before the urgency call at
+    `:661` overwrites it), not the value `resolve_solar_reserve_active` itself already covers."""
+    freezer.move_to(dt_util.as_utc(datetime(2026, 1, 15, 20, 0, 0)))
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=80.0, sun_state=SUN_STATE_BELOW_HORIZON)
+    adapters[ROLE_SOLAR_FORECAST] = _FakeNumeric(20.0)  # above the 12 kWh default threshold
+    config = _config()
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_AUTO
+    coord.active_mode = MODE_OFF
+    coord.soc_limit_override = 80.0
+    # Tomorrow (the reserved day, frozen in the evening) stays a home day with no override, so
+    # its own departure-deadline rule keeps resolving "no deadline" throughout -- the same
+    # precondition `test_tomorrow_deadline_resolved_disables_solar_reserve` engages with.
+    coord.home_day_dates = {dt_util.now().date() + timedelta(days=1)}
+    _seed_ample_peak_headroom(coord)
+    # Entering the first cycle, the pursued occurrence already lies in the past.
+    _seed_pursued_occurrence(coord, hours_from_now=-1)
+
+    result = await coord._async_update_data()
+    # Held: the cap would otherwise engage (all five other conditions hold, as the sibling test
+    # above proves), but the missed-deadline hold read entering this cycle suppresses it.
+    assert result.active_soc_limit == 80.0  # default limit, not DEFAULT_SOLAR_RESERVE_SOC
+    # The same cycle's urgency call releases the hold: soc (80.0) is already at the active
+    # limit this cycle resolved (80.0), which releases ahead of the hold branch.
+    assert coord._pursued_occurrence is None
+
+    result = await coord._async_update_data()
+    # Not held: the next cycle reads the (now released) hold as False, so the cap engages.
+    assert result.active_soc_limit == 60.0  # DEFAULT_SOLAR_RESERVE_SOC -- reserve engaged
+
+
 async def test_ev_battery_capacity_prefers_the_sensed_role_over_the_configured_value(hass, freezer):
     """R15: with `ev_battery_capacity` role mapped and reading 60.0 kWh, the required-current
     computation uses 60.0, not CONF_EV_BATTERY_CAPACITY_KWH's configured default."""
