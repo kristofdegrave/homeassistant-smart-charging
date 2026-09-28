@@ -7,7 +7,7 @@ Status: Accepted
 
 In the context of a control cycle on which state of charge is unavailable, facing an ADR-0042
 that says such a cycle establishes nothing while R5 requires it to act on the clock and on the
-pursued date's departure time, we decided to narrow ADR-0042 to "nothing that needs a reading",
+pursued date's departure time, we decided to narrow ADR-0042 to what needs a reading,
 so that the record and R5 agree on when the deadline events fire, accepting that the no-reading
 path now has three outcomes it must declare established, and one it forgets fails silently.
 
@@ -21,15 +21,16 @@ path now has three outcomes it must declare established, and one it forgets fail
   pursued occurrence that has not yet elapsed follows its own date's departure time, and is
   released when that date resolves to "no deadline". Each fires the events any exit or entry
   fires. What needs a required current (the handback, and crossing between `Urgent` and
-  `Unreachable`) waits for a reading, and a fault cycle decides nothing.
+  `Unreachable`) waits for a reading, and a fault cycle decides nothing. On a no-reading cycle
+  mid-hold, UC05's State model says no event fires, while the glossary and UC05's Domain events
+  say the onset re-fires as a level signal; the human partner ruled for the level signal.
 - **[ADR-0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md) says otherwise.** Its
   Decision says that state of charge being unavailable "establishes nothing", and its exit
   table's row for that case says it fires nothing. Its mechanism is unaffected: the edge
   detector is told whether the cycle established an outcome, and holds its prior flag when it
   did not.
 - **Two code tasks build to the rule.** One gives the no-reading path the "established"
-  declaration ADR-0042 calls for, and asks whether the backstop ending a hold counts as
-  established. The other adds the release on the pursued date resolving to "no deadline". As
+  declaration ADR-0042 calls for. The other adds the release on the pursued date resolving to "no deadline". As
   written, ADR-0042 rejects both.
 - **ADR-0042 is immutable** (ADR-0001), so its text cannot be corrected in place.
 
@@ -95,7 +96,9 @@ This narrows two clauses of ADR-0042. ADR-0042 stays `Accepted` and its text is 
 
 The *Established* column is ADR-0042's further input to `DeadlineUnreachableEdge`. The detector
 records the hold's `True`, fires the clear on the two releases when its prior flag was `True`,
-and holds its prior flag on the other two rows.
+and holds its prior flag on the other two rows. An exit that does not turn on state of charge,
+such as the deadline capability becoming absent (R18), is not in the table and keeps the terms
+R5 and UC05 give it.
 
 Everything else in ADR-0042 stands, with "established" read as above: its disconnect row, the
 reach of its fault-cycle hold rule, and its durable rule.
@@ -113,9 +116,10 @@ reach of its fault-cycle hold rule, and its durable rule.
   unreachable, so the unit test that pins `unreachable is False` for that case flips.
 - **Design:** `system-design.md`'s ADR table gains a row for this record, and its ADR-0042 row
   stops saying such a cycle publishes no clear unconditionally.
-- **Analysis:** the glossary's `DeadlineUnreachableNotified` entry says the onset re-fires on
-  every cycle its condition holds, which this record follows. UC05's State model says no event
-  fires on a no-reading cycle mid-hold, and is brought into line (a `uc` follow-up).
+- **Analysis:** within a hold, this record follows the glossary's rule that the onset
+  re-fires on every cycle its condition holds; a no-reading cycle that holds `Unreachable` with no
+  hold fires nothing (the table's last row). UC05's State model and diagram note say no event
+  fires mid-hold, and only that clause is brought into line (a `uc` follow-up).
 - **Harder:** one no-reading cycle can now fire `DeadlineUnreachableCleared` and
   `DeadlineUrgencyReverted` together, so a test of that path can no longer assert that no event
   fired.
@@ -124,7 +128,7 @@ reach of its fault-cycle hold rule, and its durable rule.
 
 `rg -n 'DeadlineUnreachableEdge|_unreachable_edge|deadline_resolvable|EVENT_DEADLINE_UNREACHABLE_NOTIFIED|required\.unreachable|re-fires|ADR-0042|establish(es|ed)? nothing|ends no occasion|needs? no reading|needing no reading|with or without a (state-of-charge )?reading|never a state-of-charge reading' custom_components/ docs/ tests/ .claude/ .github/ CLAUDE.md`
 
-— 246 hits, 44 of them in this record. It is wide enough because it is keyed on:
+— 247 hits, 45 of them in this record. It is wide enough because it is keyed on:
 - the detector, by class and attribute, and the guard predicate whose early return this record
   rules on;
 - the onset event's constant, the flag its fire site reads, and the prose stating that it
@@ -174,4 +178,4 @@ Out of scope:
 - ADR-0024's ten, ADR-0042's 24, and the one each in ADR-0016, ADR-0036 and ADR-0046, are
   immutable and keep stating their decisions; the ADL rows carry the narrowing.
 - The 26 in `docs/plans/` record what was planned at their date.
-- This record's own 44, which state the decision.
+- This record's own 45, which state the decision.
