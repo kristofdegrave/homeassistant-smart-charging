@@ -19,8 +19,7 @@ message conventions and the route to a row's per-type *completion bar*.
    - If none exists yet, file one first, per **Issue conventions** below (context label, board
      fields). Board **Status** starts in the *backlog* column (**Project board** below).
 1. **Implement** (`implement`).
-   - Isolated `git worktree`, always, even for a one-line fix — a concurrent session switching
-     branches is the risk it removes. A row whose work file makes no branch or PR skips the
+   - Isolated `git worktree`, always, even for a one-line fix. A row whose work file makes no branch or PR skips the
      worktree, push and PR — the `implement` skill's exception — and keeps *in progress* and
      *done*.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
@@ -79,9 +78,7 @@ autonomous artifact-chaining is per issue, not per step.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
-exception: `cleanup` is triggered by the human stating that the merge happened, since the
-session does not watch for the merge — no step dispatches it, and the skill guards against
-a premature statement.
+exception: `cleanup` is triggered by the human stating that the merge happened.
 
 ## Rule C — decisions go through `clarify`
 
@@ -90,8 +87,6 @@ never as a loose question in a status report.
 
 ## Rounds and the cap
 
-- **The cap exists because the chain runs unattended** (**Rule B**): a finding no fix
-  resolves would otherwise loop without end.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
@@ -138,8 +133,7 @@ why a hold takes it off; `needs-decision` adds that a reason not to merge is sti
 just posted. After a clean pass it applies `needs-approval` alone, removing a stale
 `needs-decision`. After the last pass the cap allows, with Critical or Major
 still open and no round self-granted, it applies `needs-decision` **alongside**
-`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. So a capped PR is distinguishable from a
-clean one in any list view while `needs-approval` keeps its single meaning. No other step or
+`needs-approval` and posts the one escalation comment **Rounds and the cap** describes. No other step or
 skill applies either label; the one exception is the session putting a PR on hold (below), which a checklist's
 exit check can also do at the exit. On an **issue** the same two labels are ADR-0052's parking
 signal, outside this section's PR rules: `needs-approval` on an epic asks the human for a go on
@@ -334,8 +328,8 @@ session's own footprint by the session's markers, never by author.
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
 (`adr`, `uc`, `requirement`, `development`, `testing`, `workflow`, `documentation`),
-number is the GitHub issue number; a `decompose` issue makes no branch, its work being on
-the tracker. **An issue carrying only a kind label** (`bug`,
+number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying
+only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
 defined segment. Earlier `dev/` and `fix/` spellings for this track are historical, not alternatives

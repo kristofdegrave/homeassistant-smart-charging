@@ -263,8 +263,7 @@ entry carries these keys, one item per key:
   the worker re-derive the reading; anchoring so tightly that the surrounding text is needed
   is the same fault mirrored.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
-  `none` and why in one line. Written now, not after deployment: a list written once the build
-  exists records what the build produced, not what the task promised.
+  `none` and why in one line. Written now, not after deployment.
 
 Each child issue is then filed with that entry as its body, its context label, board fields
 and the epic's milestone, its native sub-issue edge to the epic, a blocked-by edge per id the entry names, and the

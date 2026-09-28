@@ -102,8 +102,7 @@ finding:
    *Filing the children of a decomposition*: the label, board fields, the epic's milestone,
    `Source:` lines, sub-issue edge and blocked-by edges are that skill's and `CLAUDE.md`'s
    **Issue conventions**'. Each child's title starts `T<n>:`, its task id; skip a task whose `T<n>:`
-   already starts a sub-issue's title, so a re-run files only what is missing. Read back every
-   edge.
+   already starts a sub-issue's title. Read back every edge.
 3. **Close the `decompose` issue** with a comment listing the children by number, why a
    child's Size differs from the summary's, how each comment step 1 read was applied, and
    what **Rules** reports (**Tracker mechanics**, *Closing a work item*); move it to *done*
