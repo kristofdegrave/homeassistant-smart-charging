@@ -19,9 +19,14 @@ out of the core work-type files.
 
 ## Repository and git identity
 
-Claude commits, comments, and opens PRs as the developer's own GitHub account — there is no
-separate bot account for the interactive session. **Why it matters:** a human item and the
-session's own footprint are posted under the same login, so
+Claude commits, comments and opens PRs as the developer's own GitHub account — one account,
+shared with the human partner, whether the session is interactive or unattended. The local
+`user.name` and `user.email` of this repository, which every worktree of it shares, are the
+human's public commit identity; no global git config is relied on. **Why one account:**
+[ADR-0052](../adl/0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md)'s Option
+C2 decides it; older squash merges still carry the retired `kristofdegrave-bot` author line. Whether
+a session merges is **Merge strategy** below. **Why it matters:** a
+human item and the session's own footprint are posted under the same login, so
 [contribution-workflow.md](method/contribution-workflow.md)'s **Rounds and the cap** tells them apart
 by the session's markers, never by author.
 
