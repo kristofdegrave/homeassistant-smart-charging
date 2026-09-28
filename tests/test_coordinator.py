@@ -4655,20 +4655,20 @@ async def test_urgency_is_judged_against_the_escalated_rate_not_c1(hass, freezer
 # criterion) ------------------------------------------------------------------------------
 
 
-async def _run_household_spike_cycle(hass, monkeypatch, *, captar_available, active_mode):
-    """Shared Arrange+Act for the household-spike tests below: spy every module-level helper
-    `coordinator.py` calls that either escalated bound could route through, prime 3 steady
-    cycles (household net-of-charger load at 1000 W, non-zero 500 W charger draw so the C4
-    bound's own literal `charger_w=0.0` stays distinguishable from a mutation that passed
-    `ctx.charger_w` instead), then spike the 4th cycle's household to 5000 W (charger draw
-    held at the same 500 W) -- sized so the raw (debounced immediately, since a HIGHER
-    baseline is the safety-conservative direction) and smoothed (2000 W, three parts of the
-    old mean to one of the new) readings genuinely differ. Returns (calls, result) for the
-    caller's own `# Assert`.
+async def _prime_household_spike_setup(hass, monkeypatch, *, captar_available, active_mode):
+    """Shared `# Arrange` for the household-spike tests below: spy every module-level helper
+    `coordinator.py` calls that either escalated bound could route through, then prime 3
+    steady cycles (household net-of-charger load at 1000 W, non-zero 500 W charger draw so
+    the C4 bound's own literal `charger_w=0.0` stays distinguishable from a mutation that
+    passed `ctx.charger_w` instead). Returns `(coord, calls)`; each caller's own `# Act`
+    spikes the 4th cycle's household to 5000 W (charger draw held at the same 500 W) --
+    sized so the raw (debounced immediately, since a HIGHER baseline is the
+    safety-conservative direction) and smoothed (2000 W, three parts of the old mean to one
+    of the new) readings genuinely differ.
 
-    Split into a shared helper, rather than one bundled test, because the two behaviours it
-    feeds (the escalated rate's own bounds move to smoothed; the real clamps and the readout
-    stay raw) are each already fully covered on their own -- a collapse in either direction
+    Split into a shared helper, rather than one bundled test, because the behaviours it feeds
+    (the escalated rate's own bounds move to smoothed; the real clamps stay raw; the readout
+    stays raw) are each already fully covered on their own -- a collapse in either direction
     still fails the test that names that half, so nothing is lost by naming them separately."""
     calls: dict[str, list[dict]] = {
         "peak_headroom_a": [],
@@ -4701,10 +4701,7 @@ async def _run_household_spike_cycle(hass, monkeypatch, *, captar_available, act
     _seed_ample_peak_headroom(coord)
     for _ in range(3):
         await coord._async_update_data()
-
-    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
-    result = await coord._async_update_data()
-    return calls, result
+    return coord, calls
 
 
 async def test_should_fit_both_escalated_bounds_to_the_smoothed_baseline_when_it_differs_from_raw(
@@ -4717,10 +4714,14 @@ async def test_should_fit_both_escalated_bounds_to_the_smoothed_baseline_when_it
     called twice per cycle (the escalated rate's own call, then the
     `sensor.smart_charging_peak_headroom_a` readout's) -- call order distinguishes them, since
     only the first is gated on `_peak_clamp_would_run()`."""
-    # Arrange / Act
-    calls, _result = await _run_household_spike_cycle(
+    # Arrange
+    coord, calls = await _prime_household_spike_setup(
         hass, monkeypatch, captar_available=True, active_mode=MODE_OFF
     )
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
+    await coord._async_update_data()
 
     # Assert -- the smoothed mean is (1000*3 + 5000) / 4 = 2000 W; the escalated rate's own
     # calls (index -2/-1 of the spike cycle's `peak_headroom_a` pair, since the readout's own
@@ -4734,27 +4735,51 @@ async def test_should_fit_both_escalated_bounds_to_the_smoothed_baseline_when_it
     assert escalated_ceiling_call["charger_w"] == 0.0
 
 
-async def test_should_keep_the_real_clamps_and_the_readout_on_raw_when_the_smoothed_baseline_differs(  # noqa: E501
+async def test_should_keep_the_real_clamps_on_raw_when_the_smoothed_baseline_differs(
     hass, monkeypatch
 ):
-    """The real R3 clamp (`apply_peak_clamp`), the real C4 clamp (`clamp_to_ceiling`) and the
-    `sensor.smart_charging_peak_headroom_a` readout (`peak_headroom_a`'s own last call) must
+    """The real R3 clamp (`apply_peak_clamp`) and the real C4 clamp (`clamp_to_ceiling`) must
     stay on the raw, debounced operand even on a cycle where the smoothed household baseline
     genuinely differs from it -- only the escalated rate's own bounds move (companion test
-    above)."""
-    # Arrange / Act
-    calls, result = await _run_household_spike_cycle(
+    above); the readout's own raw operand is a separate, display-only call site (its own
+    companion test below)."""
+    # Arrange
+    coord, calls = await _prime_household_spike_setup(
         hass, monkeypatch, captar_available=True, active_mode=MODE_OFF
     )
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
+    await coord._async_update_data()
 
     # Assert -- the spike cycle's raw, debounced baseline is the spike itself
     # (5500 - 500 = 5000 W).
     assert calls["apply_peak_clamp"][-1]["baseline_w"] == 5000.0
     assert calls["clamp_to_ceiling"][-1]["net_w"] == 5500.0
     assert calls["clamp_to_ceiling"][-1]["charger_w"] == 500.0
+
+
+async def test_should_keep_the_peak_headroom_readout_on_raw_when_the_smoothed_baseline_differs(
+    hass, monkeypatch
+):
+    """`sensor.smart_charging_peak_headroom_a` (`peak_headroom_a`'s own last call per cycle,
+    control-cycle.md step 5, R21's own AC) must stay on the raw, debounced operand even on a
+    cycle where the smoothed household baseline genuinely differs from it -- a display-only
+    call site, separate from the real clamps (their own companion test above)."""
+    # Arrange
+    coord, calls = await _prime_household_spike_setup(
+        hass, monkeypatch, captar_available=True, active_mode=MODE_OFF
+    )
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
+    result = await coord._async_update_data()
+
+    # Assert -- the spike cycle's raw, debounced baseline is the spike itself
+    # (5500 - 500 = 5000 W).
     assert calls["peak_headroom_a"][-1]["baseline_w"] == 5000.0
     # floor((4000 - 250 - 5000) / 230) = floor(-5.43) = -6 -- the raw-based readout, unmoved
-    # by this task (control-cycle.md step 5, R21's own AC).
+    # by this task.
     assert result.peak_headroom_a == -6.0
 
 
@@ -4764,10 +4789,14 @@ async def test_should_keep_the_c4_bound_smoothed_when_captar_capability_is_absen
     """R3 AC1/R18's second case (`_peak_clamp_would_run()` False): with CapTar absent, the
     peak bound is never composed at all, but C4 still is (C4 has no opt-out) -- so its own
     bound must still be smoothed."""
-    # Arrange / Act
-    calls, _result = await _run_household_spike_cycle(
+    # Arrange
+    coord, calls = await _prime_household_spike_setup(
         hass, monkeypatch, captar_available=False, active_mode=MODE_CAPTAR
     )
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
+    await coord._async_update_data()
 
     # Assert
     assert calls["ceiling_headroom_a"][-1]["net_w"] == 2000.0
@@ -4781,10 +4810,14 @@ async def test_should_never_call_the_real_peak_clamp_when_captar_capability_is_a
     never engages at all -- even on Captar's own mode (R18), which is bound by C1/C4 alone in
     that case. Companion to the C4-stays-smoothed test above; the shared `_peak_clamp_would_run`
     predicate gates both, but each is its own observable behaviour."""
-    # Arrange / Act
-    calls, _result = await _run_household_spike_cycle(
+    # Arrange
+    coord, calls = await _prime_household_spike_setup(
         hass, monkeypatch, captar_available=False, active_mode=MODE_CAPTAR
     )
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
+    await coord._async_update_data()
 
     # Assert
     assert calls["apply_peak_clamp"] == []
@@ -4854,6 +4887,7 @@ async def test_should_keep_the_escalated_rate_unchanged_when_a_charger_current_s
             hass, charging_adapters(), config, MODE_CAPTAR, soc_limit_override=80.0, coord=coord
         )
     rate_before_step = captured[-1]
+    pre_step_count = len(captured)
 
     # Act -- cycle S: the step -- ev_soc reaches the limit (the lever), while net_w/charger_w
     # still read this cycle's own steady pre-step values (the SOC gate's 0 A write is this
@@ -4880,10 +4914,13 @@ async def test_should_keep_the_escalated_rate_unchanged_when_a_charger_current_s
             hass, reading, config, MODE_CAPTAR, soc_limit_override=80.0, coord=coord
         )
 
-    # Assert -- the step cycle plus its 4 following cycles all ran (the spy was actually
-    # exercised, so this can't pass on an empty list), and every one of them resolved the
-    # same rate as before the step.
-    rates_after_step = captured[-5:]
+    # Assert -- exactly 5 more cycles were captured since the step (the step itself plus its
+    # 4 following cycles), pinned against the count taken BEFORE the step rather than a bare
+    # slice length (which could never be short of 5 anyway, given the 6 priming entries
+    # already in `captured`) -- so a spy that stopped firing after the step would actually
+    # fail this, not pass on a slice of stale priming entries. Every one of the 5 resolved
+    # the same rate as before the step.
+    rates_after_step = captured[pre_step_count:]
     assert len(rates_after_step) == 5, f"{label}: expected 5 captured cycles"
     assert rates_after_step == [rate_before_step] * 5, (
         f"{label}: the escalated rate moved across the charger-current step"

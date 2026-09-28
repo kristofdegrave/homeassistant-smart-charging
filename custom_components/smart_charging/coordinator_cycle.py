@@ -79,13 +79,14 @@ class CycleContext:
     # tracked separately (issue #992), out of #990's own scope.
     baseline_w: float
     # Issue #1189/T10, R5's third smoothed-baseline criterion: the admitted mean in household
-    # sign (`net_w - charger_w`, `smooth_household_baseline`'s `smoothed_household_w`,
-    # ADR-0051) -- both of the escalated
-    # maximum permitted rate's baseline-dependent bounds (`_escalated_maximum_permitted_rate_a`'s
-    # peak and C4 operands) fit to this, never to `baseline_w`/`net_w`/`charger_w` above, which
-    # stay the R3/C4 clamps' and the peak-headroom readout's own raw (debounced) operands. A
-    # named field rather than `-ctx.surplus_w`: the two are the same value by design, and the name
-    # keeps the forecast's operand visible at the call site (D-3). Required, not defaulted, for
+    # sign (`net_w - charger_w`, `smoothed_household_w` -- `_run_cycle`'s own local receiving
+    # `smooth_household_baseline`'s return value, ADR-0051) -- both of the escalated maximum
+    # permitted rate's baseline-dependent bounds (`_escalated_maximum_permitted_rate_a`'s peak
+    # and C4 operands) fit to this, never to `baseline_w`/`net_w`/`charger_w` above, which stay
+    # the R3 clamp's and the peak-headroom readout's own raw, debounced `baseline_w`, or (C4)
+    # the raw, undebounced `net_w`/`charger_w`. A named field rather than `-ctx.surplus_w`: the
+    # two are the same value by design, and the name keeps the forecast's operand visible at
+    # the call site (D-3). Required, not defaulted, for
     # the same #990 reason `baseline_w` above is required -- a forgotten construction site must
     # fail loudly, not fall open onto a permissive placeholder that decides a forecast.
     smoothed_baseline_w: float

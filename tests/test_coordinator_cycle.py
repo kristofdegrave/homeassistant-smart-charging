@@ -95,15 +95,19 @@ def test_should_raise_when_smoothed_baseline_w_is_omitted_at_construction():
     `test_cycle_context_constructs_with_required_fields_and_defaults` above, which only pins
     that the field construct successfully when given; this pins that omitting it is not
     silently tolerated."""
+    # Arrange -- every required field except smoothed_baseline_w.
+    kwargs = dict(
+        status=STATE_CHARGING,
+        net_w=100.0,
+        charger_w=1000.0,
+        voltage=230.0,
+        now=1.0,
+        baseline_w=-900.0,
+    )
+
+    # Act / Assert
     with pytest.raises(TypeError):
-        CycleContext(
-            status=STATE_CHARGING,
-            net_w=100.0,
-            charger_w=1000.0,
-            voltage=230.0,
-            now=1.0,
-            baseline_w=-900.0,
-        )
+        CycleContext(**kwargs)
 
 
 def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use():
