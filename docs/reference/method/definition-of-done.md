@@ -119,6 +119,7 @@ matching current practice (`git log`):
 | `documentation` (design docs, `docs/design/**`) | `docs:` | `docs: revise the volatility-based service decomposition` (illustrative) |
 | `development` / `testing` | `T<task-number>:` matching the task's number in its epic | `T3: config flow accepts a low-tariff state-translation table` |
 | `workflow` (CI/skill/agent-authoring changes) | `workflow:` | `workflow: a weekly drift check reads the profile's dependency pins and reports what moved` |
+| `decompose` (the epic-body read) | none — the work is the epic's body and its children, on the tracker; no commit is made | — |
 | anything else (a fix, refactor, chore not tied to a task) — including an issue carrying only a `bug`/`enhancement` kind label, which has no context label to infer from | conventional-commit type (`fix:`, `refactor:`, `feat:`, `chore:`) | `fix: revert the unconsumed prompt_timeout_h config-flow field` |
 
 One row per context label, and `.github/check-method.py`'s check 3 fails when an enabled one

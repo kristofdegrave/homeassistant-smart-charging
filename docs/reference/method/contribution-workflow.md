@@ -1,7 +1,7 @@
 # Contribution workflow
 
-Universal lifecycle for **every** unit of work in this repo — a doc, an ADR, a design, or
-code. Five steps, each naming the skill an interactive session runs it through. The artifact-specific additions for analysis documents and ADRs
+Universal lifecycle for **every** unit of work in this repo. Five steps, each naming the
+skill an interactive session runs it through. The artifact-specific additions for analysis documents and ADRs
 (`CLAUDE.md`'s **Review protocol for analysis documents** and **Architecture Decision Records
 (ADRs)** topics) layer their own template and quality-check steps on top of this, never
 replacing it.
@@ -18,8 +18,9 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
    - If none exists yet, file one first, per **Issue conventions** below (context label, board
      fields). Board **Status** starts in the *backlog* column (**Project board** below).
 1. **Implement** (`implement`).
-   - Isolated `git worktree`, always, even for a one-line fix — a concurrent session switching
-     branches underneath you is the risk it removes.
+   - Isolated `git worktree`, always, even for a one-line fix. A row whose work file makes no branch or PR skips the
+     worktree, push and PR — the `implement` skill's exception — and keeps *in progress* and
+     *done*.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
      `origin/main` (**Base `main` and stacking** below).
    - Board **Status** → the *in progress* column when writing actually starts, not at filing
@@ -69,15 +70,14 @@ is gone.
 The chain **runs through** from the step it is entered at, with no check-in between steps:
 implement → review → fix → review … → a clean pass or the cap. The session stops at two
 points — a clean pass, or the cap with Critical or Major findings still open and no round
-self-granted — both found by step 2 at the end of its pass, and reports; a run its dispatch says
-is unattended has a third, the park `clarify` makes (**Rule C**).
+self-granted — both found by step 2 at the end of its pass, and reports; a run whose work file
+opens no PR stops where that work file ends instead, and a run its dispatch says is unattended
+has a third stop, the park `clarify` makes (**Rule C**).
 It never starts the next issue off the back of the one just finished.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
 or the cap; "only this step" is something the human says explicitly. Step 4 is the one
-exception: `cleanup` is triggered by the human stating that the merge happened, since the
-session does not watch for the merge — no step dispatches it, and the skill guards against
-a premature statement.
+exception: `cleanup` is triggered by the human stating that the merge happened.
 
 ## Rule C — decisions go through `clarify`
 
@@ -153,7 +153,8 @@ whichever is then correct.
 
 On an **issue** the same two labels park work for the human, as ADR-0052 decided:
 `needs-decision` is applied by `clarify`'s parking rule, in an unattended run,
-and means a question waits for the human's answer; `needs-approval` on an epic asks for a go.
+and means a question waits for the human's answer; `needs-approval` on an epic asks for a go,
+applied by the `decompose` row's work file.
 The human takes an issue's label off; a run removes `needs-decision`, on an answer
 that settles `clarify`'s park, and never an epic's `needs-approval`, whose removal is the human's
 go. An issue's label says nothing about any PR.
@@ -165,20 +166,19 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   means the PR is **on hold**: no automated work is running on it, and a human decides.
 - It posts the reason on the PR as an escalation comment ending in the escalation marker. That
   comment is a reset event (**Rounds and the cap** above). The label operations and the comment follow
-  [tracker-mechanics.md](tracker-mechanics.md), as the review step's own exit does.
-- It does no further work on the PR. The human partner merges as is, or grants a round.
+  [tracker-mechanics.md](tracker-mechanics.md).
+- It does no further work on the PR; the human partner merges as is or grants a round.
 - On a granted round, the session's first act posts the hold reason as a PR review of its own:
   a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
-  since the review step never reads human review bodies as findings. The fix step reads it as
-  any human review body, and the chain runs on from **Fix**. The session's reason
+  since the review step never reads human review bodies as findings; the fix step reads it as
+  any human review body, and the chain runs on. The session's reason
   is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
   `needs-approval`.
 
-The session applies the hold itself, rather than asking the human partner to hold a PR that
-still carries `needs-approval`.
+The session applies the hold itself rather than asking the human partner to.
 
 ## Thread discipline
 
@@ -187,8 +187,8 @@ still carries `needs-approval`.
   stays open, with the reply saying why.
 - **Resolve after the push, never before.** A failed push would otherwise leave threads closed
   over work not on the branch.
-- **Outdated is not resolved.** A thread the diff no longer shows is still open until
-  resolved explicitly.
+- **Outdated is not resolved.** A thread the diff no longer shows stays open until resolved
+  explicitly.
 - **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
   gets an issue instead (`file-task-issue`, context label per the artifact it belongs to,
   linked to the PR); the reply names the issue, and the thread is resolved.
@@ -217,7 +217,10 @@ one issue.
 **Merge is the human's, except under the merge rule** (**Commit & push authorization** below;
 its enforcement is [profile.md](../profile.md)'s **Merge strategy**) — never self-approved.
 Merging auto-closes the linked issue via `Closes #N` (not via `Part of #N`); never close it
-directly (`gh issue close`), even on a verification-only task.
+directly (`gh issue close`), even on a verification-only task. Only a `decompose` issue or an
+idea, having no PR, is closed by the work file or skill that ran it, once its filings exist,
+with a closing comment listing them ([tracker-mechanics.md](tracker-mechanics.md)'s **Closing
+a work item**).
 
 **An epic's body is the spec, and its children are the tasks**, filed by the decomposition
 that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**
@@ -252,14 +255,15 @@ and never a column by its name on the board: the board's Status vocabulary and o
 `.claude/profile.yml`'s `board.fields.status`, and which column plays which role — including
 any that plays none — is [profile.md](../profile.md)'s **Project board**. The rule here is
 only that the chain moves an item **backlog → in progress → in review → done** and through
-no other column: a column that later gains a defined meaning is inserted explicitly into
+no other column; a column gaining a meaning is inserted into
 step 0/1 here.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
 there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
 it to *done* with the same hand that closes it, which step 4's open-children report prompts
-(**Merge and issue closing** above).
+(**Merge and issue closing** above). A `decompose` issue, having no PR, takes the same
+shorter path.
 
 ## Parallel work and forward dependencies
 
@@ -274,7 +278,7 @@ reimplementation of the producer's logic.
 ## Git identity
 
 Whose account the interactive session acts under is [profile.md](../profile.md)'s **Repository
-and git identity**. What this chain relies on is only that it is **one account, shared with the
+and git identity**. This chain relies only on its being **one account, shared with the
 human partner** — which is why **Rounds and the cap** above tells a human item from the
 session's own footprint by the session's markers, never by author.
 
@@ -282,11 +286,12 @@ session's own footprint by the session's markers, never by author.
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow` (CI/skill/agent-authoring
-  changes), `documentation` (design-doc changes, `docs/design/**`). The label set itself — every name, colour and description,
+  changes), `documentation` (design-doc changes, `docs/design/**`), `decompose` (an epic's
+  body read, one child per epic). The label set itself — every name, colour and description,
   and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
-  `work_types`, and `.github/setup-labels.sh` writes it to the repository from there. Adding or
-  renaming a label: see [ci-pipeline.md](ci-pipeline.md) for every place this vocabulary must
-  stay in sync.
+  `work_types`, and `.github/setup-labels.sh` writes it to the repository. Adding or renaming
+  a label: [ci-pipeline.md](ci-pipeline.md) lists every place this vocabulary must stay in
+  sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue
@@ -303,8 +308,8 @@ session's own footprint by the session's markers, never by author.
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**. Neither is body text — `gh` supports both directly; the commands, and the
-  read-backs that confirm an edge landed, are [tracker-mechanics.md](tracker-mechanics.md)'s.
+  relationship**. Neither is body text — `gh` supports both — the commands and the
+  read-backs that confirm an edge landed are in [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N".
 - **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice ranked by a
@@ -331,7 +336,7 @@ session's own footprint by the session's markers, never by author.
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
-number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
+number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
 defined segment. Earlier branches for this kind of work used `dev/` and `fix/`; both
@@ -343,7 +348,7 @@ PR, suffix a third segment describing the split: `<context-label>/<issue-number>
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
 its row — may override the number segment for a concrete reason to key the branch off the
 artifact's own identity rather than the issue's; state the exception and its reason in that
-file, not here.
+file.
 
 ## Post-mortems
 
@@ -356,7 +361,7 @@ do not reach it, and how it is reviewed are this topic's.
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that. Its job is to explain how a specific failure got past a specific process, so the changes it
+that. It explains how a specific failure got past a specific process, so the changes it
 recommends can be argued from evidence; once they land, it stays as the record of why.
 
 ### Two rules that apply elsewhere do not apply here
