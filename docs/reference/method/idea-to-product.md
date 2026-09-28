@@ -135,8 +135,8 @@ analysis chain, but **the claim is verified before anything is designed** — th
 `diagnosing-bugs` skill owns that step: reproduce it on the real installation, or as a
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
 reproduced is not a defect yet — say so on the issue and stop, rather than designing a fix
-for a behaviour nobody has seen. A reproduced claim is placed on a milestone at once, before
-its fixing artifact is known; which issue carries it is the milestone rule in
+for a behaviour nobody has seen. A reproduced claim's own issue is placed on a milestone at once, before
+its fixing artifact is known, per the milestone rule in
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Once the fixing artifact is known, the issue gains that
 artifact's context label and re-enters the chain at that artifact's stage.
 

@@ -127,8 +127,6 @@ never as a loose question in a status report.
   resets the count, a self-grant comment included; no reset event means counting from the
   PR's first review. This is the rule's only statement — the `review` skill's *Count the
   rounds* item is its one procedure.
-  A round the human grants, or a human review, therefore never gets refused by a cap it did
-  not ask for.
 
 ## Exit labels
 
@@ -231,8 +229,6 @@ epic's open-children count once the linked issue is *done*, and reports it; what
 closes. Nothing else watches for the moment: GitHub does not close a parent whose sub-issues
 are all closed, and a child PR carries `Part of` for its epic so a merge cannot.
 
-Step 4 removes the task's worktree.
-
 ## Commit & push authorization
 
 Commit and push freely, at any point during the work — no per-commit or per-push approval
@@ -310,9 +306,10 @@ session's own footprint by the session's markers, never by author.
 - **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice ranked by a
   numeric title prefix — lower first, unprefixed after every prefixed one — never a due date.
   Unprefixed milestones do not rank against each other: a picker facing a tie puts the choice
-  to the human partner through `clarify` (**Rule C**). A new milestone stays unprefixed until
-  the human partner prefixes them all in the roadmap session, and only the human partner
-  reorders. An epic carries its milestone and filing copies it to each child routed to work.
+  to the human partner through `clarify` (**Rule C**). Within one milestone, between milestones
+  sharing a prefix, or among unmilestoned issues, it takes the lowest-numbered (oldest)
+  unblocked issue. The roadmap session is one the human partner holds to prefix every
+  milestone; a new milestone stays unprefixed until then, and only the human partner reorders. An epic carries its milestone and filing copies it to each child routed to work.
   Every issue routed to work carries one; an `idea` issue and an unreproduced claim are not
   work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
   when the work they become is placed). Whoever picks the next issue takes an unmilestoned
@@ -333,7 +330,7 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier `dev/` and `fix/` spellings are historical, not alternatives
+defined segment. Earlier `dev/` and `fix/` spellings for this track are historical, not alternatives
 (`development/<n>` keeps its own meaning above — a task cut from an epic). When both
 axes are present the **context label wins**. If extra work on the same issue needs a second, separate
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`

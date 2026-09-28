@@ -34,9 +34,8 @@ half-scoped.
    are board fields, not labels: setting them is its own step after the issue is on the board,
    per **Tracker mechanics** above.
 3. **Pick the milestone** — a filing field, set on every issue the milestone rule under
-   **Issue conventions** above says carries one: a child takes its epic's; an epic or a
-   standalone issue the slice it belongs to, or a new one where none fits, ranked as that
-   section says and never by this skill's own choice. What a milestone is, and how an issue
+   **Issue conventions** above says carries one, chosen and ranked as that section says and
+   never by this skill's own choice. What a milestone is, and how an issue
    routed to work that lacks one is picked, are that section's too; the flag that sets it, the
    call that creates one and the read-back that confirms the name resolved are **Tracker
    mechanics**'.
