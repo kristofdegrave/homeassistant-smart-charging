@@ -43,9 +43,10 @@ only sequences those stages and says which skill performs each. Cite it, never r
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
    single-artifact idea, an epic whose body is the spec plus the children cut from it for a
    multi-artifact strand — moving the brainstormed decisions wherever the flow document says
-   they end up. The flow owns the closing step and its order, `file-task-issue` its mechanics, so the epic body never
-   carries a checklist of them; what a child is and in what order children are filed is the
-   flow document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
+   they end up. The flow owns the closing step and its order, the `decompose` row's work file
+   (`CLAUDE.md`'s **Model selection**) its mechanics, so the epic body never carries a
+   checklist of them; what a child is and in what order children are filed is the flow
+   document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
    later — recursion is expected, not an error.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.

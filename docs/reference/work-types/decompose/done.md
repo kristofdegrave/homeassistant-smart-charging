@@ -15,9 +15,9 @@ the tracker.
 **(1) The body was derived, and the pass ran exactly once against it.** A body parked with no
 `reviewer` run behind it, or one the pass was run twice over → **Critical**: the human's read
 then rests on an unreviewed body, or the closing step's single-pass rule is broken. A re-entry
-after a design-change stop (`implement.md`'s step 4) is a fresh draft with its own single
-pass, not a second run over the earlier one. A Critical or Major finding of the pass neither
-fixed in the body nor filed against the document that owns it → **Major**.
+after the stop in `implement.md`'s step 4, *Out of the body*, is a fresh draft with its own
+single pass, not a second run over the earlier one. A Critical or Major finding of the pass
+neither fixed in the body nor handled by that branch → **Major**.
 
 **(2) The body on the tracker is the fixed body.** Read back after the last edit, before the
 park. No read-back → **Major**: the fix is then assumed.
@@ -50,16 +50,16 @@ is the failure the park exists to prevent, and one it cannot cheaply undo.
 ## At the close (entry 2)
 
 **(8) Every task in the body has an issue** — `file-task-issue`'s own done line, applied
-here: label, board fields, `Source:` lines, edges. A task without one → **Major**. A child
-whose Size differs from the summary's, with no line in the closing comment saying why →
-**Minor**.
+here: label, board fields, `Source:` lines, edges. A task without one → **Major**. A changed
+Size the closing comment does not explain → **Minor**.
 
 **(9) Every comment newer than the marker that `implement.md`'s entry rule admits was
 applied**, and the closing comment says how; one it does not admit was reported, not applied.
 Either missed → **Major**: the human's instruction at the gate was the point of the gate.
 
-**(10) The `decompose` issue is closed by its closing comment**, which lists the children by
-number, and it is *done*. Open, or closed without the list → **Major**.
+**(10) The `decompose` issue is closed by its closing comment**, carrying what
+`implement.md`'s entry 2 step 3 lists, and it is *done*. Open, or closed without the children
+listed → **Major**.
 
 **(11) No clutter** anywhere the run wrote — the body, the summary, the closing comment — as
 the *Clutter* entry named under item 3 defines it, at its severities and in its scope.

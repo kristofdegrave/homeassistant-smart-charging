@@ -21,7 +21,8 @@ message conventions and the route to a row's per-type *completion bar*.
 1. **Implement** (`implement`).
    - Isolated `git worktree`, always, even for a one-line fix — a concurrent session switching
      branches is the risk it removes. A row whose work file makes no branch or PR skips the
-     worktree, push and PR — the `implement` skill's exception — and keeps the board moves.
+     worktree, push and PR — the `implement` skill's exception — and keeps *in progress* and
+     *done*.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
      `origin/main` (**Base `main` and stacking** below).
    - Board **Status** → the *in progress* column when writing actually starts, not at filing
@@ -71,8 +72,8 @@ is gone. A fresh **agent**, not a fresh session.
 The chain runs **unattended** from the step it is entered at: implement → review → fix →
 review … → a clean pass or the cap, with no check-in between steps. The session stops at exactly
 two points — a clean pass, or the cap with Critical or Major findings still open and no round
-self-granted — both found by step 2 at the end of its pass, and reports; a run that parks or
-closes its issue without a PR stops there instead.
+self-granted — both found by step 2 at the end of its pass, and reports; a run whose work
+file opens no PR stops where that work file ends instead.
 It never starts the next issue off the back of the one that just finished: the control on
 autonomous artifact-chaining is per issue, not per step.
 

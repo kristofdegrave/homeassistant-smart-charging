@@ -292,12 +292,13 @@ gh api repos/$REPO/issues/<n>/comments \
   --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
 ```
 
-`author_association` is `OWNER` or `COLLABORATOR` for a collaborator and anything else for
-anyone else; it is the platform's answer, not the body's, so a login typed
-into a comment's text spoofs nothing. The read-back rule is the listing's: `--paginate`, a
-streaming filter, and the marker test on each body (*Reading a change request's label events*
-below) — the session posts under the owner's login too, so its own comments pass the author
-test and fail only the marker test.
+`author_association` is `OWNER` for the owner, `COLLABORATOR` for a collaborator, `MEMBER`
+for an organization's member on its repositories, and anything else for anyone else; it is
+the platform's answer, so a login typed into a comment's text spoofs nothing. The read-back rule
+is the listing's: `--paginate`, a streaming filter, and the marker test on each body
+([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**) — the
+session posts under the owner's login too, so its own comments pass the author test and fail
+only the marker test.
 
 ## Applying a label
 

@@ -161,7 +161,8 @@ The stage is **entered twice, with the artifact stages in between**, the way the
 below is: the issues those stages run against have to exist before they start, and the spec has
 to derive from what they merged. The **opening pass** runs straight after **Route**; the
 **closing step** runs once the `decompose` child is unblocked. An issue that surfaces after both
-still belongs here — the opening pass says where.
+still belongs here — the opening pass says where. Until the opening pass files that child with
+its edges, the **Design** stage's gate below holds the closing step.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
 
@@ -199,18 +200,19 @@ inventing a scheme ad hoc.
 
 Once the `decompose` child is unblocked, the spec for one build slice is written into the
 epic's body and the children are cut from it. Four steps, each finishing before the next
-starts. This list is the order; steps 1–3 are the `decompose` row's work file's, which runs
-them as one issue, and step 4's per-child filing checklist is `file-task-issue`'s.
+starts. This list is the order; the `decompose` row's work file runs all four as one issue,
+and step 4's per-child filing checklist is `file-task-issue`'s.
 
 1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. No
-   child exists yet to be cut from it.
+   child exists yet.
 2. **One fresh-agent pass over that body**, against the [decomposition
    checklist](decomposition-checklist.md), while the decomposition is still cheap to change.
    Its findings are fixed in the body.
 3. **The human partner reads the fixed body** and says to go on — the parked gate: the
-   `decompose` work file parks the epic with an executive summary and `needs-approval`, and
-   removing the label is the go. The pass is one agent run followed by that read — not
-   repeated, and carrying no round cap, so a finding it raises is answered before the read.
+   `decompose` work file parks the epic under `needs-approval`, and removing it is the go. The
+   pass is one agent run, then that read — never repeated over one draft, carrying no round
+   cap, so its findings are answered first; a fresh draft after the work file's *Out of the
+   body* stop gets its own.
 4. **The children are filed**, in build order, one issue per task.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` into concrete
