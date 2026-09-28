@@ -221,9 +221,10 @@ idea, having no PR, is closed by the work file or skill that ran it, once its fi
 with a closing comment listing them ([tracker-mechanics.md](tracker-mechanics.md)'s **Closing
 a work item**).
 
-**An epic's body is the spec, and its children are the tasks**, filed by the decomposition
-that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**
-topic routes to. Each child is its own issue, implemented in its own chain.
+**An epic with a spec carries it in its body, and its children are the tasks**, filed by the
+decomposition that wrote the body — the closing step of the flow `CLAUDE.md`'s
+**Idea-to-product flow** topic routes to, which also says which epics have one. Each child is
+its own issue, implemented in its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4
@@ -283,7 +284,7 @@ shared with the human partner**.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
   (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
-  `decompose` (an epic's body read, at most one per epic with a spec). The label set
+  `decompose` (an epic's body read, one per epic with a spec, none otherwise). The label set
   itself — every name, colour and description, and which context labels this project enables
   — is `.claude/profile.yml`'s `labels` and `work_types`, and `.github/setup-labels.sh` writes
   it to the repository. Adding or renaming a label: [ci-pipeline.md](ci-pipeline.md) lists
@@ -360,8 +361,8 @@ do not reach it, and how it is reviewed are this topic's.
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that. It explains how a specific failure got past a specific process, so the changes it
-recommends can be argued from evidence; once they land, it stays as the record of why.
+that. It explains how a specific failure got past a specific process; once its changes land, it
+stays as the record of why.
 
 ### Two rules that apply elsewhere do not apply here
 

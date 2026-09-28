@@ -37,15 +37,16 @@ Its issue comments follow the marker rule under `CLAUDE.md`'s **Contribution wor
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
    new-behaviour track this step does not apply.
-5. **Settle whether the strand needs an epic whose body carries the spec** — the flow document
-   says when one is required on each track, and which analysis change cannot be approved until
-   it exists. Where it is required, that epic is what step 6 files, and its body is written in
-   the closing step below rather than drafted later as a separate artifact.
+5. **Settle whether the strand needs an epic, and whether its body will carry a spec** — the
+   flow document says when each is required on each track, and which analysis change cannot
+   be approved until the spec exists. Where an epic is required, it is what step 6 files, and
+   any spec is written into its body in the closing step below rather than drafted later as a
+   separate artifact.
    Record the answer on the issue either way, so it is not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
-   single-artifact idea, an epic whose body is the spec plus the children cut from it for a
-   multi-artifact strand — moving the brainstormed decisions wherever the flow document says
-   they end up. The flow owns the closing step and its order, the `decompose` row's work file
+   single-artifact idea, an epic and the issues the flow document's **Decompose** stage files
+   for it for a multi-artifact strand — moving the brainstormed decisions wherever the flow
+   document says they end up. The flow owns the closing step and its order, the `decompose` row's work file
    (`CLAUDE.md`'s **Model selection**) its mechanics, so the epic body never carries a
    checklist of them; what a child is and in what order children are filed is the flow
    document's. A part still too fuzzy to scope keeps the `idea` label and gets worked

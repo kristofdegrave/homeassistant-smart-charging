@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, any decompose child last, and a decomposition's children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, any `decompose` child last, and a decomposition's children.
 ---
 
 # File a task issue
@@ -12,8 +12,8 @@ deciding *what* the issue is about.
 Context labels, project-board Size/Estimate fields, milestones and epic
 membership (native sub-issues and blocked-by edges) are all defined once, and `CLAUDE.md`'s
 **Issue conventions** section routes to wherever that is — start there for what each means and
-when it applies. *Which* issues a strand gets and in what order — the epic whose body is the
-spec, and the children cut from it — is the closing step of the flow `CLAUDE.md`'s
+when it applies. *Which* issues a strand gets and in what order — the epic, the issues its
+opening pass files, and its children — is the **Decompose** stage of the flow `CLAUDE.md`'s
 **Idea-to-product flow** topic routes to. The `gh` commands that write them, and the
 read-backs that confirm they took, are routed by `CLAUDE.md`'s **Tracker mechanics**
 section. This skill adds only the pre-flight order to run through so nothing gets filed
@@ -54,13 +54,12 @@ half-scoped.
 
 ## Filing an epic's opening issues
 
-Which issues an epic gets at the flow's opening pass, a `decompose` child included or not, is
-the flow's, per **Idea-to-product flow** above. File them in this order: the epic, then each
-artifact-stage issue, then any `decompose` child last — so every one of its blocked-by edges
-names an issue that already exists and goes on as a flag of its create call. Each goes through
-the checklist at the top of this file. Done when the child's edges, where it has one, read back
-one per `adr`, `uc`, `requirement` or `documentation` issue the pass filed, and the epic's one
-per child.
+Which issues an epic gets at the flow's opening pass, their order and their edges, a
+`decompose` child included or not, are the flow's, per **Idea-to-product flow** above. File
+them in that order, any child last so every one of its blocked-by edges names an issue that
+already exists and goes on as a flag of its create call. Each goes through the checklist at
+the top of this file. Done when every edge the flow names for them reads back, and the epic's
+one per child.
 
 ## Filing the children of a decomposition
 
@@ -89,9 +88,9 @@ mistakes that are this skill's own:
   passed as a flag is a second step too (item 5); an issue missing them reads as filed and is
   not.
 - Filing a child without its epic's milestone (item 3).
-- Leaving an epic the opening pass gives a `decompose` child without one, or that child short
-  of an edge to an artifact-stage issue it waits on: the closing step then starts before what
-  it derives from has merged.
+- Leaving an epic whose tasks will include `development` or `testing` work without a
+  `decompose` child, or that child short of an edge to an artifact-stage issue the pass
+  filed: the closing step then starts before what it derives from has merged.
 - Filing a decomposition's children before the pass and the human read that the `decompose`
   row of `CLAUDE.md`'s **Model selection** runs. The pass is there to catch what lives between
   tasks, and a task already filed is one it can no longer cheaply change.
