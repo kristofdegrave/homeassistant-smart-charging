@@ -245,8 +245,9 @@ ask-before-acting default; a `PreToolUse` hook (`.claude/settings.json` →
 **The merge rule.** A session runs `gh pr merge` only when all hold: `--squash`; the head a
 branch of this repository, not a fork's; `needs-approval` on and `needs-decision` off; every
 changed file under a tree in `.claude/profile.yml`'s `autopilot.auto_merge_trees`; every
-check green, required or not. The same hook mechanizes it and fails closed — its header is the
-authority on the exact conditions — and any other PR is the human's.
+check green, required or not. A push landing on `main` is a merge by another name, and
+refused. The same hook mechanizes it and fails closed — its header is the authority on the
+exact conditions — and any other PR is the human's.
 
 ## Project board
 
@@ -260,19 +261,19 @@ step 0/1 here.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
-there, it is never *in review* — nothing of its own is reviewed — and the human partner moves
-it to *done* with the same hand that closes it, which step 4's open-children report prompts
-(**Merge and issue closing** above). A `decompose` issue, having no PR, takes the same
-shorter path.
+there, it is never *in review*, and the human partner moves it to *done* with the same hand
+that closes it, which step 4's open-children report prompts (**Merge and issue closing**
+above). A `decompose` issue, having no PR, takes the same shorter path.
 
 ## Parallel work and forward dependencies
 
 Tasks may proceed in parallel. When one needs something a not-yet-built task will produce,
 neither block nor invent the missing piece: pin down the **contract** — exact name/id, value
 semantics/unit, a shared constant both sides code against — in the relevant
-spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task. The producer implements the real thing; the consumer adds only the
-signature and tests against a stubbed instance of the contract, never a private
-reimplementation of the producer's logic.
+spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task.
+The producer implements the real thing; the consumer adds only the signature and tests
+against a stubbed instance of the contract, never a private reimplementation of the
+producer's logic.
 
 ## Git identity
 
@@ -339,8 +340,9 @@ number is the GitHub issue number; a `decompose` issue makes no branch. **An iss
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
 defined segment. Earlier branches used `dev/` and `fix/`; both spellings are historical, not
-alternatives (`development/<n>` keeps its meaning above). When both axes are present the **context label wins**. If extra work on the same issue needs a second
-PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`.
+alternatives (`development/<n>` keeps its meaning above). When both axes are present the
+**context label wins**. If extra work on the same issue needs a second PR, suffix a third
+segment describing the split: `<context-label>/<issue-number>/<slug>`.
 
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
 its row — may override the number segment for a concrete reason to key the branch off the

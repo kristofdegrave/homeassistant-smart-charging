@@ -8,7 +8,7 @@ argument-hint: "#<PR number>"
 
 The last step of the interactive lifecycle. The merge it follows is the human's, or a
 session's under the merge rule; either way the step waits for the human partner's statement
-that it happened — a rule merge too, until a rule dispatches the step itself.
+that it happened — a rule merge too, until the autopilot dispatches the step itself.
 `CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step and every
 rule below — what closes the issue, which issue a PR names, when an epic closes.
 

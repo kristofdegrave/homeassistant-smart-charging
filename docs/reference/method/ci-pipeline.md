@@ -166,8 +166,8 @@ up sit in the `requirement` work type's propagate step and the Code-backing item
 completion bar its row names.
 
 It is deliberately a status check rather than a review checklist item: a checklist item is a
-reviewer's judgement on the PR, which can withhold a session's merge but never blocks the human's. It is equally deliberately not a job in
-`ci.yml`, where the project's other required
+reviewer's judgement on the PR, which can withhold a session's merge but never blocks the
+human's. It is equally deliberately not a job in `ci.yml`, where the project's other required
 status checks live: it needs the `edited` trigger, since the state it refuses is created by
 editing a PR body, and putting `edited` on `ci.yml` would re-run the whole build matrix on
 every body or title edit and cancel in-flight test runs through that file's concurrency group.

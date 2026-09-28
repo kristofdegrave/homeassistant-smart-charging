@@ -39,7 +39,8 @@
 # commands it does not name (`git checkout -f`, `git switch --discard-changes`, `git push
 # origin :branch`) are deliberately left alone rather than overlooked. A push whose refspec,
 # after the remote, lands on main is refused as a merge by another name: `main` or
-# `refs/heads/main` alone, or as the destination (`HEAD:main`, `x:refs/heads/main`). A push
+# `refs/heads/main` alone, or as the destination (`HEAD:main`, `x:refs/heads/main`), and so is
+# `--all` or `--branches`, which push local main with the rest (`--tags` pushes no branch). A push
 # whose text does not decide its destination -- no refspec, `HEAD` while on main, a
 # push.default that maps -- is not.
 # Anyone determined to force-push can still do it; the point is that nobody does it by
@@ -102,8 +103,9 @@
 # `gh api` on `repos/<repo>/merges` or a `PATCH` of `git/refs/heads/main`, a `git push`
 # to main whose text does not decide it (above), a merge from any other tool, the hanging
 # `gh` above, and the whole indirection class: anything the shell expands before gh sees
-# its words (a variable, a split or quoted letter), and any command not named here that
-# executes another. The trees and repository are read from the working tree's profile as
+# its words (a variable, a split or quoted letter), any command not named here that
+# executes another, and a prose command's own exec option (`git rebase --exec`, `git bisect
+# run`, `git submodule foreach`, `rg --pre`), which runs the words it is handed. The trees and repository are read from the working tree's profile as
 # checked out, uncommitted edits included, and a `PROFILE` in the environment is honoured,
 # so the session's own checkout can widen what auto-merges. Conceded the other way, false
 # positives: a `gh pr ...` segment whose text also carries the word `merge` and, anywhere, a
@@ -113,7 +115,9 @@
 # not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
 # pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
 # split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
-# <file>` is the workaround. The facts come from `gh`
+# <file>` is the workaround. A multi-word quoted flag value (`--body "Merged by autopilot"`)
+# is split at its spaces, so its later words count as selectors and the merge refuses as
+# naming several pull requests; `--body-file` is the workaround. The facts come from `gh`
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
 # not read.
@@ -379,7 +383,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
       -R | --repo) shift; gh_repo=${1:-} ;;
       --match-head-commit=*) match_head=${1#--match-head-commit=} ;;
       --match-head-commit) shift; match_head=${1:-} ;;
-      # Flags that take a value: skip it so a value is never read as a selector or flag.
+      # Flags that take a value: skip it so a value is never read as a selector or flag. Only
+      # its first word is skipped: a quoted value with a space is already split (conceded above).
       -b | --body | -t | --subject | -F | --body-file | -A | --author-email) shift ;;
       --*) ;;
       # gh (cobra) clusters short flags: `-sd` is `--squash --delete-branch`. A letter that
@@ -729,7 +734,10 @@ joined=$(printf '%s\n' "$cmd" | awk -v ps="$([ "$tool" = PowerShell ] && echo 1)
     c = ps ? "`" : sprintf("%c%c", 92, 92)
     gsub(c "\n", " ", buf); gsub(/\|[ \t]*\n/, "| ", buf); print buf
   }')
-[ -n "$joined" ] && cmd=$joined # as above: an awk that fails leaves the text unjoined
+# An awk that fails leaves the text unjoined, splitting `gh pr \` from `merge ...`; that still
+# fails closed only because the same broken awk leaves gh_merge empty, not 0, and the scan
+# then refuses the `merge ...` segment as merge words behind a word it does not read.
+[ -n "$joined" ] && cmd=$joined
 
 # Split the command line on shell separators so a guarded command placed after
 # && / || / ; / | / a newline is inspected in its own right. A pipe is kept at the head of
@@ -896,6 +904,11 @@ for seg in $segments; do
       fi
       if has_long '--mirror*' "$@"; then
         deny "$seg" "'git push --mirror' force-updates every ref on the remote"
+      fi
+      # --all and --branches (--a alone is ambiguous with --atomic) push every local branch,
+      # local main among them.
+      if has_long '--al*' "$@" || has_long '--b*' "$@"; then
+        deny "$seg" "'git push --all' or '--branches' pushes local main to the remote's main with every other branch, which is a merge by another name" "$MERGE_TAIL"
       fi
       # The first operand is the remote; every later one is a refspec, and a bare `main`
       # there pushes local main to the remote's main whatever is checked out. A flag's value

@@ -68,7 +68,7 @@ labels:
   action:
     - name: needs-approval
       color: b60205
-      description: "No automated work pending — a maintainer may merge a PR as it stands; an epic asks for a go"
+      description: "No automated work pending — a PR merges by a human or under the merge rule; an epic asks for a go"
     - name: needs-decision
       color: e4e669
       description: "A human decides — a PR has findings open or is on hold; an issue has a parked question"

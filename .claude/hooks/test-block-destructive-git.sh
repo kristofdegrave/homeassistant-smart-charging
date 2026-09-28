@@ -395,6 +395,10 @@ sh'
 run ALLOW 'echo "gh pr merge 1234" | grep merge'
 run ALLOW "rg -n 'gh pr merge' | wc -l"                                      # a read-only consumer runs nothing
 run BLOCK "rg -n 'gh pr merge' | wc -l | sh"                                 # ... and passes the words on
+run ALLOW "rg -n 'gh pr merge' | head -5"
+run ALLOW "rg -n 'gh pr merge' | tail -5"
+run ALLOW "rg -n 'gh pr merge' | sort"
+run ALLOW "rg -n 'gh pr merge' | sort | uniq -c"
 run ALLOW 'echo "gh pr merge 1234" |
 grep merge'                                                                    # a trailing pipe continues the line
 run ALLOW 'echo "gh pr merge 1234"; echo hi | sh'                             # a new pipeline reads no words
@@ -418,6 +422,12 @@ run ALLOW 'git push origin workflow/1438'
 run ALLOW 'git push -u origin workflow/1438'
 run ALLOW 'git push origin maintenance'                                     # a name that starts with main
 run ALLOW 'git push origin HEAD'                                            # the text cannot decide it
+run BLOCK 'git push --all origin'                                        # every local branch, main among them
+run BLOCK 'git push origin --all'
+run BLOCK 'git push --branches'
+run BLOCK 'git push --al'
+run ALLOW 'git push --tags origin'                                       # tags, no branch
+run ALLOW 'git push --atomic origin workflow/1438'
 run BLOCK 'gh pr merge 1234 --admin --match-head-commit abc123'          # not a squash
 run BLOCK 'gh pr merge 1234 --merge --match-head-commit abc123'
 run BLOCK 'gh pr merge 1234 --rebase --admin --match-head-commit abc123'
@@ -587,6 +597,10 @@ listed=1
 label=needs-approval
 file=MODIFIED ${cr}tests/x"
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a CR inside a name is refused, not deleted
+GH_VIEW=$(printf '%s\n' "$GOOD_VIEW" | sed "s/\$/$cr/")
+GH_CHECKS=$(printf '%s\n' "$GOOD_CHECKS" | sed "s/\$/$cr/")
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a trailing CR per line is Windows gh's line ending
+GH_CHECKS=$GOOD_CHECKS
 GH_VIEW='cross=false
 count=1
 listed=1
