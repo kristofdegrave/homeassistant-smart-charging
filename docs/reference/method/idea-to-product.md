@@ -151,13 +151,13 @@ gate does not apply; the track written on the issue is enough.
 ## 4. Decompose
 
 Every issue a strand gets is filed here — the epic, the issues the artifact stages run
-against, the epic's `decompose` child, and one child per task of the spec. A strand that needs no epic files one issue and
+against, any `decompose` child, and one child per task of the spec. A strand that needs no epic files one issue and
 stops; which strands those are is the first bullet set below.
 
 The stage is **entered twice, with the artifact stages in between**: the issues those stages
 run against must exist before they start, and the spec derives from what they merged. The
-**opening pass** runs straight after **Route**, and files a `decompose` child blocked by those
-stages' issues; the **closing step** runs once that child is unblocked. An issue that surfaces
+**opening pass** runs straight after **Route**, and files the `decompose` child an epic with a
+spec gets; the **closing step** runs once that child is unblocked. An issue that surfaces
 after both still belongs here — the opening pass says where.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
@@ -183,12 +183,15 @@ surfacing later that belongs to the strand — a bug found mid-implementation, a
 attached as a sub-issue too; epic membership needs no context label, and `file-task-issue`
 covers which label such a child takes.
 
-**The last issue the pass files is the `decompose` child**, one per epic: titled
-`decompose: <epic title>`, labelled `decompose`, a sub-issue of the epic, and blocked by every
-artifact-stage issue the pass filed — the `adr`, `uc`, `requirement`, `documentation` and
-`workflow` issues above. An artifact-stage issue filed against the epic later blocks its
-`decompose` child the same way: the open one, or — where that has closed — a new one filed
-with it.
+**The last issue the pass files is the `decompose` child**, for an epic that will carry a
+spec cut from a slice of `project-plan.md`: titled `decompose: <epic title>`, labelled
+`decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
+`documentation` issue the pass filed. An epic with no spec — a method epic of `workflow`
+tasks, a bug-track epic spanning slices — gets none, as a single-artifact idea has no closing
+step; its children are filed directly as tasks. A later artifact-stage issue blocks the open
+child too, and its filer posts on a parked epic a not-ready park naming it, in the `decompose`
+work file's *Out of the body* form; where the child has closed, a new one is filed with that
+edge and that park.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
@@ -245,8 +248,7 @@ the document that owns it and act on which of three cases it is:
 - **Install-time config** the slice adds, and its packaging where it ships something.
 - **The testing approach**, opening by naming the testing seam the tasks' failing tests drive
   through — one the suite already has over one the slice would add, and one seam for the whole
-  slice where one reaches every task. Named up front, the seam is what every task's test is
-  written against; found per task, each task invents its own.
+  slice where one reaches every task.
 - **One entry per task**, in build order.
 
 **A task is a vertical, demoable slice**: a narrow end-to-end path through every layer it
@@ -276,14 +278,14 @@ only statement until one owns it.
 ### Artifact: the epic, and one issue per task
 
 Or the single issue, where the idea is one artifact. The opening pass leaves the epic, the
-issues the artifact stages run against and the epic's `decompose` child; the closing step
+issues the artifact stages run against and any `decompose` child; the closing step
 leaves the spec in the epic's body and one child per task.
 
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
 The opening pass's own gate: nothing downstream starts without an issue to run against, what
-is filed for work is milestoned, and each epic has its `decompose` child, blocked by every
-artifact-stage issue filed against it. The closing step's: step 2's pass and step 3's parked
+is filed for work is milestoned, and each epic the opening pass gives a `decompose` child has
+it, with its edges. The closing step's: step 2's pass and step 3's parked
 read, both complete before any child is filed, and then every task in the body having an issue,
 filed as step 4 says. The **Implementation** stage starts from those issues and from nothing
 else.
@@ -380,10 +382,9 @@ artifact-specific additions, and this rule is the first of them:
 ### Never reference PR numbers or issue tracking statuses
 
 - **Never reference PR numbers or issue tracking statuses** (e.g. "PR #30, still open",
-  "issue #29, resolved", "has landed") inside the document body. These are ephemeral
-  repo-management facts that rot as PRs merge and issues close and don't belong in a document
-  meant to record durable reasoning — describe the underlying fact directly instead (e.g.
-  "has since been reworded", not "issue #29 has since reworded"). This applies to ADRs too.
+  "issue #29, resolved", "has landed") inside the document body; describe the underlying fact
+  directly instead (e.g. "has since been reworded", not "issue #29 has since reworded"). This
+  applies to ADRs too.
 
 ### Gate: a change touching shipped behaviour has an epic that will carry its spec before `needs-approval`
 
@@ -393,9 +394,7 @@ written body: the opening pass files it at **Decompose**, while the body is writ
 closing step once the `decompose` child is unblocked — so requiring the body here would ask for
 an artifact this stage cannot yet have. Without it, an analysis document can merge describing behaviour the code does not have.
 The review step applies that label on a clean pass and knows nothing about child issues, so
-the same condition is checked by whoever approves the merge. The epic is the earliest artifact that can
-carry that obligation — a `development`/`testing` child cannot, because it is cut from that
-epic's body by the decomposition, so none exists until the spec has been written into it.
+the same condition is checked by whoever approves the merge.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work
 file carries.
 

@@ -117,7 +117,8 @@ question with no issue to park on, in its shape.
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
   own markers (the local round, `ai-fix-`, escalation, self-grant and `clarify`'s
-  `autopilot-parked` markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
+  `autopilot-parked` markers; [profile.md](../profile.md)'s **Repository and git identity**),
+  posted while an exit label was on: after its `labeled` event and before any later
   `unlabeled` one. **Marker rule:** every session post carries one — a review's inline comments via its body,
   else `fix`'s note marker — bar the hold-reason review (**Exit labels** below); every
   comment the session posts on an issue carries one, `fix`'s note marker where no other
