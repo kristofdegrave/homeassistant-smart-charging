@@ -157,12 +157,11 @@ Every issue a strand gets is filed here — the epic, the issues the artifact st
 against, and one child per task of the spec. A strand that needs no epic files one issue and
 stops; which strands those are is the first bullet set below.
 
-The stage is **entered twice, with the artifact stages in between**, the way the **ADR** stage
-below is: the issues those stages run against have to exist before they start, and the spec has
-to derive from what they merged. The **opening pass** runs straight after **Route**; the
+The stage is **entered twice, with the artifact stages in between**: the issues those stages
+run against have to exist before they start, and the spec has to derive from what they merged. The **opening pass** runs straight after **Route**; the
 **closing step** runs once the `decompose` child is unblocked. An issue that surfaces after both
 still belongs here — the opening pass says where. Until the opening pass files that child with
-its edges, the **Design** stage's gate below holds the closing step.
+its edges, the human files it and the **Design** stage's gate below holds the closing step.
 
 ### The opening pass: the epic, and the issues the artifact stages run against
 

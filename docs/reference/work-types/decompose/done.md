@@ -1,7 +1,7 @@
 # Work type: `decompose` — the completion bar
 
-What must be true when a `decompose` run ends — parked, at entry 1, or closed, at entry 2 of
-`implement.md`. The author self-checks against it before stopping; the run produces no pull
+What must be true when a `decompose` run ends — parked or stopped, at entry 1, or closed, at
+entry 2 of `implement.md`. The author self-checks against it before stopping; the run produces no pull
 request, so a reviewer applies it — to the parked body and the tracker state — only when a
 dispatch reaches this row, which `review.md` says was a misrouting. Why the review is the
 checklist pass `implement.md` runs is the `decompose` rule under *Rows that differ from the
@@ -35,10 +35,10 @@ Missing or elsewhere in the comment → **Critical**: the autopilot cannot then 
 from any other comment, and re-parks or never proceeds. A second park over an unanswered one
 → **Major**.
 
-**(5) `needs-approval` is on the epic and `needs-decision` is not**, read back before the
-parking comment was posted — the entry rule's go reads the label's events against that
-comment's time; every other label on the epic and on the `decompose` issue is as the run
-found it. Otherwise → **Major**.
+**(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
+entry rule's go reads the label's events against that comment's time — and the run added no
+other label and removed none, bar `clarify`'s own parking of the `decompose` issue. Otherwise
+→ **Major**.
 
 **(6) No child exists.** A task issue filed before the human's go — the label removal the
 entry rule reads from the timeline, never a marker or a label state alone → **Critical**: it
@@ -53,8 +53,8 @@ is the failure the park exists to prevent, and one it cannot cheaply undo.
 here: label, board fields, `Source:` lines, edges. A task without one → **Major**. A changed
 Size the closing comment does not explain → **Minor**.
 
-**(9) Every comment newer than the marker that `implement.md`'s entry rule admits was
-applied**, and the closing comment says how; one it does not admit was reported, not applied.
+**(9) Every comment `implement.md`'s entry 2 step 1 admits was applied**, and the closing
+comment says how; one it does not admit, and any redirect, was reported there, not applied.
 Either missed → **Major**: the human's instruction at the gate was the point of the gate.
 
 **(10) The `decompose` issue is closed by its closing comment**, carrying what
@@ -63,3 +63,13 @@ listed → **Major**.
 
 **(11) No clutter** anywhere the run wrote — the body, the summary, the closing comment — as
 the *Clutter* entry named under item 3 defines it, at its severities and in its scope.
+
+## At a stop (entry 1)
+
+**(12) A stop short of the park leaves the gate readable.** Stopped by step 4's *Out of the
+body*: the filed issue exists, the blocked-by edge from the `decompose` issue to it was read
+back, and, where a park stood, a fresh one with the children part `none` names that issue.
+Parked through `clarify`: that skill's parking rule holds on the `decompose` issue. Either
+way no child exists, no label was added or removed beyond `clarify`'s parking, and (7) holds.
+A stop that leaves a standing park readable as the go → **Critical**; any other miss →
+**Major**.

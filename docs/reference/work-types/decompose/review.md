@@ -17,6 +17,6 @@ the tracker; the author applies it, and the human's read is the second reader.
 
 **A reviewer reached by a dispatch against this row** was misrouted, since the pass above is
 the review and it has already run: say so, then apply `done.md`'s bar — and no checklist
-beyond it — to the parked epic body and what the run left on the tracker, which is what the
-dispatch can still see. The verdict is the bar's; a diff handed over with the dispatch is
-outside this row and is reported, not reviewed.
+beyond it — to the tracker content the dispatch handed over, and report each item it cannot
+reach. The verdict is the bar's; a diff handed over with the dispatch is outside this row and
+is reported, not reviewed.
