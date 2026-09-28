@@ -156,8 +156,8 @@ whichever is then correct.
 On an **issue** the same two labels park work for the human, as ADR-0052 decided:
 `needs-decision` is applied by `clarify`'s parking rule, in an unattended run,
 and means a question waits for the human's answer; `needs-approval` on an epic asks for a go.
-The human takes an issue's label off; a run removes only `needs-decision`, on an answer
-passing `clarify`'s test, and never an epic's `needs-approval`, whose removal is the human's
+The human takes an issue's label off; a run removes `needs-decision`, on an answer
+that settles `clarify`'s park, and never an epic's `needs-approval`, whose removal is the human's
 go. An issue's label says nothing about any PR.
 
 **A blocking reason found after the exit puts the PR on hold.** When the session learns, before
