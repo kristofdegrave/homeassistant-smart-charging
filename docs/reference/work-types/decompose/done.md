@@ -51,7 +51,7 @@ is the failure the park exists to prevent, and one it cannot cheaply undo.
 ## At the close (entry 2)
 
 **(8) Every task in the body has an issue** — `file-task-issue`'s own done line, applied
-here: label, board fields, `Source:` lines, edges. A task without one → **Major**. A changed
+here: label, board fields, the epic's milestone, `Source:` lines, edges. A task without one → **Major**. A changed
 Size the closing comment does not explain → **Minor**.
 
 **(9) Every comment `implement.md`'s entry 2 step 1 admits was applied**, and the closing

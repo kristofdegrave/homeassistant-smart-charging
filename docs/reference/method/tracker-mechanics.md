@@ -84,9 +84,10 @@ was re-verified when it was written down.
 the item to the board and edit its fields by raw node id.
 
 ```sh
-# 1. create (see the Windows note below for why the body is a file)
+# 1. create (see the Windows note below for why the body is a file); --milestone takes the
+#    milestone's title; the flag was run on `gh issue edit` below, never on a create
 gh issue create --repo $REPO \
-  --title "<title>" --body-file <path> --label <context-label>
+  --title "<title>" --body-file <path> --label <context-label> --milestone "<title>"
 
 # 2. put it on the board; item-add prints the item id you then edit
 gh project item-add $BOARD --owner $OWNER --url <issue-url> --format json
@@ -125,14 +126,33 @@ gh project item-list $BOARD --owner $OWNER --format json --limit 1000 \
   --jq '.items[] | select(.content.number==<n>) | {id, size, estimate, status}'
 ```
 
+**Milestones.** A milestone placed or changed later is
+`gh issue edit <n> --repo $REPO --milestone "<title>"`, or over REST
+`gh api -X PATCH repos/$REPO/issues/<n> -F milestone=<number> --jq .milestone.title` — both
+run as a no-op, re-setting an issue to the milestone it had. A new one is
+`gh api -X POST repos/$REPO/milestones -f title="<title>" --jq .number`, the `--jq` printing
+its number as the read-back; **not run**, since running it creates a milestone. The titles,
+and an existing one's number — REST takes the number, not the title — are
+
+```sh
+gh api -X GET -f state=all -f per_page=100 --paginate repos/$REPO/milestones --jq '.[].title'
+gh api -X GET -f state=all -f per_page=100 --paginate repos/$REPO/milestones \
+  --jq '.[] | select(.title=="<title>") | .number'
+```
+
+(`state=all` because the listing defaults to open milestones). Read a placement back with
+`gh api repos/$REPO/issues/<n> --jq .milestone.title` — an unknown title fails
+`gh issue edit` with a not-found error, but the read-back stands under the one rule above.
+
 **REST fallback for the creation step** (the board steps have none):
 
 ```sh
 gh api -X POST repos/$REPO/issues --input <payload.json>
 ```
 
-with `{"title": …, "body": …, "labels": [ … ]}`. Using `--input` also keeps the body's UTF-8
-intact.
+with `{"title": …, "body": …, "labels": [ … ], "milestone": <number>}` — REST takes the
+milestone's number, not its title; that key was run on the PATCH above, never here. Using
+`--input` also keeps the body's UTF-8 intact.
 
 ## Rewriting a work item's body
 

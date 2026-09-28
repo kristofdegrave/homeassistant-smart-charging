@@ -99,9 +99,9 @@ finding:
    while `needs-approval` was on. Such a comment is a change to apply before filing (a task
    dropped, a Size changed), never a question to raise.
 2. **File the children**, in build order, one issue per task, through `file-task-issue`'s
-   *Filing the children of a decomposition*: the label, board fields, `Source:` lines,
-   sub-issue edge and blocked-by edges are that skill's and `CLAUDE.md`'s **Issue
-   conventions**'. Each child's title starts `T<n>:`, its task id; skip a task whose `T<n>:`
+   *Filing the children of a decomposition*: the label, board fields, the epic's milestone,
+   `Source:` lines, sub-issue edge and blocked-by edges are that skill's and `CLAUDE.md`'s
+   **Issue conventions**'. Each child's title starts `T<n>:`, its task id; skip a task whose `T<n>:`
    already starts a sub-issue's title, so a re-run files only what is missing. Read back every
    edge.
 3. **Close the `decompose` issue** with a comment listing the children by number, why a

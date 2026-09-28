@@ -111,6 +111,15 @@ temporary log with a unique prefix — `[DEBUG-a4f2]` — so cleanup is one grep
 
 ## Step 5 — hand off
 
+A confirmed claim is placed on a milestone chosen with the human partner — on the claim's
+issue, filed first if the report arrived without one. When it is placed is the **Route**
+stage under `CLAUDE.md`'s **Idea-to-product flow**, the milestone rule is **Issue
+conventions**', and the command **Tracker mechanics**'.
+
+The fix is then ordinary work: file it as a `development` issue and run it through this project's
+contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
+in that issue's row of `CLAUDE.md`'s **Model selection** table.
+
 Stop here and report:
 
 1. **Confirmed or refuted**, with the one command and its output.
@@ -125,7 +134,3 @@ Stop here and report:
    replicate the chain that triggers the defect — that is itself the finding.** Record it on the
    issue; a regression test at the wrong seam is false confidence.
 6. **Any `[DEBUG-…]` probes or throwaway files still in the tree.**
-
-The fix is then ordinary work: file it as a `development` issue and run it through this project's
-contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
-in that issue's row of `CLAUDE.md`'s **Model selection** table.

@@ -47,7 +47,10 @@ only sequences those stages and says which skill performs each. Cite it, never r
    (`CLAUDE.md`'s **Model selection**) its mechanics, so the epic body never carries a
    checklist of them; what a child is and in what order children are filed is the flow
    document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
-   later — recursion is expected, not an error.
+   later — recursion is expected, not an error. The step ends with what it filed — the epic,
+   or the single issue — placed on a milestone per the milestone rule under `CLAUDE.md`'s **Issue
+   conventions**. A shipped-behaviour issue is placed once its claim is reproduced, per the
+   verification rule under `CLAUDE.md`'s **Idea-to-product flow**.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
