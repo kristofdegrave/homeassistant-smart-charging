@@ -174,8 +174,8 @@ the merge, that a PR carrying `needs-approval` should not merge as it stands:
   a `COMMENT` review whose body is the reason, carrying no marker. It is posted directly per
   [tracker-mechanics.md](tracker-mechanics.md), not through `submit-pr-review`, which
   adds the round marker. The round enters at **Fix** whichever step skill carried the grant,
-  since the review step never reads human review bodies as findings. The fix step reads it
-  as any human review body, and the chain runs on from **Fix**. Unmarked, it also
+  since the review step never reads human review bodies as findings. The fix step reads it as
+  any human review body, and the chain runs on from **Fix**. Unmarked, it also
   counts as a human item, which changes nothing: the grant already started a fresh count. The session's reason
   is never the verdict (**Rule A**): the review step's next pass decides the exit.
 - A concern that does not block the merge is filed as a follow-up instead, and the PR keeps
@@ -250,11 +250,11 @@ the most common of those before they run.
 
 The chain above names four column **roles** — *backlog*, *in progress*, *in review*, *done* —
 and never a column by its name on the board: the board's Status vocabulary and option ids are
-`.claude/profile.yml`'s `board.fields.status`, and which column plays which role on this
-project — including any column that plays none — is [profile.md](../profile.md)'s **Project
-board**. The rule here is only that the chain moves an item **backlog → in progress → in
-review → done** and through no other column: a column that later gains a meaning is
-inserted explicitly into step 0/1 here.
+`.claude/profile.yml`'s `board.fields.status`, and which column plays which role — including
+any that plays none — is [profile.md](../profile.md)'s **Project board**. The rule here is
+only that the chain moves an item **backlog → in progress → in review → done** and through
+no other column: a column that later gains a defined meaning is inserted explicitly into
+step 0/1 here.
 
 **An epic's Status follows its children** and takes the shorter path **backlog → in progress
 → done**: the session running step 1 moves it to *in progress* when its first child goes
@@ -265,14 +265,13 @@ progress* changes nothing.
 
 ## Parallel work and forward dependencies
 
-Tasks can proceed in parallel. When one needs something a not-yet-built task will produce (an
-entity, an event, a signature), neither block nor invent the missing piece. Pin down the
-**contract** instead — exact name/id, value
-semantics/unit, a shared constant both sides code against — in the relevant
-spec/`const.py`/ADR, and mark the producing side as a dependency for its own later task. The
-producing task implements the real thing; the consuming task only adds the signature and
-tests against a simulated/stubbed instance of the contract — never a private reimplementation
-of the producer's logic.
+Tasks may proceed in parallel. When one needs something a not-yet-built task will produce (an
+entity, an event, a function signature), neither block nor invent the missing piece: pin down
+the **contract** — exact name/id, value semantics/unit, a shared constant both sides code
+against — in the relevant spec/`const.py`/ADR, and mark the producing side as a dependency for
+its own later task. The producer implements the real thing; the consumer adds only the
+signature and tests against a stubbed instance of the contract, never a private
+reimplementation of the producer's logic.
 
 ## Git identity
 
@@ -330,7 +329,8 @@ session's own footprint by the session's markers, never by author.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
   issue is filed as a native sub-issue of that epic, never standing alone: the parent edge
-  says the body was cut from a reviewed decomposition rather than typed straight into an issue. Get the edge on at filing time; adding it afterwards works
+  says the body was cut from a reviewed decomposition rather than typed straight into an
+  issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label
@@ -338,9 +338,9 @@ session's own footprint by the session's markers, never by author.
 number is the GitHub issue number. **An issue carrying only a kind label** (`bug`,
 `enhancement`) has no context label to name the branch, so the kind label itself is the
 segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier `dev/` and `fix/` spellings for this track are historical, not alternatives
-(`development/<n>` keeps its own meaning above — a task cut from an epic). When both
-axes are present the **context label wins**. If extra work on the same issue needs a second, separate
+defined segment. Earlier branches for this kind of work used `dev/` and `fix/`; both
+spellings are historical, not alternatives (`development/<n>` keeps its meaning above). When both
+axes are present the **context label wins**. If extra work on the same issue needs a second
 PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`
 (e.g. `development/142/followup`).
 
@@ -378,8 +378,8 @@ recommends can be argued from evidence; once they land, it stays as the record o
 
 By a fresh-agent review run interactively, weighted toward **quotation
 accuracy** — a post-mortem is an argument built entirely from quotes, so a quote that is
-inaccurate, truncated in a way that changes its meaning, or mined out of a context that would
-undercut the point is the defect class that matters. Pick the reviewer from what the PR
-touches (the `workflow` checklist when it also edits `CLAUDE.md`).
-No reviewer checklist is applied to the post-mortem itself: the checklists are written
-against artifacts that assert behaviour; none fits a narrative document.
+inaccurate, truncated so its meaning changes, or mined from a context that would undercut the
+point is the defect class that matters. Pick the reviewer from what the PR
+actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
+No reviewer checklist applies to the post-mortem itself: all are written against artifacts
+that assert behaviour, and none fits a narrative document.
