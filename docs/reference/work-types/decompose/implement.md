@@ -5,23 +5,23 @@ content: the epic's body, the parking comment on it and, later, the child issues
 makes no branch, no worktree and no pull request — the `implement` skill states the
 exception — and its board moves apply to the `decompose` issue.
 
-Why the read is an issue of its own, and why it parks, is ADR-0052's.
+Why the read is its own issue, and parks, is ADR-0052's.
 
 ## Two entries, and how a run tells them apart
 
 The closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to has four
-steps, run here in two entries with the human's read — the park — between:
+steps, run here in two entries with the human's read, the park, between:
 
 - **Entry 1 — draft, pass, park**: the closing step's steps 1–2, ending at step 3's gate.
 - **Entry 2 — file the children**: step 4, once the human has said go.
 
 Decide the entry from the epic's comments and label events, never from the `decompose`
 issue's Status. **The author test** passes the repository owner (`CLAUDE.md`'s **Project
-profile**) or a collaborator by the tracker's association (`CLAUDE.md`'s **Tracker
-mechanics**, *Reading a work item's comments by author*). **A comment counts** — as a change
-request or an answer — only if it passes that test and carries none of the session's markers
-(*Rounds and the cap*, under `CLAUDE.md`'s **Contribution workflow**), which excludes the
-session's own comments once that rule has every issue comment the session posts carry one.
+profile**) or a collaborator or, on an organisation's repository, a member, by the
+tracker's association (`CLAUDE.md`'s **Tracker mechanics**, *Reading a work item's comments
+by author*). **A comment counts** — as a change request or an answer — only if it passes
+that test and carries none of the session's markers (*Rounds and the cap*, under
+`CLAUDE.md`'s **Contribution workflow**).
 **A park counts** as a comment passing the author test whose last line is the parking marker
 (below), exempt from the marker exclusion. One from anyone else carrying it is reported
 (**Rules** below), never read as a park.
@@ -29,15 +29,17 @@ session's own comments once that rule has every issue comment the session posts 
 - No comment on the epic counts as a park → **Entry 1**.
 - One does — the newest parking comment — and `needs-approval` is still on the epic → the
   human has not answered. Its children part is `none` (*Out of the body*) → re-enter
-  **Entry 1** at step 1, a fresh draft, applying any counting comment newer than it as a
-  change. Otherwise a counting comment newer than it is a change request: re-enter at step
-  1's gate, then step 3, fix the body as it asks, and park again with a fresh summary — the
-  pass is not re-run. None → stop and report the epic as still parked.
+  **Entry 1** at step 1, a fresh draft, applying as a change every counting comment newer
+  than the newest park whose children part is not `none`. Otherwise a counting comment
+  newer than it is a change request: re-enter at step 1's gate, then step 3, fix the body as
+  it asks, and park again with a fresh summary — the pass is not re-run. None → stop and
+  report the epic as still parked.
 - One does, its children part is not `none`, and the epic's label timeline (**Tracker
   mechanics**, *Reading a change request's label events*) shows `needs-approval` on when it
   was posted and removed after it by a login not ending in `[bot]` → **Entry 2**: that
   removal is the go.
-- Otherwise → stop and report the epic's state; file nothing.
+- Otherwise → stop and report the epic's state, and that only the human re-applying
+  `needs-approval` resumes it; file nothing.
 
 ## Entry 1 — draft, pass, park
 
@@ -48,8 +50,9 @@ session's own comments once that rule has every issue comment the session posts 
    to *in progress*, never *in review* (**Project board**, under `CLAUDE.md`'s **Contribution
    workflow**).
 2. **Read the sources**: the epic body as it stands (*Decisions so far*, the scope), the
-   slice of `docs/design/project-plan.md` and the services of `docs/design/system-design.md` it names, the analysis documents and the accepted ADRs the
-   slice touches. Derive the slice boundary and the deferrals from those sources.
+   slice of `docs/design/project-plan.md` and the services of `docs/design/system-design.md`
+   it names, the analysis documents and the accepted ADRs the slice touches. Derive the
+   slice boundary and the deferrals from those sources.
 3. **Draft the body** — the closing step's step 1. What the body carries, a task entry's keys,
    *Derive, don't design* and its three cases for a behavioural rule are that step's, applied
    as written. Keep *Decisions so far* in place. Write the body to the epic (**Tracker
@@ -93,7 +96,8 @@ finding:
 ## Entry 2 — file the children
 
 1. **Read the body back** and every counting comment posted after the newest parking comment
-   while `needs-approval` was on. Such a comment is a change to apply before filing (a task dropped, a Size changed), never a question to raise.
+   while `needs-approval` was on. Such a comment is a change to apply before filing (a task
+   dropped, a Size changed), never a question to raise.
 2. **File the children**, in build order, one issue per task, through `file-task-issue`'s
    *Filing the children of a decomposition*: the label, board fields, `Source:` lines,
    sub-issue edge and blocked-by edges are that skill's and `CLAUDE.md`'s **Issue

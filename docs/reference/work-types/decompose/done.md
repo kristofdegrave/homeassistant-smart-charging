@@ -1,7 +1,7 @@
 # Work type: `decompose` — the completion bar
 
-What must be true when a `decompose` run ends — parked or stopped, at entry 1, or closed, at
-entry 2 of `implement.md`. The author self-checks against it before stopping; the run produces no pull
+What must be true when a `decompose` run ends — parked at entry 1, stopped, or closed at entry 2
+of `implement.md`. The author self-checks against it before stopping; the run produces no pull
 request, so a reviewer applies it — to the parked body and the tracker state — only when a
 dispatch reaches this row, which `review.md` says was a misrouting. Why the review is the
 checklist pass `implement.md` runs is the `decompose` rule under *Rows that differ from the
@@ -15,8 +15,9 @@ the tracker.
 **(1) The body was derived, and the pass ran exactly once against it.** A body parked with no
 `reviewer` run behind it, or one the pass was run twice over → **Critical**: the human's read
 then rests on an unreviewed body, or the closing step's single-pass rule is broken. A re-entry
-after `implement.md`'s *Out of the body* stop is a fresh draft with its own
-single pass, not a second run over the earlier one. A Critical or Major finding of the pass
+after `implement.md`'s *Out of the body* stop is a fresh draft with its own single pass, not
+a second run over the earlier one, and applies every counting comment the entry rule's
+not-ready arm names; one not applied → **Major**. A Critical or Major finding of the pass
 neither fixed in the body nor handled by that branch → **Major**.
 
 **(2) The body on the tracker is the fixed body.** Read back after the last edit, before the
@@ -64,10 +65,10 @@ listed → **Major**.
 **(11) No clutter** anywhere the run wrote — the body, the summary, the closing comment — as
 the *Clutter* entry named under item 3 defines it, at its severities and in its scope.
 
-## At a stop (entry 1)
+## At a stop, before or within entry 1
 
-**(12) A stop short of the park leaves the gate readable**: no child exists, and no label was
-added or removed beyond `clarify`'s parking.
+**(12) A stop short of the park leaves the gate readable**: no child exists, and no label on
+the epic or the `decompose` issue was added or removed beyond `clarify`'s parking.
 - Stopped by *Out of the body*: the filed issue exists, the blocked-by edge from the
   `decompose` issue to it was read back, where a park stood a fresh one with the children
   part `none` names that issue, and (7) holds.
