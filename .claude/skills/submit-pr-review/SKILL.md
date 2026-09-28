@@ -9,8 +9,8 @@ Post review findings as a **native pull request review** (`event: COMMENT`) with
 inline comments — never as a plain issue comment. Findings then render in the *Files changed*
 tab and land on the exact diff lines.
 
-**Never** use `event: APPROVE` or `event: REQUEST_CHANGES`. A review approves nothing: whose
-a merge is, is the merge rule under `CLAUDE.md`'s **Contribution workflow** topic, and the
+**Never** use `event: APPROVE` or `event: REQUEST_CHANGES`. A review approves nothing: who may
+merge is the merge rule under `CLAUDE.md`'s **Contribution workflow** topic, and the
 account that opened the PR cannot approve or request changes on it anyway (GitHub 422).
 Always `COMMENT`.
 

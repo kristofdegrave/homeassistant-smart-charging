@@ -346,6 +346,9 @@ run BLOCK '& git push --force'                                               # .
 run BLOCK 'iex "gh pr merge 1234 --squash --admin"'                          # PowerShell's interpreters
 run BLOCK 'Invoke-Expression "gh pr merge 1234 --squash --admin"'
 run BLOCK 'IEX "gh pr merge 1234 --squash --match-head-commit abc123"'       # in any case
+run BLOCK "echo 'gh pr merge 1234 --admin' | iex"                            # prose piped into one
+run BLOCK 'gh pr `
+merge 1234 --merge --admin'                                                  # a backtick continuation
 run BLOCK '$r = gh pr merge 1234 --squash --match-head-commit abc123'        # an assignment's command
 run BLOCK '& "C:\Program Files\GitHub CLI\gh.exe" pr merge 1234 --squash --match-head-commit abc123'  # a quoted full path
 TOOL=Bash
@@ -364,10 +367,29 @@ run BLOCK "node -e \"require('child_process').execSync('gh pr merge 1234 --squas
 run BLOCK 'echo "$(gh pr merge 1234 --squash --match-head-commit abc123)"'    # prose running a substitution
 run BLOCK 'echo hi & gh pr merge 1234 --squash --match-head-commit abc123'    # a background & starts another command
 run BLOCK 'GH_REPO=$(cat repo.txt) gh pr merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'echo `gh pr merge 1234 --squash --match-head-commit abc123`'        # a backtick substitution
+run BLOCK "env SH -c 'git status' 'gh pr merge 1234 --admin'"    # SH behind a wrapper is an interpreter, not walked past to git
+run ALLOW 'ECHO "gh pr merge 1234"'                                           # ... and prose in any case
+# Prose piped on, through any prose, into anything but prose may be run.
+run BLOCK 'echo "gh pr merge 1234 --merge --admin" | sh'
+run BLOCK "printf 'gh pr merge 1234 --admin' | bash"
+run BLOCK 'echo "gh pr merge 1234 --admin" | cat | sh'
+run BLOCK 'echo "gh pr merge 1234 --admin" |
+sh'
+run ALLOW 'echo "gh pr merge 1234" | grep merge'
+run ALLOW 'echo "gh pr merge 1234" |
+grep merge'                                                                    # a trailing pipe continues the line
+run ALLOW 'echo "gh pr merge 1234"; echo hi | sh'                             # a new pipeline reads no words
+# A line continuation is one line.
+run BLOCK 'gh pr \
+merge 1234 --merge --admin'
+run BLOCK 'git push \
+--force'
 # A push that lands on main is a merge by another name.
 run BLOCK 'git push origin HEAD:main'
 run BLOCK 'git push origin some-branch:refs/heads/main'
 run BLOCK 'git push origin :main'
+run BLOCK 'git push origin :refs/heads/main'
 run ALLOW 'git push origin HEAD:some-branch'
 run BLOCK 'gh pr merge 1234 --admin --match-head-commit abc123'          # not a squash
 run BLOCK 'gh pr merge 1234 --merge --match-head-commit abc123'
@@ -398,6 +420,15 @@ run BLOCK 'gh pr --repo other/repo merge 1234 --squash --match-head-commit abc12
 run BLOCK 'gh pr merge 1234 --repo other/repo --squash --match-head-commit abc123'
 run BLOCK 'gh pr -R o/r merge 1234 --admin --match-head-commit abc123'   # -R walked past, then the squash rule bites
 run BLOCK 'gh pr merge 1234 -Ro/r --admin --match-head-commit abc123'
+# gh steps over flags to find its subcommand, so a flag before `merge` is still the merge's.
+run BLOCK 'gh pr -Ro/r merge 1234 --admin'
+run BLOCK 'gh pr -R=other/repo merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'gh pr -Rother/repo merge 1234 --squash --match-head-commit abc123'
+run BLOCK 'gh -R other/repo pr merge 1234 --squash --match-head-commit abc123'   # before pr, too
+run BLOCK 'gh pr -md merge 1234 --match-head-commit abc123'                     # a cluster before merge
+run BLOCK 'gh -X PUT api repos/o/r/pulls/1234/merge -f merge_method=squash'      # ... and before api
+run ALLOW 'gh pr -Ro/r merge 1234 --squash --match-head-commit abc123'
+run ALLOW 'gh pr -R=o/r merge 1234 --squash --match-head-commit abc123'
 run BLOCK 'GH_REPO=o/r gh pr merge 1234 --squash --match-head-commit abc123'   # a GH_* assignment, even to the same repo
 run BLOCK 'GH_HOST=ghe.example gh pr merge 1234 --squash --match-head-commit abc123'
 run BLOCK 'xargs gh pr merge 1234 --squash --match-head-commit abc123'  # a wrapper
@@ -455,6 +486,16 @@ label=needs-approval
 file=MODIFIED tests/test_x.py
 file=MODIFIED CLAUDE.md'
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a rules file at the root
+# A rules file a later run loads stays the human's, whichever tree holds it.
+for rf in tests/CLAUDE.md docs/design/claude.local.md custom_components/x/.claude/settings.json; do
+  GH_VIEW="cross=false
+head=abc123
+count=1
+listed=1
+label=needs-approval
+file=ADDED $rf"
+  run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a nested rules file
+done
 GH_VIEW='cross=false
 head=abc123
 count=1

@@ -6,8 +6,9 @@ argument-hint: "#<PR number>"
 
 # Clean up after a merge
 
-The last step of the interactive lifecycle. The merge it follows is manual, so nothing in the
-session can know it happened until the human partner says so. `CLAUDE.md`'s **Contribution
+The last step of the interactive lifecycle. The merge it follows is another actor's — the
+human's, or another session's under the merge rule — so nothing in the session can know it
+happened until the human partner says so. `CLAUDE.md`'s **Contribution
 workflow** section routes to the doc that owns the step and every rule below — what closes the
 issue, which issue a PR names, when an epic closes.
 
