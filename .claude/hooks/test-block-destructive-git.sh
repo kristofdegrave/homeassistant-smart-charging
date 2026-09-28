@@ -242,6 +242,21 @@ EOF"
 run BLOCK "/bin/sh <<'EOF'
 git clean -f
 EOF"
+# Every interpreter is_interp knows, not only a shell, runs a heredoc's body.
+run BLOCK "python3 - <<'EOF'
+import os
+os.system('gh pr merge 1234 --squash --admin')
+EOF"
+run BLOCK "cat <<'EOF' | node
+require('child_process').execSync('gh pr merge 1234 --admin')
+EOF"
+run ALLOW "python3 - <<'EOF'
+print(1)
+EOF"
+run ALLOW "cat <<'EOF' > /tmp/msg.txt
+docs: never gh pr merge 1234 --admin by hand
+git clean -f
+EOF"
 # `<<-` strips tabs only: a space-indented terminator does not terminate, in sh or here.
 run BLOCK "cat > /tmp/doc.md <<-'EOF'
   git clean -f
@@ -334,6 +349,7 @@ run ALLOW 'echo "gh pr merge is guarded"'                     # prose behind a n
 run ALLOW 'echo "gh pr merge 1234"'
 run ALLOW 'git commit -m "gh pr merge notes"'                 # git's own rules read it, not the merge rule
 run ALLOW 'gh pr merge 1234 --squash=true --match-head-commit abc123'
+run ALLOW 'gh pr merge 1234 -s=true --match-head-commit abc123'
 run ALLOW 'gh pr merge 1234 --squash --match-head-commit abc123 2>&1'   # a redirection is no selector
 run ALLOW 'gh pr merge 1234 --squash --match-head-commit abc123 > /tmp/out.txt'
 run ALLOW 'if gh pr merge 1234 --squash --match-head-commit abc123; then echo merged; fi'  # a reserved word is stepped over
@@ -377,6 +393,8 @@ run BLOCK 'echo "gh pr merge 1234 --admin" | cat | sh'
 run BLOCK 'echo "gh pr merge 1234 --admin" |
 sh'
 run ALLOW 'echo "gh pr merge 1234" | grep merge'
+run ALLOW "rg -n 'gh pr merge' | wc -l"                                      # a read-only consumer runs nothing
+run BLOCK "rg -n 'gh pr merge' | wc -l | sh"                                 # ... and passes the words on
 run ALLOW 'echo "gh pr merge 1234" |
 grep merge'                                                                    # a trailing pipe continues the line
 run ALLOW 'echo "gh pr merge 1234"; echo hi | sh'                             # a new pipeline reads no words
@@ -390,6 +408,7 @@ run BLOCK 'git push origin HEAD:main'
 run BLOCK 'git push origin some-branch:refs/heads/main'
 run BLOCK 'git push origin :main'
 run BLOCK 'git push origin :refs/heads/main'
+run BLOCK 'git push origin "HEAD:main"'                                      # one layer of quotes is stripped
 run ALLOW 'git push origin HEAD:some-branch'
 run BLOCK 'gh pr merge 1234 --admin --match-head-commit abc123'          # not a squash
 run BLOCK 'gh pr merge 1234 --merge --match-head-commit abc123'
@@ -405,6 +424,8 @@ run BLOCK 'gh pr merge 1234 -sr --match-head-commit abc123'               # ... 
 run BLOCK 'gh pr merge 1234 --squash --rebase=true --match-head-commit abc123'
 run BLOCK 'gh pr merge 1234 --squash --merge=true --match-head-commit abc123'
 run BLOCK 'gh pr merge 1234 -s --squash=false --match-head-commit abc123'  # the last word on --squash is false
+run BLOCK 'gh pr merge 1234 -s=false --match-head-commit abc123'       # a boolean letter takes its =value
+run BLOCK 'gh pr merge 1234 -d=false --match-head-commit abc123'       # ... so the s in "false" is no squash
 run BLOCK 'echo hi; gh pr merge 1234'          # a separator starts a segment of its own
 # Which pull request: exactly one selector, by number or URL, on the profile's repository.
 run BLOCK 'gh pr merge --squash --admin --match-head-commit abc123'      # no selector
@@ -441,6 +462,8 @@ run BLOCK "sudo bash -c 'gh pr merge 1234 --squash'"
 run BLOCK 'nohup sh -c "gh pr merge 1234 --squash"'
 run BLOCK 'r=$(gh pr merge 1234 --match-head-commit abc123 -s)'   # a command substitution, though every condition holds
 run BLOCK 'sh -c "gh api -X PUT repos/o/r/pulls/1234/merge -f merge_method=squash"'  # the merge endpoint behind an interpreter
+run BLOCK 'sh -c "gh -X PUT api repos/o/r/pulls/1234/merge"'           # ... with gh's flags before api
+run ALLOW 'echo "gh api repos/o/r/pulls/1/merge"'                           # prose naming the endpoint
 run ALLOW 'sh -c "gh api repos/o/r/pulls/1234/comments"'
 # A merge under another name.
 run BLOCK 'gh api -X PUT repos/o/r/pulls/1234/merge -f merge_method=squash'

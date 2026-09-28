@@ -243,8 +243,8 @@ ask-before-acting default; a `PreToolUse` hook (`.claude/settings.json` →
 **The merge rule.** A session runs `gh pr merge` only when all hold: `--squash`; the head a
 branch of this repository, not a fork's; `needs-approval` on and `needs-decision` off; every
 changed file under a tree in `.claude/profile.yml`'s `autopilot.auto_merge_trees`; every
-check green — all of them, since the human's `--admin` merge bypasses the required ones. The
-same hook mechanizes it and fails closed; any other PR is the human's.
+check green, required or not. The same hook mechanizes it and fails closed — its header is the
+authority on the exact conditions — and any other PR is the human's.
 
 ## Project board
 

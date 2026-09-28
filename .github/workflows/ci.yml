@@ -103,7 +103,8 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: bash .github/check-authoring-rules.sh "$BASE_SHA"
       # The word budget (.github/check-word-budget.py, caps in .claude/profile.yml): diff-scoped
-      # like the check above, and in this job for the same non-blocking weight. `!cancelled()`,
+      # like the check above, and in this job for the same weight (non-blocking at the human's
+      # merge, blocking a session's). `!cancelled()`,
       # so a red authoring step does not hide a budget overrun until the next push.
       - uses: actions/setup-python@v7
         if: ${{ !cancelled() }}
@@ -134,7 +135,7 @@ jobs:
     # Blocking here, warning-only in the local pre-commit hook (.github/hooks/pre-commit): a
     # `workflow` change mid-rename must stay committable, and this job is where the finding is
     # caught instead. Whether it is a *required* status check is branch protection's call,
-    # like `authoring`.
+    # like `authoring`, and binds the human's merge alone: the merge guard counts every check.
     #
     # The job also carries the two PR-time halves of the upstream-drift check: its fixtures,
     # and `--validate` over the real dependency manifest. Both belong beside the method check

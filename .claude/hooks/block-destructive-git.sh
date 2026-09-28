@@ -84,8 +84,9 @@
 # `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. Even then a segment that
 # carries a command substitution (`$(` or a backtick) or a background `&` is refused, since
 # the command it starts runs whatever word heads the segment, and so is prose carrying the
-# words that a pipe feeds, through any prose commands, into any other command (`echo "..."
-# | sh`; `| grep merge` stays a mention). So `timeout 60 gh`, `r="$(gh ...)"`,
+# words that a pipe feeds, through any prose commands, into any other command but a read-only
+# `wc`, `head`, `tail`, `sort` or `uniq` (`echo "..." | sh`; `| grep merge` and `| wc -l` stay
+# mentions). So `timeout 60 gh`, `r="$(gh ...)"`,
 # PowerShell's `$r = gh ...`, a full-path `gh.exe` in quotes, and any interpreter (`sh -c`,
 # `pwsh -c`, `IEX`, `python -c`, `node -e`, ...) running the words, as an argument or from a
 # pipe, are all refused: what reaches gh is not what the guard read. `gh api` calls whose path
@@ -100,7 +101,10 @@
 # hanging `gh` above. Conceded the other way, a false positive: a commit message built as
 # `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan (the opener sits inside
 # quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
-# not prose is refused; `git commit -F <file>` is the workaround. The facts come from `gh`
+# not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
+# pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
+# split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
+# <file>` is the workaround. The facts come from `gh`
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
 # not read.
@@ -257,16 +261,18 @@ same_repo() { # same_repo <value> <owner/name>
 # Is the word (a path is reduced to its last part, case and `.exe` ignored, as PowerShell
 # and Windows ignore them) a shell or other interpreter that runs its argument text as a
 # command? PowerShell's `iex` included.
+# The one list: the heredoc blanker below reads it too, so the two cannot drift.
+INTERPRETERS='sh bash dash ash ksh zsh busybox ssh su docker podman eval source pwsh powershell cmd iex invoke-expression python python3 node perl ruby'
 is_interp() {
   _w=$(printf '%s' "${1##*[/\\]}" | tr 'A-Z' 'a-z')
-  case "${_w%.exe}" in
-    sh | bash | dash | ash | ksh | zsh | busybox | ssh | su | docker | podman | eval | source | pwsh | powershell | cmd | iex | invoke-expression | python | python3 | node | perl | ruby) return 0 ;;
+  case " $INTERPRETERS " in
+    *" ${_w%.exe} "*) return 0 ;;
   esac
   return 1
 }
 
 # Which gh words does the segment carry? Prints `<merge> <api>`: merge is 1 when the words
-# hold gh, pr and merge in that order, api when gh is followed by api. Each word is
+# hold gh, pr and merge in that order, api when gh's subcommand is api. Each word is
 # lowercased, stripped of trailing quotes and brackets, and cut after its last quote,
 # bracket, `=`, `$`, `&`, `{` or path separator, so `"gh"`, `r="$(gh`, `C:\...\gh.exe"`
 # and `os.system('gh` all read as gh.
@@ -277,11 +283,17 @@ gh_words() {
       n = split($0, w, /[ \t]+/)
       for (i = 1; i <= n; i++) {
         t = tolower(w[i]); sub(tailq, "", t); sub(head, "", t); sub(/\.exe$/, "", t)
-        if (prev == "gh" && t == "api") api = 1
+        # The subcommand of gh, stepping over flags as gh_merge_rule reads the path: a `--long`
+        # or two-letter flag without `=` takes the next word (`gh -X PUT api`).
+        if (ga) {
+          if (eat) eat = 0
+          else if (t ~ /^-/) { if (t !~ /=/ && (t ~ /^--./ || length(t) == 2) && t != "--help" && t != "--version" && t != "-h") eat = 1 }
+          else { if (t == "api") api = 1; ga = 0 }
+        }
+        if (t == "gh") { ga = 1; eat = 0 }
         if (st == 0 && t == "gh") st = 1
         else if (st == 1 && t == "pr") st = 2
         else if (st == 2 && t == "merge") merge = 1
-        prev = t
       }
     }
     END { printf "%d %d\n", merge, api }'
@@ -355,20 +367,28 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
       --*) ;;
       # gh (cobra) clusters short flags: `-sd` is `--squash --delete-branch`. A letter that
       # takes a value (b t F A R) ends the flags: what follows it in the cluster, or else
-      # the next word, is that value, never a flag -- `-bfixes` is a body, not a squash.
+      # the next word, is that value, never a flag -- `-bfixes` is a body, not a squash. A
+      # boolean letter's `=value` ends the cluster too: `-s=false` is no squash.
       -?*)
         cl=${1#-}
         while [ -n "$cl" ]; do
           ch=${cl%"${cl#?}"}
           cl=${cl#?}
           case "$ch" in
-            s) squash=1 ;;
+            s)
+              case "$cl" in
+                =true) squash=1; cl='' ;;
+                =*) deny_merge "$seg" "'gh pr merge -s$cl': every merge in this project is a squash" ;;
+                *) squash=1 ;;
+              esac
+              ;;
             m | r) deny_merge "$seg" "'gh pr merge -$ch': every merge in this project is a squash" ;;
             b | t | F | A | R)
               if [ -z "$cl" ]; then shift; cl=${1:-}; fi
               [ "$ch" = R ] && gh_repo=${cl#=}  # `-R=x` is x, as pflag reads it
               cl=''
               ;;
+            *) case "$cl" in =*) cl='' ;; esac ;;
           esac
         done
         ;;
@@ -557,9 +577,9 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
 #     prose, not a redirection, and opens nothing -- otherwise a later line that happens
 #     to equal the delimiter would swallow everything up to it;
 #   - the opener line itself is kept, so `cat <<'EOF' && git clean -f` still denies;
-#   - a heredoc fed to a shell (`sh <<'EOF'`, `cat <<'EOF' | bash`, `ssh host <<'EOF'`)
-#     really does execute its body, so an opener line naming an interpreter keeps its
-#     body in the scan.
+#   - a heredoc fed to an interpreter (`sh <<'EOF'`, `cat <<'EOF' | node`, `ssh host <<'EOF'`)
+#     really does execute its body, so an opener line naming one on is_interp's list, or
+#     sudo, keeps its body in the scan.
 #
 # The quote scan behind the third rule reads one line at a time and knows nothing about
 # `#` comments or bash's `$'...'`, so an opener inside a quoted string that *opened on an
@@ -567,7 +587,7 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
 # the same shape the header already concedes for `bash -c`: contrived to reach, and no
 # harder to reach deliberately than the wrappers this guard never claimed to see.
 strip_heredoc_bodies() {
-  printf '%s\n' "$1" | awk '
+  printf '%s\n' "$1" | awk -v interps="$INTERPRETERS sudo" '
     BEGIN {
       q = sprintf("%c", 39)  # a single quote, unwritable inside this quoted program
       # A delimiter is quoted (inert body), backslash-quoted, or a bare word. The bare
@@ -576,7 +596,7 @@ strip_heredoc_bodies() {
       # less to be blanked, never more.
       opener = "<<-?[ \t]*(\"[^\"]*\"|" q "[^" q "]*" q "|\\\\?[A-Za-z0-9_.-]+)"
       sep = "[ \t;|&()<>\"" q "]+"
-      ni = split("sh bash dash ash ksh zsh busybox ssh su sudo docker podman eval source", s, " ")
+      ni = split(interps, s, " ")
       for (x = 1; x <= ni; x++) interpreter[s[x]] = 1
     }
 
@@ -641,8 +661,10 @@ strip_heredoc_bodies() {
         # A body handed to an interpreter is code, not data, however it is quoted.
         nw = split(seg, w, sep)
         for (x = 1; x <= nw; x++) {
-          v = w[x]
-          sub(/^.*\//, "", v)
+          # Read as is_interp reads a word: the last path part, case and `.exe` ignored.
+          v = tolower(w[x])
+          sub(/^.*[\/\\]/, "", v)
+          sub(/\.exe$/, "", v)
           if (v in interpreter) { cnt = 0; break }
         }
         if (cnt == 0) { i++; continue }
@@ -786,8 +808,13 @@ for seg in $segments; do
   esac
   # Prose is a mention only while nothing reads it: words naming a merge piped, through any
   # number of prose commands, into anything else (`echo "gh pr merge ..." | sh`) are
-  # refused, since that command may run them.
-  [ "$piped" = 0 ] || [ "$piped_words" = 0 ] || [ "$prose" = 1 ] ||
+  # refused, since that command may run them. A read-only consumer that only counts, cuts
+  # or orders lines (`| wc -l`) runs nothing, and passes them on to the next.
+  consumer=0
+  case "$found:$first" in
+    :wc | :head | :tail | :sort | :uniq) consumer=1 ;;
+  esac
+  [ "$piped" = 0 ] || [ "$piped_words" = 0 ] || [ "$prose" = 1 ] || [ "$consumer" = 1 ] ||
     deny_merge "$seg" "prose naming 'gh pr merge' is piped into a command the guard does not read, which may run it, so the auto-merge conditions cannot be shown to hold"
   [ "$prose" = 0 ] || [ "$gh_merge" = 0 ] || piped_words=1
   if [ -z "$found" ]; then
@@ -854,6 +881,8 @@ for seg in $segments; do
         deny "$seg" "'git push --mirror' force-updates every ref on the remote"
       fi
       for t in "$@"; do
+        t=${t#[\"\']}  # one layer of quotes: `"HEAD:main"` is HEAD:main
+        t=${t%[\"\']}
         case "$t" in
           +?*) deny "$seg" "a leading '+' on a refspec is a force-push in disguise" ;;
           *?:main | *?:refs/heads/main | :main | :refs/heads/main)

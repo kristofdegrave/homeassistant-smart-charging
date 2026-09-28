@@ -6,11 +6,11 @@ argument-hint: "#<PR number>"
 
 # Clean up after a merge
 
-The last step of the interactive lifecycle. The merge it follows is another actor's — the
-human's, or another session's under the merge rule — so nothing in the session can know it
-happened until the human partner says so. `CLAUDE.md`'s **Contribution
-workflow** section routes to the doc that owns the step and every rule below — what closes the
-issue, which issue a PR names, when an epic closes.
+The last step of the interactive lifecycle. The merge it follows is the human's, or a
+session's under the merge rule; either way the step waits for the human partner's statement
+that it happened — a rule merge too, until ADR-0052's `cleanup` consequence lands.
+`CLAUDE.md`'s **Contribution workflow** section routes to the doc that owns the step and every
+rule below — what closes the issue, which issue a PR names, when an epic closes.
 
 The trigger is the human partner's statement that the merge happened — "merged #N", "I merged
 it" — in whatever words it comes, which is why the skill stays model-invocable: the session has
