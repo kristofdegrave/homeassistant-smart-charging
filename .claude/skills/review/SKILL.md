@@ -23,10 +23,8 @@ interactive-only wording precisely because it sits in every run's index.
    - Read three listings, all routed by `CLAUDE.md`'s **Tracker mechanics** section: the PR's
      label events, its reviews, its issue comments and its review-thread replies — every item,
      with author and time, as a stream rather than a post read-back.
-   - Find the most recent reset event as the rule defines it. The markers it excludes are the
-     session's own: the round marker (`submit-pr-review`'s §4), the `<!-- ai-fix-` family
-     (`fix`'s §5 and §6), the escalation marker `<!-- local-review-escalated -->` and the
-     self-grant marker `<!-- local-review-self-granted -->`.
+   - Find the most recent reset event as the rule defines it, excluding the session markers
+     that rule lists.
    - Rounds so far = marker-carrying reviews posted after that event (all of them when there
      is none). Count self-grant comments since that event apart — only those by the login
      the session posts under, so a marker pasted by anyone else raises nothing: each raises

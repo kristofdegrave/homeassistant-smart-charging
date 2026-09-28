@@ -72,8 +72,8 @@ the epic or the `decompose` issue was added or removed beyond `clarify`'s parkin
 - Stopped by *Out of the body*: the filed issue exists, the blocked-by edge from the
   `decompose` issue to it was read back, where a park stood a fresh one with the children
   part `none` names that issue, and (7) holds.
-- Parked through `clarify`, once ADR-0052's consequence for that skill lands: that skill's
-  parking rule holds on the `decompose` issue, and (7) holds.
+- Parked through `clarify`: that skill's parking rule holds on the `decompose` issue, and (7)
+  holds.
 - Stopped as picked too early, as still parked, or at the entry rule's last arm: nothing on
   the tracker changed, and the run did not move the `decompose` issue.
 
