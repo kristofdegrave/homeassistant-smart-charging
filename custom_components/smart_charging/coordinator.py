@@ -447,10 +447,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         NF14/R13: `resolve_deadline_for` takes the concrete calendar date being resolved, not a
         bare weekday, and looks it up in `self.home_day_dates` -- the set of dates the home-day
         flag currently applies to (at most today's and tomorrow's at once). Resolving today's,
-        calendar tomorrow's, the reserved day's and the day-after-the-pursued-occurrence's
-        deadline are four separate calls to the same closure, one per date, so each reads the
-        home-day flag for its own date and none can leak into another -- which is what fixes the
-        flag set in the evening for tomorrow also overriding today's resolution."""
+        calendar tomorrow's, the reserved day's, the day-after-the-pursued-occurrence's and the
+        pursued occurrence's own date's deadline are five separate calls to the same closure,
+        one per date, so each reads the home-day flag for its own date and none can leak into
+        another -- which is what fixes the flag set in the evening for tomorrow also
+        overriding today's resolution."""
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
@@ -470,10 +471,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         # R14's four-row table, evaluated for a given calendar date -- shared by today's
         # deadline (urgency, below), calendar tomorrow's (R15's next-occurrence rule), the
-        # reserved day's (R9's precondition, UC07) and the day after the pursued occurrence's
-        # (R5's backstop, T7's `_resolve_following_occurrence`), so the other six args can
-        # never drift apart between call sites. NF14: the home-day row is looked up for THIS
-        # date alone, never for "whichever the flag was last read for".
+        # reserved day's (R9's precondition, UC07), the day after the pursued occurrence's
+        # (R5's backstop, T7's `_resolve_following_occurrence`) and the pursued occurrence's
+        # own date's (R5's following-its-own-date rule, `_resolve_departure_on_pursued_date`,
+        # #1481), so the other six args can never drift apart between call sites. NF14: the
+        # home-day row is looked up for THIS date alone, never for "whichever the flag was
+        # last read for".
         def resolve_deadline_for(target_date: date) -> time_of_day | None:
             return resolve_departure_deadline(
                 external_configured,
@@ -554,7 +557,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         """T7: the occurrence for the day AFTER the pursued one, from the same R14 table
         `today_date`/`deadline_tomorrow`/`deadline_reserved_day` above already evaluate (the
         comment at `resolve_deadline_for`'s own definition counts this as the fourth call site)
-        -- one more call to the same closure, so none of the four can drift apart from another.
+        -- one more call to the same closure, so none of the five can drift apart from another.
         Feeds R5's backstop (`missed_deadline_backstop_fired`, coordinator_cycle.py) alongside
         the 24-hour bound.
 
@@ -575,6 +578,26 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return datetime.combine(
             following_date, following_time, tzinfo=self._pursued_occurrence.tzinfo
         )
+
+    def _resolve_departure_on_pursued_date(
+        self, resolve_deadline_for: Callable[[date], time_of_day | None]
+    ) -> time_of_day | None:
+        """D2/F1: R14's table, evaluated for the pursued occurrence's OWN date -- the fifth
+        call to `resolve_deadline_for` (today's, calendar tomorrow's, the reserved day's and
+        the day after the pursued one being the other four), so this one date's resolution
+        cannot drift from those either. Feeds `follow_pursued_occurrence` (D1,
+        coordinator_cycle.py), which is what makes a pending pursued occurrence follow its own
+        date's departure time (resolution-rules.md).
+
+        Not gated on `deadline_resolvable`: it runs, and is threaded through, on a no-reading
+        cycle too -- unused there today (the non-resolvable early return in
+        `resolve_deadline_urgency` does not read it), but needed once F2 (#1482) does. Same
+        shape as `_resolve_following_occurrence` above.
+
+        None whenever there is no pursued occurrence to follow -- nothing to resolve."""
+        if self._pursued_occurrence is None:
+            return None
+        return resolve_deadline_for(self._pursued_occurrence.date())
 
     async def _run_cycle(self) -> CycleResult:
         await self._read_owned_entities()
@@ -823,6 +846,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 ),
                 pursued_occurrence=self._pursued_occurrence,
                 following_occurrence=self._resolve_following_occurrence(resolve_deadline_for),
+                departure_on_pursued_date=self._resolve_departure_on_pursued_date(
+                    resolve_deadline_for
+                ),
                 auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
@@ -852,15 +878,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if required.unreachable:
             # engines/deadline.py saturates required_a to float('inf') for a deadline at or
             # before `now` -- still the pure engine's own documented contract, and since issue
-            # #1005 all but unreachable from this cycle: resolve_next_occurrence yields an
-            # occurrence after `now`, except inside a fall-back repeated hour where a fold=1
-            # `now` can wall-clock-precede a fold=0 occurrence that is absolutely earlier. So
-            # the cap below still guards a real (if once-a-year) path, not only a future
-            # regression. float('inf') must never
-            # cross this boundary: it doesn't round-trip through HA's JSON websocket encoding,
-            # and notification_manager.py formats it straight into user-facing text (issue
-            # #650). Cap it to maximum_permitted_rate_a -- the same bound the engine compared
-            # required_a against to set `unreachable` in the first place, so "would need at
+            # #1005 all but unreachable from this cycle: `deadline_at` (resolve_next_occurrence's
+            # result, or follow_pursued_occurrence's `moved`, #1481) yields an occurrence after
+            # `now`, except inside a fall-back repeated hour where a fold=1 `now` can
+            # wall-clock-precede a fold=0 occurrence that is absolutely earlier -- both sources
+            # share that same `combine`-with-`fold=0` construction. So the cap below still
+            # guards a real (if once-a-year) path, not only a future regression.
+            # float('inf') must never cross this boundary: it doesn't round-trip through HA's
+            # JSON websocket encoding, and notification_manager.py formats it straight into
+            # user-facing text (issue #650). Cap it to maximum_permitted_rate_a -- the same
+            # bound the engine compared required_a against to set `unreachable` in the first
+            # place, so "would need at
             # least max_current A" is exactly true, not an arbitrary numeric artifact like
             # sys.float_info.max would be. NaN needs no separate branch: it can never reach
             # here since `nan > maximum_permitted_rate_a` is always False, which would leave
@@ -882,8 +910,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # The occurrence this cycle's resolution leaves behind, taken from
         # `deadline_urgency.required` rather than re-derived here: the engine's successor, or the
         # non-resolvable early return's split (a disconnect or the 24-hour backstop releases, an
-        # unavailable state of charge holds). Either way the occurrence is never re-anchored onto
-        # a later resolution.
+        # unavailable state of charge holds). While a pursued occurrence is pending it now DOES
+        # move onto its own date's freshly resolved departure time each cycle
+        # (`follow_pursued_occurrence`, D1) -- what stays true is that the move is never a
+        # release or an engagement of its own (resolution-rules.md).
         # Both fault early-returns above sit UPSTREAM of this line, so a fault cycle holds
         # whichever occurrence it entered with rather than releasing it -- the same reasoning
         # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle

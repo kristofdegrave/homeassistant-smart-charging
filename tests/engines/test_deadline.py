@@ -20,6 +20,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from custom_components.smart_charging.engines.deadline import (
+    follow_pursued_occurrence,
     resolve_departure_deadline,
     resolve_next_occurrence,
     resolve_required_current,
@@ -404,6 +405,147 @@ def test_next_occurrence_spans_midnight_for_the_plans_own_worked_example():
     assert (occurrence - NOW).total_seconds() / 3600 == 8.0
 
 
+# --- R5: a pending pursued occurrence follows its own date's departure time (D1) ----------
+
+FOLLOW_NOW = datetime(2026, 7, 21, 6, 0)
+
+
+def test_should_return_the_next_occurrence_when_nothing_is_pursued():
+    """No occurrence pursued: R5's ordinary next-occurrence rule governs unchanged."""
+    # Arrange
+    next_occurrence = datetime(2026, 7, 21, 9, 0)
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=None,
+        departure_on_pursued_date=time(7, 0),
+        next_occurrence=next_occurrence,
+        now=FOLLOW_NOW,
+    )
+
+    # Assert
+    assert result == (next_occurrence, None)
+
+
+def test_should_leave_an_elapsed_pursued_occurrence_unmoved_when_its_date_resolves_a_new_time():
+    """Elapsed entering the cycle: the existing guard stays -- even though its date resolves a
+    new time, nothing read on this cycle moves it (resolution-rules.md)."""
+    # Arrange
+    pursued = datetime(2026, 7, 21, 5, 0)  # already elapsed relative to `now`
+    next_occurrence = datetime(2026, 7, 22, 6, 0)
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=time(9, 0),
+        next_occurrence=next_occurrence,
+        now=FOLLOW_NOW,
+    )
+
+    # Assert
+    assert result == (next_occurrence, pursued)
+
+
+def test_should_treat_a_pursued_occurrence_as_elapsed_when_it_is_exactly_now():
+    """The same `<=` comparison `resolve_required_current`'s hold branch makes: an occurrence
+    exactly at `now` counts as elapsed, not pending."""
+    # Arrange
+    pursued = FOLLOW_NOW
+    next_occurrence = datetime(2026, 7, 22, 6, 0)
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=time(9, 0),
+        next_occurrence=next_occurrence,
+        now=FOLLOW_NOW,
+    )
+
+    # Assert
+    assert result == (next_occurrence, pursued)
+
+
+def test_should_release_when_the_pursued_dates_own_resolution_is_no_deadline():
+    """R14's "no deadline" is one of urgency's release conditions -- "the date resolving to
+    'no deadline' is the release above" (resolution-rules.md) once this return is fed into
+    `resolve_required_current`."""
+    # Arrange
+    pursued = datetime(2026, 7, 21, 9, 0)  # still ahead of `now`
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=None,
+        next_occurrence=datetime(2026, 7, 22, 6, 0),
+        now=FOLLOW_NOW,
+    )
+
+    # Assert
+    assert result == (None, None)
+
+
+def test_should_move_a_pending_pursued_occurrence_when_its_date_resolves_a_new_departure_time():
+    """The ordinary case: a still-ahead pursued occurrence follows its own date's freshly
+    resolved departure time -- R5's AC this task builds."""
+    # Arrange
+    pursued = datetime(2026, 7, 21, 7, 0)
+    moved = datetime(2026, 7, 21, 9, 0)
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=time(9, 0),
+        next_occurrence=datetime(2026, 7, 22, 6, 0),
+        now=FOLLOW_NOW,
+    )
+
+    # Assert
+    assert result == (moved, moved)
+
+
+def test_should_move_a_pending_pursued_occurrence_into_the_past_when_the_new_time_has_passed():
+    """A new time that has already passed is left for `resolve_required_current`'s own hold
+    branch to catch on this cycle (resolution-rules.md) -- this function only resolves the
+    moved value, it does not itself decide whether a hold begins."""
+    # Arrange
+    pursued = datetime(2026, 7, 21, 9, 0)  # still ahead of `now` entering the cycle
+    now = datetime(2026, 7, 21, 8, 0)
+    moved = datetime(2026, 7, 21, 7, 30)  # the new time, already behind `now`
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=time(7, 30),
+        next_occurrence=datetime(2026, 7, 22, 6, 0),
+        now=now,
+    )
+
+    # Assert
+    assert result == (moved, moved)
+
+
+def test_should_ignore_an_earlier_dates_occurrence_when_a_later_one_is_pursued():
+    """ "A departure added for an earlier date than the pursued occurrence's is not judged
+    until the pursued occurrence is released" (`requirements.md` R5). While tomorrow's
+    occurrence is pursued and still ahead, `next_occurrence` carrying an earlier date's
+    resolution must be ignored outright -- only the pursued date's own resolution governs."""
+    # Arrange
+    pursued = datetime(2026, 7, 22, 7, 0)  # tomorrow
+    earlier_next_occurrence = datetime(2026, 7, 21, 8, 0)  # an earlier date
+    moved = datetime(2026, 7, 22, 9, 0)  # tomorrow's own newly resolved time
+
+    # Act
+    result = follow_pursued_occurrence(
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=time(9, 0),
+        next_occurrence=earlier_next_occurrence,
+        now=FOLLOW_NOW,
+    )
+
+    # Assert
+    assert result == (moved, moved)
+
+
 def test_overnight_deadline_is_urgent_only_on_the_real_remaining_window():
     # End-to-end over both functions: the worked example's 22:00 -> 06:00 case charging 75 kWh * 30%
     # over 8 hours needs 12.228 A -- NOT the infinite, always-unreachable figure the old
@@ -739,22 +881,27 @@ def test_should_release_the_pursued_occurrence_when_the_handback_clears_urgency(
 
 
 def test_should_keep_the_original_occurrence_when_the_deadline_resolves_to_a_different_time():
-    """THE RULE THAT MAKES A HOLD REACHABLE AT ALL, on the ordinary path.
+    """THE RULE THAT MAKES BOTH A HOLD AND A FOLLOWED MOVE REACHABLE, on the ordinary path.
 
-    The pursued occurrence is anchored: resolution-rules.md's 'Missed-deadline hold' says
-    "the departure-deadline rule rolling forward cannot move it, and that later occurrence
-    resolving to 'no deadline' cannot end it". This case pins the first half — a deadline
-    resolving to a DIFFERENT TIME, which is the one the ordinary path implements: an
-    occurrence still in the FUTURE,
-    with `deadline_at` resolving elsewhere, must come back unmoved.
+    `resolve_required_current` treats `deadline_at` and `pursued_occurrence` as two
+    independent parameters: `pursued_occurrence` is threaded straight through as this
+    function's own successor, never re-derived from `deadline_at` (`follow_pursued_occurrence`,
+    the caller, is what decides whether the two carry the same value or different ones each
+    cycle -- resolution-rules.md, 'A pursued occurrence that has not yet elapsed follows its
+    own date's departure time'). This case pins that independence directly, with the two
+    parameters deliberately mismatched: an occurrence still in the FUTURE, with `deadline_at`
+    resolving elsewhere, must come back exactly as `pursued_occurrence` was passed in.
 
     It is deliberately set up with `pursued_occurrence != deadline_at`. An earlier version of
     this test used a pursued occurrence in the PAST, which returns from the hold branch and
-    never reaches the ordinary path's preservation line at all -- so re-anchoring the
+    never reaches the ordinary path's own successor line at all -- so re-anchoring the
     occurrence to `deadline_at` there left the whole suite green. Since
     `resolve_next_occurrence` always yields an occurrence strictly after `now` BY WALL CLOCK
     (the one exception being the fall-back repeated hour, per its own docstring), that mutation
-    makes a missed-deadline hold unreachable in production.
+    makes a missed-deadline hold unreachable in production. Real callers now always pass the
+    two aligned once a pursued occurrence is pending (`follow_pursued_occurrence`'s own
+    `(moved, moved)` case) -- this test's mismatch is what proves the independence, not a shape
+    a real cycle produces.
     """
     # Arrange -- 14:00 is pursued and still ahead of the 06:00 `now`; R14 resolves 16:00.
     pursued = datetime(2026, 7, 21, 14, 0)
@@ -1192,3 +1339,120 @@ def test_should_release_the_hold_when_wall_clock_arithmetic_would_still_be_short
     # Assert
     assert result.urgent is False
     assert result.pursued_occurrence is None
+
+
+# --- R5: the backstop and the handback follow the MOVED occurrence, not the original --------
+#
+# Each test below derives its "moved" value from `follow_pursued_occurrence` itself -- feeding
+# an originally-engaged occurrence and a DIFFERENT `departure_on_pursued_date` through it, the
+# same as a real re-seed the coordinator would read -- rather than a bare constant, so the
+# value under test really is the move's own output, not a stand-in indistinguishable from any
+# other occurrence.
+
+BACKSTOP_ORIGINAL = datetime(2026, 7, 21, 7, 0)  # engaged occurrence, before the move
+BACKSTOP_MOVED, _ = follow_pursued_occurrence(
+    pursued_occurrence=BACKSTOP_ORIGINAL,
+    departure_on_pursued_date=time(9, 0),  # a later time, re-seeded on the same date
+    next_occurrence=datetime(2026, 7, 22, 6, 0),  # irrelevant here -- something is pursued
+    now=datetime(2026, 7, 21, 6, 0),  # before BACKSTOP_ORIGINAL -- not yet elapsed
+)
+
+BACKSTOP_MOVED_KWARGS = dict(
+    deadline_at=None,
+    soc=50.0,
+    active_soc_limit=80.0,
+    ev_battery_capacity_kwh=100.0,
+    voltage=230.0,
+    baseline_desired_a=0.0,
+    escalated_maximum_permitted_rate_a=32.0,
+    pursued_occurrence=BACKSTOP_MOVED,
+    following_occurrence=None,
+)
+
+
+def test_should_still_hold_just_under_24_hours_from_the_moved_occurrence():
+    """`follow_pursued_occurrence` feeds its `moved` value into `resolve_required_current` as
+    `pursued_occurrence` too, so the backstop's 24-hour arm is measured from the MOVED time,
+    not the occurrence originally engaged on (resolution-rules.md: "the 24 hours run from the
+    moved occurrence, so the backstop moves with it"). Pinned against `BACKSTOP_ORIGINAL`
+    (07:00), 24 h from `BACKSTOP_MOVED` (09:00) is still short of 24 h from the original."""
+    # Arrange
+    now = BACKSTOP_MOVED + timedelta(hours=24) - timedelta(minutes=1)
+    assert now > BACKSTOP_ORIGINAL + timedelta(hours=24)  # already past the ORIGINAL's bound
+
+    # Act
+    result = resolve_required_current(**BACKSTOP_MOVED_KWARGS, now=now)
+
+    # Assert
+    assert result.pursued_occurrence == BACKSTOP_MOVED
+
+
+def test_should_release_at_24_hours_from_the_moved_occurrence():
+    """The mirror of the case above, one minute later: the backstop's 24-hour arm fires,
+    measured from the same moved occurrence (resolution-rules.md, as above)."""
+    # Arrange
+    now = BACKSTOP_MOVED + timedelta(hours=24)
+
+    # Act
+    result = resolve_required_current(**BACKSTOP_MOVED_KWARGS, now=now)
+
+    # Assert
+    assert result.pursued_occurrence is None
+
+
+HANDBACK_NOW = datetime(2026, 7, 21, 6, 0)
+HANDBACK_ORIGINAL = datetime(2026, 7, 21, 6, 30)  # 30 min out -- required_a far exceeds baseline
+HANDBACK_KWARGS = dict(
+    now=HANDBACK_NOW,
+    soc=50.0,
+    active_soc_limit=80.0,
+    ev_battery_capacity_kwh=100.0,
+    voltage=230.0,
+    baseline_desired_a=16.0,
+    escalated_maximum_permitted_rate_a=32.0,
+)
+
+
+def test_should_not_hand_back_when_judged_against_the_original_occurrence():
+    """Before the move: `follow_pursued_occurrence` re-resolves the SAME 06:30, unchanged, so
+    `required_a` still far exceeds the 16 A baseline and the handback does not fire
+    (resolution-rules.md: "the required current is judged against the moved occurrence from
+    then on" -- this pins the "before" half of that contrast)."""
+    # Arrange
+    deadline_at, pursued_occurrence = follow_pursued_occurrence(
+        pursued_occurrence=HANDBACK_ORIGINAL,
+        departure_on_pursued_date=time(6, 30),  # not yet re-seeded -- same time
+        next_occurrence=datetime(2026, 7, 22, 6, 0),
+        now=HANDBACK_NOW,
+    )
+
+    # Act
+    result = resolve_required_current(
+        **HANDBACK_KWARGS, deadline_at=deadline_at, pursued_occurrence=pursued_occurrence
+    )
+
+    # Assert
+    assert result.urgent is True
+
+
+def test_should_hand_back_when_judged_against_the_moved_occurrence():
+    """After the move: `follow_pursued_occurrence` re-resolves the SAME pursued occurrence to
+    10 hours out instead, and `required_a` falls comfortably under the 16 A baseline -- the
+    handback fires, judged against the MOVED occurrence, not the one urgency originally
+    engaged on (resolution-rules.md, as above)."""
+    # Arrange
+    deadline_at, pursued_occurrence = follow_pursued_occurrence(
+        pursued_occurrence=HANDBACK_ORIGINAL,
+        departure_on_pursued_date=time(16, 0),  # re-seeded 10 h out
+        next_occurrence=datetime(2026, 7, 22, 6, 0),
+        now=HANDBACK_NOW,
+    )
+    assert pursued_occurrence != HANDBACK_ORIGINAL  # genuinely moved, not the same instant
+
+    # Act
+    result = resolve_required_current(
+        **HANDBACK_KWARGS, deadline_at=deadline_at, pursued_occurrence=pursued_occurrence
+    )
+
+    # Assert
+    assert result.urgent is False
