@@ -37,13 +37,16 @@
 # -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to decide the merge
 # rule below. The block list is the one the workflow doc enumerates, so same-family
 # commands it does not name (`git checkout -f`, `git switch --discard-changes`, `git push
-# origin :branch`) are deliberately left alone rather than overlooked. A push whose refspec names `main` as its destination
-# (`HEAD:main`, `x:refs/heads/main`) is refused as a merge by another name; a bare
-# `git push origin main` is not, since the branch checked out cannot be told from the text.
+# origin :branch`) are deliberately left alone rather than overlooked. A push whose refspec,
+# after the remote, lands on main is refused as a merge by another name: `main` or
+# `refs/heads/main` alone, or as the destination (`HEAD:main`, `x:refs/heads/main`). A push
+# whose text does not decide its destination -- no refspec, `HEAD` while on main, a
+# push.default that maps -- is not.
 # Anyone determined to force-push can still do it; the point is that nobody does it by
 # reflex.
 #
-# The merge rule. `gh pr merge` is allowed only when every condition holds: `--squash`
+# The merge rule. `gh pr merge` is allowed only when every condition holds (with `--help`,
+# `-h` or `--disable-auto`, which merge nothing, it passes unread): `--squash`
 # (`--squash=true` counts, any other `--squash=` value refuses), and no `--merge`/`--rebase`
 # in any spelling; exactly one selector, a bare pull-request number or a pull-request URL
 # on this repository (`repo` in .claude/profile.yml) -- no selector, a `#`-prefixed one (a
@@ -97,10 +100,16 @@
 # -ArgumentList 'pr','merge'`), a request body read from a file (`--input`), a `gh alias`
 # or a git one (`git -c alias.m='!gh pr merge ...' m`),
 # `gh api` on `repos/<repo>/merges` or a `PATCH` of `git/refs/heads/main`, a `git push`
-# to main that does not name main in its refspec, a merge from any other tool, and the
-# hanging `gh` above. Conceded the other way, a false positive: a commit message built as
-# `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan (the opener sits inside
-# quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
+# to main whose text does not decide it (above), a merge from any other tool, the hanging
+# `gh` above, and the whole indirection class: anything the shell expands before gh sees
+# its words (a variable, a split or quoted letter), and any command not named here that
+# executes another. The trees and repository are read from the working tree's profile as
+# checked out, uncommitted edits included, and a `PROFILE` in the environment is honoured,
+# so the session's own checkout can widen what auto-merges. Conceded the other way, false
+# positives: a `gh pr ...` segment whose text also carries the word `merge` and, anywhere, a
+# backtick, `$(` or `&` is refused as a wrapped merge (a body file is the workaround); a
+# commit message built as `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan
+# (the opener sits inside quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
 # not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
 # pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
 # split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
@@ -112,8 +121,8 @@
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
 DOC='docs/reference/method/contribution-workflow.md, section "Commit & push authorization"'
-# The profile the merge rule reads its trees from. Overridable for the test suite only,
-# the same way .github/profile-env.sh takes it.
+# The profile the merge rule reads its trees from. Overridable the way .github/profile-env.sh
+# takes it, for the test suite; a PROFILE in the environment is honoured (the header concedes it).
 PROFILE=${PROFILE:-$(dirname "$0")/../profile.yml}
 
 payload=$(cat)
@@ -226,12 +235,17 @@ Fix the failing condition, or leave the merge to them."
 
 deny_merge() { deny "$1" "$2" "$MERGE_TAIL"; }
 
+# A trailing CR per line is gh's line ending on Windows; a CR anywhere else stays, so the
+# control-character check below refuses a path that carries one.
+strip_cr() { awk '{ sub(/\r$/, ""); print }'; }
+
 # The auto-merge trees, one per line, from the profile's `autopilot.auto_merge_trees`
 # list, each normalised to end in one slash so a prefix match cannot straddle a directory
 # name. Read with awk rather than a YAML parser (none is guaranteed here), so the key has
 # to keep the plain block-list shape the profile gives it.
 auto_merge_trees() {
   awk '
+    { sub(/\r$/, "") }
     /^[^ \t#]/ { top = ($0 ~ /^autopilot:/); list = 0 }
     top && /^  auto_merge_trees:/ { list = 1; next }
     top && list && /^    - / { t = $0; sub(/^    - */, "", t); sub(/[ \t]+(#.*)?$/, "", t); gsub(/["'"'"']/, "", t); sub(/\/+$/, "", t); if (t != "") print t "/"; next }
@@ -242,6 +256,7 @@ auto_merge_trees() {
 # `owner/name` from the profile's `repo` key, read the same way as the trees.
 profile_repo() {
   awk '
+    { sub(/\r$/, "") }
     /^[^ \t#]/ { top = ($0 ~ /^repo:/) }
     top && /^  owner:/ { o = $2 }
     top && /^  name:/ { n = $2 }
@@ -355,6 +370,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   match_head=''
   while [ $# -gt 0 ]; do
     case "$1" in
+      # No merge runs: help prints and exits, and gh's `--disable-auto` only cancels a pending
+      # auto-merge, returning before any merge, so neither needs the conditions below.
       --help | -h | --disable-auto) return 0 ;;
       --squash | --squash=true) squash=1 ;;
       --squash=* | --merge | --rebase | --merge=* | --rebase=*) deny_merge "$seg" "'gh pr merge $1': every merge in this project is a squash" ;;
@@ -442,7 +459,7 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   # line carries its change type first, then its path, since a path may hold a space.
   facts=$(gh pr view "$number" -R "$repo" \
     --json isCrossRepository,headRefOid,changedFiles,labels,files \
-    --template '{{"cross="}}{{.isCrossRepository}}{{"\n"}}{{"head="}}{{.headRefOid}}{{"\n"}}{{"count="}}{{.changedFiles}}{{"\n"}}{{"listed="}}{{len .files}}{{"\n"}}{{range .labels}}{{"label="}}{{.name}}{{"\n"}}{{end}}{{range .files}}{{"file="}}{{.changeType}}{{" "}}{{.path}}{{"\n"}}{{end}}' 2>/dev/null | tr -d '\r')
+    --template '{{"cross="}}{{.isCrossRepository}}{{"\n"}}{{"head="}}{{.headRefOid}}{{"\n"}}{{"count="}}{{.changedFiles}}{{"\n"}}{{"listed="}}{{len .files}}{{"\n"}}{{range .labels}}{{"label="}}{{.name}}{{"\n"}}{{end}}{{range .files}}{{"file="}}{{.changeType}}{{" "}}{{.path}}{{"\n"}}{{end}}' 2>/dev/null | strip_cr)
   case "$facts" in
     cross=true*) deny_merge "$seg" "the pull request's head is a branch of another repository (a fork), which never auto-merges" ;;
     cross=false*) ;;
@@ -543,7 +560,7 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   # counts, not only the required ones; a workflow not yet queued is not among them. A skipped check is a job the change did not reach (a
   # path-filtered test job on a docs change), not a red one.
   checks=$(gh pr checks "$number" -R "$repo" \
-    --json name,bucket --template '{{range .}}{{"check="}}{{.bucket}}{{" "}}{{.name}}{{"\n"}}{{end}}' 2>/dev/null | tr -d '\r')
+    --json name,bucket --template '{{range .}}{{"check="}}{{.bucket}}{{" "}}{{.name}}{{"\n"}}{{end}}' 2>/dev/null | strip_cr)
   [ -n "$checks" ] ||
     deny_merge "$seg" "'gh pr checks' reported no checks on the pull request, so none is known to be green"
   IFS='
@@ -880,6 +897,10 @@ for seg in $segments; do
       if has_long '--mirror*' "$@"; then
         deny "$seg" "'git push --mirror' force-updates every ref on the remote"
       fi
+      # The first operand is the remote; every later one is a refspec, and a bare `main`
+      # there pushes local main to the remote's main whatever is checked out. A flag's value
+      # read as an operand only moves the remote earlier, so this errs towards refusing.
+      remote=0
       for t in "$@"; do
         t=${t#[\"\']}  # one layer of quotes: `"HEAD:main"` is HEAD:main
         t=${t%[\"\']}
@@ -887,7 +908,13 @@ for seg in $segments; do
           +?*) deny "$seg" "a leading '+' on a refspec is a force-push in disguise" ;;
           *?:main | *?:refs/heads/main | :main | :refs/heads/main)
             deny "$seg" "the refspec '$t' lands on main, which is a merge by another name" "$MERGE_TAIL" ;;
+          -*) continue ;;
         esac
+        case "$remote $t" in
+          '1 main' | '1 refs/heads/main')
+            deny "$seg" "the refspec '$t' pushes local main to the remote's main, which is a merge by another name" "$MERGE_TAIL" ;;
+        esac
+        remote=1
       done
       ;;
     reset)

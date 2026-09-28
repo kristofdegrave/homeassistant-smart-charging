@@ -126,7 +126,6 @@ fi
 echo
 echo "=== allowed: the standing authorization must not be narrowed ==="
 run ALLOW 'git push'
-run ALLOW 'git push origin main'
 run ALLOW 'git push -u origin some-branch'
 run ALLOW 'git push --set-upstream origin some-branch'
 run ALLOW 'git push --follow-tags'
@@ -180,6 +179,7 @@ git push --force
 EOF'
 # `<<-` strips leading tabs from body and terminator alike, so this one uses real tabs.
 tab=$(printf '\t')
+cr=$(printf '\r')
 run ALLOW "cat > /tmp/doc.md <<-'EOF'
 ${tab}git reset --hard
 ${tab}EOF"
@@ -410,6 +410,14 @@ run BLOCK 'git push origin :main'
 run BLOCK 'git push origin :refs/heads/main'
 run BLOCK 'git push origin "HEAD:main"'                                      # one layer of quotes is stripped
 run ALLOW 'git push origin HEAD:some-branch'
+# A bare main after the remote pushes local main to it, whatever is checked out.
+run BLOCK 'git push origin main'
+run BLOCK 'git push origin refs/heads/main'
+run BLOCK 'git push -u origin "main"'                                      # after a flag, in quotes
+run ALLOW 'git push origin workflow/1438'
+run ALLOW 'git push -u origin workflow/1438'
+run ALLOW 'git push origin maintenance'                                     # a name that starts with main
+run ALLOW 'git push origin HEAD'                                            # the text cannot decide it
 run BLOCK 'gh pr merge 1234 --admin --match-head-commit abc123'          # not a squash
 run BLOCK 'gh pr merge 1234 --merge --match-head-commit abc123'
 run BLOCK 'gh pr merge 1234 --rebase --admin --match-head-commit abc123'
@@ -572,6 +580,13 @@ listed=1
 label=needs-approval
 file=MODIFIED tests/x${tab}y"
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a control character in a name
+GH_VIEW="cross=false
+head=abc123
+count=1
+listed=1
+label=needs-approval
+file=MODIFIED ${cr}tests/x"
+run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a CR inside a name is refused, not deleted
 GH_VIEW='cross=false
 count=1
 listed=1
@@ -622,6 +637,8 @@ run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a pr
 printf 'autopilot:\n  auto_merge_trees:\n    - tests/\n' > "$STUB/profile.yml"
 run BLOCK 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a profile with no repo to pin to
 run ALLOW 'gh pr view 1234'                                               # ... which refuses the merge alone
+printf 'repo:\r\n  owner: o\r\n  name: r\r\nautopilot:\r\n  auto_merge_trees:\r\n    - custom_components/\r\n    - tests\r\n    - docs/design/\r\n' > "$STUB/profile.yml"
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a CRLF profile reads the same
 unset PROFILE
 STUB_REPO=kristofdegrave/homeassistant-smart-charging
 run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # and the real profile still passes

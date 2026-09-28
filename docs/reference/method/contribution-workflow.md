@@ -130,16 +130,17 @@ question with no issue to park on, in its shape.
 
 ## Exit labels
 
-`needs-approval` and `needs-decision` both mean **no automated review/fix work is pending, a
-human decides**. On a PR, `needs-approval` adds that it may be merged **as it stands**, by a human
-or under the merge rule; `needs-decision` adds that a reason not to merge is still open. Both PR
-exits have one actor: the **review step**, at the end of its pass. After a clean pass it applies
-`needs-approval` alone, removing a stale `needs-decision`. After the last pass the cap allows,
-with Critical or Major still open and no round self-granted, it applies `needs-decision`
-**alongside** `needs-approval` and posts the one escalation comment **Rounds and the cap**
-describes, so a capped PR is told from a clean one and `needs-approval` keeps one meaning. No
-other step or skill applies either label to a PR, bar the session putting one on hold (below),
-which a checklist's exit check can also do at the exit.
+`needs-approval` and `needs-decision` both mean **no automated review/fix work is pending**.
+On a PR, `needs-approval` adds that it may be merged **as it stands**, by a human or under the
+merge rule; `needs-decision` adds that a reason not to merge is still open, for a human to
+decide. Both PR exits have one actor: the **review step**, at the end of its pass. After a
+clean pass it applies `needs-approval` alone, removing a stale `needs-decision`.
+After the last pass the cap allows, with Critical or Major still open and no round
+self-granted, it applies `needs-decision` **alongside** `needs-approval` and posts the one
+escalation comment **Rounds and the cap** describes, so a capped PR is told from a clean one
+and `needs-approval` keeps one meaning. No other step or skill applies either label to a PR,
+bar the session putting one on hold (below), which a checklist's exit check can also do at the
+exit.
 Neither label is a merge (**Merge and issue closing** below).
 
 On a PR, a human item (**Rounds and the cap** above) posted **while** either label is on makes it
@@ -216,11 +217,11 @@ one issue.
 **Merge is the human's, except under the merge rule** (**Commit & push authorization** below;
 its enforcement is [profile.md](../profile.md)'s **Merge strategy**) — never self-approved.
 Merging auto-closes the linked issue via `Closes #N` (not via `Part of #N`); never close it
-directly (`gh issue close`), even on a fully clean verification-only task.
+directly (`gh issue close`), even on a verification-only task.
 
 **An epic's body is the spec, and its children are the tasks**, filed by the decomposition
 that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**
-topic routes to. Implementing each child is its own issue and its own chain.
+topic routes to. Each child is its own issue, implemented in its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4
