@@ -5632,3 +5632,53 @@ async def test_should_release_the_hold_when_the_day_after_has_elapsed_and_soc_is
     assert coord._pursued_occurrence is None
     assert coord._required_current.urgent is False
     assert result.effective_peak_limit_kw == 2.5
+
+
+async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_already_elapsed(
+    hass, freezer
+):
+    """T11/requirements.md R5's AC: a car connecting AFTER today's departure deadline has
+    already elapsed is never held for it -- it never pursued that occurrence in the first
+    place, since `_pursued_occurrence` starts `None` (`__init__`) and nothing seeds it to a
+    past value on connect. `UC05`'s State model scopes the pursued occurrence to the current
+    connected session, never preserved across anything that isn't itself a live hold.
+
+    Today's own default resolves to a departure time already behind `now`, so a coordinator
+    that (wrongly) fed that stale time straight into `resolve_required_current` as `deadline_at`
+    -- instead of `resolve_next_occurrence` rolling it forward to tomorrow's occurrence, R15 --
+    would see a non-positive `remaining_hours` and saturate `required_a` to infinity, engaging
+    urgency and latching that already-elapsed time as `pursued_occurrence` on the very first
+    connected cycle. A real, sizeable SOC gap (not one already at the active limit) is used so
+    that shortcut would actually show up as urgency, rather than being masked by `soc_at_active_
+    limit`'s own zero-required-current branch.
+
+    Set up in `Power`, as `test_should_release_the_pursued_occurrence_when_the_car_disconnects`
+    is, so this reaches the ordinary `deadline_resolvable=True` path rather than the non-
+    resolvable early return.
+    """
+    # Arrange -- freezer.move_to takes a UTC instant; this harness's local zone is US/Pacific
+    # (UTC-8 in January), so 06:00 UTC on the 16th is 22:00 local on the 15th. Today's own
+    # default (17:00) is already elapsed at that local time; tomorrow's (09:00) is a
+    # comfortable ~11h out. 30-point SOC gap over that window needs far less current than the
+    # escalated rate (resolved off `max_peak_kw=100.0`) permits.
+    freezer.move_to("2026-01-16 06:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    now_dt = dt_util.now()
+    coord.departure_dow_defaults[now_dt.weekday()] = time_of_day(17, 0)  # already past
+    coord.departure_dow_defaults[(now_dt.weekday() + 1) % 7] = time_of_day(9, 0)  # ~11h out
+
+    # Act -- this coordinator's very first cycle: nothing was ever pursued before it.
+    result = await coord._async_update_data()
+
+    # Assert -- never engaged, let alone held on the elapsed time.
+    assert result.fault is False
+    assert coord._pursued_occurrence is None
+    assert coord._required_current.urgent is False
+    assert coord._required_current.unreachable is False
