@@ -10,7 +10,7 @@ Why the read is its own issue, and parks, is ADR-0052's.
 ## Two entries, and how a run tells them apart
 
 The closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to has four
-steps, run here in two entries with the human's read, the park, between:
+steps, run here in two entries:
 
 - **Entry 1 — draft, pass, park**: the closing step's steps 1–2, ending at step 3's gate.
 - **Entry 2 — file the children**: step 4, once the human has said go.
@@ -55,13 +55,13 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
    slice boundary and the deferrals from those sources.
 3. **Draft the body** — the closing step's step 1. What the body carries, a task entry's keys,
    *Derive, don't design* and its three cases for a behavioural rule are that step's, applied
-   as written. Keep *Decisions so far* in place. Write the body to the epic (**Tracker
-   mechanics**, *Rewriting a work item's body*) and read it back.
-4. **Run the pass** — step 2. Write the body to a scratch file — the `reviewer` agent reaches
-   no tracker — and spawn that agent **once**, naming the file's absolute path and the
-   checklist `CLAUDE.md`'s **Decomposition checklist** topic routes to. Fix every finding in
-   the body itself, save what *Out of the body* sends elsewhere, then read the body
-   back.
+   as written. Keep *Decisions so far* and the body's existing task ids in place; number a new
+   task after the highest. Write the body to the epic (**Tracker mechanics**, *Rewriting a
+   work item's body*) and read it back.
+4. **Run the pass** — step 2. Write the body to a scratch file and spawn the `reviewer` agent
+   **once**, naming the file's absolute path and the checklist `CLAUDE.md`'s **Decomposition
+   checklist** topic routes to. Fix every finding in the body itself, save what *Out of the
+   body* sends elsewhere, then read the body back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
    *Applying a label*, with its read-back), then post the executive summary on the epic as
    the parking comment (*Commenting on a work item*), in that order. The summary carries five
@@ -74,9 +74,9 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
      fix, or its *Out of the body* issue; the Minor and Nit count.
    - **The children it will file** — one line per task: id, title, Size.
 
-   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`, read by
-   the autopilot, shared with `clarify`'s parking and listed under *Rounds and the cap*. Then
-   stop and report: the epic, that it is parked, the children planned. **No child is filed in this entry.**
+   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`, listed
+   under *Rounds and the cap*. Then stop and report: the epic, that it is parked, the children
+   planned. **No child is filed in this entry.**
 
 ### Out of the body
 
@@ -101,12 +101,13 @@ in a finding of the pass (step 4):
 2. **File the children**, in build order, one issue per task, through `file-task-issue`'s
    *Filing the children of a decomposition*, which owns what each carries. This file's
    convention for the children it files: each title starts `T<n>:`, its task id; a run
-   skips a task whose `T<n>:` starts the title of the epic's sub-issue, whichever child filed it.
-3. **Close the `decompose` issue** with a comment listing the children by number, why a
-   child's Size differs from the summary's, how each comment step 1 read was applied, and
-   what **Rules** reports (**Tracker mechanics**, *Closing a work item*); move it to *done*
-   (*Filing a work item*, step 3), **Merge and issue closing**'s closed-directly case (under
-   `CLAUDE.md`'s **Contribution workflow**). Report the list.
+   skips a task whose `T<n>:` starts the title of any sub-issue of the epic.
+3. **Close the `decompose` issue** with a comment listing the children by number, each
+   skipped task with the sub-issue it matched, why a child's Size differs from the summary's,
+   how each comment step 1 read was applied, and what **Rules** reports (**Tracker
+   mechanics**, *Closing a work item*); move it to *done* (*Filing a work item*, step 3),
+   **Merge and issue closing**'s closed-directly case (under `CLAUDE.md`'s **Contribution
+   workflow**). Report the list.
 
 ## Rules
 

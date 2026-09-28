@@ -47,12 +47,19 @@ half-scoped.
    later finding fits — attach it as a **native sub-issue** of that epic, and add a
    **blocked-by edge** to each already-filed issue it cannot start before, rather than leaving
    it untracked or its order implied by body text; the epic takes a blocked-by edge to it too,
-   per **Issue conventions**. An artifact-stage issue filed after the epic's opening pass also
-   blocks the epic's open `decompose` child, with the park **Idea-to-product flow** gives.
-   Both edges can be set while creating the issue or added afterwards; **Tracker mechanics**
-   above routes to the commands and to the read-back that confirms each edge exists. Don't
-   touch the epic's other children while doing this: their state is a call for whoever owns
-   the epic, not a side effect of filing one issue.
+   per **Issue conventions**. An `adr`, `uc`, `requirement` or `documentation` issue filed
+   after the epic's opening pass also blocks the epic's `decompose` child — the open one, or a
+   new one filed with that edge where it has closed — as **Idea-to-product flow** says. Where
+   a park stands on the epic, post a not-ready park on it (**Tracker mechanics**, *Commenting
+   on a work item*): the five parts of the park in the `decompose` row's work file (**Model
+   selection**), the children part `none` — not ready, blocked on the new issue by number —
+   and each other part `none` with why, ending on the parking marker. The "label is on" in
+   that file's *Out of the body* binds its own run only; this filer never touches
+   `needs-approval`. All these edges can be set while creating the issue or added afterwards;
+   **Tracker mechanics** above routes to the commands and to the read-back that confirms each
+   edge exists. Done when every edge and the park read back. Don't touch the epic's other
+   children, its `decompose` child aside, while doing this: their state is a call for whoever
+   owns the epic, not a side effect of filing one issue.
 
 ## Filing an epic's opening issues
 
@@ -61,7 +68,8 @@ the flow's, per **Idea-to-product flow** above. File them in this order: the epi
 artifact-stage issue, then any `decompose` child last — so every one of its blocked-by edges
 names an issue that already exists and goes on as a flag of its create call. Each goes through
 the checklist at the top of this file. Done when the child's edges, where it has one, read back
-one per artifact-stage issue the pass filed, and the epic's one per child.
+one per `adr`, `uc`, `requirement` or `documentation` issue the pass filed, and the epic's one
+per child.
 
 ## Filing the children of a decomposition
 
@@ -81,8 +89,8 @@ epic's milestone, `Source:` lines and edges, and no task in that body is left wi
 
 The conventions are `CLAUDE.md`'s **Issue conventions**, not this list — except the `Source:`
 lines, whose owner is item 2 above; the ones this skill's users trip on most are the context
-label, the `epic` label, those lines, Size and Estimate, the milestone, and epic edges. The mistakes that are
-this skill's own:
+label, the `epic` label, those lines, Size and Estimate, the milestone, and epic edges. The
+mistakes that are this skill's own:
 
 - Forcing a context label onto work that is still fuzzy instead of filing it as an `idea`
   (item 1).

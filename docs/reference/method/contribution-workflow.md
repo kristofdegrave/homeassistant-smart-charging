@@ -281,13 +281,13 @@ human partner**.
 ## Issue conventions
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
-  `development`/`testing` (implementation tasks, **Task issues** below), `workflow` (CI/skill/agent-authoring
-  changes), `documentation` (design-doc changes, `docs/design/**`), `decompose` (an epic's
-  body read, at most one per epic with a spec). The label set itself — every name, colour and description,
-  and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
-  `work_types`, and `.github/setup-labels.sh` writes it to the repository. Adding or renaming
-  a label: [ci-pipeline.md](ci-pipeline.md) lists every place this vocabulary must stay in
-  sync.
+  `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
+  (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
+  `decompose` (an epic's body read, at most one open per epic with a spec). The label set
+  itself — every name, colour and description, and which context labels this project enables
+  — is `.claude/profile.yml`'s `labels` and `work_types`, and `.github/setup-labels.sh` writes
+  it to the repository. Adding or renaming a label: [ci-pipeline.md](ci-pipeline.md) lists
+  every place this vocabulary must stay in sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue
@@ -317,10 +317,11 @@ human partner**.
   Unprefixed milestones do not rank against each other: a picker facing a tie puts the choice
   to the human partner through `clarify` (**Rule C**). Within one milestone, between milestones
   sharing a prefix, or among unmilestoned issues, it takes the lowest-numbered (oldest)
-  unblocked issue not labelled `epic`. The roadmap session is one the human partner holds to prefix every
-  milestone; a new milestone stays unprefixed until then, and only the human partner reorders. An epic carries its milestone and filing copies it to each child routed to work.
-  Every issue routed to work carries one; an `idea` issue and an unreproduced claim are not
-  work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
+  unblocked issue not labelled `epic`. The roadmap session is one the human partner holds to
+  prefix every milestone; a new milestone stays unprefixed until then, and only the human
+  partner reorders. An epic carries its milestone and filing copies it to each child routed to
+  work. Every issue routed to work carries one; an `idea` issue and an unreproduced claim are
+  not work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
   when the work they become is placed). Whoever picks the next issue takes an unmilestoned
   issue routed to work last, never skips it. The `gh` flags are
   [tracker-mechanics.md](tracker-mechanics.md)'s **Filing a work item**.
@@ -330,17 +331,18 @@ human partner**.
   condition.
 - **Task issues** (`development`/`testing` label) are **children of the epic whose body
   carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
-  issue is filed as a native sub-issue of that epic, never standing alone. Get the edge on at filing time; adding it afterwards works
-  (**Epic-first for multi-artifact strands** above has both forms).
+  issue is filed as a native sub-issue of that epic, never standing alone. Get the edge on at
+  filing time; adding it afterwards works (**Epic-first for multi-artifact strands** above has
+  both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
-number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying only a kind label** (`bug`,
-`enhancement`) has no context label to name the branch, so the kind label itself is the
-segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches used `dev/` and `fix/`; both spellings are historical, not
-alternatives (`development/<n>` keeps its meaning above). When both axes are present the
-**context label wins**. If extra work on the same issue needs a second PR, suffix a third
-segment describing the split: `<context-label>/<issue-number>/<slug>`.
+number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying
+only a kind label** (`bug`, `enhancement`) has no context label to name the branch, so the
+kind label itself is the segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the
+shipped-behaviour track's defined segment. Earlier branches used `dev/` and `fix/`; both
+spellings are historical, not alternatives (`development/<n>` keeps its meaning above). When
+both axes are present the **context label wins**. If extra work on the same issue needs a
+second PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`.
 
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
 its row — may override the number segment for a concrete reason to key the branch off the
