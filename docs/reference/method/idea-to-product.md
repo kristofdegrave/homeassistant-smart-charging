@@ -185,9 +185,10 @@ covers which label such a child takes.
 **The last issue the pass files is the `decompose` child**: titled `decompose: <epic title>`,
 labelled `decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
 `documentation` issue the pass filed. The one exception is a **method epic** — one whose
-children are all `workflow` issues, a change to the method itself: it needs no spec, so it
-gets no `decompose` child and no closing step, and its children are filed here, at the opening
-pass. Every other epic is an epic with a spec.
+tasks, the children beside the issues the artifact stages run against, are all `workflow`
+issues, a change to the method itself: it needs no spec, so it gets no `decompose` child and
+no closing step, and its children are filed here, at the opening pass. Every other epic is an
+epic with a spec.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
