@@ -1412,7 +1412,7 @@ def test_should_release_the_hold_when_the_following_occurrence_has_elapsed():
     forwarded and already elapsed, it releases a hold well inside the 24-hour bound -- exactly
     the case that is unreachable if `resolve_next_occurrence`'s output were used instead, since
     that always yields an occurrence strictly after `now`. Same pursued occurrence and `now_dt`
-    as `test_should_keep_the_hold_when_the_following_occurrence_is_left_at_its_default`, so only
+    as `test_should_keep_the_hold_when_no_following_occurrence_resolves`, so only
     the forwarding can account for the difference."""
     # Arrange -- the pursued occurrence elapsed 16h ago (short of the 24-hour bound), and the
     # occurrence for the day AFTER it -- 26 July, the day after 25 July -- already past `now_dt`.
