@@ -55,9 +55,9 @@ half-scoped.
 ## Filing an epic's opening issues
 
 Which issues an epic gets at the flow's opening pass, their order and their edges, a
-`decompose` child included or not, are the flow's, per **Idea-to-product flow** above. File
-them in that order, any `decompose` child last so every one of its blocked-by edges names an
-issue that already exists and goes on as a flag of its create call. Each goes through the
+`decompose` child included or not, are the flow's, per **Idea-to-product flow** above. Filed in
+that order, a `decompose` child's blocked-by edges each name an issue that already exists, so
+they go on as flags of its create call. Each goes through the
 checklist at the top of this file. Done when every edge the flow names for them reads back, and
 the epic's one per child.
 

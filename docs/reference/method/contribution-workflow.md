@@ -184,8 +184,7 @@ The session applies the hold itself rather than asking the human partner to.
 - **Reply always.** Every finding gets a reply on its thread: what was done, or why not.
 - **Resolve only what was actually fixed.** A disputed, deferred or partially addressed thread
   stays open, with the reply saying why.
-- **Resolve after the push, never before.** A failed push would otherwise leave threads closed
-  over work not on the branch.
+- **Resolve after the push, never before.**
 - **Outdated is not resolved.** A thread the diff no longer shows stays open until resolved
   explicitly.
 - **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
@@ -223,7 +222,7 @@ a work item**).
 
 **An epic with a spec carries it in its body, and its children are the tasks**, filed by the
 decomposition that wrote the body — the closing step of the flow `CLAUDE.md`'s
-**Idea-to-product flow** topic routes to, which also says which epics have one. Each child is
+**Idea-to-product flow** topic routes to, whose opening pass says which epics have one. Each child is
 its own issue, implemented in its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
@@ -284,7 +283,7 @@ shared with the human partner**.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
   (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
-  `decompose` (an epic's body read, one per epic with a spec, none otherwise). The label set
+  `decompose` (an epic's body read, one child per epic, a method epic aside). The label set
   itself — every name, colour and description, and which context labels this project enables
   — is `.claude/profile.yml`'s `labels` and `work_types`, and `.github/setup-labels.sh` writes
   it to the repository. Adding or renaming a label: [ci-pipeline.md](ci-pipeline.md) lists
@@ -309,8 +308,8 @@ shared with the human partner**.
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**, and the epic a blocked-by edge to each child — a convention for the UI,
-  which lists its open work; nothing gates on it. Neither is body text; the commands and the
+  relationship**, and the epic a blocked-by edge to each child — a UI convention;
+  nothing gates on it. Neither is body text; the commands and the
   read-backs that confirm an edge landed are in [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N".
@@ -331,9 +330,11 @@ shared with the human partner**.
   shipped behaviour also needs an epic whose body carries the spec to exist for it — see
   [idea-to-product.md](idea-to-product.md)'s **Analysis** stage, whose gate owns that
   condition.
-- **Task issues** (`development`/`testing` label) cut from a spec are **children of the epic
-  whose body carries it**, each one's body its task — ADR-0044; a bug fix's are cut from none.
-  Such an issue is a native sub-issue of that epic, its edge set at filing time or after
+- **Task issues** (`development`/`testing` label) are **children of the epic whose body
+  carries the implementation spec**, and each one's body is its task — ADR-0044. So such an
+  issue is filed as a native sub-issue of that epic, never standing alone: the parent edge
+  says the body was cut from a reviewed decomposition rather than typed straight into an
+  issue. Get the edge on at filing time; adding it afterwards works
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,

@@ -170,7 +170,7 @@ move into its body under *Decisions so far* (**Brainstorm** above).
 
 Whether the strand needs an epic is settled here and written on the issue:
 
-- **New behaviour**: always an epic, so a spec, where one is cut, always has a body.
+- **New behaviour**: always an epic, so there is always a body for the spec.
 - **Bug track**: an epic only when brainstorming yields more than one slice. A one-slice fix
   goes straight from the routed issue to work.
 - **A single-artifact idea**: no epic, so no spec and no closing step — one issue, filed
@@ -182,15 +182,12 @@ surfacing later that belongs to the strand — a bug found mid-implementation, a
 attached as a sub-issue too; epic membership needs no context label, and `file-task-issue`
 covers which label such a child takes.
 
-**The last issue the pass files is the `decompose` child**, only for an epic whose tasks will
-be cut from a `project-plan.md` slice — a multi-artifact idea that passes **Design**: titled
-`decompose: <epic title>`, labelled `decompose`, a sub-issue of the epic, blocked by every
-`adr`, `uc`, `requirement` and `documentation` issue the pass filed. A method epic of
-`workflow` tasks and a bug-track epic get no child and no closing step; their children are
-filed directly, a bug-track epic's from the fix, as a one-slice fix goes straight to work. A
-`development` or `testing` issue is a child of the epic whose spec it was cut from where there
-is one; a bug fix's, one-slice or a bug-track epic's, are cut from no spec — **Task issues**
-in [contribution-workflow.md](contribution-workflow.md).
+**The last issue the pass files is the `decompose` child**: titled `decompose: <epic title>`,
+labelled `decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
+`documentation` issue the pass filed. The one exception is a **method epic** — one whose
+children are all `workflow` issues, a change to the method itself: it needs no spec, so it
+gets no `decompose` child and no closing step, and its children are filed here, at the opening
+pass. Every other epic is an epic with a spec.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
@@ -283,8 +280,8 @@ leaves the spec in the epic's body and one child per task.
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 
 The opening pass's own gate: nothing downstream starts without an issue to run against, what is
-filed for work is milestoned, and each epic the opening pass gives a `decompose` child has it,
-with its edges. The closing step's: step 2's pass and step 3's parked read, both complete
+filed for work is milestoned, and each epic with a spec has its `decompose` child, with its
+edges. The closing step's: step 2's pass and step 3's parked read, both complete
 before any child is filed, and then every task in the body having an issue, filed as step 4
 says. The **Implementation** stage starts from those issues and from nothing else.
 
@@ -393,6 +390,9 @@ closing step once the `decompose` child is unblocked — so requiring the body h
 an artifact this stage cannot yet have. Without it, an analysis document can merge describing
 behaviour the code does not have. The review step applies that label on a clean pass and knows
 nothing about child issues, so the same condition is checked by whoever approves the merge.
+The epic is the earliest artifact that can carry that obligation — a `development`/`testing`
+child cannot, because it is cut from that epic's body by the decomposition, so none exists
+until the spec has been written into it.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work
 file carries.
 
