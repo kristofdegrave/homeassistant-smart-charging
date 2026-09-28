@@ -15,7 +15,7 @@ the tracker.
 **(1) The body was derived, and the pass ran exactly once against it.** A body parked with no
 `reviewer` run behind it, or one the pass was run twice over → **Critical**: the human's read
 then rests on an unreviewed body, or the closing step's single-pass rule is broken. A re-entry
-after the stop in `implement.md`'s step 4, *Out of the body*, is a fresh draft with its own
+after `implement.md`'s *Out of the body* stop is a fresh draft with its own
 single pass, not a second run over the earlier one. A Critical or Major finding of the pass
 neither fixed in the body nor handled by that branch → **Major**.
 
@@ -33,7 +33,7 @@ park. No read-back → **Major**: the fix is then assumed.
 passes the entry rule's author test, and it is the only park the human has not answered.
 Missing or elsewhere in the comment → **Critical**: the autopilot cannot then tell the park
 from any other comment, and re-parks or never proceeds. A second park over an unanswered one
-→ **Major**.
+→ **Major**; a not-ready park, and the park that follows one, are not over an unanswered park.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
 entry rule's go reads the label's events against that comment's time — and the run added no
@@ -66,10 +66,15 @@ the *Clutter* entry named under item 3 defines it, at its severities and in its 
 
 ## At a stop (entry 1)
 
-**(12) A stop short of the park leaves the gate readable.** Stopped by step 4's *Out of the
-body*: the filed issue exists, the blocked-by edge from the `decompose` issue to it was read
-back, and, where a park stood, a fresh one with the children part `none` names that issue.
-Parked through `clarify`: that skill's parking rule holds on the `decompose` issue. Either
-way no child exists, no label was added or removed beyond `clarify`'s parking, and (7) holds.
+**(12) A stop short of the park leaves the gate readable**: no child exists, and no label was
+added or removed beyond `clarify`'s parking.
+- Stopped by *Out of the body*: the filed issue exists, the blocked-by edge from the
+  `decompose` issue to it was read back, where a park stood a fresh one with the children
+  part `none` names that issue, and (7) holds.
+- Parked through `clarify`, once ADR-0052's consequence for that skill lands: that skill's
+  parking rule holds on the `decompose` issue, and (7) holds.
+- Stopped as picked too early, as still parked, or at the entry rule's last arm: nothing on
+  the tracker changed, and the run did not move the `decompose` issue.
+
 A stop that leaves a standing park readable as the go → **Critical**; any other miss →
 **Major**.
