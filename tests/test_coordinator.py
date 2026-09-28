@@ -5655,11 +5655,11 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     would see a non-positive `remaining_hours` and saturate `required_a` to infinity, engaging
     urgency and latching that already-elapsed time as `pursued_occurrence` on the very first
     connected cycle. A real, sizeable SOC gap (not one already at the active limit) is used so
-    that shortcut would actually show up as urgency, rather than being masked by `soc_at_active_
-    limit`'s own zero-required-current branch. Asserting `required_a` against tomorrow's
-    occurrence (not just the negatives below) is what tells that apart from a regression that
-    dropped the deadline into "no deadline resolved" instead -- the negatives alone read the
-    same in both cases.
+    that shortcut would actually show up as urgency, rather than being masked by
+    `soc_at_active_limit`'s own zero-required-current branch. Asserting `required_a` against
+    tomorrow's occurrence (not just the negatives below) is what tells that apart from a
+    regression that dropped the deadline into "no deadline resolved" instead -- the negatives
+    alone read the same in both cases.
 
     Set up in `Power`, matching this file's other direct-construction deadline tests; the mode
     plays no part in reaching `deadline_resolvable=True` (`coordinator.py`'s
@@ -5670,11 +5670,18 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     # (UTC-8 in January), so 06:00 UTC on the 16th is 22:00 local on the 15th. Today's own
     # default (17:00) is already elapsed at that local time; tomorrow's (09:00) is a
     # comfortable ~11h out. The 30-point SOC gap over that ~11h window needs ~8.9A, well under
-    # this suite's `max_current=16.0` ceiling on the escalated rate (config_factory.py).
+    # the 12.8A slack threshold (`max_current=16.0` / (1 + DEADLINE_URGENCY_MARGIN),
+    # config_factory.py's shared factory default) that would engage urgency.
+    ev_battery_capacity_kwh = 75.0
+    voltage = 230.0
     freezer.move_to("2026-01-16 06:00:00")
-    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0)
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=50.0, voltage=voltage)
     coord = SmartChargingCoordinator(
-        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+        hass,
+        adapters=adapters,
+        config=_config(ev_battery_capacity_kwh=ev_battery_capacity_kwh),
+        interval_s=30,
+        store=_FakeStore({}),
     )
     coord.active_profile = PROFILE_MANUAL
     coord.active_mode = MODE_POWER
@@ -5695,5 +5702,5 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     assert coord._required_current.urgent is False
     assert coord._required_current.unreachable is False
     assert coord._required_current.required_a == pytest.approx(
-        75.0 * (80.0 - 50.0) / 100 * 1000 / 11 / 230.0
+        ev_battery_capacity_kwh * (80.0 - 50.0) / 100 * 1000 / 11 / voltage
     )
