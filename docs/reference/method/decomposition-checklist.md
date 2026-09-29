@@ -33,7 +33,9 @@ item scores against whichever documents hold those here.
   Wherever an item below says the closing step fixes something, it scores against that rule
   rather than restating it, so the step has to be read before any such item is applied.
 - `docs/design/system-design.md` and `docs/design/project-plan.md` — the slice the body claims
-  to derive from, and the services it may name.
+  to derive from, and the services it may name. A body whose *Decisions so far* records the bug
+  track derives from the verified defect instead (the closing step's *Derive, don't design*):
+  its slice is the fix recorded there, and `project-plan.md` has none to check it against.
 - The analysis documents the body cites, every requirement it lists as in scope, and
   `docs/analysis/system-overview.md` for the glossary — the tree is under `CLAUDE.md`'s
   **Document structure** topic.
@@ -87,8 +89,9 @@ decision needed a record of its own is not yours — the worthiness test is `CLA
 **Architecture Decision Records (ADRs)** topic's.
 
 **(7) Derived, not invented.** Every task maps to a service already in `system-design.md` and a
-task in `project-plan.md`. A service, call direction or volatility the body introduces is
-**Major**: the fix is an issue against the design document, never a paragraph in the body.
+task in `project-plan.md` — on the bug track, to the recorded fix. A service, call direction or
+volatility the body introduces is **Major**: the fix is an issue against the design document,
+never a paragraph in the body.
 
 **(8) Nothing restated that another document owns.** A formula, threshold, resolution order or
 ADR rationale reproduced instead of cited is *Clutter* in its restatement form, judged by the

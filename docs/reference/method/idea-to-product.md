@@ -228,12 +228,13 @@ filing checklist is `file-task-issue`'s.
    body* stop gets its own.
 4. **The children are filed**, in build order, one issue per task.
 
-**Derive, don't design.** The body turns one approved slice of `project-plan.md` into concrete
-files, functions and tests, citing the analysis documents and the ADRs rather than restating or
-overriding them. A service or call direction the design does not already name is not invented
-here: it is an issue against the design document, run through that document's own issue-first
-cycle, and the draft resumes after. Before writing a **behavioural** rule into the body, read
-the document that owns it and act on which of three cases it is:
+**Derive, don't design.** The body turns one approved slice of `project-plan.md` — on the bug
+track, the verified defect: the `diagnosing-bugs` reproduction and the fix brainstormed on the
+routed issue — into concrete files, functions and tests, citing the analysis documents and the
+ADRs rather than restating or overriding them. A service or call direction the design does not
+already name is not invented here: it is an issue against the design document, run through that
+document's own issue-first cycle, and the draft resumes after. Before writing a **behavioural**
+rule into the body, read the document that owns it and act on which of three cases it is:
 
 - **It says the same thing** — a duplicate. Cut it and cite the source.
 - **No document says it** — the body would hold the only copy. Keep the text as it stands,
@@ -399,9 +400,7 @@ closing step once the `decompose` child is unblocked — so requiring the body h
 an artifact this stage cannot yet have. Without it, an analysis document can merge describing
 behaviour the code does not have. The review step applies that label on a clean pass and knows
 nothing about child issues, so the same condition is checked by whoever approves the merge.
-The epic is the earliest artifact that can carry that obligation — a `development`/`testing`
-child cannot, because it is cut from that epic's body by the decomposition, so none exists
-until the spec has been written into it.
+The epic is the earliest artifact that can carry that obligation.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work
 file carries.
 
@@ -425,10 +424,11 @@ The tree is under **Document structure** below.
 
 ### Gate: the slice a spec derives from is in an approved `project-plan.md`
 
-The **Decompose** stage's closing step derives from one slice of `project-plan.md` and never
-re-decomposes the system — the rule is that step's, *Derive, don't design*. So a design change
-that adds or reshapes a slice is merged before the spec for that slice is drafted, and a
-structural decision the design surfaced has its ADR first (the **ADR** stage's gate).
+The **Decompose** stage's closing step derives a new-behaviour spec from one slice of
+`project-plan.md` and never re-decomposes the system — the rule is that step's, *Derive, don't
+design*. So a design change that adds or reshapes a slice is merged before the spec for that
+slice is drafted, and a structural decision the design surfaced has its ADR first (the **ADR**
+stage's gate).
 
 ### Skills
 

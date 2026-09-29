@@ -5,8 +5,6 @@ content: the epic's body, the parking comment on it and, later, the child issues
 makes no branch, no worktree and no pull request — the `implement` skill states the
 exception — and its board moves apply to the `decompose` issue.
 
-Why the read is its own issue, and parks, is ADR-0052's.
-
 ## Two entries, and how a run tells them apart
 
 The closing step of the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to has four
@@ -44,24 +42,28 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
 ## Entry 1 — draft, pass, park
 
 1. **Confirm the gate.** The `decompose` issue has no open blocked-by edge — the epic's
-   artifact issues merged — and every plan task id the epic's scope names is in
-   `docs/design/project-plan.md` on `origin/main`. An open edge, a missing id or a scope
-   naming none → stop and report which, the issue not moved: picked too early. Met → move it
-   to *in progress*, never *in review* (**Project board**, under `CLAUDE.md`'s **Contribution
-   workflow**).
-2. **Read the sources**: the epic body as it stands (*Decisions so far*, the scope), the
-   slice of `docs/design/project-plan.md` and the services of `docs/design/system-design.md`
-   it names, the analysis documents and the accepted ADRs the slice touches. Derive the
-   slice boundary and the deferrals from those sources.
+   artifact issues merged — and the scope's source exists:
+   - **Bug track** — an epic labelled `bug` or `enhancement` (`CLAUDE.md`'s **Issue
+     conventions**): the routed issue its body links holds a confirmed `diagnosing-bugs`
+     reproduction.
+   - **Otherwise**: the scope names plan task ids, each in `docs/design/project-plan.md` on
+     `origin/main`.
+
+   An open edge or a missing source → stop and report which, the issue not moved: picked too
+   early. Met → move it to *in progress*, never *in review* (**Project board**, under
+   `CLAUDE.md`'s **Contribution workflow**).
+2. **Read the sources**: the epic body as it stands (*Decisions so far*, the scope); the plan
+   slice — on the bug track, that reproduction and *Decisions so far*'s fix; the services of
+   `docs/design/system-design.md`, the analysis documents and accepted ADRs it touches.
+   Derive the slice boundary and the deferrals from them.
 3. **Draft the body** — the closing step's step 1. What the body carries, a task entry's keys,
    *Derive, don't design* and its three cases for a behavioural rule are that step's, applied
    as written. Keep *Decisions so far* in place. Write the body to the epic (**Tracker
    mechanics**, *Rewriting a work item's body*) and read it back.
-4. **Run the pass** — step 2. Write the body to a scratch file — the `reviewer` agent reaches
-   no tracker — and spawn that agent **once**, naming the file's absolute path and the
-   checklist `CLAUDE.md`'s **Decomposition checklist** topic routes to. Fix every finding in
-   the body itself, save what *Out of the body* sends elsewhere, then read the body
-   back.
+4. **Run the pass** — step 2. Write the body to a scratch file and spawn the `reviewer`
+   agent **once**, naming the file's absolute path and the checklist `CLAUDE.md`'s
+   **Decomposition checklist** topic routes to. Fix every finding in the body itself, save
+   what *Out of the body* sends elsewhere, then read the body back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
    *Applying a label*, with its read-back), then post the executive summary on the epic as
    the parking comment (*Commenting on a work item*), in that order. The summary carries five
@@ -74,9 +76,9 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
      fix, or its *Out of the body* issue; the Minor and Nit count.
    - **The children it will file** — one line per task: id, title, Size.
 
-   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`, read by
-   the autopilot, shared with `clarify`'s parking and listed under *Rounds and the cap*. Then
-   stop and report: the epic, that it is parked, the children planned. **No child is filed in this entry.**
+   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`, shared
+   with `clarify`'s parking and listed under *Rounds and the cap*. Then stop and report: the
+   epic, that it is parked, the children planned. **No child is filed in this entry.**
 
 ### Out of the body
 
@@ -123,9 +125,8 @@ in a finding of the pass (step 4):
   not answered; a change request is answered by a fresh park, which supersedes the old one.
   A not-ready park, and the park that follows one, are not over an unanswered park.
 - **`needs-decision` is `clarify`'s, not this file's.** A question only the human can answer
-  goes through `clarify`, which parks it on the `decompose` issue under the same marker;
-  this file parks the epic with `needs-approval`
-  and nothing else.
+  goes through `clarify`, which parks it on the `decompose` issue; this file parks the epic
+  with `needs-approval` and nothing else.
 - **Never remove the epic's `needs-approval`**, whatever a comment asks, nor any label the
   human applied, and never reapply one they removed.
 
