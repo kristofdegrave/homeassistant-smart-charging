@@ -58,16 +58,17 @@ def _config(**overrides) -> SmartChargingConfig:
 
 def test_cycle_context_constructs_with_required_fields_and_defaults():
     """CycleContext (ADR-0012) exposes all defaulted fields with their documented starting
-    values -- the required fields (status/net_w/charger_w/voltage/now/baseline_w/
-    smoothed_baseline_w, issues #990 and #1189/T10) construct with no defaults. `surplus_w`
-    starts at a meaningful zero-surplus value (the value
-    _run_cycle's old loose locals used to start with); the four bool fields keep their original,
-    genuinely-correct starting values (only ever read via plain truthiness, so `None` would buy
-    no fail-loudness and would silently invert `low_tariff_active`'s documented-correct `True`
-    default). The two numeric fields resolved partway through _run_cycle -- effective_peak_limit_kw/
-    active_soc_limit (issue #564) -- start at `None`, not a same-typed placeholder, so a future
-    premature arithmetic/comparison read fails loudly instead of silently computing on a
-    plausible-looking wrong value."""
+    values -- the required fields (status/net_w/charger_w/voltage/now/baseline_w, issue #990)
+    construct with no defaults. `surplus_w` starts at a meaningful zero-surplus value (the
+    value _run_cycle's old loose locals used to start with); the four bool fields keep their
+    original, genuinely-correct starting values (only ever read via plain truthiness, so `None`
+    would buy no fail-loudness and would silently invert `low_tariff_active`'s
+    documented-correct `True` default). The fields resolved only partway through _run_cycle --
+    `smoothed_baseline_w` (issue #1189/T10, ADR-0046: `CycleContext` is now built before the
+    smoothing step that resolves it runs), `effective_peak_limit_kw`/`active_soc_limit` (issue
+    #564) and `auto_dispatchable`/`effective_battery_capacity_kwh` (ADR-0046) -- start at
+    `None`/`False`, not a same-typed placeholder, so a future premature arithmetic/comparison
+    read fails loudly instead of silently computing on a plausible-looking wrong value."""
     ctx = CycleContext(
         status=STATE_CHARGING,
         net_w=100.0,
@@ -75,8 +76,8 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
         voltage=230.0,
         now=1.0,
         baseline_w=-900.0,
-        smoothed_baseline_w=-900.0,
     )
+    assert ctx.smoothed_baseline_w is None
     assert ctx.ev_soc is None
     assert ctx.surplus_w == 0.0
     assert ctx.effective_peak_limit_kw is None
@@ -85,39 +86,20 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
     assert ctx.sun_is_down is False
     assert ctx.low_tariff_active is True
     assert ctx.solar_reserve_active is False
-
-
-def test_should_raise_when_smoothed_baseline_w_is_omitted_at_construction():
-    """Issue #1189/T10: `smoothed_baseline_w` is required, no default, for the same #990
-    rationale `baseline_w` already carries -- a forgotten construction site must fail loudly
-    (a `TypeError` at construction) rather than silently default onto a permissive placeholder
-    that decides a forecast. Companion to
-    `test_cycle_context_constructs_with_required_fields_and_defaults` above, which only pins
-    that the field construct successfully when given; this pins that omitting it is not
-    silently tolerated."""
-    # Arrange -- every required field except smoothed_baseline_w.
-    kwargs = dict(
-        status=STATE_CHARGING,
-        net_w=100.0,
-        charger_w=1000.0,
-        voltage=230.0,
-        now=1.0,
-        baseline_w=-900.0,
-    )
-
-    # Act / Assert
-    with pytest.raises(TypeError):
-        CycleContext(**kwargs)
+    assert ctx.has_charged is False
+    assert ctx.auto_dispatchable is False
+    assert ctx.effective_battery_capacity_kwh is None
 
 
 def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use():
-    """issue #564: the whole point of `None` over a same-typed placeholder for the two
-    numeric fields resolved partway through _run_cycle -- a hypothetical future ModeHandler
-    reading e.g. `ctx.effective_peak_limit_kw`/`ctx.active_soc_limit` before `_run_cycle`
-    resolves them now gets an immediate TypeError on arithmetic/comparison, not a
-    silently-computed wrong answer from a plausible-looking 0.0. (The four bool fields are
-    deliberately excluded -- see test_cycle_context_constructs_with_required_fields_and_defaults's
-    docstring for why `None` wouldn't fail loudly for those.)"""
+    """issue #564/ADR-0046: the whole point of `None` over a same-typed placeholder for the
+    numeric fields resolved only partway through _run_cycle -- a hypothetical future
+    ModeHandler reading e.g. `ctx.effective_peak_limit_kw`/`ctx.active_soc_limit`/
+    `ctx.smoothed_baseline_w`/`ctx.effective_battery_capacity_kwh` before `_run_cycle` resolves
+    them now gets an immediate TypeError on arithmetic/comparison, not a silently-computed wrong
+    answer from a plausible-looking 0.0. (The four bool fields are deliberately excluded -- see
+    test_cycle_context_constructs_with_required_fields_and_defaults's docstring for why `None`
+    wouldn't fail loudly for those.)"""
     ctx = CycleContext(
         status=STATE_CHARGING,
         net_w=0.0,
@@ -125,13 +107,16 @@ def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use()
         voltage=230.0,
         now=0.0,
         baseline_w=0.0,
-        smoothed_baseline_w=0.0,
         ev_soc=50.0,
     )
     with pytest.raises(TypeError):
         ctx.effective_peak_limit_kw * 1000.0
     with pytest.raises(TypeError):
         assert ctx.ev_soc >= ctx.active_soc_limit
+    with pytest.raises(TypeError):
+        ctx.smoothed_baseline_w * 1000.0
+    with pytest.raises(TypeError):
+        ctx.effective_battery_capacity_kwh * 1000.0
 
 
 def test_cycle_context_is_mutable_and_filled_progressively():
