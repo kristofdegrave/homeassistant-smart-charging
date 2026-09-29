@@ -317,11 +317,11 @@ it is wired to its callers).
 - **Status:** shipped — `engines/deadline.py`; tests in `tests/engines/test_deadline.py`. Complete:
   R5's pursued occurrence, and the missed-deadline hold read from it (`pursued is not None and
   pursued <= now`, never a second tracked flag), are built —
-  `resolve_required_current` carries the hold branch, `follow_pursued_occurrence` re-anchors a
-  pending occurrence to its own date's departure time, and the non-resolvable
-  early return's ADR-0053 table governs a SOC-unavailable cycle mid-hold. The
-  urgency call site's own adapter reads and the `resolve_deadline_urgency` gating unit sit in
-  `coordinator.py`/`coordinator_cycle.py` per ADR-0023.
+  `resolve_required_current` carries the hold branch, and `follow_pursued_occurrence` re-anchors a
+  pending occurrence to its own date's departure time. The
+  urgency call site's own adapter reads, the `resolve_deadline_urgency` gating unit, and its
+  non-resolvable early return whose ADR-0053 table governs a SOC-unavailable cycle mid-hold, all
+  sit in `coordinator.py`/`coordinator_cycle.py` per ADR-0023, not in this Engine.
 - **Builds:** resolved departure deadline (today + one-day-ahead, R14), required current, whether
   urgency is in effect, **whether the deadline is unreachable even so**, and the per-profile lever
   set it is willing to spend (R5/R15). Also R5's pursued occurrence, threaded in and out by M1
@@ -391,7 +391,7 @@ it is wired to its callers).
   distinction). The headroom operation is the one R5 specifies on the smoothed baseline. Like
   E5, this Engine needed no change for that: it takes `net_w` and `charger_w` as parameters and
   cannot tell a raw reading from a smoothed one. M1 fits this call to `ctx.smoothed_baseline_w`
-  for R5's escalated rate while the C4 clamp and readout stay on the raw operands — shipped
+  for R5's escalated rate while the C4 clamp stays on the raw operands — shipped
   (see M1's Status).
 - **Depends on:** ADR-0010; must be a **structurally distinct** call site from E5 so the `Power`
   opt-out can never reach C4 (ADR-0006).
@@ -785,8 +785,8 @@ from the retired functional sequence.
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Checkpoint markers are not uniform and say so individually rather than to one formula —
-  Phase 2 reads *Met:*, Phase 4 *Met per slice:*, and only Phase 3 *Partially met:*: the Phase 3
-  no-cross-Manager-call assertion (no executable guard) and the Phase 4 UC01–UC11 end-to-end
+  Phase 2 reads *Met:*, and only Phase 3 reads *Partially met:*, for the no-cross-Manager-call
+  assertion (no executable guard). Phase 4 reads *Met per slice:*, for the UC01–UC11 end-to-end
   validation (per-slice, not one suite).
 - **Independently testable.** Each task names its unit boundary per ADR-0009 (pure Engines → plain
   pytest; Resource Access + Managers + Clients → HA harness) and an integration checkpoint proving
