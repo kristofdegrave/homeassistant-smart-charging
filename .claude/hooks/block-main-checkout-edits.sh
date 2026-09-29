@@ -16,15 +16,18 @@
 # (`D:\...` or `D:/...`) is turned into the shell's form with cygpath where one is on PATH, and
 # every backslash is read as a separator. The nearest existing directory at or above the path
 # is asked, with git, whether it lies inside a working tree, and if so whether that tree is the
-# repository's main worktree (--git-dir equals --git-common-dir) and its current branch is main.
-# All three -> deny. So a path outside any git tree (the scratchpad, the memory directory), a
-# linked worktree, the main checkout on any other branch or a detached HEAD, and a path inside
-# a .git directory are all allowed.
+# repository's main worktree (--git-dir and --git-common-dir resolve to the same directory) and
+# its current branch is main. All three -> deny, an ignored file (`.claude/settings.local.json`)
+# as much as a tracked one. So a path outside any git tree (the scratchpad, the memory
+# directory), a linked worktree, the main checkout on any other branch or a detached HEAD, and a
+# path inside a .git directory are all allowed.
 #
 # Fails OPEN, as the git rules of block-destructive-git.sh do: this is an accident guard, not a
-# sandbox, and a guard that cannot decide must not stall every edit. A payload that names a
-# guarded tool but yields no path, or a git that cannot answer, allows the call -- with a note
-# on stderr, so the guard is not silently gone.
+# sandbox, and a guard that cannot decide must not stall every edit. A payload with no tool name,
+# one that names a guarded tool but yields no path, no git on PATH, or a git that fails for any
+# reason but "not a git repository" (`detected dubious ownership`, a corrupt repository) allows
+# the call -- with a note on stderr, so the guard is not silently gone. Only the answers git
+# gives on a readable repository, and "not a git repository", allow without one.
 #
 # Known gap, accepted: a write through the shell tools (`sed -i`, a heredoc, a redirection,
 # `git checkout -- <path>`) never reaches this hook, and nothing here tries to cover it. A
@@ -68,16 +71,20 @@ extract() {
     }'
 }
 
+note_open() { # note_open <why> -- allow the call, saying why it went unchecked
+  echo "$SELF: $1; allowing the ${tool:-tool} call unchecked" >&2
+  exit 0
+}
+
 tool=$(extract tool_name)
 case "$tool" in
   Edit | Write) path=$(extract file_path) ;;
   NotebookEdit) path=$(extract notebook_path) ;;
-  *) exit 0 ;;
+  # The matcher sends only the three tools above, so an empty name is the decoder failing.
+  '') note_open "could not read tool_name from the payload" ;;
+  *) exit 0 ;; # a tool this guard does not cover
 esac
-if [ -z "$path" ]; then
-  echo "$SELF: could not read the path from the $tool payload; allowing the call unchecked" >&2
-  exit 0
-fi
+[ -n "$path" ] || note_open "could not read the path from the $tool payload"
 
 # A Windows drive path, in either slash, into the shell's own form (`/d/...` under Git Bash).
 # Backslashes become slashes first, so cygpath and the dirname walk below see one separator.
@@ -113,23 +120,42 @@ while [ ! -d "$dir" ]; do
   dir=$up
 done
 
-inside=$(git -C "$dir" rev-parse --is-inside-work-tree 2>/dev/null) || exit 0 # not in a repo
-[ "$inside" = true ] || exit 0 # inside a .git directory
+command -v git >/dev/null 2>&1 || note_open "no git on PATH"
+errfile=$(mktemp 2>/dev/null) || note_open "could not make a temp file for git's errors"
+trap 'rm -f "$errfile"' EXIT
 
-dirs=$(git -C "$dir" rev-parse --path-format=absolute --git-dir --git-common-dir 2>/dev/null)
-if [ -z "$dirs" ]; then
-  echo "$SELF: git could not name the git directories of $dir; allowing the $tool call unchecked" >&2
-  exit 0
-fi
-git_dir=$(printf '%s\n' "$dirs" | sed -n 1p)
-common_dir=$(printf '%s\n' "$dirs" | sed -n 2p)
+# Ask git; on failure, allow silently only for "not a git repository" -- a parsed answer, the
+# path is in no working tree -- and with a note for anything else.
+ask() { # ask <git args...> -- sets $answer, or exits
+  answer=$(git -C "$dir" "$@" 2>"$errfile") && return 0
+  err=$(tr '\n' ' ' <"$errfile")
+  case "$err" in *'not a git repository'*) exit 0 ;; esac
+  note_open "git $1 failed in $dir (${err% })"
+}
+
+ask rev-parse --is-inside-work-tree
+[ "$answer" = true ] || exit 0 # inside a .git directory
+
+# Both directories resolved by cd, not by --path-format=absolute (git 2.31+, and an older
+# rev-parse echoes the unknown option back as if it were an answer). Either may be relative.
+ask rev-parse --git-dir --git-common-dir
+git_dir=$(printf '%s\n' "$answer" | sed -n 1p)
+common_dir=$(printf '%s\n' "$answer" | sed -n 2p)
+resolve() { (cd "$dir" 2>/dev/null && cd "$1" 2>/dev/null && pwd -P); }
+[ -n "$git_dir" ] && [ -n "$common_dir" ] &&
+  git_dir=$(resolve "$git_dir") && common_dir=$(resolve "$common_dir") &&
+  [ -n "$git_dir" ] && [ -n "$common_dir" ] ||
+  note_open "git named no git directories that exist for $dir"
 [ "$git_dir" = "$common_dir" ] || exit 0 # a linked worktree
 
-branch=$(git -C "$dir" symbolic-ref --short -q HEAD 2>/dev/null)
-[ "$branch" = main ] || exit 0
+# symbolic-ref -q exits 1, silently, on a detached HEAD; anything else is a failure.
+if ! branch=$(git -C "$dir" symbolic-ref --short -q HEAD 2>"$errfile"); then
+  [ -s "$errfile" ] || exit 0 # a detached HEAD
+  note_open "git symbolic-ref failed in $dir ($(tr '\n' ' ' <"$errfile"))"
+fi
+[ "$branch" = main ] || exit 0 # another branch
 
 top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
-parent=$(dirname "${top:-$dir}")
 
 json_escape() {
   printf '%s' "$1" |
@@ -145,9 +171,8 @@ Reason: this path is in the repository's main checkout, $top, which is on main.
 Every unit of work is edited in its own task worktree, never in the main checkout
 ($DOC).
 
-Make the edit in the task's worktree instead ($parent/sc-<type>-<n>, on the task branch).
-If it does not exist yet, cut it from a fetched origin/main:
-  git fetch origin && git worktree add -b <branch> <path> origin/main"
+Make the edit in the task's own worktree, on its branch, instead; if there is none yet,
+create it as that step says."
 
 printf '%s\n' "$message" >&2
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$(json_escape "$message")"

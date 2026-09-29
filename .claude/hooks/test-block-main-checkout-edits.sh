@@ -33,7 +33,13 @@ g -C "$MAIN" init -b main && echo a > "$MAIN/a.txt" && g -C "$MAIN" add a.txt &&
   g -C "$OTHER" worktree add "$OTHERMAIN" main ||
   { echo "could not build the throwaway repositories under $T" >&2; exit 1; }
 
-run() { # run BLOCK|ALLOW|NOTE <tool> <path-key> <path> [cwd] -- NOTE: allowed, with a stderr note
+# The hook runs under $HOOK_PATH (default: this PATH), so a case can hand it a stub git or none;
+# sh itself is found once, here. DECOY_FIRST=1 puts the decoy content before the path key, so
+# "the first match wins" cannot be what keeps the escaped decoy key from matching.
+SH=$(command -v sh)
+DECOY='"content":"the payload says \"file_path\":\"elsewhere\""'
+
+run() { # run BLOCK|ALLOW|NOTE <tool> <path-key> <path> [cwd] -- NOTE: allowed, with a note carrying $WANT
   expect=$1
   tool=$2
   key=$3
@@ -44,15 +50,17 @@ run() { # run BLOCK|ALLOW|NOTE <tool> <path-key> <path> [cwd] -- NOTE: allowed, 
   esc_dir=$(printf '%s' "$dir" | sed 's/\\/\\\\/g')
   input="\"$key\":\"$esc_path\""
   [ "$key" = none ] && input='"old_string":"x"'
-  out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{%s,"content":"the payload says \\"file_path\\":\\"elsewhere\\""}}' "$esc_dir" "$tool" "$input" |
-    sh "$HOOK" 2>&1)
+  if [ "${DECOY_FIRST:-0}" = 1 ]; then input="$DECOY,$input"; else input="$input,$DECOY"; fi
+  out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{%s}}' "$esc_dir" "$tool" "$input" |
+    PATH=${HOOK_PATH:-$PATH} "$SH" "$HOOK" 2>&1)
   rc=$?
   case "$out" in *'"permissionDecision":"deny"'*) denied=1 ;; *) denied=0 ;; esac
   shown="$tool $key=$path${5:+  (cwd $5)}"
   case "$expect" in
     BLOCK) [ "$rc" = 2 ] && [ "$denied" = 1 ] ;;
     ALLOW) [ "$rc" = 0 ] && [ -z "$out" ] ;;
-    NOTE) [ "$rc" = 0 ] && [ "$denied" = 0 ] && [ -n "$out" ] ;;
+    NOTE) [ "$rc" = 0 ] && [ "$denied" = 0 ] &&
+      case "$out" in *"$WANT"*"allowing the"*"call unchecked"*) true ;; *) false ;; esac ;;
   esac
   if [ $? = 0 ]; then
     printf 'ok   %-5s  %s\n' "$expect" "$shown"
@@ -79,10 +87,65 @@ run ALLOW Edit file_path "$OTHER/a.txt"                   # a main worktree on a
 run ALLOW Edit file_path "$OTHERMAIN/a.txt"               # a linked worktree that is on main
 run ALLOW Edit file_path "$MAIN/.git/COMMIT_EDITMSG"      # inside the .git directory
 run ALLOW Read file_path "$MAIN/a.txt"                    # a tool the guard does not cover
+WANT='could not read the path'
 run NOTE NotebookEdit file_path "$MAIN/n.ipynb"           # NotebookEdit reads notebook_path only
 
-# --- the payload the guard cannot read: open, but not silently ---
+# --- the decoy key first: an escaped "file_path" inside a string never matches ---
+DECOY_FIRST=1
+run BLOCK Edit file_path "$MAIN/a.txt"
+run ALLOW Edit file_path "$LINKED/a.txt"
+DECOY_FIRST=0
+
+# --- what the guard cannot read or ask: open, but not silently ---
 run NOTE Edit none ""                                     # no path at all
+WANT='could not read tool_name'
+run NOTE "" file_path "$MAIN/a.txt"                       # no tool name
+
+# A PATH with every tool the hook runs but git, each a wrapper around the real one.
+NOGIT=$T/bin-nogit
+mkdir -p "$NOGIT"
+for t in awk sed tr dirname cat mktemp rm cygpath; do
+  real=$(command -v "$t") || continue
+  printf '#!/bin/sh
+exec "%s" "$@"
+' "$real" > "$NOGIT/$t"
+  chmod +x "$NOGIT/$t"
+done
+HOOK_PATH=$NOGIT
+WANT='no git on PATH'
+run NOTE Edit file_path "$MAIN/a.txt"                     # no git on PATH
+HOOK_PATH=
+
+# Stub gits, each first on PATH: one that refuses the repository the way an unsafe owner does,
+# and one that answers the first question but not the second.
+STUB=$T/bin-stub
+mkdir -p "$STUB"
+HOOK_PATH=$STUB:$PATH
+printf '#!/bin/sh
+echo "fatal: detected dubious ownership in repository at x" >&2
+exit 128
+' > "$STUB/git"
+chmod +x "$STUB/git"
+WANT='dubious ownership'
+run NOTE Edit file_path "$MAIN/a.txt"                     # git fails, not "not a repository"
+printf '#!/bin/sh
+case "$*" in *is-inside-work-tree*) echo true ;; *) exit 128 ;; esac
+' > "$STUB/git"
+WANT='git rev-parse failed'
+run NOTE Edit file_path "$MAIN/a.txt"                     # git names no git directories
+printf '#!/bin/sh
+case "$*" in *is-inside-work-tree*) echo true ;; *) echo --path-format=absolute; echo .git ;; esac
+' > "$STUB/git"
+WANT='named no git directories that exist'
+run NOTE Edit file_path "$MAIN/a.txt"                     # ... or names ones that do not exist
+REAL_GIT=$(command -v git)
+printf '#!/bin/sh
+case "$*" in *symbolic-ref*) echo "fatal: bad HEAD" >&2; exit 128 ;; esac
+exec "%s" "$@"
+' "$REAL_GIT" > "$STUB/git"
+WANT='git symbolic-ref failed'
+run NOTE Edit file_path "$MAIN/a.txt"                     # git cannot read the branch
+HOOK_PATH=
 
 # --- Windows spellings of the same paths (need cygpath, i.e. Git Bash / MSYS) ---
 if command -v cygpath >/dev/null 2>&1; then
