@@ -15,23 +15,31 @@
 # the other two. A relative path is taken against the payload's cwd; a Windows drive path
 # (`D:\...` or `D:/...`) is turned into the shell's form with cygpath where one is on PATH, and
 # every backslash is read as a separator. The nearest existing directory at or above the path
-# is asked, with git, whether it lies inside a working tree, and if so whether that tree is the
-# repository's main worktree (--git-dir and --git-common-dir resolve to the same directory) and
-# its current branch is main. All three -> deny, an ignored file (`.claude/settings.local.json`)
-# as much as a tracked one. So a path outside any git tree (the scratchpad, the memory
+# is asked, with git, whether it lies inside a working tree, and if so for that tree's top
+# level and its current branch. The tree is the repository's main worktree when its `.git` is a
+# directory, or a file whose `gitdir:` does not point into a `worktrees/` directory (a
+# submodule, a --separate-git-dir checkout); a linked worktree's `.git` is a file pointing
+# there. That test asks the filesystem, never compares two spellings of a path, so a path typed
+# in another letter case (`D:\git\...` for `D:\GIT\...`) or with an 8.3 short name is judged
+# the same as the canonical one. Main worktree on main -> deny, an ignored file as much as a
+# tracked one: the main checkout's `.claude/settings.local.json` cannot be edited with the file
+# tools at all while it is on main. So a path outside any git tree (the scratchpad, the memory
 # directory), a linked worktree, the main checkout on any other branch or a detached HEAD, and a
-# path inside a .git directory are all allowed.
+# path inside a .git directory are all allowed. git runs under LC_ALL=C, so the one error text
+# read below ("not a git repository") is the same under a localized git.
 #
 # Fails OPEN, as the git rules of block-destructive-git.sh do: this is an accident guard, not a
 # sandbox, and a guard that cannot decide must not stall every edit. A payload with no tool name,
-# one that names a guarded tool but yields no path, no git on PATH, or a git that fails for any
-# reason but "not a git repository" (`detected dubious ownership`, a corrupt repository) allows
-# the call -- with a note on stderr, so the guard is not silently gone. Only the answers git
-# gives on a readable repository, and "not a git repository", allow without one.
+# one that names a guarded tool but yields no path, a relative path with no cwd, no git on PATH,
+# a git that fails for any reason but "not a git repository" (`detected dubious ownership`, a
+# corrupt repository, a branch it cannot read), or a top level whose `.git` is missing or names
+# no gitdir allows the call -- with a note on stderr, so the guard is not silently gone. An --is-inside-work-tree answer other than `true` or
+# `false` is not trusted either way: the checks below still run, a main checkout on main is
+# still refused, and any allow they reach carries the note. Only the answers git gives on a
+# readable repository, and "not a git repository", allow without one.
 #
 # Known gap, accepted: a write through the shell tools (`sed -i`, a heredoc, a redirection,
-# `git checkout -- <path>`) never reaches this hook, and nothing here tries to cover it. A
-# submodule checkout reads as a main worktree of its own repository, so one on main is refused.
+# `git checkout -- <path>`) never reaches this hook, and nothing here tries to cover it.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-main-checkout-edits.sh
 
@@ -105,7 +113,8 @@ case "$path" in
   /* | [A-Za-z]:/*) ;;
   *)
     cwd=$(extract cwd)
-    [ -n "$cwd" ] || cwd=$(pwd)
+    # Not the hook's own cwd: nothing says it is the one the path was written against.
+    [ -n "$cwd" ] || note_open "could not read the cwd a relative path ($path) is taken against"
     path=$(to_shell_path "$cwd")/$path ;;
 esac
 
@@ -127,36 +136,46 @@ trap 'rm -f "$errfile"' EXIT
 # Ask git; on failure, allow silently only for "not a git repository" -- a parsed answer, the
 # path is in no working tree -- and with a note for anything else.
 ask() { # ask <git args...> -- sets $answer, or exits
-  answer=$(git -C "$dir" "$@" 2>"$errfile") && return 0
+  answer=$(LC_ALL=C git -C "$dir" "$@" 2>"$errfile") && return 0
   err=$(tr '\n' ' ' <"$errfile")
   case "$err" in *'not a git repository'*) exit 0 ;; esac
-  note_open "git $1 failed in $dir (${err% })"
+  note_open "git $* failed in $dir (${err% })"
+}
+
+# An allow the checks reach; silent unless an earlier answer could not be trusted.
+warn=
+allow() {
+  [ -z "$warn" ] || note_open "$warn"
+  exit 0
 }
 
 ask rev-parse --is-inside-work-tree
-[ "$answer" = true ] || exit 0 # inside a .git directory
+case "$answer" in
+  true) ;;
+  false) exit 0 ;; # inside a .git directory
+  *) warn="git rev-parse --is-inside-work-tree answered '$answer' in $dir, not true or false" ;;
+esac
 
-# Both directories resolved by cd, not by --path-format=absolute (git 2.31+, and an older
-# rev-parse echoes the unknown option back as if it were an answer). Either may be relative.
-ask rev-parse --git-dir --git-common-dir
-git_dir=$(printf '%s\n' "$answer" | sed -n 1p)
-common_dir=$(printf '%s\n' "$answer" | sed -n 2p)
-resolve() { (cd "$dir" 2>/dev/null && cd "$1" 2>/dev/null && pwd -P); }
-[ -n "$git_dir" ] && [ -n "$common_dir" ] &&
-  git_dir=$(resolve "$git_dir") && common_dir=$(resolve "$common_dir") &&
-  [ -n "$git_dir" ] && [ -n "$common_dir" ] ||
-  note_open "git named no git directories that exist for $dir"
-[ "$git_dir" = "$common_dir" ] || exit 0 # a linked worktree
+ask rev-parse --show-toplevel
+top=$answer
+[ -n "$top" ] || note_open "git named no top level for $dir"
+if [ -d "$top/.git" ]; then
+  : # the main worktree
+elif [ -f "$top/.git" ]; then
+  gitdir=$(sed -n 's/^gitdir:[ \t]*//p' "$top/.git" | tr '\\' '/')
+  [ -n "$gitdir" ] || note_open "$top/.git names no gitdir"
+  case "$gitdir" in */worktrees/*) allow ;; esac # a linked worktree
+  : # a submodule or --separate-git-dir checkout: the main worktree of its own repository
+else
+  note_open "git's top level $top has no .git"
+fi
 
 # symbolic-ref -q exits 1, silently, on a detached HEAD; anything else is a failure.
-if ! branch=$(git -C "$dir" symbolic-ref --short -q HEAD 2>"$errfile"); then
-  [ -s "$errfile" ] || exit 0 # a detached HEAD
+if ! branch=$(LC_ALL=C git -C "$dir" symbolic-ref --short -q HEAD 2>"$errfile"); then
+  [ -s "$errfile" ] || allow # a detached HEAD
   note_open "git symbolic-ref failed in $dir ($(tr '\n' ' ' <"$errfile"))"
 fi
-[ "$branch" = main ] || exit 0 # another branch
-
-top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
-parent=$(dirname "${top:-$dir}") # the worktrees sit beside the main checkout
+[ "$branch" = main ] || allow # another branch
 
 json_escape() {
   printf '%s' "$1" |
@@ -172,8 +191,8 @@ Reason: this path is in the repository's main checkout, $top, which is on main.
 Every unit of work is edited in its own task worktree, never in the main checkout
 ($DOC).
 
-Make the edit in the task's own worktree instead ($parent/sc-<type>-<n>, on the task
-branch); if there is none yet, create it as that step says."
+Make the edit in the task's own worktree instead ('git worktree list' shows them); if there is
+none yet, create it as that step says."
 
 printf '%s\n' "$message" >&2
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$(json_escape "$message")"
