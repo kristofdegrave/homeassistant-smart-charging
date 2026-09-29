@@ -3,7 +3,10 @@
 # The method (docs/reference/**, .claude/skills/**, .claude/agents/**, the work-type files) is
 # written to travel between repositories; this file is the part that does not. A value spelled
 # here is spelled nowhere else under docs/reference/** or .claude/**: those files name the key
-# (for example `board.fields.size.id`) and whoever runs the command resolves it here. Project
+# (for example `board.fields.size.id`) and whoever runs the command resolves it here. The
+# exceptions are `repo` in .claude/settings.json's allow-list and `autopilot.loop_marker` in the
+# loop settings file, since a settings file cannot read this one, and `autopilot.loop_settings`
+# in the start command a human copies; docs/reference/profile.md's **Autopilot loop** says why. Project
 # facts that carry a *why* — git identity, merge strategy, what a board column means — are
 # prose, in docs/reference/profile.md; this file holds only what a script or a command needs
 # verbatim.
@@ -202,9 +205,9 @@ review:
 # many issues' chains may be in flight at once, on disjoint trees. `tracking_issue` is the
 # number of the issue the `autopilot` skill logs its ticks and digests on and reads `paused`
 # from; `null` until that issue is filed, and the skill does not start without it.
-# `loop_settings` (the loop-only settings file's path) and `loop_marker` (the `env` variable
-# it sets) are filled by the permissions follow-up; the skill does not start while either is
-# `null`.
+# `loop_settings` is the loop-only settings file's path from the repository root, and
+# `loop_marker` the `env` variable it sets to `1`; what the file holds and how the loop is
+# started with it is docs/reference/profile.md's **Autopilot loop**.
 autopilot:
   auto_merge_trees:
     - custom_components/
@@ -212,8 +215,8 @@ autopilot:
     - docs/design/
   lanes: 2
   tracking_issue: null
-  loop_settings: null
-  loop_marker: null
+  loop_settings: .claude/autopilot.settings.json
+  loop_marker: SMART_CHARGING_AUTOPILOT
 
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
