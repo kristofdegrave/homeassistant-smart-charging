@@ -358,15 +358,14 @@ file.
 ## Post-mortems
 
 One dated analysis per shipped failure, at `docs/postmortems/YYYY-MM-DD-<slug>.md` — the tree
-is listed under `CLAUDE.md`'s **Document structure** topic. What a post-mortem is, which rules
-do not reach it, and how it is reviewed are this topic's.
+is listed under `CLAUDE.md`'s **Document structure** topic.
 
 ### A snapshot of reasoning at a date
 
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that.
+that. Once its changes land, it stays as the record of why.
 
 ### Two rules that apply elsewhere do not apply here
 
