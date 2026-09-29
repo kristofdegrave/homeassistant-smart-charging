@@ -120,6 +120,11 @@ The fix is then ordinary work: file it as a `development` issue and run it throu
 contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
 in that issue's row of `CLAUDE.md`'s **Model selection** table.
 
+**Record a confirmed claim on its issue** as a comment carrying `fix`'s note marker, per the
+marker rule under `CLAUDE.md`'s **Contribution workflow**: that the claim is confirmed, the one
+command and its output, and the minimal reproduction with its captured symptom. That comment is
+the reproduction the rest of the flow reads.
+
 Stop here and report:
 
 1. **Confirmed or refuted**, with the one command and its output.

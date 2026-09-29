@@ -42,27 +42,28 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
 ## Entry 1 — draft, pass, park
 
 1. **Confirm the gate.** The `decompose` issue has no open blocked-by edge — the epic's
-   artifact issues merged — and the scope's source exists:
-   - **Bug track** — an epic labelled `bug` or `enhancement` (`CLAUDE.md`'s **Issue
-     conventions**): the routed issue its body links holds a confirmed `diagnosing-bugs`
-     reproduction.
-   - **Otherwise**: the scope names plan task ids, each in `docs/design/project-plan.md` on
-     `origin/main`.
+   artifact issues merged — and the source of the epic's track, by its kind label
+   (`CLAUDE.md`'s **Issue conventions**), exists:
+   - **New behaviour**: the scope names plan task ids, each in `docs/design/project-plan.md`
+     on `origin/main`.
+   - **`bug`**: a comment on the routed issue its body links, under the session's login with
+     `fix`'s note marker, states the `diagnosing-bugs` reproduction confirmed.
+   - **`enhancement`**: its merged `requirement`/`uc` change, one of those issues.
 
    An open edge or a missing source → stop and report which, the issue not moved: picked too
    early. Met → move it to *in progress*, never *in review* (**Project board**, under
    `CLAUDE.md`'s **Contribution workflow**).
-2. **Read the sources**: the epic body as it stands (*Decisions so far*, the scope); the plan
-   slice — on the bug track, that reproduction and *Decisions so far*'s fix; the services of
-   `docs/design/system-design.md`, the analysis documents and accepted ADRs it touches.
-   Derive the slice boundary and the deferrals from them.
+2. **Read the sources**: the epic body (*Decisions so far*, the scope); the track's source,
+   with the fix or decisions *Decisions so far* records and any plan slice the strand's
+   design change added; the `docs/design/system-design.md` services, analysis documents and
+   accepted ADRs the source touches. Derive the slice boundary and the deferrals from them.
 3. **Draft the body** — the closing step's step 1. What the body carries, a task entry's keys,
    *Derive, don't design* and its three cases for a behavioural rule are that step's, applied
    as written. Keep *Decisions so far* in place. Write the body to the epic (**Tracker
    mechanics**, *Rewriting a work item's body*) and read it back.
 4. **Run the pass** — step 2. Write the body to a scratch file and spawn the `reviewer`
-   agent **once**, naming the file's absolute path and the checklist `CLAUDE.md`'s
-   **Decomposition checklist** topic routes to. Fix every finding in the body itself, save
+   agent **once**, naming the file's absolute path, the epic's track and the checklist
+   `CLAUDE.md`'s **Decomposition checklist** topic routes to. Fix every finding in the body itself, save
    what *Out of the body* sends elsewhere, then read the body back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
    *Applying a label*, with its read-back), then post the executive summary on the epic as
@@ -70,8 +71,7 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
    parts, one `##` each, none omitted — `none` and why where a part is empty:
    - **What the slice builds** — scope and success criteria.
    - **What it defers** — every deferral; a safety-relevant one flagged as a known deviation.
-   - **What it derives from** — the plan slice, the design services, the analysis documents
-     and the ADRs, by identifier.
+   - **What it derives from** — step 2's sources for the track, by identifier.
    - **What the pass found and how it was fixed** — one line per Critical or Major and its
      fix, or its *Out of the body* issue; the Minor and Nit count.
    - **The children it will file** — one line per task: id, title, Size.
@@ -82,9 +82,8 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
 
 ### Out of the body
 
-Each case *Derive, don't design* sends elsewhere — a disagreeing source, a rule no document
-states, a service or call direction the design does not name — met while drafting (step 3) or
-in a finding of the pass (step 4):
+Each case *Derive, don't design* sends elsewhere, met while drafting (step 3) or in a finding
+of the pass (step 4):
 
 - **File it** against the owning document (`file-task-issue`).
 - **The unstated rule** keeps its text: park, naming the issue in the summary.

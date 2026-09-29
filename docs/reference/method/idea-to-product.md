@@ -228,13 +228,14 @@ filing checklist is `file-task-issue`'s.
    body* stop gets its own.
 4. **The children are filed**, in build order, one issue per task.
 
-**Derive, don't design.** The body turns one approved slice of `project-plan.md` — on the bug
-track, the verified defect: the `diagnosing-bugs` reproduction and the fix brainstormed on the
-routed issue — into concrete files, functions and tests, citing the analysis documents and the
-ADRs rather than restating or overriding them. A service or call direction the design does not
-already name is not invented here: it is an issue against the design document, run through that
-document's own issue-first cycle, and the draft resumes after. Before writing a **behavioural**
-rule into the body, read the document that owns it and act on which of three cases it is:
+**Derive, don't design.** The body turns one approved slice of `project-plan.md` — on a `bug`
+epic, the `diagnosing-bugs` reproduction, on an `enhancement` one the `requirement`/`uc` change,
+each with the fix or decisions *Decisions so far* records and any design change's slice — into
+concrete files, functions and tests, citing the analysis documents and the ADRs rather than
+restating or overriding them. A service or call direction the design does not already name is
+not invented here: it is an issue against the design document, and the draft resumes after.
+Before writing a **behavioural** rule into the body, read the document that owns it and act on
+which of three cases it is:
 
 - **It says the same thing** — a duplicate. Cut it and cite the source.
 - **No document says it** — the body would hold the only copy. Keep the text as it stands,
