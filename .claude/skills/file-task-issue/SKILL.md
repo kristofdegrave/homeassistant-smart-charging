@@ -59,7 +59,7 @@ Which issues an epic gets at the flow's opening pass, their order and their edge
 that order, a `decompose` child's blocked-by edges each name an issue that already exists, so
 they go on as flags of its create call. Each goes through the
 checklist at the top of this file. Done when every edge the flow names for them reads back, and
-the epic's one per child.
+the epic's blocked-by edge to each of them.
 
 ## Filing the children of a decomposition
 

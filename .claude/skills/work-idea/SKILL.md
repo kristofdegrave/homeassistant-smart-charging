@@ -39,8 +39,8 @@ Its issue comments follow the marker rule under `CLAUDE.md`'s **Contribution wor
    new-behaviour track this step does not apply.
 5. **Settle whether the strand needs an epic, and whether its body will carry a spec** — the
    flow document says when each is required — by track, and by whether **Brainstorm** settled
-   any `development` or `testing` task — and which analysis change cannot be approved until
-   that epic exists. Where an epic is required, it is what step 6 files, and any spec is
+   that the strand has no `development` or `testing` task — and which analysis change cannot be
+   approved until that epic exists. Where an epic is required, it is what step 6 files, and any spec is
    written into its body in the closing step below rather than drafted later as a separate
    artifact. Record the answer on the issue either way, that task question included, so it is
    not re-argued.

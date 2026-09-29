@@ -171,7 +171,8 @@ move into its body under *Decisions so far* (**Brainstorm** above).
 
 Whether the strand needs an epic is settled here and written on the issue:
 
-- **New behaviour**: always an epic, so there is always a body for a spec it carries.
+- **New behaviour**: always an epic, so there is always a body for its spec, where it carries
+  one.
 - **Bug track**: an epic only when brainstorming yields more than one slice. A one-slice fix
   goes straight from the routed issue to work.
 - **A single-artifact idea**: no epic, so no spec and no closing step — one issue, filed
@@ -187,9 +188,9 @@ covers which label such a child takes.
 labelled `decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
 `documentation` issue the pass filed. The one exception is a **method epic**, a change to the
 method itself — one whose strand was settled at **Brainstorm** to have no `development` or
-`testing` task, every task (at least one) a `workflow` issue this pass files beside any `adr`,
-`uc`, `requirement` and `documentation` issue. It needs no spec, so it gets no `decompose`
-child and no closing step. Every other epic is an epic with a spec.
+`testing` task, every task (at least one) a `workflow` issue this pass files beside any `adr`
+or `documentation` issue, or a `uc`/`requirement` change touching no shipped behaviour. It
+needs no spec, so it gets no `decompose` child and no closing step. Every other epic is an epic with a spec.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.

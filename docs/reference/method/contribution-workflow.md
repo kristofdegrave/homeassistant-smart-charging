@@ -86,6 +86,8 @@ question with no issue to park on, in its shape.
 
 ## Rounds and the cap
 
+- **The cap exists because the chain runs through with no check-in** (**Rule B**): a finding no fix
+  resolves would otherwise loop forever.
 - **One pass posts one review**, however many reviewer agents it ran. The first review pass is
   round 1.
 - **The cap starts at `.claude/profile.yml`'s `review.interactive_cap`** review passes, counted
@@ -135,10 +137,9 @@ decide. Both PR exits have one actor: the **review step**, at the end of its pas
 clean pass it applies `needs-approval` alone, removing a stale `needs-decision`.
 After the last pass the cap allows, with Critical or Major still open and no round
 self-granted, it applies `needs-decision` **alongside** `needs-approval` and posts the one
-escalation comment **Rounds and the cap** describes, so a capped PR is told from a clean one
-and `needs-approval` keeps one meaning. No other step or skill applies either label to a PR,
-bar the session putting one on hold (below), which a checklist's exit check can also do at the
-exit.
+escalation comment **Rounds and the cap** describes. No other step or skill applies either
+label to a PR, bar the session putting one on hold (below), which a checklist's exit check can
+also do at the exit.
 Neither label is a merge (**Merge and issue closing** below).
 
 On a PR, a human item (**Rounds and the cap** above) posted **while** either label is on makes it
@@ -337,11 +338,12 @@ shared with the human partner**.
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
-number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying
-only a kind label** (`bug`, `enhancement`) has no context label to name the branch, so the
-kind label itself is the segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the
-shipped-behaviour track's defined segment. Earlier branches used `dev/` and `fix/`; both
-spellings are historical, not alternatives (`development/<n>` keeps its meaning above). When
+number is the GitHub issue number; a `decompose` issue makes no branch, nor an epic. **An
+issue carrying only a kind label** (`bug`, `enhancement`) has no context label to name the
+branch, so the kind label itself is the segment: `bug/<issue-number>` or
+`enhancement/<issue-number>` — the shipped-behaviour track's defined segment. Earlier branches
+used `dev/` and `fix/`; both spellings are historical, not alternatives (`development/<n>`
+keeps its meaning above). When
 both axes are present the **context label wins**. If extra work on the same issue needs a
 second PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`.
 
@@ -382,5 +384,4 @@ accuracy** — a post-mortem is an argument built entirely from quotes, so a quo
 inaccurate, truncated so its meaning changes, or mined from a context that would undercut the
 point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
-No reviewer checklist applies to the post-mortem itself: all are written against artifacts
-that assert behaviour, and none fits a narrative document.
+No reviewer checklist applies to the post-mortem itself.
