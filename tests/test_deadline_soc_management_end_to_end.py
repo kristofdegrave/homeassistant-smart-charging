@@ -379,35 +379,17 @@ async def test_should_start_without_a_pursued_occurrence_when_the_entry_reloads_
     assert reloaded._pursued_occurrence is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=AssertionError,
-    reason=(
-        "#1178 -- closed as an analysis decision (ADR-0042); the code fix is T13, tracked in "
-        "epic #1183, not yet filed as its own issue"
-    ),
-)
 async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_mid_hold(
     hass, freezer
 ):
     """T5's deviation guard (design doc's *Deliberate deferrals*): R5's AC states a cycle on
     which state of charge is unavailable "ends no occasion" -- it must neither notify nor
-    re-arm. The shipped non-resolvable early return does not yet distinguish its two halves for
-    the *event* (only for the pursued occurrence, D-5/T4) -- ADR-0024's stale exit-table row
-    fires `DeadlineUnreachableCleared` on this cycle regardless, which wrongly re-arms M3's
-    latch and delivers a second notice for the same occasion once the reading returns and the
-    hold is still in effect.
-
-    `strict=True`: T13 (D-9) builds the fix and removes this marker in the same commit; a plain
-    xfail would XPASS silently once that lands, and `xfail_strict` is not set project-wide
-    (T12's own integration checkpoint greps for exactly that). Same public-route hold entry as
-    this file's other two-notice tests above.
-
-    `raises=AssertionError` narrows the xfail to a failing assertion rather than any error, but
-    does not itself distinguish which assertion -- the Arrange guards below share the same
-    exception type as the intended re-arm failure. The two sibling tests above pin the same
-    Arrange, so a regression there would show up as a failure there first, not as a
-    silently-wrong xfail here."""
+    re-arm. T13 (D-9) builds the fix: this is a genuine mid-hold cycle (the pursued occurrence
+    has already elapsed), so ADR-0053's table row 1 applies -- the non-resolvable early return
+    now reports `unreachable=True` off the clock alone, with no reading needed, so
+    `DeadlineUnreachableEdge` sees True stay True and fires no clear (never re-arming M3's
+    latch) rather than the pre-fix `unreachable=False` wrongly clearing and re-arming it. Same
+    public-route hold entry as this file's other two-notice tests above."""
     # Arrange -- engage, then cross the departure time into a genuine hold; the occasion's one
     # notice already delivered.
     freezer.move_to("2026-01-17 12:00:00")  # Saturday: no compiled default to latch on
