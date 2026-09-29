@@ -388,15 +388,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
     async def _read_cycle_inputs(self) -> tuple[str, float, float, float] | None:
         """Steps 1 and 3 (ADR-0006): read the three required adapters and resolve voltage (NF4's
         fallback -- the one role where a None reading is not a fault). Returns None on a missing
-        required adapter; _run_cycle performs the actual fault CycleResult itself, keeping
-        ADR-0007's single fault-handling code path in _run_cycle rather than scattered across
-        extracted methods (ADR-0023). Also caches each read role's value into
+        required adapter; `_run_cycle`'s own required-role fault exit (`_fault_required_role`)
+        builds the actual fault `CycleResult`, keeping ADR-0007's single fault-handling code
+        path to one exit per fault kind (ADR-0023/ADR-0046) rather than scattered across
+        extracted methods. Also caches each read role's value into
         `self._role_readings` (ADR-0021) -- the three required reads cache directly here,
         grid voltage's and solar power's optional reads cache inside `_read_role` (issue #717,
-        #911). `_run_cycle`
-        decides whether to advance `self._role_readings_at`, since that depends on whether
-        this cycle succeeded as a whole (the required-adapter read succeeding is necessary
-        but not sufficient, #648)."""
+        #911). `_finish_successful_cycle` decides whether to advance
+        `self._role_readings_at`, since that depends on whether this cycle succeeded as a
+        whole (the required-adapter read succeeding is necessary but not sufficient, #648)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -419,19 +419,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return None
         return status, net_w, charger_w, voltage
 
-    async def _resolve_deadline_and_reserve(
-        self, ctx: CycleContext, now_dt: datetime
-    ) -> tuple[time_of_day | None, Callable[[date], time_of_day | None]]:
+    async def _resolve_deadline_and_reserve(self, ctx: CycleContext) -> None:
         """R14's departure-external/sun/low-tariff reads and the date-parameterised deadline
         table, plus R9's solar-reserve-cap gating (resolve_solar_reserve_gate,
         coordinator_cycle.py) -- the two are resolved together because R9's gate needs the
         reserved day's deadline, this same block's own result. Mutates ctx.sun_is_up/
         ctx.sun_is_down/ctx.low_tariff_active/ctx.solar_reserve_active in place (ADR-0012's
-        existing "assign onto ctx as each value resolves" pattern) and returns
-        (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use. deadline_tomorrow
-        has exactly one consumer -- R15's next-occurrence rule (issue #1005), which needs
-        calendar tomorrow whatever R9's own lookahead does -- and stays calendar tomorrow on
-        purpose (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
+        existing "assign onto ctx as each value resolves" pattern) and assigns onto
+        ctx.deadline_tomorrow/ctx.resolve_deadline_for itself, returning nothing -- read by
+        `_resolve_deadline_urgency_step`, two calls later, so ADR-0046's Decision, item 1 puts
+        them here rather than as `_run_cycle` locals. deadline_tomorrow has exactly one
+        consumer -- R15's next-occurrence rule (issue #1005), which needs calendar tomorrow
+        whatever R9's own lookahead does -- and stays calendar tomorrow on purpose
+        (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
         (`resolve_reserved_day`, coordinator_cycle.py), a separate call through the same
         closure, so a future change to either one cannot silently move the other's date with
         it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) and
@@ -452,6 +452,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         one per date, so each reads the home-day flag for its own date and none can leak into
         another -- which is what fixes the flag set in the evening for tomorrow also
         overriding today's resolution."""
+        now_dt = ctx.now_dt
         # Computed separately from the _read_role call below, not redundant with it:
         # resolve_deadline_for's `external_configured` param needs "role configured" as its
         # own signal, distinct from "value is None" -- a distinction `_read_role`'s single
@@ -518,9 +519,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             forecast_today_kwh if now_dt.date() == reserved_day else forecast_kwh
         )
         # R9's sixth precondition (resolution-rules.md): read as it stood ENTERING this cycle,
-        # before the urgency call (`resolve_deadline_urgency`, called further down in
-        # `_run_cycle`) may release it this same cycle -- this runs well before that call, so no
-        # ordering trick is needed to keep the two apart.
+        # before the urgency call (`resolve_deadline_urgency`, called from
+        # `_resolve_deadline_urgency_step`, a later named step in `_run_cycle`) may release it
+        # this same cycle -- this runs well before that call, so no ordering trick is needed to
+        # keep the two apart.
         missed_deadline_hold = (
             self._pursued_occurrence is not None and self._pursued_occurrence <= now_dt
         )
@@ -533,7 +535,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             deadline_reserved_day_resolved=deadline_reserved_day is not None,
             missed_deadline_hold=missed_deadline_hold,
         )
-        return deadline_tomorrow, resolve_deadline_for
+        ctx.deadline_tomorrow = deadline_tomorrow
+        ctx.resolve_deadline_for = resolve_deadline_for
 
     async def _read_deadline_urgency_inputs(
         self,
@@ -609,229 +612,277 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return resolve_deadline_for(self._pursued_occurrence.date())
 
     async def _run_cycle(self) -> CycleResult:
+        """ADR-0006's ten ordered steps, ADR-0046's named-step composition: every step below is
+        one call, its result a field on `ctx` when more than one later step reads it, or a
+        local passed to the one call that does. The two fault exits are a sentinel test and a
+        literal `return` of the result the exit's own step builds (ADR-0007's single fault path);
+        every other branch, and every event fired from this cycle, lives inside the named step
+        that decides it, never here."""
         await self._read_owned_entities()
-        now_dt = dt_util.now()
+        now_dt = dt_util.now()  # read by _build_cycle_context alone; others read ctx.now_dt
         inputs = await self._read_cycle_inputs()
         if inputs is None:
-            self._enter_fault("required adapter returned None")
-            await self._write(0.0)
-            # `_role_readings_at` deliberately does NOT advance to `now_dt` here --
-            # ADR-0021 and entity-catalog.md's `sensor.smart_charging_adapter_readings` row
-            # define the entity's own state as the timestamp of
-            # the LAST SUCCESSFUL cycle, and a required-role fault means this cycle wasn't one;
-            # the cache keeps whichever timestamp a prior successful cycle set, even though the
-            # per-role values `_read_cycle_inputs` just cached are this cycle's own (possibly
-            # None) readings. `self._unreachable_edge`'s prior flag is held for the same reason
-            # (ADR-0024): this return sits upstream of its call site below, so a fault cycle
-            # never reaches it and must not be treated as a genuine resolve.
-            return CycleResult(
-                commanded_current=0.0,
-                fault=True,
-                active_mode=self.active_mode,
-                adapter_readings=self._current_adapter_readings(),
-                adapter_readings_at=self._role_readings_at,
-            )
+            return await self._fault_required_role()
         status, net_w, charger_w, voltage = inputs
+        baseline_w = self._debounce_baseline(net_w, charger_w)
+        ctx = self._build_cycle_context(status, net_w, charger_w, voltage, now_dt, baseline_w)
+        self._resolve_solar_surplus(ctx)
+        await self._resolve_monthly_peak(ctx)
+        self._reset_mode_state_if_changed()
+        await self._read_ev_soc(ctx)
+        ev_soc_fault = self._ev_soc_fault(ctx)
+        if ev_soc_fault:
+            return await self._fault_ev_soc(ctx)
+        self._smooth_household_baseline(ctx)
+        self._step_up_gate.resolve(
+            profile=self.active_profile,
+            mode_is_solar=self._mode_handlers[self.active_mode].is_solar_mode,
+            status=ctx.status,
+            soc=ctx.ev_soc,
+            default_limit=self.soc_limit_override,
+            step_threshold_pp=self._config.solar_step_threshold_pp,
+            step_pp=self._config.solar_step_pp,
+            max_solar_soc=self._config.max_solar_soc,
+        )
+        await self._resolve_deadline_and_reserve(ctx)
+        self._resolve_active_soc_limit(ctx)
+        self._resolve_auto_dispatchable(ctx)
+        await self._resolve_deadline_urgency_step(ctx)
+        self._resolve_deadline_bookkeeping(ctx)
+        self._maybe_apply_auto_mode(ctx)
+        self._reset_mode_state_if_changed()
+        self._resolve_effective_peak_limit(ctx)
+        desired = self._dispatch_mode(ctx)
+        desired = self._apply_peak_clamp(ctx, desired)
+        desired = self._apply_grid_ceiling_clamp(ctx, desired)
+        desired = apply_floor_cap(  # E8 invariant last
+            desired, min_a=self._config.min_current, max_a=self._config.max_current
+        )
+        await self._write(desired)
+        return self._finish_successful_cycle(ctx, desired)
 
-        # Issue #990: debounce the raw (net_w - charger_w) baseline once here, before it feeds
-        # solar_surplus_w/peak_headroom_a/apply_peak_clamp below -- a single source of truth so
-        # all three stay in lockstep and none can transiently see the inflated (undebounced)
-        # reading the others already reject. See debounce_baseline_w's own docstring.
-        # ADR-0039: `command_changed` describes the write at the end of the PREVIOUS cycle -- the
-        # one this cycle's `charger_w` may not have caught up with -- so it is read here, before
-        # this cycle's own `_write` overwrites it.
+    async def _fault_required_role(self) -> CycleResult:
+        """ADR-0007/ADR-0046: the required-adapter fault exit's own step -- logs the fault,
+        forces the 0 A write, and builds the fault `CycleResult` itself, so `_run_cycle`'s body
+        holds only the sentinel test and the literal return (ADR-0046's body rule, item 2).
+
+        `_role_readings_at` deliberately does NOT advance to this cycle's timestamp -- ADR-0021
+        and entity-catalog.md's `sensor.smart_charging_adapter_readings` row define the entity's
+        own state as the timestamp of the LAST SUCCESSFUL cycle, and a required-role fault means
+        this cycle wasn't one; the cache keeps whichever timestamp a prior successful cycle set,
+        even though the per-role values `_read_cycle_inputs` just cached are this cycle's own
+        (possibly None) readings. `self._unreachable_edge`'s prior flag is held for the same
+        reason (ADR-0024): this exit sits upstream of its call site, so a fault cycle never
+        reaches it and must not be treated as a genuine resolve."""
+        self._enter_fault("required adapter returned None")
+        await self._write(0.0)
+        return CycleResult(
+            commanded_current=0.0,
+            fault=True,
+            active_mode=self.active_mode,
+            adapter_readings=self._current_adapter_readings(),
+            adapter_readings_at=self._role_readings_at,
+        )
+
+    def _debounce_baseline(self, net_w: float, charger_w: float) -> float:
+        """Issue #990: debounces the raw `net_w - charger_w` baseline once, before it feeds
+        `solar_surplus_w`/`peak_headroom_a`/`apply_peak_clamp` -- a single source of truth so
+        all three stay in lockstep and none can transiently see the inflated (undebounced)
+        reading the others already reject. ADR-0039: `command_changed` describes the write at
+        the end of the PREVIOUS cycle, read here before this cycle's own `_write` overwrites it.
+        Named as its own step (ADR-0046) since its result feeds `CycleContext`'s construction
+        directly, right after this call."""
         baseline_w, self._baseline_debouncer = debounce_baseline_w(
             net_w - charger_w,
             self._baseline_debouncer,
             debounce_cycles=BASELINE_DEBOUNCE_CYCLES,
             command_changed=self._command_stepped,
         )
+        return baseline_w
 
-        # entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary -- raw
-        # net_w, deliberately distinct from `surplus_w`
-        # below (R10's smoothed control-path value). Floored at 0: a negative reading here
-        # would mean the household is drawing more than the charger, never actual solar
-        # surplus (glossary) -- max(), not the debounce above, is the boundary for that (issue
-        # #990's Direction section: the two are separate concerns).
-        solar_surplus_w = max(-baseline_w, 0.0)
-
-        # Peak-Demand Tracker (E5) + effective-peak-limit resolution (E5) --
-        # runs every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Uses
-        # real wall-clock (`now_dt`, read at the top of `_run_cycle`) for month rollover,
-        # distinct from the monotonic `now` the mode state machines use below.
-        monthly_peak_kw = self._peak_demand.update(
-            net_w, now_dt, window_size=self._config.peak_window_size
-        )
-        # ADR-0030/ADR-0032: an optional external monthly-peak reading (DSO/smart-meter),
-        # merged with the internally-tracked value into the clamp's operand. Never gated on
-        # captar_available -- R21 AC7 (tracking runs every cycle regardless of which
-        # capabilities are declared) requires the value to still be tracked and surfaced for
-        # observability even when the CapTar capability is absent, though
-        # `_peak_clamp_would_run`'s own gate
-        # (R3 AC1, issue #1018) means no charging decision ends up consulting it in that case.
-        # monthly_peak_kw itself keeps meaning only the internally-tracked peak: it is
-        # never overwritten with the merged value, so a live spike this integration observes
-        # between external-sensor refreshes is not discarded.
-        external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)
-        peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)
-        # Fallback for the ev_soc-fault early return below, where real urgency can't yet be
-        # known -- overwritten with the real `urgent` value once required-current resolves.
-        effective_peak_limit_kw = resolve_effective_peak_limit(
-            peak_operand_kw,
-            self._config.max_peak_kw,
-            self._config.peak_floor_kw,
-            urgent=False,
-        )
-        # R11: catches a Manual mode change here (already final -- set externally before this
-        # cycle runs), before the baseline-mode dry run below reads _mode_state, so that dry
-        # run sees fresh state on the very cycle the user switches modes. Idempotent -- a no-op
-        # if nothing has changed yet, which is always true for Auto at this point (its own mode
-        # isn't resolved until later, below); the same check runs again after that resolution,
-        # to catch an Auto mode change too.
-        self._reset_mode_state_if_changed()
-
-        # ev_soc is read whenever the car is connected and the role is configured -- the
-        # deadline-urgency comparison needs it regardless of mode (R5 is cross-cutting), not
-        # only while a solar mode or Captar is selected. Its absence is only ever a FAULT while
-        # a solar mode or Captar is selected AND the car is connected (Power/Off must not
-        # regress to needing an SOC sensor; a disconnected car is a clean idle
-        # stop, not a fault, even if its SOC sensor also goes unavailable on unplug, per UC01/R7);
-        # outside that gate a missing reading just means deadline urgency can't be computed this
-        # cycle (below), not a fault.
-        ev_soc = await self._read_role(ROLE_EV_SOC) if status in CHARGEABLE_STATES else None
-        if (
-            self._mode_handlers[self.active_mode].is_soc_gated
-            and status in CHARGEABLE_STATES
-            and ev_soc is None
-        ):
-            self._enter_fault(
-                "ev_soc required while a solar mode is active but missing/None",
-                clear_baseline_deferral=False,
-            )
-            await self._write(0.0)
-            # `_role_readings_at` deliberately does NOT advance to `now_dt` here -- same
-            # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
-            # cycle" reasoning as the
-            # required-role fault path above (#648): an ev_soc fault means this cycle wasn't
-            # a successful one, even though the three required-adapter reads that fed
-            # `solar_surplus_w`/`monthly_peak_kw` above did succeed. (The assignment itself
-            # now lives at the very end of a successful cycle, see the comment there.)
-            # `self._unreachable_edge`'s prior flag is held for the same reason (ADR-0024):
-            # this return also sits upstream of its call site below.
-            return CycleResult(
-                commanded_current=0.0,
-                fault=True,
-                active_mode=self.active_mode,
-                monthly_peak_kw=monthly_peak_kw,
-                effective_peak_limit_kw=effective_peak_limit_kw,
-                solar_surplus_w=solar_surplus_w,
-                adapter_readings=self._current_adapter_readings(),
-                adapter_readings_at=self._role_readings_at,
-            )
-
-        # __init__.py's SmartChargingConfig already applies DEFAULT_SMOOTHING_WINDOW for a
-        # pre-solar config entry that predates this option; smoothing runs every cycle
-        # regardless of mode.
-        # Issue #1329/R10: folds `net_w - charger_w` -- the household's own load, independent
-        # of what the charger itself drew -- into the window, so Solar/SolarOnly's set-point
-        # settles under steady inputs. `command_changed=self._command_stepped` is the same
-        # signal `debounce_baseline_w` above already reads for R3 (ADR-0039). See
-        # `smooth_household_baseline`'s own docstring for the full reasoning.
-        smoothed_household_w, self._household_window = smooth_household_baseline(
-            net_w - charger_w,
-            self._household_window,
-            size=self._config.smoothing_window,
-            command_changed=self._command_stepped,
-        )
-        surplus_w = -smoothed_household_w  # shared by Solar/SolarOnly dispatch below and the
-        # baseline-mode dry-run.
-        now = self.hass.loop.time()  # injected, not read inside modes/engines
-        # ADR-0012: carries this cycle's readings/derived values into the ModeHandler registry
-        # lookup below, replacing the loose local variables the old dispatch chain threaded by
-        # hand. Filled progressively as later steps resolve each remaining value -- not
-        # everything is known yet at this point in the cycle.
-        ctx = CycleContext(
+    def _build_cycle_context(
+        self,
+        status: str,
+        net_w: float,
+        charger_w: float,
+        voltage: float,
+        now_dt: datetime,
+        baseline_w: float,
+    ) -> CycleContext:
+        """ADR-0046: `_run_cycle`'s one construction of its `CycleContext`, right after the
+        required-role read succeeds -- from the required reads, the debounced baseline computed
+        just before it, and the cycle's clock readings. Building it here, above every state the
+        two fault exits hold, means neither fault exit moves anything a fault cycle must leave
+        untouched. Every field a later step resolves (`ev_soc`, the smoothed baseline, the
+        active SOC limit, ...) starts at its dataclass default and is written onto this same
+        instance as that step runs -- never held as a second, separate local (issue #719/#564).
+        R11/issue #757: `has_charged` is already known at this point (it isn't resolved this
+        cycle), so it is threaded in at construction rather than assigned later."""
+        return CycleContext(
             status=status,
             net_w=net_w,
             charger_w=charger_w,
             voltage=voltage,
-            now=now,
+            now=self.hass.loop.time(),  # injected, not read inside modes/engines
             baseline_w=baseline_w,
-            # Issue #1189/T10: the same admitted mean `surplus_w` above negates -- both of
-            # `_escalated_maximum_permitted_rate_a`'s baseline-dependent bounds fit to it, in
-            # household sign (surplus_w is negated, this is not).
-            smoothed_baseline_w=smoothed_household_w,
-            ev_soc=ev_soc,
-            surplus_w=surplus_w,
-            # R11/issue #757: mirrors this cycle's has-charged flag onto ctx so
-            # _SolarModeHandler/_SolarOnlyModeHandler (coordinator_cycle.py) can read it without
-            # either the ModeHandler Protocol or CycleContext's construction elsewhere needing
-            # to know about it -- _dispatch_mode (below) flips self._has_charged itself, off
-            # this same ctx's is_solar_mode/new-state-phase check.
             has_charged=self._has_charged,
-        )
-        # R8 is Auto-only, like R9's reserve cap (resolution-rules.md) -- computed fresh every
-        # cycle from THIS cycle's active_profile and active_mode. Under Manual, active_mode is
-        # already this cycle's final value (set externally before the cycle runs); under Auto,
-        # it's still the PRIOR cycle's resolved mode here (Auto's own mode isn't resolved until
-        # later, below) -- one cycle of lag, which is what R16 allows an Auto-driven mode
-        # change ("takes effect within the next control cycle").
-        # ADR-0023: SolarStepUpGate computes is_solar_mode_charging internally from these same
-        # inputs and mutates its own `.state` in place; callers read `.state` afterward.
-        self._step_up_gate.resolve(
-            profile=self.active_profile,
-            mode_is_solar=self._mode_handlers[self.active_mode].is_solar_mode,
-            status=status,
-            soc=ev_soc,
-            default_limit=self.soc_limit_override,
-            step_threshold_pp=self._config.solar_step_threshold_pp,
-            step_pp=self._config.solar_step_pp,
-            max_solar_soc=self._config.max_solar_soc,
+            now_dt=now_dt,
         )
 
-        # R5/R14/R15: `today_date` stays inline -- _read_deadline_urgency_inputs (below)
-        # needs it as a parameter; only `tomorrow_date` moved into
-        # _resolve_deadline_and_reserve (ADR-0023).
-        today_date = now_dt.date()
-        deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(
-            ctx, now_dt
-        )
-        active_soc_limit = self._resolve_active_soc_limit(ctx)
+    def _resolve_solar_surplus(self, ctx: CycleContext) -> None:
+        """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary -- raw
+        net_w, deliberately distinct from `ctx.surplus_w` (R10's smoothed control-path value).
+        Floored at 0: a negative reading here would mean the household is drawing more than the
+        charger, never actual solar surplus (glossary) -- max(), not the debounce ctx.baseline_w
+        feeds, is the boundary for that (issue #990's Direction section: the two are separate
+        concerns). Assigns onto `ctx.solar_surplus_w` itself and returns nothing, the file's
+        one ctx-write convention."""
+        ctx.solar_surplus_w = max(-ctx.baseline_w, 0.0)
 
-        # `auto_dispatchable` is also this cycle's own gate for actually resolving Auto's
-        # active mode below -- computed once here and reused there (and inside
-        # resolve_deadline_urgency), rather than repeating the same conjunction, so the two
-        # can never drift apart. When it's False (disconnected, or Auto with no ev_soc role
-        # mapped at all), Auto simply keeps whatever active_mode it last resolved -- a
-        # deliberate, scope-truthful simplification, same as required-current's own guard
-        # inside resolve_deadline_urgency.
-        # This `active_profile` check is deliberately NOT routed through the ADR-0017
-        # PROFILE_POLICIES registry: it decides WHETHER mode selection dispatches this cycle
-        # at all, not WHICH mode is selected -- the one decision ADR-0017's Context scopes to
-        # the registry. The actual selection (both the baseline and the real call) already
-        # goes through PROFILE_POLICIES[PROFILE_AUTO].select(...) in resolve_deadline_urgency,
-        # gated by this same flag.
-        auto_dispatchable = (
+    async def _resolve_monthly_peak(self, ctx: CycleContext) -> None:
+        """Peak-Demand Tracker (E5) + the clamp's merged operand (ADR-0030/ADR-0032) -- runs
+        every cycle regardless of mode (R3's bookkeeping is not Captar-specific). Never gated on
+        captar_available -- R21 AC7 (tracking runs every cycle regardless of which capabilities
+        are declared) requires the value to still be tracked and surfaced for observability even
+        when the CapTar capability is absent, though `_peak_clamp_would_run`'s own gate (R3 AC1,
+        issue #1018) means no charging decision ends up consulting it in that case.
+        `monthly_peak_kw` keeps meaning only the internally-tracked peak: it is never
+        overwritten with the merged value, so a live spike this integration observes between
+        external-sensor refreshes is not discarded. Assigns onto `ctx.monthly_peak_kw`/
+        `ctx.peak_operand_kw` itself and returns nothing, the file's one ctx-write convention."""
+        monthly_peak_kw = self._peak_demand.update(
+            ctx.net_w, ctx.now_dt, window_size=self._config.peak_window_size
+        )
+        external_peak_kw = await self._read_role(ROLE_MONTHLY_PEAK_EXTERNAL)
+        ctx.monthly_peak_kw = monthly_peak_kw
+        ctx.peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)
+
+    async def _read_ev_soc(self, ctx: CycleContext) -> None:
+        """ev_soc is read whenever the car is connected and the role is configured -- the
+        deadline-urgency comparison needs it regardless of mode (R5 is cross-cutting), not only
+        while a solar mode or Captar is selected. Assigns onto `ctx.ev_soc` itself and returns
+        nothing, the file's one ctx-write convention."""
+        ctx.ev_soc = await self._read_role(ROLE_EV_SOC) if ctx.status in CHARGEABLE_STATES else None
+
+    def _ev_soc_fault(self, ctx: CycleContext) -> bool:
+        """C5: whether this cycle must fault for a missing `ev_soc` -- required only while a
+        solar mode or Captar is selected AND the car is connected (Power/Off must not regress to
+        needing an SOC sensor; a disconnected car is a clean idle stop, not a fault, even if its
+        SOC sensor also goes unavailable on unplug, per UC01/R7); outside that gate a missing
+        reading just means deadline urgency can't be computed this cycle, not a fault. Returns
+        the fault exit's own sentinel (ADR-0046's body rule, item 1: "a fault test's sentinel is
+        a local the test reads")."""
+        return (
+            self._mode_handlers[self.active_mode].is_soc_gated
+            and ctx.status in CHARGEABLE_STATES
+            and ctx.ev_soc is None
+        )
+
+    async def _fault_ev_soc(self, ctx: CycleContext) -> CycleResult:
+        """C5's second fault exit's own step (ADR-0046) -- logs the fault (never clearing the
+        baseline deferral: this exit always sits after `_debounce_baseline` already ran this
+        cycle, so a `deferred_previous=True` reaching here was set by that same cycle's own,
+        legitimate call and must survive the fault exactly as an ordinary cycle would, #1380),
+        forces the 0 A write, and resolves the provisional (non-urgent) effective peak limit
+        itself for this result -- ADR-0046's own decision: this fault is that limit's only
+        consumer at this point in the cycle, so `_run_cycle`'s body never carries a provisional
+        local the success path does not need. `_role_readings_at` deliberately does NOT advance
+        -- same ADR-0021/#648 reasoning as `_fault_required_role`; `self._unreachable_edge`'s
+        prior flag is held for the same reason (ADR-0024): this exit also sits upstream of its
+        call site."""
+        self._enter_fault(
+            "ev_soc required while a solar mode is active but missing/None",
+            clear_baseline_deferral=False,
+        )
+        await self._write(0.0)
+        effective_peak_limit_kw = resolve_effective_peak_limit(
+            ctx.peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=False
+        )
+        return CycleResult(
+            commanded_current=0.0,
+            fault=True,
+            active_mode=self.active_mode,
+            monthly_peak_kw=ctx.monthly_peak_kw,
+            effective_peak_limit_kw=effective_peak_limit_kw,
+            solar_surplus_w=ctx.solar_surplus_w,
+            adapter_readings=self._current_adapter_readings(),
+            adapter_readings_at=self._role_readings_at,
+        )
+
+    def _smooth_household_baseline(self, ctx: CycleContext) -> None:
+        """Issue #1329/R10: folds `net_w - charger_w` -- the household's own load, independent
+        of what the charger itself drew -- into the rolling window, so Solar/SolarOnly's
+        set-point settles under steady inputs. `command_changed=self._command_stepped` is the
+        same signal `_debounce_baseline` already reads for R3 (ADR-0039). Writes both
+        `ctx.smoothed_baseline_w` (issue #1189/T10, R5's own forecast operand -- the same
+        admitted mean `ctx.surplus_w` negates, in household sign) and `ctx.surplus_w` (shared by
+        Solar/SolarOnly dispatch and the baseline-mode dry run) -- the one place either is
+        resolved."""
+        smoothed_household_w, self._household_window = smooth_household_baseline(
+            ctx.net_w - ctx.charger_w,
+            self._household_window,
+            size=self._config.smoothing_window,
+            command_changed=self._command_stepped,
+        )
+        ctx.smoothed_baseline_w = smoothed_household_w
+        ctx.surplus_w = -smoothed_household_w
+
+    def _resolve_auto_dispatchable(self, ctx: CycleContext) -> None:
+        """Whether Auto's own mode-selection dispatches this cycle at all (never WHICH mode is
+        selected -- the one decision ADR-0017's Context scopes to the registry). When it's False
+        (disconnected, or Auto with no ev_soc role mapped at all), Auto simply keeps whatever
+        active_mode it last resolved -- a deliberate, scope-truthful simplification, same as
+        required-current's own guard inside `resolve_deadline_urgency`. Deliberately NOT routed
+        through the ADR-0017 PROFILE_POLICIES registry: the actual selection (both the baseline
+        and the real call) already goes through `PROFILE_POLICIES[PROFILE_AUTO].select(...)` in
+        `resolve_deadline_urgency`, gated by this same flag. Read by both the deadline-urgency
+        step and the Auto-mode-apply step below, so it lives on `ctx` rather than as a
+        `_run_cycle` local a second later step would also have to read (ADR-0046)."""
+        ctx.auto_dispatchable = (
             self.active_profile == PROFILE_AUTO
-            and status in CHARGEABLE_STATES
-            and ev_soc is not None
+            and ctx.status in CHARGEABLE_STATES
+            and ctx.ev_soc is not None
         )
-        # R5/R14/R15: today's departure deadline and the required-current/urgency it drives
-        # (ADR-0006 steps 3-6 -- see resolve_deadline_urgency's own
-        # docstring for the guard/dedup rationale). The adapter/HA reads (today's deadline, the
-        # sensed battery capacity) stay coordinator-side, in `_read_deadline_urgency_inputs`
-        # above; everything else moves to coordinator_cycle.py, pure and HA-import-free
-        # (ADR-0012's boundary). `deadline_resolvable` itself is computed once here and passed
-        # into both `_read_deadline_urgency_inputs` and `resolve_deadline_urgency` rather than
-        # re-derived from status/ev_soc on the other side of the module boundary -- a second,
-        # separately written copy of the same predicate is exactly the lockstep-editing hazard
-        # this design exists to remove. Stays inline in `_run_cycle` rather than moving into
-        # `_read_deadline_urgency_inputs` (ADR-0023).
-        deadline_resolvable = status in CHARGEABLE_STATES and ev_soc is not None
-        deadline_today, effective_battery_capacity_kwh = await self._read_deadline_urgency_inputs(
+
+    async def _resolve_deadline_urgency_step(self, ctx: CycleContext) -> None:
+        """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
+        (ADR-0006 steps 3-6). The adapter/HA reads (today's deadline, the sensed battery
+        capacity) stay coordinator-side, in `_read_deadline_urgency_inputs`; everything else is
+        `resolve_deadline_urgency` itself, pure and HA-import-free (ADR-0012's boundary).
+        `deadline_resolvable`/`today_date` stay local to this one step -- neither is read by any
+        other (ADR-0046). Reads `ctx.deadline_tomorrow`/`ctx.resolve_deadline_for`, both set by
+        `_resolve_deadline_and_reserve`; assigns its own result onto `ctx.deadline_urgency`
+        itself and returns nothing, the file's one ctx-write convention. Fires
+        `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` itself when the result says so -- ADR-0046's own
+        event rule: fired from the method that calls the resolution it reports, never from
+        `_run_cycle`'s body.
+
+        engines/deadline.py saturates `required_a` to `float('inf')` for a deadline at or before
+        `now` -- still the pure engine's own documented contract, and since issue #1005 all but
+        unreachable from this cycle: `deadline_at` (`resolve_next_occurrence`'s result, or
+        `follow_pursued_occurrence`'s `moved`, #1481) yields an occurrence after `now`, except
+        inside a fall-back repeated hour where a fold=1 `now` can wall-clock-precede a fold=0
+        occurrence that is absolutely earlier -- both sources share that same `combine`-with-
+        `fold=0` construction. So the cap below still guards a real (if once-a-year) path, not
+        only a future regression. `float('inf')` must never cross the HA boundary (it doesn't
+        round-trip through the JSON websocket encoding, and notification_manager.py formats it
+        straight into user-facing text, issue #650), so it is capped to
+        `maximum_permitted_rate_a` -- the same bound the engine compared `required_a` against
+        to set `unreachable` in the first place, so "would need at least max_current A" is
+        exactly true, not an arbitrary numeric artifact like `sys.float_info.max` would be. NaN
+        needs no separate branch: it can never reach here since `nan > maximum_permitted_rate_a`
+        is always False, which would leave `unreachable` False and this block unentered. A
+        missed-deadline hold reaches here with `required_a` None and carries the same cap."""
+        now_dt = ctx.now_dt
+        today_date = now_dt.date()
+        deadline_resolvable = ctx.status in CHARGEABLE_STATES and ctx.ev_soc is not None
+        (
+            deadline_today,
+            ctx.effective_battery_capacity_kwh,
+        ) = await self._read_deadline_urgency_inputs(
             deadline_resolvable=deadline_resolvable,
             today_date=today_date,
-            resolve_deadline_for=resolve_deadline_for,
+            resolve_deadline_for=ctx.resolve_deadline_for,
         )
         deadline_urgency = resolve_deadline_urgency(
             ctx,
@@ -839,184 +890,139 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 deadline_resolvable=deadline_resolvable,
                 active_mode=self.active_mode,
                 deadline_today=deadline_today,
-                # R15/issue #1005: the next occurrence may fall tomorrow (today's departure
-                # time already passed), and R14's terminal row is a day-of-week default, so
-                # tomorrow's own resolution is needed rather than today's time on tomorrow's
-                # date. `deadline_tomorrow` is calendar tomorrow's own resolution, resolved
-                # once in `_resolve_deadline_and_reserve` and reused here -- not resolved a
-                # second time -- gated on `deadline_resolvable` here so it matches
-                # `deadline_today`'s own gating. R9's solar-reserve gate no longer shares this
-                # value (#1422): it resolves the reserved day's deadline separately.
-                deadline_tomorrow=deadline_tomorrow if deadline_resolvable else None,
+                deadline_tomorrow=ctx.deadline_tomorrow if deadline_resolvable else None,
                 now_dt=now_dt,
-                effective_battery_capacity_kwh=effective_battery_capacity_kwh,
-                escalated_maximum_permitted_rate_a=self._escalated_maximum_permitted_rate_a(
-                    ctx, peak_operand_kw=peak_operand_kw
-                ),
+                escalated_maximum_permitted_rate_a=self._escalated_maximum_permitted_rate_a(ctx),
                 pursued_occurrence=self._pursued_occurrence,
-                following_occurrence=self._resolve_following_occurrence(resolve_deadline_for),
+                following_occurrence=self._resolve_following_occurrence(ctx.resolve_deadline_for),
                 departure_on_pursued_date=self._resolve_departure_on_pursued_date(
-                    resolve_deadline_for
+                    ctx.resolve_deadline_for
                 ),
-                auto_dispatchable=auto_dispatchable,
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
                 solar_start_threshold_w=self._config.solar_start_threshold_w,
             ),
             mode_desired_current=lambda mode: self._mode_desired_current(
                 mode,
-                status=status,
-                ev_soc=ev_soc,
-                active_soc_limit=active_soc_limit,
-                surplus_w=surplus_w,
-                voltage=voltage,
-                now=now,
+                status=ctx.status,
+                ev_soc=ctx.ev_soc,
+                active_soc_limit=ctx.active_soc_limit,
+                surplus_w=ctx.surplus_w,
+                voltage=ctx.voltage,
+                now=ctx.now,
             ),
         )
-        required = deadline_urgency.required
-        # Exposed for the effective-peak-limit `urgent` parameter and Auto
-        # mode-selection's escalation, and for tests, the same way `_step_up_gate.state` already is.
-        self._required_current = required
-        # ADR-0024: reading `required.unreachable` itself (never any one upstream guard) was
-        # meant to make every exit path -- required current falling back in range, a
-        # disconnect, the deadline capability withdrawn -- clear for free, since each already
-        # funnels through this same flag. ADR-0042 (narrowed by ADR-0053) qualifies that: a
-        # cycle that established nothing about the deadline -- the non-resolvable early
-        # return's state-of-charge-unavailable half, on the cycles ADR-0053's own table does
-        # NOT mark established -- must not decide a clear either, so that fact travels
-        # alongside the flag from `resolve_deadline_urgency` straight to this fire site.
-        _, cleared = self._unreachable_edge.resolve(
-            required.unreachable, outcome_established=deadline_urgency.outcome_established
-        )
-        if cleared:
-            self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)
-        if required.unreachable:
-            # engines/deadline.py saturates required_a to float('inf') for a deadline at or
-            # before `now` -- still the pure engine's own documented contract, and since issue
-            # #1005 all but unreachable from this cycle: `deadline_at` (resolve_next_occurrence's
-            # result, or follow_pursued_occurrence's `moved`, #1481) yields an occurrence after
-            # `now`, except inside a fall-back repeated hour where a fold=1 `now` can
-            # wall-clock-precede a fold=0 occurrence that is absolutely earlier -- both sources
-            # share that same `combine`-with-`fold=0` construction. So the cap below still
-            # guards a real (if once-a-year) path, not only a future regression.
-            # float('inf') must never cross this boundary: it doesn't round-trip through HA's
-            # JSON websocket encoding, and notification_manager.py formats it straight into
-            # user-facing text (issue #650). Cap it to maximum_permitted_rate_a -- the same
-            # bound the engine compared required_a against to set `unreachable` in the first
-            # place, so "would need at
-            # least max_current A" is exactly true, not an arbitrary numeric artifact like
-            # sys.float_info.max would be. NaN needs no separate branch: it can never reach
-            # here since `nan > maximum_permitted_rate_a` is always False, which would leave
-            # `unreachable` False and this block unentered.
-            # A missed-deadline hold reaches here with `required_a` None -- no required current
-            # is computed once the occurrence has passed -- and carries the same cap: it is the
-            # saturated case's statement about a deadline that has run out entirely.
+        if deadline_urgency.required.unreachable:
             notified_required_a = (
                 self._config.max_current
-                if required.required_a is None or math.isinf(required.required_a)
-                else required.required_a
+                if deadline_urgency.required.required_a is None
+                or math.isinf(deadline_urgency.required.required_a)
+                else deadline_urgency.required.required_a
             )
             self.hass.bus.async_fire(
                 EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
                 {ATTR_REQUIRED_CURRENT_A: notified_required_a},
             )
+        ctx.deadline_urgency = deadline_urgency
 
-        urgent = deadline_urgency.urgent
-        # The occurrence this cycle's resolution leaves behind, taken from
-        # `deadline_urgency.required` rather than re-derived here: the engine's successor, or the
-        # non-resolvable early return's split (a disconnect or the 24-hour backstop releases, an
-        # unavailable state of charge holds). While a pursued occurrence is pending it now DOES
-        # move onto its own date's freshly resolved departure time each cycle
-        # (`follow_pursued_occurrence`, D1) -- what stays true is that the move is never a
-        # release or an engagement of its own (resolution-rules.md).
-        # Both fault early-returns above sit UPSTREAM of this line, so a fault cycle holds
-        # whichever occurrence it entered with rather than releasing it -- the same reasoning
-        # `_role_readings_at` and `_unreachable_edge` carry in those blocks (ADR-0024): a cycle
-        # that established nothing about the deadline must not decide anything about it either.
-        # A fault is not one of R5's release conditions, and the cycle forces 0 A regardless.
-        self._pursued_occurrence = required.pursued_occurrence
-        effective_peak_limit_kw = resolve_effective_peak_limit(
-            peak_operand_kw, self._config.max_peak_kw, self._config.peak_floor_kw, urgent=urgent
+    def _resolve_deadline_bookkeeping(self, ctx: CycleContext) -> None:
+        """Exposes this cycle's required-current resolution for the effective-peak-limit
+        `urgent` parameter and Auto mode-selection's escalation (and for tests, the same way
+        `_step_up_gate.state` already is), resolves the R5 pursued-occurrence carry, and fires
+        `EVENT_DEADLINE_UNREACHABLE_CLEARED` itself -- ADR-0046's event rule, same as
+        `_resolve_deadline_urgency_step`'s own NOTIFIED fire. ADR-0024: reading
+        `required.unreachable` itself (never any one upstream guard) makes every exit path --
+        required current falling back in range, a disconnect, the deadline capability withdrawn
+        -- clear for free, since each already funnels through this same flag. ADR-0042 (narrowed
+        by ADR-0053) qualifies that: a cycle that established nothing about the deadline must
+        not decide a clear either, so `deadline_urgency.outcome_established` travels alongside
+        the flag straight to this fire site.
+
+        The pursued occurrence this cycle's resolution leaves behind is taken from
+        `deadline_urgency.required` rather than re-derived here: the engine's successor, or the
+        non-resolvable early return's split (a disconnect or the 24-hour backstop releases, an
+        unavailable state of charge holds). Both fault exits above sit UPSTREAM of this step, so
+        a fault cycle holds whichever occurrence it entered with rather than releasing it -- the
+        same reasoning `_role_readings_at` and `_unreachable_edge` carry there (ADR-0024): a
+        cycle that established nothing about the deadline must not decide anything about it
+        either. A fault is not one of R5's release conditions, and the cycle forces 0 A
+        regardless."""
+        deadline_urgency = ctx.deadline_urgency
+        required = deadline_urgency.required
+        self._required_current = required
+        _, cleared = self._unreachable_edge.resolve(
+            required.unreachable, outcome_established=deadline_urgency.outcome_established
         )
-        # This is the only ctx.effective_peak_limit_kw assignment -- the earlier, provisional
-        # resolve_effective_peak_limit(urgent=False) call above (used only for the ev_soc-fault
-        # early return) runs before `ctx` is constructed, so ctx's field intentionally carries
-        # its dataclass default (None, issue #564) until this final, real value lands here.
-        # `_apply_peak_clamp` (below) reads it off `ctx` rather than as a separately-passed
-        # kwarg (issue #719) -- there is no second copy for the two to drift out of lockstep.
-        ctx.effective_peak_limit_kw = effective_peak_limit_kw
+        if cleared:
+            self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)
+        self._pursued_occurrence = required.pursued_occurrence
 
-        # entity-catalog.md's `sensor.smart_charging_peak_headroom_a` row / control-cycle.md
-        # step 5 -- the same target and (issue #990:
-        # debounced) baseline the R3 clamp itself holds. Since issue #1078 this shares
-        # `apply_peak_clamp`'s own arithmetic through `peak_headroom_a` rather than restating
-        # it, so the readout cannot drift from the clamp it reports on while the clamp runs at
-        # all; with the CapTar capability absent (R3 AC1, issue #1018) the clamp does not run,
-        # yet this readout still resolves and is surfaced (R21's own AC), simply consulted by
-        # no charging decision in that case. Reading it here instead of returning it from
-        # `_apply_peak_clamp` still avoids changing that control-path signature for a
-        # display-only need.
+    def _maybe_apply_auto_mode(self, ctx: CycleContext) -> None:
+        """Manual dispatches via the selector unconditionally (NF2 regression: active_mode never
+        changes here while Manual, even under urgency) -- only Auto resolves its own mode, via
+        `resolve_deadline_urgency`'s real (non-baseline) urgent resolution. The explicit
+        None-check is defense in depth: `resolved_mode` is None exactly when
+        `ctx.auto_dispatchable` was False inside `resolve_deadline_urgency` too (the two
+        booleans are computed from the same inputs), so this should never trigger -- but
+        `self.active_mode` is typed `str`, and silently assigning None would surface far
+        downstream as a `KeyError` on the mode-handler lookup instead of here. Routed through
+        `set_active_mode` rather than a direct assignment, so this site gets the same
+        registry-membership guard as the Store-read path -- keeping `self.active_mode`'s one
+        mutation point (ADR-0014) genuinely singular."""
+        if ctx.auto_dispatchable and ctx.deadline_urgency.resolved_mode is not None:
+            self.set_active_mode(ctx.deadline_urgency.resolved_mode)
+
+    def _resolve_effective_peak_limit(self, ctx: CycleContext) -> None:
+        """The one real (non-provisional) effective-peak-limit resolution (ADR-0046) -- the
+        body resolves it once, after urgency, and assigns it onto `ctx` once, so
+        `_apply_peak_clamp`/`_finish_successful_cycle` have no second, separately-passed copy
+        to drift out of lockstep with (issue #719/#564). The ev_soc fault exit's own provisional,
+        non-urgent resolution (`_fault_ev_soc`) is a separate call for a separate result --
+        this is the only assignment onto `ctx.effective_peak_limit_kw`."""
+        ctx.effective_peak_limit_kw = resolve_effective_peak_limit(
+            ctx.peak_operand_kw,
+            self._config.max_peak_kw,
+            self._config.peak_floor_kw,
+            urgent=ctx.deadline_urgency.urgent,
+        )
+
+    def _finish_successful_cycle(
+        self,
+        ctx: CycleContext,
+        desired: float,
+    ) -> CycleResult:
+        """The successful cycle's own closing step (ADR-0046, body rule item 5): resolves the
+        display-only peak-headroom readout (entity-catalog.md's
+        `sensor.smart_charging_peak_headroom_a` row / control-cycle.md step 5 -- sharing
+        `apply_peak_clamp`'s own arithmetic through `peak_headroom_a` rather than restating it,
+        so the readout cannot drift from the clamp it reports on) and the time-to-full estimate
+        (entity-catalog.md's `sensor.smart_charging_time_to_full` row / glossary -- "the
+        charger's current applied rate" is `desired` AFTER every clamp/floor/cap, not the mode's
+        pre-clamp request; `ev_soc >= active_soc_limit` is checked before the 0 A case so a
+        SOC-gated-stop cycle, which also sets desired=0.0, still reports 0, not unknown), records
+        the last-successful-cycle timestamp (ADR-0021/#648 -- deliberately the LAST write before
+        the success return, not right after `_read_cycle_inputs`: any exception between the
+        required-adapter read and this point funnels to `_async_update_data`'s handler and must
+        report a prior cycle's timestamp, not this one's) and the fault-recovery log, and builds
+        the `CycleResult` -- `_run_cycle`'s body only writes and returns what this step builds."""
         peak_headroom = peak_headroom_a(
             baseline_w=ctx.baseline_w,
-            voltage=voltage,
-            effective_peak_limit_kw=effective_peak_limit_kw,
+            voltage=ctx.voltage,
+            effective_peak_limit_kw=ctx.effective_peak_limit_kw,
             safety_margin_w=self._config.safety_margin_w,
         )
-        if auto_dispatchable and deadline_urgency.resolved_mode is not None:
-            # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
-            # never changes here while Manual, even under urgency) -- only Auto resolves its
-            # own mode, via resolve_deadline_urgency's real (non-baseline) urgent resolution.
-            # The explicit None-check is defense in depth: `resolved_mode` is None exactly
-            # when `auto_dispatchable` was False inside resolve_deadline_urgency too (the two
-            # booleans are computed from the same inputs), so this should never trigger --
-            # but self.active_mode is typed `str`, and silently assigning None would surface
-            # far downstream as a `KeyError` on the mode-handler lookup instead of here. Routed
-            # through set_active_mode rather than a direct assignment, so this
-            # site gets the same registry-membership guard as the Store-read path -- keeping
-            # `self.active_mode`'s one mutation point (ADR-0014) genuinely singular.
-            self.set_active_mode(deadline_urgency.resolved_mode)
-
-        # Checked again here, after Auto's own mode resolution above -- catches a same-cycle
-        # Auto escalation/revert in time for this cycle's own dispatch below, not one cycle
-        # late (the earlier call above only ever catches a Manual change, since Auto's mode
-        # isn't resolved yet at that point).
-        self._reset_mode_state_if_changed()
-
-        desired = self._dispatch_mode(ctx)
-
-        desired = self._apply_peak_clamp(ctx, desired)
-
-        desired = self._apply_grid_ceiling_clamp(ctx, desired)
-        desired = apply_floor_cap(  # E8 invariant last
-            desired, min_a=self._config.min_current, max_a=self._config.max_current
-        )
-
-        # entity-catalog.md's `sensor.smart_charging_time_to_full` row / glossary -- "the
-        # charger's current applied rate"/`charger_current`
-        # is the value actually written, i.e. `desired` AFTER every clamp/floor/cap, not the
-        # mode's pre-clamp request -- a clamped or floored-to-0 cycle must not report an ETA
-        # that assumes a rate the charger was never actually set to. `ev_soc >= active_soc_limit`
-        # is checked before the 0 A case so a SOC-gated-stop cycle (which also sets desired=0.0)
-        # still reports 0, not unknown, per that same catalog row.
-        if ev_soc is None:
+        if ctx.ev_soc is None:
             time_to_full_min = None
-        elif ev_soc >= active_soc_limit:
+        elif ctx.ev_soc >= ctx.active_soc_limit:
             time_to_full_min = 0.0
         elif desired == 0.0:
             time_to_full_min = None
         else:
-            energy_needed_kwh = effective_battery_capacity_kwh * (active_soc_limit - ev_soc) / 100
-            time_to_full_min = energy_needed_kwh * 1000 / (desired * voltage) * 60
-
-        await self._write(desired)
-        # ADR-0021 and the `sensor.smart_charging_adapter_readings` row's "last successful
-        # cycle" -- deliberately the LAST
-        # statement before the success return, not right after `_read_cycle_inputs` (#648):
-        # any exception between the required-adapter read and this point (including the
-        # ev_soc-fault gate above, and any raise from the write itself) funnels to
-        # `_async_update_data`'s handler and must report a prior cycle's timestamp, not this
-        # one's -- moving this assignment any earlier would resurrect #648 for those paths.
-        self._role_readings_at = now_dt
+            energy_needed_kwh = (
+                ctx.effective_battery_capacity_kwh * (ctx.active_soc_limit - ctx.ev_soc) / 100
+            )
+            time_to_full_min = energy_needed_kwh * 1000 / (desired * ctx.voltage) * 60
+        self._role_readings_at = ctx.now_dt
         if self._was_faulted:
             _LOGGER.info("smart_charging recovered from fault")
             self._was_faulted = False
@@ -1024,10 +1030,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             commanded_current=desired,
             fault=False,
             active_mode=self.active_mode,
-            monthly_peak_kw=monthly_peak_kw,
-            effective_peak_limit_kw=effective_peak_limit_kw,
-            active_soc_limit=active_soc_limit,
-            solar_surplus_w=solar_surplus_w,
+            monthly_peak_kw=ctx.monthly_peak_kw,
+            effective_peak_limit_kw=ctx.effective_peak_limit_kw,
+            active_soc_limit=ctx.active_soc_limit,
+            solar_surplus_w=ctx.solar_surplus_w,
             peak_headroom_a=peak_headroom,
             time_to_full_min=time_to_full_min,
             adapter_readings=self._current_adapter_readings(),
@@ -1048,8 +1054,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         plain writable attribute but this is its only
         mutation point. Since ADR-0018, `select.py` never calls this directly: the coordinator
         reads the stored option through the Store each cycle (`_read_owned_entities`) and calls
-        this itself. The other production caller is `_run_cycle`'s own Auto-mode resolution
-        (`self.set_active_mode(deadline_urgency.resolved_mode)`); tests call it directly too.
+        this itself. The other production caller is `_maybe_apply_auto_mode`'s own Auto-mode
+        resolution (`self.set_active_mode(ctx.deadline_urgency.resolved_mode)`); tests call it
+        directly too.
 
         Unlike `SelectEntity`'s own `options` list (which rejects an out-of-enum value before
         ever reaching this method), a value read back from the Store has no such gate --
@@ -1241,18 +1248,16 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and not self._active_cooldown.elapsed(now)
         )
 
-    def _resolve_active_soc_limit(self, ctx: CycleContext) -> float:
+    def _resolve_active_soc_limit(self, ctx: CycleContext) -> None:
         """This cycle's active SOC limit (ADR-0011/ADR-0012's `SocGateResolver`): resolves it,
-        fires `ActiveSocLimitChanged` on a change, writes it onto `ctx`, and -- #1335 -- feeds
-        the resolution straight into `_refresh_power_soc_limit_reached`. That refresh has to
-        happen here, at the one place this cycle's limit is already in hand, rather than
-        waiting for `_dispatch_mode`'s Power branch to run: see that method's own docstring
-        for why it must run every cycle, whatever the active mode. Reads `ctx.ev_soc` rather
-        than taking it as a second parameter -- both are already on `ctx` by the time this
-        runs, and threading it again would reintroduce the two-sources-of-truth problem
-        `_dispatch_mode`'s own docstring warns against for the identical pair. Named and
-        called as one step from `_run_cycle` (ADR-0046) rather than left inline, the same
-        reason `_resolve_deadline_and_reserve` beside it already is one."""
+        fires `ActiveSocLimitChanged` on a change, assigns it onto `ctx` itself (the file's one
+        ctx-write convention) and -- #1335 -- feeds the resolution straight into
+        `_refresh_power_soc_limit_reached`. That refresh has to happen here, at the one place
+        this cycle's limit is already in hand, rather than waiting for `_dispatch_mode`'s Power
+        branch to run: see that method's own docstring for why it must run every cycle,
+        whatever the active mode. Named and called as one step from `_run_cycle` (ADR-0046)
+        rather than left inline, the same reason `_resolve_deadline_and_reserve` beside it
+        already is one."""
         active_soc_limit, soc_limit_changed, soc_limit_rose = self._soc_gate.resolve(
             self.soc_limit_override,
             solar_reserve_active=ctx.solar_reserve_active,
@@ -1269,9 +1274,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # `_dispatch_mode`'s own Power branch) says it was actually delivering current as of
         # its own last dispatch, not merely idling at or above the limit with nothing behind
         # it. Resolved here, before `_dispatch_mode` itself runs, the same one-cycle-lag
-        # caveat R8's step-up gate already carries under Auto (this cycle's `self.active_mode`
-        # is Auto's own PRIOR resolution until later in `_run_cycle` -- see the comment above
-        # `auto_dispatchable`'s own assignment).
+        # caveat R8's step-up gate already carries under Auto: `self.active_mode` at this point
+        # in the cycle is still Auto's PRIOR resolution -- `_maybe_apply_auto_mode` (later in
+        # `_run_cycle`) is what advances it to this cycle's own choice -- and `_step_up_gate`
+        # was already resolved, earlier this same cycle, against that identical stale value
+        # (`mode_is_solar=self._mode_handlers[self.active_mode].is_solar_mode`). R16 allows the
+        # lag; this check inherits it for the same reason rather than reading a value that does
+        # not exist yet.
         power_in_charging = (
             self.active_mode == MODE_POWER
             and not self._cooldown_blocks(Phase.CHARGING, ctx.now)
@@ -1283,7 +1292,6 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             limit_rose=soc_limit_rose,
             power_in_charging=power_in_charging,
         )
-        return active_soc_limit
 
     def _refresh_power_soc_limit_reached(
         self,
@@ -1579,9 +1587,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return False
         return not (self.active_mode == MODE_POWER and not self._config.power_respect_peak)
 
-    def _escalated_maximum_permitted_rate_a(
-        self, ctx: CycleContext, *, peak_operand_kw: float
-    ) -> float:
+    def _escalated_maximum_permitted_rate_a(self, ctx: CycleContext) -> float:
         """R5's `escalated maximum permitted rate` (system-overview.md glossary): the maximum
         permitted rate that WOULD be in force if deadline urgency were engaged -- the same C1/C4
         bounds fitted to the peak headroom under an effective peak limit raised to the maximum
@@ -1614,11 +1620,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         out-of-order control-path clamp. The headroom helper shares C4's arithmetic without being
         that step.
 
-        `peak_operand_kw` is threaded in for symmetry with the resolved limit and is provably
-        inert at this call: the effective-peak-limit rule's *Urgency raise* row returns the
-        maximum peak unconditionally, so no operand value can change what `urgent=True` resolves
-        to. It is passed rather than dropped so that a future row-1 that *does* consult the
-        operand needs no new plumbing here.
+        `ctx.peak_operand_kw` is provably inert at this call: the effective-peak-limit rule's
+        *Urgency raise* row returns the maximum peak unconditionally, so no operand value can
+        change what `urgent=True` resolves to. It is still read here, not dropped, so that a
+        future row-1 that *does* consult the operand needs no new plumbing.
 
         The glossary names two cases in which the peak clamp does not run at all and only C1/C4
         bound the rate: `Power` with its own R17 peak-protection opt-out disabled, and the CapTar
@@ -1646,7 +1651,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ]
         if self._peak_clamp_would_run():
             escalated_peak_limit_kw = resolve_effective_peak_limit(
-                peak_operand_kw,
+                ctx.peak_operand_kw,
                 self._config.max_peak_kw,
                 self._config.peak_floor_kw,
                 urgent=True,
@@ -1959,8 +1964,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         (`_log_fault`'s own once-per-outage discipline), starts the fault stop's cooldown
         (`_start_fault_stop_cooldown`, C5/R11, issue #1311), and clears the household window's
         own one-cycle-deferral cap (issue #1329) together, so each of the three fault sites is
-        one statement in its caller's body -- ADR-0046's body rule for `_run_cycle` (a call to a
-        named step, one statement each) rather than several.
+        one statement in its own caller's body -- `_run_cycle`'s two named fault-exit steps
+        (`_fault_required_role`/`_fault_ev_soc`) and `_async_update_data`'s own exception
+        handler -- ADR-0046's body rule (a call to a named step, one statement each) rather than
+        several.
 
         `clear_baseline_deferral` defaults True for two of the three call sites. The
         required-adapter fault always returns before `debounce_baseline_w` is reached this
