@@ -1,6 +1,6 @@
 ---
 name: diagnosing-bugs
-description: Use when a claim is made about the shipped Smart Charging integration's behaviour — a defect (the running system misbehaves) or an enhancement (its current behaviour should change) — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
+description: Use when a claim is made about this project's shipped behaviour — a defect (the running system misbehaves) or an enhancement (its current behaviour should change) — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
 ---
 
 # Diagnosing bugs
@@ -87,7 +87,7 @@ document, the requirement, or a worked example. Capture the exact symptom (the w
 missing unit, the event firing every cycle) so the eventual fix can be checked against it.
 
 If the loop stays green the claim is **refuted**: say so plainly with the command and its output,
-record it (Step 5), and stop. That is a finished result, not a failure.
+record it and report (both Step 5), and stop. That is a finished result, not a failure.
 
 **Minimise.** Cut inputs, config, callers and steps one at a time, re-running after each cut, until
 every remaining element is load-bearing — removing any one turns it green.
@@ -114,19 +114,19 @@ temporary log with a unique prefix — `[DEBUG-a4f2]` — so cleanup is one grep
 
 ## Step 5 — hand off
 
-A confirmed claim is placed on a milestone chosen with the human partner — on the claim's
-issue, filed first if the report arrived without one. When it is placed is the **Route**
-stage under `CLAUDE.md`'s **Idea-to-product flow**, the milestone rule is **Issue
-conventions**', and the command **Tracker mechanics**'.
+A confirmed claim's issue is placed on a milestone chosen with the human partner. When it is
+placed is the **Route** stage under `CLAUDE.md`'s **Idea-to-product flow**, the milestone rule
+is **Issue conventions**', and the command **Tracker mechanics**'.
 
 The fix is then ordinary work: file it as a `development` issue and run it through this project's
 contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
 in that issue's row of `CLAUDE.md`'s **Model selection** table.
 
-**Record either verdict on the claim's issue**, redacted as above, as a comment whose first line
-is exactly `diagnosing-bugs: confirmed` or `diagnosing-bugs: refuted`, then `fix`'s note
-marker per the marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its
-**Tracker mechanics** topic and read back. It carries the one command and its output and, when
+**Record either verdict on the claim's issue** — filed first, in either outcome, if the report
+arrived without one — redacted as above, as a comment whose first line is exactly
+`diagnosing-bugs: confirmed` or `diagnosing-bugs: refuted`, then `fix`'s note marker per the
+marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its **Tracker mechanics**
+topic and read back. It carries the one command and its output and, when
 confirmed, the minimal reproduction with its captured symptom. The rest of the flow reads the
 newest such comment.
 

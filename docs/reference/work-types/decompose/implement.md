@@ -45,10 +45,11 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
    exists for the track the epic's kind label sets (`CLAUDE.md`'s **Issue conventions**):
    - **No kind label → new behaviour**: the scope names plan task ids, each in
      `docs/design/project-plan.md` on `origin/main`.
-   - **`bug` or `enhancement` → shipped behaviour**: exactly one issue so labelled is linked
-     from the epic body — none or several is a missing source — and on it the newest comment
-     by the session's login opening with a `diagnosing-bugs` verdict line opens with its
-     confirmed one. No `requirement`/`uc` change is required.
+   - **`bug` or `enhancement` → shipped behaviour**: *Decisions so far* names exactly one
+     issue with the epic's own kind label — none or several is a missing source — and on it
+     the newest comment by the repository owner's login, which every session posts under
+     (`CLAUDE.md`'s **Project profile**), opening with a `diagnosing-bugs` verdict line opens
+     with its confirmed one. No `requirement`/`uc` change is required.
 
    An open edge or a missing source → stop and report which, the issue not moved: picked too
    early. Met → move it to *in progress*, never *in review* (**Project board**, under
@@ -64,9 +65,8 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
    mechanics**, *Rewriting a work item's body*) and read it back.
 4. **Run the pass** — step 2. Write the body to a scratch file and spawn the `reviewer`
    agent **once**, naming the file's absolute path, the checklist `CLAUDE.md`'s
-   **Decomposition checklist** topic routes to and the epic's track — the agent reaches no
-   tracker. Fix every finding in the body itself, save what *Out of the body* sends
-   elsewhere, then read the body back.
+   **Decomposition checklist** topic routes to and the epic's track. Fix every finding in the
+   body itself, save what *Out of the body* sends elsewhere, then read the body back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
    *Applying a label*, with its read-back), then post the executive summary as the epic's
    parking comment (*Commenting on a work item*). The summary carries five parts, one `##`
@@ -78,9 +78,9 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
      fix, or its *Out of the body* issue; the Minor and Nit count.
    - **The children it will file** — one line per task: id, title, Size.
 
-   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`, shared
-   with `clarify`'s parking and listed under *Rounds and the cap*. Then stop and report: the
-   epic, that it is parked, the children planned. **No child is filed in this entry.**
+   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`, listed
+   under *Rounds and the cap*. Then stop and report: the epic, that it is parked, the children
+   planned. **No child is filed in this entry.**
 
 ### Out of the body
 

@@ -168,7 +168,8 @@ Where the bullets below call for an epic, it is filed first, Size only, labelled
 no context label ([contribution-workflow.md](contribution-workflow.md)'s **Issue
 conventions**). If the idea started as an issue, link it from the epic body and close the idea
 issue once it is fully captured — never relabel it as the epic. The brainstormed decisions
-move into its body under *Decisions so far* (**Brainstorm** above).
+move into its body under *Decisions so far* (**Brainstorm** above); on a `bug` or
+`enhancement` epic they name its routed issue.
 
 Whether the strand needs an epic is settled here and written on the issue:
 
@@ -401,7 +402,6 @@ closing step once the `decompose` child is unblocked — so requiring the body h
 an artifact this stage cannot yet have. Without it, an analysis document can merge describing
 behaviour the code does not have. The review step applies that label on a clean pass and knows
 nothing about child issues, so the same condition is checked by whoever approves the merge.
-The epic is the earliest artifact that can carry that obligation.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work
 file carries.
 

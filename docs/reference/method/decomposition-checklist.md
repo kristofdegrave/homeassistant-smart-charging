@@ -36,8 +36,7 @@ item scores against whichever documents hold those here.
   to derive from, and the services it may name. The dispatch names the epic's track; on the
   shipped-behaviour track (a `bug` or `enhancement` epic) the body derives instead from what
   the closing step's *Derive, don't design* names for it — the reproduction itself, a tracker
-  comment, is out of this pass's reach — and from `project-plan.md` only where the strand's
-  design change added a slice.
+  comment, is out of this pass's reach.
 - The analysis documents the body cites, every requirement it lists as in scope, and
   `docs/analysis/system-overview.md` for the glossary — the tree is under `CLAUDE.md`'s
   **Document structure** topic.
