@@ -376,7 +376,7 @@ it is wired to its callers).
 - **Integration checkpoint:** ⎔ M1 calls E5's **headroom** twice — once for the
   `sensor.smart_charging_peak_headroom_a` readout under the in-force limit, once for R5's escalated rate under the raised one — on
   *different baselines* (Status above): the readout and the clamp on the
-  raw household baseline, R5's rate on the smoothed one. Its **clamp** runs once on the control path, the only one of the
+  raw household baseline, R5's rate on the smoothed one. Its **clamp** runs at most once on the control path, the only one of the
   three calls that may advance the breach timer.
   M1 applies the peak clamp as a distinct call site from Grid-Safety
   (ADR-0006), and writes the Tracker's value through the Store.
@@ -492,11 +492,13 @@ it is wired to its callers).
   deadline (E4) → resolve SOC (E3) → available modes (E9) → escalated headroom (E5) + C4 headroom
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
-  clamp (E5) → readout headroom (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1
-  are each called up to twice per cycle: once to establish R5's handback baseline (Auto's own
-  Profile call; Manual reads `active_mode` directly and skips it), once to dispatch — and neither
-  call happens on a cycle the non-resolvable early return reaches (a disconnect, or SOC
-  unavailable). Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
+  clamp (E5) → readout headroom (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2's
+  baseline call and E1's baseline query are each made at most once per cycle (Auto's own Profile
+  call for the handback baseline; Manual reads `active_mode` directly and skips E2 entirely), and
+  neither runs on a cycle the non-resolvable early return reaches (a disconnect, or SOC
+  unavailable) — but E1's real dispatch call still runs on such a cycle, against whichever mode is
+  already active, since that early return only skips the baseline pair and the Profile's own
+  dispatch resolution. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
   pursued occurrence); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
@@ -511,8 +513,8 @@ it is wired to its callers).
   path's direction and the Store's home; resolved). The compute pipeline was never gated.
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
   UC01–UC04; the two-distinct-clamps ordering (ADR-0006); the R5 call order — the baseline
-  Profile and Mode calls precede the Deadline urgency call, and the headroom calls advance no
-  breach timer, each fitted to its own baseline: raw for
+  Profile and Mode calls precede the Deadline urgency call, and the headroom calls (unlike the R3
+  clamp) advance no breach timer, each fitted to its own baseline: raw for
   `sensor.smart_charging_peak_headroom_a` and the R3 clamp, smoothed for R5's
   escalated rate, a distinction only observable from here; R15's capacity fallback (an unmapped or unavailable sensed role falls back to the
   configured value, and the Engine sees only the composed result); fault → force-0A + Fault sensor
@@ -789,7 +791,7 @@ from the retired functional sequence.
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
   gaps). Checkpoint markers are not uniform and say so individually rather than following one
-  formula — Phase 1 and Phase 2 read *Met:*, and only Phase 3 reads *Partially met:*, for the
+  formula — Phase 1 and Phase 2 both read *Met*, and only Phase 3 reads *Partially met:*, for the
   no-cross-Manager-call assertion (no executable guard). Phase 4 reads *Met per slice:*, for the
   UC01–UC11 end-to-end validation (per-slice, not one suite).
 - **Independently testable.** Each task names its unit boundary per ADR-0009 (pure Engines → plain
