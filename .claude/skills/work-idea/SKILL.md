@@ -35,8 +35,8 @@ Its issue comments follow the marker rule under `CLAUDE.md`'s **Contribution wor
    chosen track on the issue, so the next step is not re-argued.
 4. **On the shipped-behaviour track, verify the claim before anything is designed** — the
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
-   refutes, which it records on the issue, stops the cycle there. On the new-behaviour track
-   this step does not apply.
+   refutes (recorded on the issue) or cannot reproduce stops the cycle there. On the
+   new-behaviour track this step does not apply.
 5. **Settle whether the strand needs an epic, and whether its body will carry a spec** — the
    flow document says when each is required — by track, and by whether the brainstorm settled
    that the strand has no `development` or `testing` task — and which analysis change cannot be

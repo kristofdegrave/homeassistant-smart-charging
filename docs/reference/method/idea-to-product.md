@@ -168,8 +168,8 @@ Where the bullets below call for an epic, it is filed first, Size only, labelled
 no context label ([contribution-workflow.md](contribution-workflow.md)'s **Issue
 conventions**). If the idea started as an issue, link it from the epic body and close the idea
 issue once it is fully captured — never relabel it as the epic. The brainstormed decisions
-move into its body under *Decisions so far* (**Brainstorm** above); on a `bug` or
-`enhancement` epic they name its routed issue.
+move into its body under *Decisions so far* (**Brainstorm** above); on a `bug`/`enhancement`
+epic they name the issue `diagnosing-bugs` recorded its verdict on.
 
 Whether the strand needs an epic is settled here and written on the issue:
 

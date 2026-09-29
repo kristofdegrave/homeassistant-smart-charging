@@ -79,8 +79,9 @@ remaining three keys are scored by items (5), (9) and (10).
 
 **(5) The build order is sound.** Every task's **Blocked by** line names task ids the body
 defines, or `none` — an entry with neither is **Major**, since the filer cannot tell an
-omission from an empty set. A named id that does not exist, a cycle, or an order that
-contradicts `project-plan.md`'s (a task before the service it calls) is **Major** too.
+omission from an empty set. A named id that does not exist, a cycle, a task before the
+service it calls, or, on new behaviour, an order that contradicts `project-plan.md`'s is
+**Major** too.
 
 **(6) No task contradicts an accepted ADR.** **Major**, and **Critical** where the contradicted
 rule is a safety behaviour. An ADR gate opened *after* the task it blocks, or not identified at
