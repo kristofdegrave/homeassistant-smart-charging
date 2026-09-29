@@ -1,0 +1,17 @@
+{
+  "env": {
+    "SMART_CHARGING_AUTOPILOT": "1"
+  },
+  "permissions": {
+    "defaultMode": "dontAsk",
+    "allow": [
+      "Edit(//**/sc-*/**)",
+      "Edit(//**/scratchpad/**)"
+    ],
+    "deny": [
+      "Edit(//**/.claude/**)",
+      "Edit(//**/.github/**)",
+      "Edit(//**/CLAUDE.md)"
+    ]
+  }
+}

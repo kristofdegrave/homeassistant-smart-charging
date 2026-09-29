@@ -52,6 +52,41 @@ squash matters:** it rewrites the merged branch into one commit, which orphans a
 stacked on it. That is the reason [contribution-workflow.md](method/contribution-workflow.md)'s **Base `main` and stacking** has every
 PR base `main` directly, however the work was branched locally.
 
+## Autopilot loop
+
+The loop is started from the repository root with the loop-only settings file
+`profile.yml`'s `autopilot.loop_settings` names:
+
+```sh
+claude --setting-sources project --settings .claude/autopilot.settings.json
+```
+
+then `/loop <interval> /autopilot` in that session. **Why `--setting-sources project`:** it
+drops the user and local settings, whose broad allows would otherwise reach the loop, so the
+committed `.claude/settings.json` allow-list and the loop file are the only grants in force;
+the shared file's `PreToolUse` guard still runs. **Why the loop file:**
+[ADR-0054](../adl/0054-autopilot-runs-dontask-and-trusts-only-write-access-authors.md)'s
+Options A1 and A2 — it sets `defaultMode: dontAsk`, denies edits and writes to `.claude/**`,
+`.github/**` and `CLAUDE.md` in any checkout, allows edits only in a task worktree and the
+session scratchpad, and sets the `env` variable `autopilot.loop_marker` names to `1`, which the
+`autopilot` skill's first step checks and the guard can key on.
+
+**What the rules assume.** A task worktree sits beside the main checkout, named `sc-<…>`
+(`D:/GIT/sc-wf-1501` for `workflow/1501`); the `Read` and `Edit` rules for worktrees match
+`//**/sc-*/**`, and those for scratch files `//**/scratchpad/**`. The shared allow-list's
+`Read` rules exist because the `reviewer` definition's `permissionMode: dontAsk` reaches
+interactive dispatches too. A worktree placed elsewhere is refused in the loop.
+
+**Label gestures.** `.claude/settings.json`'s `ask` rules match
+`gh issue edit … --remove-label … needs-approval` and any `gh api` label `DELETE`: an
+interactive session prompts, a `dontAsk` one is refused, so removing an epic's `needs-approval`
+stays the human's and a pull request's removal on the REST fallback parks.
+`gh pr edit --remove-label` is allowed. A single command removing another label while naming
+`needs-approval` is refused too, and parks.
+
+**Not in the list.** The WSL test runner is this machine's, not the repository's; a step that
+needs a local HA-harness run is refused in the loop and leaves the tests to CI.
+
 ## Project board
 
 The board is `profile.yml`'s `board` (its name, number and node id are there). Its Status
