@@ -494,11 +494,12 @@ it is wired to its callers).
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
   clamp (E5) → readout headroom (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2's
   baseline call and E1's baseline query are each made at most once per cycle (Auto's own Profile
-  call for the handback baseline; Manual reads `active_mode` directly and skips E2 entirely), and
-  neither runs on a cycle the non-resolvable early return reaches (a disconnect, or SOC
-  unavailable) — but E1's real dispatch call still runs on such a cycle, against whichever mode is
-  already active, since that early return only skips the baseline pair and the Profile's own
-  dispatch resolution. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
+  call for the handback baseline; Manual's own dispatch-time `ManualPolicy` call, at the
+  owned-entity read, is unaffected — only this baseline call is skipped, `baseline_mode` taking
+  `active_mode` directly), and neither runs on a cycle the non-resolvable early return reaches (a
+  disconnect, or SOC unavailable) — but E1's real dispatch call still runs on such a cycle,
+  against whichever mode is already active, since that early return only skips the baseline pair
+  and the Profile's own dispatch resolution. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
   pursued occurrence); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
@@ -513,10 +514,11 @@ it is wired to its callers).
   path's direction and the Store's home; resolved). The compute pipeline was never gated.
 - **Testable on its own:** HA harness (ADR-0009 — pipeline is HA-coupled): full-cycle regression per
   UC01–UC04; the two-distinct-clamps ordering (ADR-0006); the R5 call order — the baseline
-  Profile and Mode calls precede the Deadline urgency call, and the headroom calls (unlike the R3
-  clamp) advance no breach timer, each fitted to its own baseline: raw for
-  `sensor.smart_charging_peak_headroom_a` and the R3 clamp, smoothed for R5's
-  escalated rate, a distinction only observable from here; R15's capacity fallback (an unmapped or unavailable sensed role falls back to the
+  Profile and Mode calls precede the Deadline urgency call, and the headroom calls advance no
+  breach timer (unlike the R3 clamp) and each fit to their own baseline — raw for
+  `sensor.smart_charging_peak_headroom_a`'s readout call, smoothed for R5's escalated rate's —
+  while the R3 clamp itself stays fitted to the raw baseline, a distinction only observable from
+  here; R15's capacity fallback (an unmapped or unavailable sensed role falls back to the
   configured value, and the Engine sees only the composed result); fault → force-0A + Fault sensor
   (ADR-0007); `set_active_mode` timer reset (R11).
 - **Integration checkpoint:** ⎔ driven by C1 (timer) and reading C2 (owned entities); one end-to-end
