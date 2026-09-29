@@ -668,9 +668,31 @@ async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_
     # Assert
     assert result.fault is True
     assert coord._household_window.deferred_previous is False
-    # ADR-0046: the ev_soc fault exit sits UPSTREAM of `_smooth_household_baseline` (the step
-    # that would otherwise fold this cycle's own reading in), so a fault cycle must leave the
-    # window's samples exactly as it found them -- nothing this cycle read is admitted.
+
+
+async def test_should_leave_household_window_samples_unchanged_when_ev_soc_faults(hass):
+    """Round-2 review finding, split off the deferral test above (which is named for, and
+    should assert only, deferral-clearing): ADR-0046's ev_soc fault exit sits UPSTREAM of
+    `_smooth_household_baseline` (the step that would otherwise fold this cycle's own reading
+    in), so a fault cycle must leave the window's samples exactly as it found them -- nothing
+    this cycle read is admitted. Same Arrange as the test above; if `_smooth_household_baseline`
+    ever moved above the fault exit this is the test that would go red, not the deferral one."""
+    # Arrange -- same setup as the deferral test above
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(), smoothing_window=4)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._household_window = HouseholdWindow(samples=(100.0,), deferred_previous=True)
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
     assert coord._household_window.samples == (100.0,)
 
 
@@ -3093,10 +3115,11 @@ async def test_should_resolve_todays_own_default_when_only_tomorrow_is_in_home_d
         now=0.0,
         baseline_w=0.0,
         smoothed_baseline_w=0.0,
+        now_dt=now_dt,
     )
 
     # Act
-    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx)
 
     # Assert
     assert resolve_deadline_for(now_dt.date()) == time_of_day(6, 0)
@@ -3124,10 +3147,11 @@ async def test_should_resolve_the_override_when_tomorrow_is_in_home_day_dates(ha
         now=0.0,
         baseline_w=0.0,
         smoothed_baseline_w=0.0,
+        now_dt=now_dt,
     )
 
     # Act
-    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx)
 
     # Assert
     tomorrow_date = now_dt.date() + timedelta(days=1)

@@ -73,9 +73,20 @@ def test_should_use_documented_defaults_when_constructed_with_only_required_fiel
     `effective_peak_limit_kw`/`active_soc_limit` (issue #564) and `effective_battery_capacity_kwh`
     (ADR-0046) -- start at `None`, not a same-typed placeholder, so a future premature
     arithmetic/comparison read fails loudly instead of silently computing on a
-    plausible-looking wrong value. One behaviour (default construction), many fields checked
-    against it -- testing bar item 3 permits multiple assertions under one `# Assert` when they
-    all check the same action's outcome."""
+    plausible-looking wrong value (each has its own fail-loud test below).
+
+    `peak_operand_kw`/`monthly_peak_kw`/`solar_surplus_w`/`deadline_urgency` also start at
+    `None` (ADR-0046), but the narrower claim: every production reader of each one is a step
+    that runs strictly after the one call that resolves it, so no interleaved read of any of
+    these four ever sees the default in practice -- unlike the fail-loud group above, `None`
+    here is not exercised as a premature-read guard, only as a same-typed-placeholder-hazard
+    guard (changing one to e.g. `0.0` would silently look like a genuine reading, #564).
+    `now_dt` starts `None` for a third reason: in the real cycle `_build_cycle_context` always
+    sets it at construction, so the default is only ever seen by a `CycleContext` built outside
+    that one call (a test, or the baseline dry run) -- again not a premature-read guard. One
+    behaviour (default construction), many fields checked against it -- testing bar item 3
+    permits multiple assertions under one `# Assert` when they all check the same action's
+    outcome."""
     # Act
     ctx = CycleContext(
         status=STATE_CHARGING,
@@ -98,6 +109,11 @@ def test_should_use_documented_defaults_when_constructed_with_only_required_fiel
     assert ctx.has_charged is False
     assert ctx.auto_dispatchable is False
     assert ctx.effective_battery_capacity_kwh is None
+    assert ctx.peak_operand_kw is None
+    assert ctx.monthly_peak_kw is None
+    assert ctx.solar_surplus_w is None
+    assert ctx.deadline_urgency is None
+    assert ctx.now_dt is None
 
 
 def _unresolved_ctx() -> CycleContext:
@@ -120,8 +136,8 @@ def _unresolved_ctx() -> CycleContext:
 
 def test_should_raise_type_error_when_effective_peak_limit_kw_is_read_before_it_resolves():
     """issue #564: `effective_peak_limit_kw` stays `None` until `_resolve_effective_peak_limit`
-    (`_fault_ev_soc`'s own provisional resolution the ev_soc fault exit) runs -- a premature
-    arithmetic read fails loudly instead of silently computing on a plausible-looking 0.0."""
+    runs -- a premature arithmetic read fails loudly instead of silently computing on a
+    plausible-looking 0.0."""
     # Arrange
     ctx = _unresolved_ctx()
     # Act / Assert
@@ -145,8 +161,8 @@ def test_should_raise_type_error_when_smoothed_baseline_w_is_read_before_smoothi
     `_smooth_household_baseline` runs -- `CycleContext` is now built before that smoothing step
     (ADR-0046: right after the required-role read, above the ev_soc fault exit), so a premature
     arithmetic read (e.g. from `_escalated_maximum_permitted_rate_a`, which fits its bounds to
-    this field) fails loudly instead of silently computing on a plausible-looking 0.0. This is
-    the guarantee `test_should_raise_when_smoothed_baseline_w_is_omitted_at_construction`
+    this field) fails loudly instead of silently computing on a plausible-looking 0.0. This
+    replaces the guarantee `test_should_raise_when_smoothed_baseline_w_is_omitted_at_construction`
     pinned before the restructure moved the resolution point; it now lives here alongside the
     other partway-resolved numeric fields."""
     # Arrange
