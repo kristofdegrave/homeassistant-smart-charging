@@ -156,6 +156,7 @@ fi
 [ "$branch" = main ] || exit 0 # another branch
 
 top=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
+parent=$(dirname "${top:-$dir}") # the worktrees sit beside the main checkout
 
 json_escape() {
   printf '%s' "$1" |
@@ -171,8 +172,8 @@ Reason: this path is in the repository's main checkout, $top, which is on main.
 Every unit of work is edited in its own task worktree, never in the main checkout
 ($DOC).
 
-Make the edit in the task's own worktree, on its branch, instead; if there is none yet,
-create it as that step says."
+Make the edit in the task's own worktree instead ($parent/sc-<type>-<n>, on the task
+branch); if there is none yet, create it as that step says."
 
 printf '%s\n' "$message" >&2
 printf '{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"%s"}}\n' "$(json_escape "$message")"
