@@ -153,7 +153,7 @@ whichever is then correct.
 On an **issue** the same two labels park work for the human, as ADR-0052 decided:
 `needs-decision` is applied by `clarify`'s parking rule, in an unattended run,
 and means a question waits for the human's answer; `needs-approval` on an epic asks for a go,
-applied by the `decompose` row's work file.
+applied by the `decompose` row's work file or the `autopilot` skill's verify-live park.
 The human takes an issue's label off; a run removes `needs-decision`, on an answer
 that settles `clarify`'s park, and never an epic's `needs-approval`, whose removal is the human's
 go. An issue's label says nothing about any PR.
@@ -302,8 +302,8 @@ shared with the human partner**.
   epic's own work stays beside it (a bug-track epic, filed new at the opening pass beside the
   routed `bug` issue, keeps `bug` and never gains a context label); `epic` adds no
   Model-selection row.
-- **The `control` label** `paused` is the autopilot's remote stop, put on its tracking issue by
-  the human; what it stops is the `autopilot` skill's rule.
+- **The `control` label** `paused` is the human's stop on the autopilot's tracking issue, per
+  the `autopilot` skill.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
