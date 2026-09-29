@@ -34,8 +34,9 @@ item scores against whichever documents hold those here.
   rather than restating it, so the step has to be read before any such item is applied.
 - `docs/design/system-design.md` and `docs/design/project-plan.md` — the slice the body claims
   to derive from, and the services it may name. The dispatch names the epic's track; on the
-  `bug` or `enhancement` track the body derives instead from what the closing step's *Derive,
-  don't design* names for that track, and from `project-plan.md` only where the strand's
+  shipped-behaviour track (a `bug` or `enhancement` epic) the body derives instead from what
+  the closing step's *Derive, don't design* names for it — the reproduction itself, a tracker
+  comment, is out of this pass's reach — and from `project-plan.md` only where the strand's
   design change added a slice.
 - The analysis documents the body cites, every requirement it lists as in scope, and
   `docs/analysis/system-overview.md` for the glossary — the tree is under `CLAUDE.md`'s
@@ -90,9 +91,9 @@ decision needed a record of its own is not yours — the worthiness test is `CLA
 **Architecture Decision Records (ADRs)** topic's.
 
 **(7) Derived, not invented.** Every task maps to a service already in `system-design.md` and to
-its source: a task in `project-plan.md`; where the dispatch names the `bug` track, the recorded
-fix, and the `enhancement` track, the `requirement`/`uc` change — on either, plus any plan slice
-the strand's design change added. A service, call direction or volatility the body introduces is
+its source: a task in `project-plan.md`; where the dispatch names the shipped-behaviour track,
+the fix *Decisions so far* records, plus, where filed, the strand's `requirement`/`uc` change and
+any plan slice its design change added. A service, call direction or volatility the body introduces is
 **Major**: the fix is an issue against the design document, never a paragraph in the body.
 
 **(8) Nothing restated that another document owns.** A formula, threshold, resolution order or

@@ -1,12 +1,14 @@
 ---
 name: diagnosing-bugs
-description: Use when a defect is reported against the shipped Smart Charging integration — a claim that the running system misbehaves — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
+description: Use when a claim is made about the shipped Smart Charging integration's behaviour — a defect (the running system misbehaves) or an enhancement (its current behaviour should change) — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
 ---
 
 # Diagnosing bugs
 
-Confirm or refute a reported defect and leave behind a minimal reproduction. **It stops there.**
-No fix, no regression test, no verification — the `development` flow owns those.
+Confirm or refute a claim about shipped behaviour — a reported defect or an enhancement — and
+leave behind a minimal reproduction. For an enhancement the reproduction pins the current
+behaviour the claim describes, and "confirmed" means the system behaves as it says. **It stops
+there.** No fix, no regression test, no verification — the `development` flow owns those.
 
 Its one job is the step nothing else here performs: judging the system against something other
 than this repo's own documents. The reporter's *observation* is the oracle, so the loop you build
@@ -121,13 +123,15 @@ contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the 
 in that issue's row of `CLAUDE.md`'s **Model selection** table.
 
 **Record a confirmed claim on its issue** as a comment carrying `fix`'s note marker, per the
-marker rule under `CLAUDE.md`'s **Contribution workflow**: that the claim is confirmed, the one
-command and its output, and the minimal reproduction with its captured symptom. That comment is
-the reproduction the rest of the flow reads.
+marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its **Tracker mechanics**
+topic (*Commenting on a work item*) and read back: that the claim is confirmed, the one command
+and its output, and the minimal reproduction with its captured symptom. That comment is the
+reproduction the rest of the flow reads.
 
 Stop here and report:
 
-1. **Confirmed or refuted**, with the one command and its output.
+1. **Confirmed or refuted**, with the one command and its output, and the recording comment's
+   link — or that posting it failed.
 2. **The minimal reproduction** and the captured symptom.
 3. **The cause** — which hypothesis survived, which were eliminated.
 4. **Where else this shape lives** — the same wrong assumption at sibling call sites, roles or
