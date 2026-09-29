@@ -43,8 +43,7 @@ over an unanswered park.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
 entry rule's go reads the label's events against that comment's time — and the run added no
-other label and removed none, bar `clarify`'s own parking of the `decompose` issue; it
-re-applied `needs-approval` only where the entry rule's late-artifact arm says to. Otherwise
+other label and removed none, bar `clarify`'s own parking of the `decompose` issue. Otherwise
 → **Major**.
 
 **(6) The run filed no child.** A task issue it filed before the human's go — the label
@@ -65,8 +64,9 @@ comment says how; one it does not admit, and any redirect, was reported there, n
 Either missed → **Major**: the human's instruction at the gate was the point of the gate.
 
 **(10) The `decompose` issue is closed by its closing comment**, carrying what
-`implement.md`'s entry 2 step 3 lists, and it is *done*. Open, or closed without the children
-listed → **Major**.
+`implement.md`'s entry 2 step 3 lists, and it is *done* — or left open, the stop reported,
+where that step's re-read found a new blocked-by edge. Open otherwise, or closed without the
+children listed → **Major**.
 
 **(11) No clutter** anywhere the run wrote — the body, the summary, the closing comment — as
 the *Clutter* entry named under item 3 defines it, at its severities and in its scope.
@@ -74,8 +74,7 @@ the *Clutter* entry named under item 3 defines it, at its severities and in its 
 ## At a stop, before or within entry 1
 
 **(12) A stop short of the park leaves the gate readable**: the run filed no child, and no
-label on the epic or the `decompose` issue was added or removed beyond `clarify`'s parking
-and (5)'s re-application.
+label on the epic or the `decompose` issue was added or removed beyond `clarify`'s parking.
 - Stopped by *Out of the body*: the filed issue exists, the blocked-by edge from the
   `decompose` issue to it was read back, where a park stood a fresh one with the children
   part `none` names that issue, and (7) holds.
@@ -84,7 +83,8 @@ and (5)'s re-application.
 - Stopped as picked too early or as still parked: nothing on the tracker changed, and the run
   did not move the `decompose` issue.
 - Stopped at the entry rule's last arm: `clarify`'s parking rule holds on the `decompose`
-  issue, which the run did not move.
+  issue, its question naming what resumes the run, or with `needs-decision` already on
+  nothing on the tracker changed; the run did not move the issue.
 
 A stop that leaves a standing park readable as the go → **Critical**; any other miss →
 **Major**.

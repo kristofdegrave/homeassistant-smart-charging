@@ -223,7 +223,7 @@ starts; the `decompose` row's work file runs all four as one issue, and step 4's
 filing checklist is `file-task-issue`'s.
 
 1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. No
-   child exists yet.
+   child is filed.
 2. **One fresh-agent pass over that body**, against the [decomposition
    checklist](decomposition-checklist.md), while the decomposition is still cheap to change.
    Its findings are fixed in the body.
@@ -295,7 +295,7 @@ tasks; the closing step leaves the spec in the epic's body and one child per tas
 The opening pass's own gate: nothing downstream starts without an issue to run against, what is
 filed for work is milestoned, and each epic with a spec has its `decompose` child, with its
 edges. The closing step's: step 2's pass and step 3's parked read, both complete
-before any child is filed, and then every task in the body having an issue, filed as step 4
+before step 4 files a child, and then every task in the body having an issue, filed as step 4
 says. The **Implementation** stage starts from those issues and from nothing else.
 
 ### Skills

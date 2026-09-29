@@ -232,7 +232,8 @@ gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues --
 
 bid=$(gh api repos/$REPO/issues/<blocker> --jq .id)
 gh api -X POST repos/$REPO/issues/<n>/dependencies/blocked_by -F issue_id=$bid
-gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<n>/dependencies/blocked_by --jq '.[].number'
+gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<n>/dependencies/blocked_by \
+  --jq '.[] | {number, state, state_reason, closed_at}'
 ```
 
 Reading the edges the other way round, and with state — from a child to its parent, and a
@@ -244,7 +245,7 @@ open-children count reads. Both are the sub-issues REST API's own reads (*get pa
 ```sh
 gh api repos/$REPO/issues/<child>/parent --jq '{number, state}'
 gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues \
-  --jq '.[] | {number, state, title}'
+  --jq '.[] | {number, state, state_reason, closed_at, title}'
 ```
 
 The second is a listing, so `--paginate` is mandatory here as everywhere in this file; the
