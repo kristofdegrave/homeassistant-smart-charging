@@ -70,8 +70,11 @@ def resolve_solar_reserve_active(
     `missed_deadline_hold` is R9's sixth precondition (resolution-rules.md's "hold excludes
     the solar-reserve cap"): a missed-deadline hold takes priority over the cap exactly as a
     departure deadline resolved for the reserved day already does, so the cap never competes
-    with either (R5/R9). It is read as it stood *entering* the cycle, and defaults to False
-    so callers that do not yet supply it keep today's behaviour.
+    with either (R5/R9). It is read as it stood *entering* the cycle. Defaults to False,
+    matching `resolve_solar_reserve_gate`'s own default (coordinator_cycle.py) -- the one
+    production caller (that wrapper, and coordinator.py's `_resolve_deadline_and_reserve`
+    beneath it) always supplies the real value; the default stays so this file's own
+    plain-pytest tests that don't need to prove the threading can keep omitting it.
     """
     return (
         profile == PROFILE_AUTO
