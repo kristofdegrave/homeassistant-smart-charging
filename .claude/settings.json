@@ -76,7 +76,16 @@
       "Bash(gh api graphql *Ref(*)",
       "Bash(gh api graphql *createCommitOnBranch*)",
       "Bash(gh api graphql *updateRepository*)",
-      "Bash(gh api graphql *BranchProtectionRule*)"
+      "Bash(gh api graphql *BranchProtectionRule*)",
+      "Bash(gh api *-X*-X*)",
+      "Bash(gh api *--method*)",
+      "Bash(gh api graphql *query=*query=*)",
+      "Bash(gh api graphql *=@*)",
+      "Bash(gh api graphql *--input*)",
+      "Bash(gh api graphql *updateIssue*)",
+      "Bash(gh api graphql *PullRequest*)",
+      "Bash(gh api *issues/*--input*)",
+      "Bash(gh api *issues/*=@*)"
     ]
   },
   "hooks": {
