@@ -283,11 +283,11 @@ shared with the human partner**.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
   (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
-  `decompose` (an epic's body read, one child per epic, a method epic aside). The label set
-  itself — every name, colour and description, and which context labels this project enables
-  — is `.claude/profile.yml`'s `labels` and `work_types`, and `.github/setup-labels.sh` writes
-  it to the repository. Adding or renaming a label: [ci-pipeline.md](ci-pipeline.md) lists
-  every place this vocabulary must stay in sync.
+  `decompose` (an epic's body read, at most one open per epic). The label
+  set itself — every name, colour and description, and which context labels this project
+  enables — is `.claude/profile.yml`'s `labels` and `work_types`, and
+  `.github/setup-labels.sh` writes it to the repository. Adding or renaming a label:
+  [ci-pipeline.md](ci-pipeline.md) lists every place this vocabulary must stay in sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue

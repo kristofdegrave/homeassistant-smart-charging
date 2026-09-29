@@ -199,6 +199,11 @@ method itself — one whose strand:
 A method epic needs no spec, so it gets no `decompose` child and no closing step. Every other
 epic is an epic with a spec.
 
+**An `adr`, `uc`, `requirement` or `documentation` issue filed after this pass** under an epic
+with a `decompose` sub-issue, by anything but a `decompose` run, blocks the epic's open
+`decompose` child; with none open, a new one is filed as above, blocked by it. The filer posts
+no park and leaves `needs-approval` alone.
+
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** owns those rules
@@ -218,15 +223,14 @@ starts; the `decompose` row's work file runs all four as one issue, and step 4's
 filing checklist is `file-task-issue`'s.
 
 1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. No
-   child exists yet.
+   child is filed.
 2. **One fresh-agent pass over that body**, against the [decomposition
-   checklist](decomposition-checklist.md), while the decomposition is still cheap to change.
-   Its findings are fixed in the body.
+   checklist](decomposition-checklist.md). Its findings are fixed in the body.
 3. **The human partner reads the fixed body** and says to go on — the parked gate: the
    `decompose` work file parks the epic under `needs-approval`, and removing it is the go. The
    pass is one agent run, then that read — never repeated over one draft, carrying no round
-   cap, so its findings are answered first; a fresh draft after the work file's *Out of the
-   body* stop gets its own.
+   cap, so its findings are answered first; a fresh draft the work file's entry rule starts
+   gets its own.
 4. **The children are filed**, in build order, one issue per task.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` — on a `bug`
@@ -266,13 +270,10 @@ entry carries these keys, one item per key:
 
 - **Files and test** — the exact paths, and the concrete failing test the task starts from.
 - **Test boundary** — which harness that failing test drives through.
-- **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way so
-  the filer can tell an empty set from an omission.
+- **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way.
 - **Sources** — the documents the entry was cut from, each named at the smallest
   self-contained unit the task turns on: a section where the task turns on one, the whole file
-  where the document is argued as a whole. Naming a whole document the task needs part of makes
-  the worker re-derive the reading; anchoring so tightly that the surrounding text is needed
-  is the same fault mirrored.
+  where the document is argued as a whole.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
   `none` and why in one line. Written now, not after deployment.
 
@@ -281,7 +282,7 @@ the epic's milestone, its native sub-issue edge to the epic and the epic's block
 it, a blocked-by edge per id the entry names, and the anchored `Source:` lines naming the
 entry's sources. The other fields are [contribution-workflow.md](contribution-workflow.md)'s
 **Issue conventions**'; the `Source:` line's format is ADR-0044's, not yet written into a
-method document, so that record is its only statement until one owns it.
+method document.
 
 ### Artifact: the epic, and one issue per task
 
@@ -294,7 +295,7 @@ tasks; the closing step leaves the spec in the epic's body and one child per tas
 The opening pass's own gate: nothing downstream starts without an issue to run against, what is
 filed for work is milestoned, and each epic with a spec has its `decompose` child, with its
 edges. The closing step's: step 2's pass and step 3's parked read, both complete
-before any child is filed, and then every task in the body having an issue, filed as step 4
+before step 4 files a child, and then every task in the body having an issue, filed as step 4
 says. The **Implementation** stage starts from those issues and from nothing else.
 
 ### Skills
