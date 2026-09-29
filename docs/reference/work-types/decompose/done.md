@@ -37,9 +37,8 @@ park. No read-back → **Major**: the fix is then assumed.
 **(4) The comment ends in the parking marker**, as its last line, posted under a login that
 passes the entry rule's author test, and it is the only park the human has not answered.
 Missing or elsewhere in the comment → **Critical**: the autopilot cannot then tell the park
-from any other comment, and re-parks or never proceeds. A second park over an unanswered one
-→ **Major**; a not-ready park, and the park that follows one or a late artifact, are not
-over an unanswered park.
+from any other comment, and re-parks or never proceeds. A second park over an unanswered one,
+as `implement.md`'s *One park per human answer* rule defines it → **Major**.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
 entry rule's go reads the label's events against that comment's time — and the run added no
@@ -65,7 +64,7 @@ Either missed → **Major**: the human's instruction at the gate was the point o
 
 **(10) The `decompose` issue is closed by its closing comment**, carrying what
 `implement.md`'s entry 2 step 3 lists, and it is *done* — or left open, the stop reported,
-where that step's re-read found a new blocked-by edge. Open otherwise, or closed without the
+where step 1 found an open blocked-by edge or step 3's re-read a new one. Open otherwise, or closed without the
 children listed → **Major**.
 
 **(11) No clutter** anywhere the run wrote — the body, the summary, the closing comment — as
@@ -85,8 +84,9 @@ label on the epic or the `decompose` issue was added or removed beyond `clarify`
 - Stopped at the entry rule's last arm with its own `clarify` park standing: nothing on the
   tracker changed, a reply comment to that park reported, and the run did not move the issue.
 - Stopped at that arm without one: `clarify`'s parking rule holds on the `decompose` issue,
-  its question naming re-applying `needs-approval` on the epic as the only answer, and the
-  run did not move the issue.
+  its question naming both actions that answer it — re-applying `needs-approval` on the epic
+  and removing `needs-decision` from the `decompose` issue — and the run did not move the
+  issue.
 
 A stop that leaves a standing park readable as the go → **Critical**; any other miss →
 **Major**.
