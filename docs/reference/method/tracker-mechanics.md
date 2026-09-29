@@ -482,22 +482,17 @@ Resolving has **no REST endpoint at all** — GraphQL only, in two steps. List t
 their ids and current state:
 
 ```sh
-gh api graphql -F owner="$OWNER" -F name="$REPO_NAME" -F number=<n> \
-  -f query='query($owner:String!, $name:String!, $number:Int!) { repository(owner:$owner, name:$name) {
-  pullRequest(number:$number) { reviewThreads(first:100) {
-    pageInfo { hasNextPage endCursor }
-    nodes { id isResolved isOutdated
-      comments(first:1){ nodes { databaseId path line body } } } } } } }'
+gh api graphql -f query='query{ repository(owner:"<owner>", name:"<name>") { pullRequest(number:<n>) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'
 ```
 
-`first:` is a hard cap, not a default that grows — the same trap as `item-list`'s limit. Check
-`hasNextPage` and fetch the next page with `after:` rather than assuming 100 covered it.
+`first:` is a hard cap, like `item-list`'s limit: check `hasNextPage` and fetch on with
+`reviewThreads(first:100, after:"<endCursor>")`. `<owner>` and `<name>` are `profile-env.sh`'s
+`OWNER` and `REPO_NAME`; these two are inlined on one line so a `dontAsk` session admits them.
 
 then resolve one by its thread id:
 
 ```sh
-gh api graphql -f query='mutation($tid:ID!){ resolveReviewThread(input:{threadId:$tid}){ thread { id isResolved } } }' \
-  -f tid=<thread-id>
+gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:"<thread-id>"}){ thread { id isResolved } } }'
 ```
 
 `isOutdated: true` only means a later commit moved the line; it is **not** resolved. The
