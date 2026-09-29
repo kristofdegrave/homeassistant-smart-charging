@@ -894,6 +894,36 @@ def test_deadline_unreachable_edge_reports_cleared_again_on_a_second_occasion():
     assert edge.resolve(False) == (False, True)
 
 
+# --- DeadlineUnreachableEdge's `outcome_established` input (ADR-0042, narrowed by ADR-0053:
+# T13/D-9 -- the guard that reaches this with nothing decided must say so, or the flag's
+# default `False` reads as a genuine resolve) ---
+
+
+def test_deadline_unreachable_edge_holds_the_clear_when_the_cycle_establishes_nothing():
+    """After a True, `resolve(unreachable=False, outcome_established=False)` reports NO clear
+    and leaves the prior flag `True` -- the returned `unreachable` is the HELD prior flag, not
+    the (uncomputed) argument, since nothing this cycle can advance it to."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(True)
+    assert edge.resolve(False, outcome_established=False) == (True, False)
+
+
+def test_deadline_unreachable_edge_fires_the_held_clear_once_a_later_cycle_establishes_it():
+    """Continuing the case above: the next call that DOES establish an outcome reports the
+    clear exactly once, off the flag the held call left untouched."""
+    edge = DeadlineUnreachableEdge()
+    edge.resolve(True)
+    edge.resolve(False, outcome_established=False)
+    assert edge.resolve(False, outcome_established=True) == (False, True)
+
+
+def test_deadline_unreachable_edge_holding_reports_no_clear_when_the_prior_flag_is_already_false():
+    """The prior flag already False, `outcome_established=False` still reports no clear -- there
+    is nothing to hold a clear FROM either."""
+    edge = DeadlineUnreachableEdge()
+    assert edge.resolve(False, outcome_established=False) == (False, False)
+
+
 # --- SolarStepUpGate (ADR-0023, T0.1: R8 solar step-up gating, coordinator.py:306-326) ---
 
 
@@ -1436,7 +1466,8 @@ def test_should_release_the_hold_when_the_following_occurrence_has_elapsed():
 
 def test_should_release_the_pursued_occurrence_when_the_car_is_disconnected():
     """A disconnect ends the connected session, so it is a real exit and one of R5's own
-    release conditions (resolution-rules.md's release list; UC05's State model)."""
+    release conditions (resolution-rules.md's release list; UC05's State model) -- always
+    established (ADR-0042), whatever the held occurrence."""
     # Arrange / Act -- `deadline_resolvable` False with its CONNECTED half also False.
     result = _resolve_deadline_urgency(
         deadline_resolvable=False,
@@ -1447,13 +1478,18 @@ def test_should_release_the_pursued_occurrence_when_the_car_is_disconnected():
     # Assert
     assert result.required.pursued_occurrence is None
     assert result.urgent is False
+    assert result.outcome_established is True
 
 
-def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable():
-    """The other half of the same early return, releasing in the OPPOSITE direction: a cycle on
-    which state of charge is unavailable establishes nothing about the deadline, so "the System
-    holds whichever state it was already in" (UC05's State model; ADR-0024). Collapsing the two
-    halves would release a hold on a cycle that established nothing."""
+def test_should_report_unreachable_when_no_reading_and_the_occurrence_has_elapsed():
+    """ADR-0053 (narrowing ADR-0042): a no-reading cycle still settles what needs no reading --
+    the clock against the held occurrence. `pursued` (09:00) is already behind the default
+    `now_dt` (10:00), so the hold BEGINS (or continues) on this cycle alone, `unreachable`
+    reports True, and the outcome counts as established (row 1 of the ADR's table) so the edge
+    detector does not hold a stale flag past it.
+
+    This is the test ADR-0053's Consequences names as flipping: before this record, the same
+    arrangement pinned `unreachable is False` as "establishes nothing"."""
     # Arrange / Act -- `deadline_resolvable` False while still connected, which is exactly the
     # state of charge half failing.
     pursued = datetime(2026, 7, 27, 9, 0)
@@ -1465,19 +1501,42 @@ def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavailable(
     )
 
     # Assert -- the urgency the occurrence implies is held with it ("urgency is in effect for
-    # exactly as long as there is a pursued occurrence", resolution-rules.md), while
-    # `unreachable` stays False: ADR-0042 leaves the flag as it is and gives the clear edge its
-    # own input instead.
+    # exactly as long as there is a pursued occurrence", resolution-rules.md), and `unreachable`
+    # now follows the clock too (ADR-0053).
     assert result.required.pursued_occurrence == pursued
     assert result.urgent is True
     assert result.required.urgent is True
+    assert result.required.unreachable is True
+    assert result.outcome_established is True
+
+
+def test_should_hold_established_false_when_no_reading_and_not_yet_elapsed():
+    """The steady-state counterpart of the test above: the held occurrence is still AHEAD of
+    `now_dt`, so nothing needing a reading has happened yet -- `unreachable` stays False and the
+    outcome is NOT established, so the edge detector holds whichever flag it already carried
+    rather than taking this cycle's `unreachable=False` at face value."""
+    # Arrange / Act -- pursued 30 minutes AFTER the default now_dt (10:00).
+    pursued = datetime(2026, 7, 27, 10, 30)
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=pursued,
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence == pursued
+    assert result.urgent is True
     assert result.required.unreachable is False
+    assert result.outcome_established is False
 
 
 def test_should_release_the_occurrence_when_state_of_charge_is_unavailable_at_the_24_hour_bound():
     """R5's 24-hour bound needs only the clock and the pursued occurrence, so it applies on a
     cycle whose state of charge is unavailable as well: at the bound the occurrence is released
-    and urgency with it ("a hold never outlives one deadline cycle", requirements.md R5)."""
+    and urgency with it ("a hold never outlives one deadline cycle", requirements.md R5). The
+    backstop releasing the hold is itself one of ADR-0053's three established no-reading
+    outcomes (row 2), so the edge detector is told the release is real rather than held."""
     # Arrange -- `now_dt` is 10:00 on 27 July; the occurrence exactly 24 h earlier.
     pursued = datetime(2026, 7, 26, 10, 0)
 
@@ -1493,6 +1552,8 @@ def test_should_release_the_occurrence_when_state_of_charge_is_unavailable_at_th
     assert result.required.pursued_occurrence is None
     assert result.urgent is False
     assert result.required.urgent is False
+    assert result.required.unreachable is False
+    assert result.outcome_established is True
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---

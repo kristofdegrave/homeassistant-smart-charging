@@ -375,9 +375,13 @@ def resolve_required_current(
             # urgent but UNREACHABLE -- `required_a` above the escalated rate outright, the
             # no-margin comparison at the foot of this function, which is a strict subset of
             # the slack test -- `unreachable` never falls, so the coordinator's
-            # `_unreachable_edge`, which keys on that flag alone (ADR-0024), never fires
-            # `DeadlineUnreachableCleared` and the next occasion goes unnotified. The new
-            # occurrence is judged from the next cycle instead.
+            # `_unreachable_edge` never fires `DeadlineUnreachableCleared` and the next occasion
+            # goes unnotified. True of ADR-0024 alone, and still true now that ADR-0042
+            # (narrowed by ADR-0053) also feeds the edge an `outcome_established` input: this
+            # release resolves a reading (`deadline_resolvable` was True to reach this branch at
+            # all), so that input is `True` here regardless -- the flag itself is still what
+            # decides whether a clear fires. The new occurrence is judged from the next cycle
+            # instead.
             return RequiredCurrentResult(
                 required_a=None,
                 urgent=False,
