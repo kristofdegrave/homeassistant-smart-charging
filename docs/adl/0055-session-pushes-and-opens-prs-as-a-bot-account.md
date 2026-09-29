@@ -1,4 +1,4 @@
-# ADR-0055: The session pushes and opens pull requests as a bot account; the owner's account keeps approval and merge (narrows ADR-0052)
+# ADR-0055: The session commits, pushes and opens pull requests as a bot account; the owner's account keeps approval and merge (narrows ADR-0052)
 
 Date: 2026-09-29
 Status: Accepted
@@ -7,7 +7,7 @@ Status: Accepted
 
 In the context of one GitHub account shared by the session and the human partner, facing a
 code-owner review nobody can give to a pull request its own author opened, we decided on
-Option C, the bot reached only to push and to open a pull request, to make the human's
+Option C, the bot reached only to commit, push and open a pull request, to make the human's
 approval a real review, accepting that the owner's account can now approve the session's pull
 requests, so an approval is one more rule of an accident guard.
 
@@ -51,9 +51,9 @@ owner's through a committed wrapper the guard trusts as a second first word.
   the owner's login, and each would change.
 - Con: the guard gains a second word it lets reach a merge.
 
-### Option C — The owner's account stays the default; the bot is reached only to push and to open a pull request
+### Option C — The owner's account stays the default; the bot is reached only to commit, push and open a pull request
 
-Pushes use a repository-local credential helper returning the bot's stored token; a pull
+Commits carry the bot's name and noreply email through the repository-local git config; pushes use a repository-local credential helper returning the bot's stored token; a pull
 request is opened through one committed wrapper that sets `GH_TOKEN` to it and runs only that
 call. Approval and merge stay plain `gh`, as the owner.
 
@@ -104,12 +104,14 @@ rg -n --hidden --glob '!.git/' --glob '!docs/adl/**' --glob '!docs/postmortems/*
   -e 'one account|own GitHub account|owner.s login|human.s login|same login|under the owner|as the owner|as the maintainer|as the human' \
   -e 'kristofdegrave-bot|bot (account|identity|author|login)|[Oo]nly commits carry' \
   -e 'gh pr create|gh pr review|APPROVE' -e '/pulls(\*|[^/a-z]|$)|/pulls/<[a-z]+>/reviews' \
-  -e 'commit identity|git config user|credential\.' .
+  -e 'commit identity|git config user|credential\.' \
+  -e 'gh pr merge. outside|merge outside the auto-merge|goes to the merge rule|^# The merge rule|same hook mechanizes|Table-driven test for block-destructive' .
 ```
 
 Wide enough: the decision governs whose login each step runs under and who may approve, and
 every site stating either names the account, the bot, the approval, or the command or the
-`pulls` endpoint that opens or reviews a pull request. **32** hits.
+`pulls` endpoint that opens or reviews a pull request; and every statement of what the guard
+refuses names the merge rule, beside which the approval rule goes. **40** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
@@ -118,12 +120,16 @@ every site stating either names the account, the bot, the approval, or the comma
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's comments being the owner's |
 | `.claude/skills/submit-pr-review/SKILL.md:14` | The PR's opener cannot approve anyway | The guard refuses an approval |
 | `docs/reference/method/tracker-mechanics.md:360`, `:364`, `:368` | `gh pr create` and its REST fallback as the owner | Through the bot wrapper |
+| `.claude/hooks/block-destructive-git.sh:5`, `:26`, `:49` | The header states a merge rule only | Gains the approval rule |
+| `.claude/hooks/test-block-destructive-git.sh:2` | Tests the git and merge rules | Gains the approval cases |
+| `CLAUDE.md:18`; `docs/reference/method/contribution-workflow.md:247` | The guard refuses destructive git and a merge | And an approval |
 | `.claude/settings.json:30`, `:34`, `:38` | Allow the owner to open a pull request, by command or over REST | The wrapper opens one; the owner's calls on the `pulls` collection narrowed to reviews and comments |
 
-16 hits conform: `profile.md:30`, `:42`, `contribution-workflow.md:217`,
-`tracker-mechanics.md:39`, `:308`, `:431`, `:452`, `:460`, `CODEOWNERS:6`,
-`review/SKILL.md:105`, `submit-pr-review/SKILL.md:12`, `:63`, `fix/SKILL.md:34`,
-`autopilot/SKILL.md:33`, `decompose/implement.md:57`, `test-block-destructive-git.sh:159`.
+18 hits conform: `block-destructive-git.sh:234`, `:236`, `profile.md:30`, `:42`,
+`contribution-workflow.md:217`, `tracker-mechanics.md:39`, `:308`, `:431`, `:452`, `:460`,
+`CODEOWNERS:6`, `review/SKILL.md:105`, `submit-pr-review/SKILL.md:12`, `:63`,
+`fix/SKILL.md:34`, `autopilot/SKILL.md:33`, `decompose/implement.md:57`,
+`test-block-destructive-git.sh:159`.
 Out of scope: `profile.yml:27` names the board's owner, `test-check-authoring-rules.sh:23` a
 throwaway repository's identity, `ci-pipeline.md:260` the retired job's app login, and
 `ai-authoring.md:281` a recipe named as an authoring example; each keeps saying so.
