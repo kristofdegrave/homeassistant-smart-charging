@@ -202,8 +202,7 @@ epic is an epic with a spec.
 **An `adr`, `uc`, `requirement` or `documentation` issue filed after this pass** under an epic
 with a `decompose` sub-issue, by anything but a `decompose` run, blocks the epic's open
 `decompose` child; with none open, a new one is filed as above, blocked by it. The filer posts
-no park and leaves `needs-approval` alone: the `decompose` work file's entry rule reads the
-edge.
+no park and leaves `needs-approval` alone.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
@@ -226,8 +225,7 @@ filing checklist is `file-task-issue`'s.
 1. **The body is drafted**, and it is **derived** — see *Derive, don't design* below. No
    child is filed.
 2. **One fresh-agent pass over that body**, against the [decomposition
-   checklist](decomposition-checklist.md), while the decomposition is still cheap to change.
-   Its findings are fixed in the body.
+   checklist](decomposition-checklist.md). Its findings are fixed in the body.
 3. **The human partner reads the fixed body** and says to go on — the parked gate: the
    `decompose` work file parks the epic under `needs-approval`, and removing it is the go. The
    pass is one agent run, then that read — never repeated over one draft, carrying no round
@@ -272,8 +270,7 @@ entry carries these keys, one item per key:
 
 - **Files and test** — the exact paths, and the concrete failing test the task starts from.
 - **Test boundary** — which harness that failing test drives through.
-- **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way so
-  the filer can tell an empty set from an omission.
+- **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way.
 - **Sources** — the documents the entry was cut from, each named at the smallest
   self-contained unit the task turns on: a section where the task turns on one, the whole file
   where the document is argued as a whole.
@@ -285,7 +282,7 @@ the epic's milestone, its native sub-issue edge to the epic and the epic's block
 it, a blocked-by edge per id the entry names, and the anchored `Source:` lines naming the
 entry's sources. The other fields are [contribution-workflow.md](contribution-workflow.md)'s
 **Issue conventions**'; the `Source:` line's format is ADR-0044's, not yet written into a
-method document, so that record is its only statement until one owns it.
+method document.
 
 ### Artifact: the epic, and one issue per task
 
