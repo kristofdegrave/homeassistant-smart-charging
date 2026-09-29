@@ -202,6 +202,9 @@ review:
 # many issues' chains may be in flight at once, on disjoint trees. `tracking_issue` is the
 # number of the issue the `autopilot` skill logs its ticks and digests on and reads `paused`
 # from; `null` until that issue is filed, and the skill does not start without it.
+# `loop_settings` (the loop-only settings file's path) and `loop_marker` (the `env` variable
+# it sets) are filled by the permissions follow-up; the skill does not start while either is
+# `null`.
 autopilot:
   auto_merge_trees:
     - custom_components/
@@ -209,6 +212,8 @@ autopilot:
     - docs/design/
   lanes: 2
   tracking_issue: null
+  loop_settings: null
+  loop_marker: null
 
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
