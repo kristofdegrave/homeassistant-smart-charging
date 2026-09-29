@@ -223,7 +223,7 @@ it is wired to its callers).
 
 > **⎔ Phase 1 checkpoint:** every Resource-Access class reachable through its factory/Store; no
 > logic layer references a raw upstream entity directly (NF3 guard). The owned-write path builds
-> against the native entity names (G-NAMING resolved).
+> against the native entity names (G-NAMING resolved). *Met.*
 
 ### Phase 2 — Engines
 
@@ -320,8 +320,8 @@ it is wired to its callers).
   `resolve_required_current` carries the hold branch, and `follow_pursued_occurrence` re-anchors a
   pending occurrence to its own date's departure time. The
   urgency call site's own adapter reads, the `resolve_deadline_urgency` gating unit, and its
-  non-resolvable early return whose ADR-0053 table governs a SOC-unavailable cycle mid-hold, all
-  sit in `coordinator.py`/`coordinator_cycle.py` per ADR-0023, not in this Engine.
+  non-resolvable early return whose ADR-0053 table governs a SOC-unavailable cycle with a pursued
+  occurrence, all sit in `coordinator.py`/`coordinator_cycle.py` per ADR-0023, not in this Engine.
 - **Builds:** resolved departure deadline (today + one-day-ahead, R14), required current, whether
   urgency is in effect, **whether the deadline is unreachable even so**, and the per-profile lever
   set it is willing to spend (R5/R15). Also R5's pursued occurrence, threaded in and out by M1
@@ -493,7 +493,10 @@ it is wired to its callers).
   (E6) → baseline mode (E2, urgency input false) → baseline desired current (E1, queried and not
   committed) → required current/urgency (E4) → select mode (E2) → desired current (E1) → peak
   clamp (E5) → readout headroom (E5) → grid clamp (E6) → invariants (E8) → write (RA1). E2 and E1
-  are each called twice per cycle: once to establish R5's handback baseline, once to dispatch. Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
+  are each called up to twice per cycle: once to establish R5's handback baseline (Auto's own
+  Profile call; Manual reads `active_mode` directly and skips it), once to dispatch — and neither
+  call happens on a cycle the non-resolvable early return reaches (a disconnect, or SOC
+  unavailable). Owns and threads every Engine's cross-cycle state, the Deadline Engine's included (R5's
   pursued occurrence); writes diagnostics
   (`sensor.smart_charging_monthly_peak_kw`, Fault/OK) through the Store (RA3). Realizes UC01–UC04 and
   UC05–UC07 in passing. **Publishes** the cycle's domain events. The ones ADR-0011 puts on the HA
@@ -601,10 +604,11 @@ it is wired to its callers).
   inheriting one derived from its translated name, and capability-gated entities are disabled at the
   **registry** level rather than not created at all — `_attr_entity_registry_enabled_default` on
   first registration plus a setup-time `sync_disabled_by` for the reconfigure case (`entity.py`),
-  which never overrides a user's own enable/disable choice. The second is ADR-0028, whose code has
-  shipped while the ADR itself is still **Proposed** — the one place in this plan where the
-  ADR-before-build rule was not met in order; it is a record to reconcile in `docs/adl/`, not a gate
-  that still blocks C2.
+  which never overrides a user's own enable/disable choice (ADR-0047 narrows this further). The
+  second is ADR-0028, whose code shipped before the ADR itself reached **Accepted** — the one
+  place in this plan where the ADR-before-build rule was not met in order. The ADR has since been
+  accepted, so this is a closed record of that gap rather than a live one — never a gate that
+  still blocks C2.
 - **Builds:** the user-set entities — active profile/mode, default SOC limit, `Power` target current,
   departure times, home-day flag (`entity.py` base classes, ADR-0002; platform files
   `select`/`number`/`time`/`switch`). The `select.smart_charging_mode` selector's option list is fixed at
@@ -760,8 +764,8 @@ from the retired functional sequence.
   M1's owned-entity read path; G-NAMING (ADR-0004 with ADR-0013) precedes C2, C3, and RA3's
   owned-write path; G-ADR-0022 (ADR-0022) precedes C5. All six are closed, so no task below is
   blocked by a structural-decision gate. **One exception to "before, not after":** ADR-0028's
-  registry-level capability disabling (C2) shipped while that ADR is still Proposed — recorded at
-  C2 rather than smoothed over.
+  registry-level capability disabling (C2) shipped before that ADR reached Accepted — recorded at
+  C2 rather than smoothed over; the ADR has since been accepted, closing the gap.
 - **Every service in `system-design.md` §3 appears in exactly one task, none duplicated:**
   Adapters V1 → RA1/RA2 (+RA1-VL in M2); Notification access V11 → RA4; Store V13 → RA3;
   5 Charging-Mode Engines → E1; 2 Profile Engines → E2; SOC-Target → E3; Deadline → E4;
@@ -784,10 +788,10 @@ from the retired functional sequence.
   Manager tasks, M1 and M2 have shipped;
   M3 is partially shipped (UC08's prompt and R5's delivery are built; UC10's plug-in reminder is
   designed, per system-design §5.3, but not yet built — M3's own Status names the three concrete
-  gaps). Checkpoint markers are not uniform and say so individually rather than to one formula —
-  Phase 2 reads *Met:*, and only Phase 3 reads *Partially met:*, for the no-cross-Manager-call
-  assertion (no executable guard). Phase 4 reads *Met per slice:*, for the UC01–UC11 end-to-end
-  validation (per-slice, not one suite).
+  gaps). Checkpoint markers are not uniform and say so individually rather than following one
+  formula — Phase 1 and Phase 2 read *Met:*, and only Phase 3 reads *Partially met:*, for the
+  no-cross-Manager-call assertion (no executable guard). Phase 4 reads *Met per slice:*, for the
+  UC01–UC11 end-to-end validation (per-slice, not one suite).
 - **Independently testable.** Each task names its unit boundary per ADR-0009 (pure Engines → plain
   pytest; Resource Access + Managers + Clients → HA harness) and an integration checkpoint proving
   it is wired to its callers before the next task depends on it.
