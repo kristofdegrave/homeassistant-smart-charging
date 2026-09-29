@@ -133,9 +133,16 @@
 # and a stale `origin/main` errs towards refusing. This closes the shell's way round the loop
 # file's Edit deny (ADR-0054, Option A2's Con: a subprocess write such as `git checkout <ref>
 # -- .github/...`); an interactive session, with the marker unset, is unaffected. It fails
-# CLOSED: a git that cannot list the changes, or a path it had to quote, refuses. Conceded:
-# a commit or push spelled so the scan does not read it as one (the indirection class above),
-# and a `gh api` contents or git-data write, which ADR-0054 accepts.
+# CLOSED: a git that cannot list the changes, a path it had to quote, or a commit or push
+# after a segment that changes directory (`cd`, `pushd`, `Set-Location`: the rule reads the
+# payload's cwd or an explicit -C, not where the shell moved), refuses. Conceded: a commit
+# or push spelled so the scan does not read it as one (the indirection class above); an
+# ignored file force-added in the same command (`git add -f`), which `git status` does not
+# list -- the push then refuses it; a commit made by another git command (`merge`, `revert`),
+# which only the push catches; a hook already committed on the branch, which git runs on
+# the next commit; the marker's name, read like the trees from the profile as checked out,
+# so editing it switches the rule off; and a `gh api` contents or git-data write, which
+# ADR-0054 accepts.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
@@ -805,11 +812,18 @@ set -f
 IFS='
 '
 piped_words=0
+# Set once a segment changes directory: the loop rule below reads the payload's cwd (or an
+# explicit -C), not a directory a `cd` earlier in the command moved to, so it refuses then.
+dir_moved=0
 for seg in $segments; do
   # Unset rather than saved-and-restored: an IFS arriving unset from the environment
   # would restore as the empty string, which disables word splitting altogether and
   # would fail the guard open on every command.
   unset IFS
+  _first=${seg#"${seg%%[! |(]*}"}
+  case "${_first%% *}" in
+    cd | pushd | popd | chdir | Set-Location | set-location | sl | Push-Location | push-location) dir_moved=1 ;;
+  esac
   piped=0
   case "$seg" in
     '|'*) piped=1; seg=${seg#|} ;;
@@ -935,7 +949,7 @@ for seg in $segments; do
     case "$1" in
       -C)
         shift
-        [ $# -gt 0 ] && { repo=$1; shift; }
+        [ $# -gt 0 ] && { repo=${1#[\"\']}; repo=${repo%[\"\']}; shift; }
         ;;
       -c | --git-dir | --work-tree | --namespace | --exec-path)
         shift
@@ -981,25 +995,38 @@ for seg in $segments; do
         esac
         remote=1
       done
-      # In the loop, a push whose commits touch the harness is refused: the pushed branch's
-      # change since it left main, so content merged in from main does not count. The source
-      # is the first refspec's left side, or HEAD when none is named.
+      # In the loop, a push whose commits touch the harness is refused: each pushed source's
+      # change since it left main, so content merged in from main does not count. The sources
+      # are every refspec's left side after the remote -- the values of the options that take
+      # a separate one skipped, so they are not read as the remote -- or HEAD when none is
+      # named. Renames are listed as a delete and an add, so a move out of the harness shows.
       if in_loop; then
-        src='' remote=0
+        [ "$dir_moved" = 0 ] ||
+          deny "$seg" "in the autopilot loop a push after a directory change cannot be checked: the guard reads the payload's cwd or an explicit -C, not where an earlier 'cd' moved" "$HARNESS_TAIL"
+        srcs='' remote=0 skip=0
         for t in "$@"; do
+          [ "$skip" = 1 ] && { skip=0; continue; }
           t=${t#[\"\']}
           t=${t%[\"\']}
-          case "$t" in -*) continue ;; esac
-          [ "$remote" = 1 ] && { src=${t%%:*}; break; }
+          case "$t" in
+            -o | --push-option | --repo | --receive-pack | --exec) skip=1; continue ;;
+            -*) continue ;;
+          esac
+          if [ "$remote" = 1 ]; then
+            t=${t%%:*}
+            [ -n "$t" ] && srcs="$srcs $t"
+          fi
           remote=1
         done
-        [ -n "$src" ] || src=HEAD
-        if ! files=$(git -C "$cwd" -C "$repo" -c core.quotepath=false diff --name-only "origin/main...$src" 2>/dev/null); then
-          deny "$seg" "in the autopilot loop a push must be shown not to touch the harness, and git could not list what '$src' changes against origin/main" "$HARNESS_TAIL"
-        fi
-        if hit=$(printf '%s\n' "$files" | first_harness_path); then
-          deny "$seg" "in the autopilot loop a push may not carry a change to the harness ('$hit'): .claude/, .github/ and CLAUDE.md stay the human's" "$HARNESS_TAIL"
-        fi
+        [ -n "$srcs" ] || srcs=HEAD
+        for src in $srcs; do
+          if ! files=$(git -C "$cwd" -C "$repo" -c core.quotepath=false diff --no-renames --name-only "origin/main...$src" 2>/dev/null); then
+            deny "$seg" "in the autopilot loop a push must be shown not to touch the harness, and git could not list what '$src' changes against origin/main" "$HARNESS_TAIL"
+          fi
+          if hit=$(printf '%s\n' "$files" | first_harness_path); then
+            deny "$seg" "in the autopilot loop a push may not carry a change to the harness ('$hit'): .claude/, .github/ and CLAUDE.md stay the human's" "$HARNESS_TAIL"
+          fi
+        done
       fi
       ;;
     commit)
@@ -1008,6 +1035,8 @@ for seg in $segments; do
       # whole command before any of it runs, so a `git add` earlier in it has not staged yet.
       # A rename's line names both paths.
       if in_loop; then
+        [ "$dir_moved" = 0 ] ||
+          deny "$seg" "in the autopilot loop a commit after a directory change cannot be checked: the guard reads the payload's cwd or an explicit -C, not where an earlier 'cd' moved" "$HARNESS_TAIL"
         if ! changes=$(git -C "$cwd" -C "$repo" -c core.quotepath=false status --porcelain=v1 --untracked-files=all 2>/dev/null); then
           deny "$seg" "in the autopilot loop a commit must be shown not to touch the harness, and git could not list the working tree's changes" "$HARNESS_TAIL"
         fi

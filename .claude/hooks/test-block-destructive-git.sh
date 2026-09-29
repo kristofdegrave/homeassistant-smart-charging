@@ -673,6 +673,8 @@ MARKER=$(awk '/^autopilot:/{t=1} t&&/^  loop_marker:/{print $2; exit}' "$CWD/.cl
 
 echo b > "$LR/wt/.github/ci.yml"; g add .github/ci.yml
 run ALLOW "git commit -m x" "$LR/wt"                                   # marker unset: interactive, unaffected
+export "$MARKER=0"
+run ALLOW "git commit -m x" "$LR/wt"                                   # a marker other than 1: not the loop
 export "$MARKER=1"
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
 run BLOCK "git -C $LR/wt commit -m x"                                  # ... reached through -C
@@ -692,6 +694,9 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a renam
 g mv src/ci.yml .github/ci.yml
 echo b > "$LR/wt/src/a.py"; g add src
 run ALLOW "git commit -m x" "$LR/wt"                                   # a change outside the harness
+run ALLOW "git -C $LR/wt commit -m x"                                  # ... through -C, from another cwd
+run ALLOW "git -C \"$LR/wt\" commit -m x"                              # ... with the -C path quoted
+run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
 run ALLOW "git push" "$LR/wt"                                          # no refspec: HEAD
@@ -699,9 +704,17 @@ echo c > "$LR/wt/.github/ci.yml"; g commit -qam harness
 run BLOCK "git push origin task" "$LR/wt"                              # a pushed commit touching .github/
 run BLOCK "git push -u origin HEAD:task" "$LR/wt"                      # ... whatever the refspec spells
 run BLOCK "git push" "$LR/wt"                                          # ... or with none
+run BLOCK "git push -o ci.skip origin task" "$LR/wt"                   # ... behind an option's separate value
+g branch other main
+run BLOCK "git push origin other task" "$LR/wt"                        # ... as the second of two sources
+g reset -q --hard HEAD~1
+g mv .github/ci.yml src/moved.yml; g commit -qm move
+run BLOCK "git push origin task" "$LR/wt"                              # a pushed rename out of .github/
 g reset -q --hard HEAD~1
 g checkout -q main; echo m > "$LR/wt/.github/ci.yml"; g commit -qam main-harness; g push -q origin main
-g checkout -q task; g merge -q --no-edit main
+g checkout -q task
+run ALLOW "git push origin task" "$LR/wt"                              # main moved on with a harness change the branch lacks: three-dot
+g merge -q --no-edit main
 run ALLOW "git push origin task" "$LR/wt"                              # a merge of main brings harness content in: not the branch's
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
