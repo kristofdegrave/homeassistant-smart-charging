@@ -1,7 +1,7 @@
 # CI: the repository's own checks
 
 The regular CI checks whose reasons this document owns: label vocabulary sync, the docs-only
-close guard and the upstream-pin drift check.
+close guard, the upstream-pin drift check and the `Source:` line check.
 
 ## Label vocabulary sync
 
@@ -278,7 +278,7 @@ mentions `Source:`, and fails when a `Source:` line does not resolve against the
 branch: a line not of the form `CLAUDE.md`'s **Source lines** topic fixes, a path outside
 the trees `.claude/profile.yml`'s `source_lines.trees` allows, a file that is not there, or an
 anchor matching no heading. The rule, the exit codes and every finding's wording are
-`.github/check-source-lines.py`'s; the workflow only carries the verdict to the run's log, one
+`.github/check-source-lines.py`'s, run through its `.sh` wrapper; the workflow only carries the verdict to the run's log, one
 annotation per offending line.
 
 **It exists because the lines replace the hunt.** A worker reads what the lines name and stops,

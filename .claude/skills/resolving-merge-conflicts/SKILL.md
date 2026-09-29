@@ -56,7 +56,7 @@ in this order of usefulness:
 1. **The commit message** — its prefix names the kind of work the commit did; the prefix
    vocabulary is the commit-message conventions under `CLAUDE.md`'s **Definition of Done**
    topic.
-2. **The anchored `Source:` lines**, where the issue that commit's PR closes carries them —
+2. **The `Source:` lines**, where the issue that commit's PR closes carries them —
    only a child of a decomposition does. They name the documents that task was cut from, which
    state what it was allowed to change; their form is `CLAUDE.md`'s **Source lines**.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,

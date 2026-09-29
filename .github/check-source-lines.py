@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """The `Source:` line check: does every `Source:` line in an issue body point at something real?
 
-A child issue cut by a decomposition carries `Source:` lines naming the documents it was cut
-from, and those lines replace the worker's own search for sources -- so a pointer that resolves
-to nothing yields an implementation that is silently under-informed. The convention (who
-carries the lines, what they stand in for, how finely they are anchored) is the document
-`CLAUDE.md`'s **Source lines** topic routes to; this script checks only the form and that each
-target exists. It does not judge granularity, which no check can.
+The convention is the document `CLAUDE.md`'s **Source lines** topic routes to, and why the
+check exists is docs/reference/method/ci-pipeline.md's "The `Source:` line check". This script
+checks only the form and that each target exists, never granularity.
 
 A `Source:` line is any line of the body, outside a fenced code block, that begins `Source:`.
 Each one must be exactly `Source: <path>` or `Source: <path>#<anchor>` -- one token after the
@@ -18,7 +15,7 @@ prefix, trailing whitespace ignored -- where:
     repeated heading's `-1`, `-2` suffix included.
 
 Anchors are computed with the method check's own heading and slug functions
-(.github/check-method.py), so the two checks cannot disagree about what an anchor is.
+(.github/check-method.py).
 
   Usage: check-source-lines.py (--body FILE | --issue N) [--root DIR] [--ref REF]
 
@@ -32,7 +29,8 @@ Anchors are computed with the method check's own heading and slug functions
 
   Exit 0  every `Source:` line resolves, or the body carries none
        1  at least one does not; each finding names the line number, the line and why
-       2  usage or environment error: unreadable profile, no `source_lines.trees`, git failing
+       2  usage or environment error: unreadable profile, no `source_lines.trees`, git failing,
+          or any unexpected error while checking -- never 1, which is a verdict
        3  the body could not be fetched (--issue only). Not a verdict: the caller must not
           read it as a failure of the issue, and CI passes the run with a warning
 """
@@ -216,7 +214,11 @@ def main() -> int:
     except (EnvError, OSError) as exc:
         print(f"check-source-lines: {exc}", file=sys.stderr)
         return 2
-    findings = check(body.replace("\r\n", "\n"), trees, tree)
+    try:
+        findings = check(body.replace("\r\n", "\n"), trees, tree)
+    except Exception as exc:  # an unexpected error must not read as exit 1, a verdict
+        print(f"check-source-lines: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
     count = len(source_lines(body.replace("\r\n", "\n")))
     if findings:
         print(f"{len(findings)} of {count} `Source:` line(s) do not resolve:")

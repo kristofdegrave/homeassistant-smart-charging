@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, any `decompose` child last, and a decomposition's children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, any `decompose` child last, and a decomposition's children.
 ---
 
 # File a task issue
@@ -27,7 +27,8 @@ half-scoped.
 2. **Pick the one context label** (an epic's labels are **Issue conventions**'), set
    Size/Estimate, and — for a child of a decomposition, and no other issue — write one
    `Source:` line per source its task entry names, in the form `CLAUDE.md`'s **Source lines**
-   fixes, then run the check that topic names over the drafted body (`--body`) before filing.
+   fixes, then run the check that topic names over the drafted body before filing — `--body` with
+   `--ref origin/main` after a fetch, the branch CI resolves against, not your working tree.
    The lines are one provenance pointer set, not a relevance survey: copy the entry's
    **Sources** key, never add what else the task might touch. **Issue conventions** covers the
    other fields. A finding against already-shipped behaviour also

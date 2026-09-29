@@ -9,18 +9,18 @@ in for. How the decomposer picks an entry's sources is the closing step of the f
 
 ## Who carries them
 
-- **Every child filed by a decomposition** — the closing step's step 4, one line per document
-  its task entry's **Sources** key names.
+- **Every child filed by a decomposition** — the closing step's step 4, one line per source
+  its task entry's **Sources** key names, so two sections of one document are two lines.
 - **No issue filed outside one.** Nobody determined its sources in advance, so its work file's
   instruction to go and find them is the right one, and a `Source:` line there would claim a
   provenance nobody established. The prefix is reserved: provenance on such an issue is written
-  in prose, never on a line beginning `Source:`, which the check reads as a line and fails.
+  in prose, never on a line beginning `Source:`. That is a filing rule the check cannot
+  enforce — it fails only a line that does not resolve, and cannot tell who cut the issue.
 
 ## The form
 
 - `Source: <path>` or `Source: <path>#<anchor>` — at the start of the line, one per line,
-  nothing else on it. The retired `Plan:` line's shape, reused on purpose: a line a script finds
-  and resolves without reading prose.
+  nothing else on it, so a script finds and resolves it without reading prose.
 - `<path>` is repo-relative and lies under a tree the profile's `source_lines.trees` allows —
   documents only. An edge to another issue is a native sub-issue or blocked-by edge, never a
   `Source:` line; a code path is what the task changes, not what it was cut from.

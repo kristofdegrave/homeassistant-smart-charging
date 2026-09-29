@@ -50,12 +50,16 @@ jobs:
           set -uo pipefail
           out=$(bash .github/check-source-lines.sh --issue "$ISSUE")
           rc=$?
+          # The output carries body text, so workflow commands are suspended while it is
+          # printed, under a token the issue's author cannot know.
+          token=$(python -c 'import secrets; print(secrets.token_hex(16))')
+          echo "::stop-commands::$token"
           printf '%s\n' "$out"
+          echo "::$token::"
           case "$rc" in
             0) ;;
-            # Each finding line carries body text, but only after the script's own `line N: `
-            # prefix, so no line of the log begins with text the issue's author wrote; the `%`
-            # escape keeps that text from being decoded as annotation escapes.
+            # Each finding line carries body text only after the script's own `line N: `
+            # prefix, and the `%` escape keeps it from being decoded as annotation escapes.
             1) printf '%s\n' "$out" | grep '^line ' | while IFS= read -r line; do
                  echo "::error title=Source line does not resolve (#$ISSUE)::${line//%/%25}"
                done

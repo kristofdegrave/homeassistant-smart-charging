@@ -39,7 +39,9 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
    and which artifact it is, its closing step. Where the issue carries `Source:` lines, run
    the check `CLAUDE.md`'s **Source lines** names against the fetched base
    (`--issue <n> --ref origin/main`) before dispatching: a line that does not resolve goes to
-   the human partner through `clarify`, never guessed past, and a failed lookup is no verdict.
+   the human partner through `clarify`, never guessed past. Exit 3, a failed fetch, is no
+   verdict: rerun it over the body already read (`--body`); exit 2 is an environment fault,
+   fixed before dispatching.
    What the lines stand in for, and the escape when they fall short, are that topic's and the
    work file's.
 3. Worktree, branch and board **Status** per the implement step. The worktree is cut from the
