@@ -154,7 +154,7 @@ whichever is then correct.
 On an **issue** the same two labels park work for the human, as ADR-0052 decided:
 `needs-decision` is applied by `clarify`'s parking rule, in an unattended run,
 and means a question waits for the human's answer; `needs-approval` on an epic asks for a go,
-applied by the `decompose` row's work file.
+applied by the `decompose` row's work file or the `autopilot` skill's verify-live park.
 The human takes an issue's label off; a run removes `needs-decision`, on an answer
 that settles `clarify`'s park, and never an epic's `needs-approval`, whose removal is the human's
 go. An issue's label says nothing about any PR.
@@ -303,6 +303,8 @@ shared with the human partner**.
   epic's own work stays beside it (a bug-track epic, filed new at the opening pass beside the
   routed `bug` issue, keeps `bug` and never gains a context label); `epic` adds no
   Model-selection row.
+- **The `control` label** `paused` is the human's stop on the autopilot's tracking issue, per
+  the `autopilot` skill.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
@@ -357,24 +359,21 @@ file.
 ## Post-mortems
 
 One dated analysis per shipped failure, at `docs/postmortems/YYYY-MM-DD-<slug>.md` — the tree
-is listed under `CLAUDE.md`'s **Document structure** topic. What a post-mortem is, which rules
-do not reach it, and how it is reviewed are this topic's.
+is listed under `CLAUDE.md`'s **Document structure** topic.
 
 ### A snapshot of reasoning at a date
 
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that. It explains how a specific failure got past a specific process; once its changes land, it
-stays as the record of why.
+that. Once its changes land, it stays as the record of why.
 
 ### Two rules that apply elsewhere do not apply here
 
 - **Tracking refs are required, not forbidden.** `CLAUDE.md`'s *Review protocol for analysis
   documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies. That
-  rule does not reach this directory: a post-mortem's entire evidentiary value
-  is the specific PRs, issues, commits and review comments it cites, at the dates it cites
-  them.
+  rule does not reach this directory: a post-mortem's evidence is the PRs, issues, commits and
+  review comments it cites, at the dates it cites them.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis
   tree's own review checklist do not govern it; it quotes the analysis docs as evidence
   rather than asserting behaviour.

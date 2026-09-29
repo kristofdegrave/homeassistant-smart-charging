@@ -116,6 +116,12 @@ labels:
     - name: epic
       color: 3e4b9e
       description: "Parent tracking a strand's child issues — carries no context label, never picked as a task"
+  # The autopilot's remote stop, applied by the human to its tracking issue (`autopilot`
+  # below); what it stops is the `autopilot` skill's rule.
+  control:
+    - name: paused
+      color: fbca04
+      description: "On the autopilot's tracking issue: no new dispatch; running chains finish"
 
 # The work types this project enables, from the method's catalogue. Each names a row of
 # CLAUDE.md's Model selection table and a directory under docs/reference/work-types/ — the
@@ -187,19 +193,27 @@ review:
   # routes here for this number rather than stating it.
   interactive_ceiling: 5
 
-# The autopilot's two settings, from the merge rule docs/reference/method/contribution-workflow.md's
-# **Commit & push authorization** states and docs/reference/profile.md's **Merge strategy**
-# explains. `auto_merge_trees` is read by .claude/hooks/block-destructive-git.sh, which refuses
-# a `gh pr merge` with any changed file outside them: a plain block list of path prefixes, since
-# the hook reads it with awk and no YAML parser (it adds a missing trailing slash). `lanes` is
-# the lane cap ADR-0052 decides: how many issues' chains may be in flight at once, on disjoint
-# trees.
+# The autopilot's settings. `auto_merge_trees` comes from the merge rule
+# docs/reference/method/contribution-workflow.md's **Commit & push authorization** states and
+# docs/reference/profile.md's **Merge strategy** explains; it is read by
+# .claude/hooks/block-destructive-git.sh, which refuses a `gh pr merge` with any changed file
+# outside them: a plain block list of path prefixes, since the hook reads it with awk and no
+# YAML parser (it adds a missing trailing slash). `lanes` is the lane cap ADR-0052 decides: how
+# many issues' chains may be in flight at once, on disjoint trees. `tracking_issue` is the
+# number of the issue the `autopilot` skill logs its ticks and digests on and reads `paused`
+# from; `null` until that issue is filed, and the skill does not start without it.
+# `loop_settings` (the loop-only settings file's path) and `loop_marker` (the `env` variable
+# it sets) are filled by the permissions follow-up; the skill does not start while either is
+# `null`.
 autopilot:
   auto_merge_trees:
     - custom_components/
     - tests/
     - docs/design/
   lanes: 2
+  tracking_issue: null
+  loop_settings: null
+  loop_marker: null
 
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
