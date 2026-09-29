@@ -692,6 +692,9 @@ rm -rf "$LR/wt/docs/.Claude"
 g mv .github/ci.yml src/ci.yml
 run BLOCK "git commit -m x" "$LR/wt"                                   # a rename out of .github/
 g mv src/ci.yml .github/ci.yml
+g mv src/a.py .github/a.py
+run BLOCK "git commit -m x" "$LR/wt"                                   # a rename into .github/, read only once split
+g mv .github/a.py src/a.py
 echo b > "$LR/wt/src/a.py"; g add src
 run ALLOW "git commit -m x" "$LR/wt"                                   # a change outside the harness
 run ALLOW "git -C $LR/wt commit -m x"                                  # ... through -C, from another cwd
@@ -700,6 +703,14 @@ run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
 run ALLOW "git push" "$LR/wt"                                          # no refspec: HEAD
+run ALLOW "git push -o ci.skip origin task" "$LR/wt"                   # an option's separate value is not read as the remote
+run BLOCK "git push origin --tags" "$LR/wt"                            # tags carry commits no source diff sees
+run BLOCK "git push --follow-tags origin task" "$LR/wt"                # ... followed ones too
+run BLOCK "cd $LR/wt && git push origin task" "$LR/wt"                 # a push after a cd
+run BLOCK "{ cd $LR/wt; git commit -m x; }" "$LR/wt"                   # a cd behind a brace
+run BLOCK "if cd $LR/wt; then git commit -m x; fi" "$LR/wt"            # ... or a reserved word
+run BLOCK "Set-Location $LR/wt; git commit -m x" "$LR/wt"              # PowerShell's, any case
+run BLOCK "env -C $LR/wt git commit -m x" "$LR/wt"                     # env -C
 echo c > "$LR/wt/.github/ci.yml"; g commit -qam harness
 run BLOCK "git push origin task" "$LR/wt"                              # a pushed commit touching .github/
 run BLOCK "git push -u origin HEAD:task" "$LR/wt"                      # ... whatever the refspec spells
@@ -716,6 +727,13 @@ g checkout -q task
 run ALLOW "git push origin task" "$LR/wt"                              # main moved on with a harness change the branch lacks: three-dot
 g merge -q --no-edit main
 run ALLOW "git push origin task" "$LR/wt"                              # a merge of main brings harness content in: not the branch's
+g checkout -q main; echo m2 > "$LR/wt/.github/ci.yml"; echo mainside > "$LR/wt/src/a.py"; g commit -qam main2; g push -q origin main
+g checkout -q task; echo taskside > "$LR/wt/src/a.py"; g commit -qam taskside; g merge main
+echo resolved > "$LR/wt/src/a.py"; g add src/a.py
+run ALLOW "git commit -m x" "$LR/wt"                                   # finishing a conflicted merge of main: its harness change is main's
+echo mine > "$LR/wt/.github/ci.yml"; g add .github/ci.yml
+run BLOCK "git commit -m x" "$LR/wt"                                   # ... but not with a harness edit on top
+g checkout -q MERGE_HEAD -- .github/ci.yml; g commit -qm merged
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
 unset "$MARKER"
