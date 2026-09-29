@@ -38,15 +38,15 @@ Its issue comments follow the marker rule under `CLAUDE.md`'s **Contribution wor
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
    new-behaviour track this step does not apply.
 5. **Settle whether the strand needs an epic, and whether its body will carry a spec** — the
-   flow document says when each is required — by track, and by whether **Brainstorm** settled
+   flow document says when each is required — by track, and by whether the brainstorm settled
    that the strand has no `development` or `testing` task — and which analysis change cannot be
-   approved until that epic exists. Where an epic is required, it is what step 6 files, and any spec is
-   written into its body in the closing step below rather than drafted later as a separate
-   artifact. Record the answer on the issue either way, that task question included, so it is
+   approved until that epic exists. Where an epic is required, it is what step 6 files, and any
+   spec is written into its body in the closing step below rather than drafted later as a
+   separate artifact. Record the answer on the issue either way, that task question included, so it is
    not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
-   single-artifact idea; for a multi-artifact strand, an epic and the issues filed with it at
-   **Decompose** in the flow `CLAUDE.md`'s **Idea-to-product flow** routes to — moving the
+   single-artifact idea; for a multi-artifact strand, an epic and the issues its opening pass
+   files, per the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to — moving the
    brainstormed decisions wherever the flow document says they end up. The flow owns the
    closing step and its order, the `decompose` row's work file (`CLAUDE.md`'s **Model
    selection**) its mechanics, so the epic body never carries a checklist of them; what a child

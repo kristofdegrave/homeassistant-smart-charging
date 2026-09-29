@@ -13,8 +13,8 @@ Context labels, project-board Size/Estimate fields, milestones and epic
 membership (native sub-issues and blocked-by edges) are all defined once, and `CLAUDE.md`'s
 **Issue conventions** section routes to wherever that is — start there for what each means and
 when it applies. *Which* issues a strand gets and in what order — the epic, the issues its
-opening pass files, and its children — is the **Decompose** stage of the flow `CLAUDE.md`'s
-**Idea-to-product flow** topic routes to. The `gh` commands that write them, and the
+opening pass files, and its children — is owned by the flow `CLAUDE.md`'s **Idea-to-product
+flow** topic routes to. The `gh` commands that write them, and the
 read-backs that confirm they took, are routed by `CLAUDE.md`'s **Tracker mechanics**
 section. This skill adds only the pre-flight order to run through so nothing gets filed
 half-scoped.

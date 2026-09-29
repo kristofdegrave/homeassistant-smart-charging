@@ -80,8 +80,8 @@ it means the `idea` issue is the first thing that exists, not the epic.
 ## 2. Brainstorm
 
 **Mandatory, whatever form the idea arrived in** — a one-line thought, a filed `idea` issue, a
-bug report that turns out to be a feature. Two skills,
-both entered through `clarify`, own the technique; the idea's shape picks between them:
+bug report that turns out to be a feature. Two skills, both entered through `clarify`, own the
+technique; the idea's shape picks between them:
 
 - **`grilling`** for a branch-heavy idea — one where settling a decision
   opens further decisions, so the dialogue works a design tree.
@@ -130,10 +130,11 @@ yet, because the fixing artifact is not known until the claim is verified) → s
 analysis chain, but **the claim is verified before anything is designed** — the
 `diagnosing-bugs` skill owns that step: reproduce it on the real installation, or as a
 failing test at the harness seam ADR-0009 assigns to that layer. A claim that cannot be
-reproduced is not a defect yet — say so on the issue and stop. A reproduced claim's own issue is placed on a milestone at once, before
-its fixing artifact is known, per the milestone rule in
-[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Once the fixing artifact is known, the issue gains that
-artifact's context label and re-enters the chain at that artifact's stage.
+reproduced is not a defect yet — say so on the issue and stop. A reproduced claim's own issue
+is placed on a milestone at once, before its fixing artifact is known, per the milestone rule
+in [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**. Once the
+fixing artifact is known, the issue gains that artifact's context label and re-enters the
+chain at that artifact's stage.
 
 ### Artifact: the chosen track, written on the issue
 
@@ -187,10 +188,15 @@ covers which label such a child takes.
 **The last issue the pass files is the `decompose` child**: titled `decompose: <epic title>`,
 labelled `decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
 `documentation` issue the pass filed. The one exception is a **method epic**, a change to the
-method itself — one whose strand was settled at **Brainstorm** to have no `development` or
-`testing` task, every task (at least one) a `workflow` issue this pass files beside any `adr`
-or `documentation` issue, or a `uc`/`requirement` change touching no shipped behaviour. It
-needs no spec, so it gets no `decompose` child and no closing step. Every other epic is an epic with a spec.
+method itself — one whose strand:
+
+1. was settled at **Brainstorm** to have no `development` or `testing` task, as `work-idea`
+   step 5 records;
+2. has at least one `workflow` task, filed at this pass; and
+3. files no other issue beside them but `adr` and `documentation` issues.
+
+A method epic needs no spec, so it gets no `decompose` child and no closing step. Every other
+epic is an epic with a spec.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.

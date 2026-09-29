@@ -60,9 +60,9 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
 
 A change is judged by a **spawned reviewer agent**, never by the session that holds the
 author's context. The session that wrote the work may still run step 2, because it only
-dispatches to agents that cannot see what it saw and relays what they return. The moment it judges the work itself
-— screening findings before posting, or checking the reviewer missed nothing — the separation
-is gone.
+dispatches to agents that cannot see what it saw and relays what they return. The moment it
+judges the work itself — screening findings before posting, or checking the reviewer missed
+nothing — the separation is gone.
 
 ## Rule B — stop-and-report, per issue
 
@@ -299,8 +299,9 @@ shared with the human partner**.
   row.
 - **The `epic` label** marks an epic — a parent tracking its children, not a unit of work — so
   an epic carries no context label and is never picked as a task. A kind label naming the
-  epic's own work stays beside it (a bug-track epic keeps `bug` and never gains a context
-  label); `epic` adds no Model-selection row and makes no branch.
+  epic's own work stays beside it (a bug-track epic, filed new at the opening pass beside the
+  routed `bug` issue, keeps `bug` and never gains a context label); `epic` adds no
+  Model-selection row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
@@ -343,9 +344,9 @@ issue carrying only a kind label** (`bug`, `enhancement`) has no context label t
 branch, so the kind label itself is the segment: `bug/<issue-number>` or
 `enhancement/<issue-number>` — the shipped-behaviour track's defined segment. Earlier branches
 used `dev/` and `fix/`; both spellings are historical, not alternatives (`development/<n>`
-keeps its meaning above). When
-both axes are present the **context label wins**. If extra work on the same issue needs a
-second PR, suffix a third segment describing the split: `<context-label>/<issue-number>/<slug>`.
+keeps its meaning above). When both axes are present the **context label wins**. If extra work
+on the same issue needs a second PR, suffix a third segment describing the split:
+`<context-label>/<issue-number>/<slug>`.
 
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
 its row — may override the number segment for a concrete reason to key the branch off the
