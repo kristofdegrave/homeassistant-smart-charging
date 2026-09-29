@@ -2,8 +2,8 @@
 
 The criteria a fresh agent applies to an **epic body** — the implementation spec and the tasks
 cut from it — in the one pass the closing step of the flow `CLAUDE.md`'s **Idea-to-product
-flow** topic routes to runs before any child is filed. That step owns *when* the pass runs and
-what the body must contain; this file owns *what the pass checks*.
+flow** topic routes to runs before the children it plans are filed. That step owns *when* the
+pass runs and what the body must contain; this file owns *what the pass checks*.
 
 **Who reads this.** The reviewer only — a fresh agent that did not write the body. There is no
 diff and no PR: the body is handed over as a file, the findings are fixed in the body, and the
@@ -75,7 +75,8 @@ is **Major** — the session implementing the task works from the issue body and
 literally. A missing test boundary, or one routing a test through the harness that is not its
 layer's, is **Major** too. The body's testing approach naming no seam for the tasks to drive
 through is **Minor**: each task then finds its own and the suite grows a seam per task. The
-remaining three keys are scored by items (5), (9) and (10).
+remaining three keys are scored by items (5), (9) and (10). For an entry marked as an
+already-filed task the draft drops, score none of the keys there.
 
 **(5) The build order is sound.** Every task's **Blocked by** line names task ids the body
 defines, or `none` — an entry with neither is **Major**, since the filer cannot tell an
@@ -104,7 +105,7 @@ Two cases are not restatements: text that says something **different** from its 
 that document — never a recommendation to cut the text here, which holds the only copy.
 
 **(9) The sources are granular enough to work from, and no more.** What is scored here is each
-task entry's **Sources** key — the pass runs before any child is filed, so the anchored
+task entry's **Sources** key — the pass runs before a new task's issue is filed, so the anchored
 `Source:` lines cut from it do not exist yet. Read them as the worker will: do they reach what
 the task needs without handing it the whole tree?
 A line naming a document where the task turns on one section of it is **Minor** — the worker
