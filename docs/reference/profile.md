@@ -119,10 +119,11 @@ hold the GraphQL `mergeBranch`, `…Ref…`, commit, repository-settings, branch
 
 **What the loop file refuses beyond the harness paths:** edits to any `.git` or `HEAD` file,
 so no repository can be made by hand; git's `-c` and `--config-env` overrides,
-`git -C … config`, `--git-dir`, `--work-tree`, a `-C` into the scratchpad, `--upload-pack`,
+`git -C … config`, `--git-dir`, `--work-tree`, `--upload-pack`,
 `--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O`/`--open-files-in-pager`; the
 subcommands the chain never runs — `rebase`, `bisect`, `submodule`, `difftool`,
-`filter-branch`, `clone`, `init` — and those that write the tree or the object store around the
+`filter-branch`, `clone`, `init`, `cherry-pick`, `switch`, and a fetch of a pull request's
+`pull/<n>/…` ref — and those that write the tree or the object store around the
 Edit deny — `mv`, `restore`, `apply`, `am`, `checkout … -- <path>`, `hash-object`,
 `update-index`, `read-tree`, `commit-tree`, `update-ref`, `mktree`, `fast-import`; a push
 naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
@@ -136,14 +137,18 @@ gesture included; spacing a GraphQL document the rules do not expect; a bare
 `git -C <main checkout> push` while on `main`, which names no refspec; and what git reads from
 disk rather than from the command — a `git -C` into a directory that is not a task worktree, or
 a hook the repository runs on commit (its `core.hooksPath` is under `.github/`), reached by a
-write this list does not name. A `git merge` still brings `.github/**` content in from a
-branch, which is reviewed content. Branch protection does
+write this list does not name; a `-C` into a directory a writer laid out as a repository by
+some path other than a `HEAD` edit; and any ref on `origin` — a branch anyone with write access
+pushed, merged or reviewed or not — whose `.github/hooks` a `git -C <wt> merge` or
+`checkout <ref>` brings in, and git runs on the next checkout or commit. Branch protection does
 not enforce on the owner's account, so only the `PreToolUse` guard, which parses what it
 reads, can close these, and it does not yet.
 
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop
-and leaves the tests to CI. Web access: neither `WebFetch` nor `WebSearch` is listed, so a
+and leaves the tests to CI. Merge conflicts: taking one side with `checkout --ours`/`--theirs
+-- <path>` is refused, so a conflict is resolved by editing the file, and one in a harness file
+parks. Web access: neither `WebFetch` nor `WebSearch` is listed, so a
 `research` step parks.
 
 ## Project board

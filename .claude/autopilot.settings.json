@@ -73,8 +73,13 @@
       "Bash(git checkout * -- *)",
       "Bash(git *--git-dir*)",
       "Bash(git *--work-tree*)",
-      "Bash(git -C *scratchpad*)",
-      "Edit(//**/HEAD)"
+      "Edit(//**/HEAD)",
+      "Bash(git * fetch * pull/*)",
+      "Bash(git fetch * pull/*)",
+      "Bash(git cherry-pick*)",
+      "Bash(git * cherry-pick*)",
+      "Bash(git switch*)",
+      "Bash(git * switch*)"
     ]
   }
 }

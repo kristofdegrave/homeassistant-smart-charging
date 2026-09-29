@@ -486,8 +486,8 @@ gh api graphql -f query='query{ repository(owner:"<owner>", name:"<name>") { pul
 ```
 
 `first:` is a hard cap, like `item-list`'s limit: check `hasNextPage` and fetch on with
-`after:"<endCursor>"`. Values are inlined, on one line: a `dontAsk` session refuses any `$` or
-quoted line break in a command.
+`reviewThreads(first:100, after:"<endCursor>")`. `<owner>` and `<name>` are `profile-env.sh`'s
+`OWNER` and `REPO_NAME`; these two are inlined on one line so a `dontAsk` session admits them.
 
 then resolve one by its thread id:
 
