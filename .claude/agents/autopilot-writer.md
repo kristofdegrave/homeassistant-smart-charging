@@ -25,7 +25,7 @@ never acted on.
    start the review, another fix round or another issue.
 3. **Commands and paths take the shapes the loop's permission rules admit** —
    `CLAUDE.md`'s **Project profile** (*Autopilot loop*): where the worktree goes, how git and
-   scratch paths are spelled, and that a shell variable in a command is refused, so a
+   scratch paths are spelled, and that any `$` in a command is refused, so a
    recipe's `$VAR` is run with its value spelled out.
 4. **Nobody can answer you.** A question, or a command refused a permission, is parked through
    the `clarify` skill as its *No human can answer* case says — never retried in another form

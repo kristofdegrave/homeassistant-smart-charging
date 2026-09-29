@@ -64,7 +64,7 @@ claude --setting-sources project --settings .claude/autopilot.settings.json
 then `/loop <interval> /autopilot` in that session. **Why `--setting-sources project`:** it
 drops the user and local settings, whose broad allows would otherwise reach the loop, so the
 committed `.claude/settings.json` allow-list and the loop file are the only grants in force;
-the shared file's `PreToolUse` guard still runs. **Why the loop file:**
+the shared file's `PreToolUse` guards still run. **Why the loop file:**
 [ADR-0054](../adl/0054-autopilot-runs-dontask-and-trusts-only-write-access-authors.md)'s
 Options A1 and A2 — it sets `defaultMode: dontAsk`, denies edits and writes to `.claude/**`,
 `.github/**` and `CLAUDE.md` in any checkout, allows edits only in a task worktree and the
@@ -75,22 +75,23 @@ session scratchpad, and sets the `env` variable `autopilot.loop_marker` names to
 (`<parent>/sc-wf-<n>` for `workflow/<n>`); the `Read` and `Edit` rules for worktrees match
 `//**/sc-*/**`, and those for scratch files `//**/scratchpad/**`. The shared allow-list's
 `Read` rules exist because the `reviewer` definition's `permissionMode: dontAsk` reaches
-interactive dispatches too. A worktree placed elsewhere is refused in the loop. Six shapes
+interactive dispatches too. A worktree placed elsewhere is refused in the loop. Seven shapes
 the harness itself decides, observed in a `dontAsk` session:
 
 - **No `$` in a command.** `gh api repos/$REPO/…` is refused where the same call with the
-  repository spelled out passes, and so is a GraphQL document declaring `$tid`, even quoted;
-  shell state does not survive between calls either. So a recipe's variables are resolved with
-  `bash .github/profile-env.sh` and their values spelled into the command, a GraphQL recipe's
-  variables inlined (`resolveReviewThread(input:{threadId:"<id>"})`), and the allow-list names this repository literally; with the marker in the
+  repository spelled out passes, and so is a GraphQL document declaring a variable, even
+  quoted; shell state does not survive between calls either. So a recipe's shell variables are
+  resolved with `bash .github/profile-env.sh` and their values spelled into the command, and the allow-list names this repository literally; with the marker in the
   loop file, the only `profile.yml` values spelled under `.claude/**`, since a settings file
   cannot read the profile.
 - **Git in a worktree is `git -C <worktree> …`**: `cd <worktree> && git …` is refused
-  whatever the allow-list says. `Bash(git -C *)` is in the loop file only, beside the denies
-  that hold its program-running forms, so an interactive session still prompts for it.
+  whatever the allow-list says. `Bash(git -C *)` is in the loop file only, so an interactive
+  session still prompts for it.
 - **Scratch paths are written long**: a Windows short name (`KRISTO~1`) is refused where its
   long form passes.
 - **The marker is read with `printenv <marker>`**, the one form the loop file admits.
+- **A command is one line**: a line break inside a quoted argument makes it match no rule, so
+  a multi-line GraphQL document is written on one line.
 - **A rule's text holds no parenthesis**: a `Bash(…)` rule with one inside matches nothing,
   so each rule here stops before the first `(` of the command it admits.
 - **A commit message goes in a file** (`git -C <worktree> commit -F <scratch file>`): the
@@ -99,7 +100,8 @@ the harness itself decides, observed in a `dontAsk` session:
 
 **`gh api` is admitted by recipe shape**, not whole: reads on this repository's issues and
 pulls, `POST`/`PATCH` on its issues, `POST` on its pulls and milestones, any `-X GET`,
-`rate_limit`, and the three GraphQL forms the recipes use, each a prefix. `ask` rules close
+`rate_limit`, and the three GraphQL recipes' opening words (`query{ repository`,
+`mutation{ resolveReviewThread`, `{viewer{login}}`), each a prefix. `ask` rules close
 what a prefix leaves open: a method after the path or a second method flag, `--method`, `..`
 in a path, a second `query=`, a GraphQL field or `--input` read from a file, a GraphQL
 `mutation` after `-F`, an `operationName`, a second `input:` in one document, and a body
@@ -115,20 +117,27 @@ another label while naming `needs-approval` is refused too, and parks. The same 
 hold the GraphQL `mergeBranch`, `…Ref…`, commit, repository-settings, branch-protection and
 `…PullRequest…` mutations.
 
-**What the loop file refuses beyond the harness paths:** edits to any `.git` file or
-directory; git's `-c` and `--config-env` overrides, `git -C … config`, `--upload-pack`,
-`--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O`/`--open-files-in-pager`;
-the subcommands `rebase`, `bisect`, `submodule`, `difftool`, `filter-branch` and `clone`,
-which the chain never runs; a push naming `main`; and `pytest`, which runs any `conftest.py`
-a writer has written.
+**What the loop file refuses beyond the harness paths:** edits to any `.git` or `HEAD` file,
+so no repository can be made by hand; git's `-c` and `--config-env` overrides,
+`git -C … config`, `--git-dir`, `--work-tree`, a `-C` into the scratchpad, `--upload-pack`,
+`--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O`/`--open-files-in-pager`; the
+subcommands the chain never runs — `rebase`, `bisect`, `submodule`, `difftool`,
+`filter-branch`, `clone`, `init` — and those that write the tree or the object store around the
+Edit deny — `mv`, `restore`, `apply`, `am`, `checkout … -- <path>`, `hash-object`,
+`update-index`, `read-tree`, `commit-tree`, `update-ref`, `mktree`, `fast-import`; a push
+naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
 
 **Known gaps.** A Bash rule matches the text typed, not the program run — Claude Code's own
 permissions documentation says it is not a security boundary around the program — so each
 list above holds the forms named, and a form it does not name passes. Known ones: a label or
 mutation name in another letter case (gh matches label names case-insensitively, the rules do
 not) or split by quotes (`needs-appro''val`), which passes every substring rule, the label
-gesture included; spacing a GraphQL document the rules do not expect; and a bare
-`git -C <main checkout> push` while on `main`, which names no refspec. Branch protection does
+gesture included; spacing a GraphQL document the rules do not expect; a bare
+`git -C <main checkout> push` while on `main`, which names no refspec; and what git reads from
+disk rather than from the command — a `git -C` into a directory that is not a task worktree, or
+a hook the repository runs on commit (its `core.hooksPath` is under `.github/`), reached by a
+write this list does not name. A `git merge` still brings `.github/**` content in from a
+branch, which is reviewed content. Branch protection does
 not enforce on the owner's account, so only the `PreToolUse` guard, which parses what it
 reads, can close these, and it does not yet.
 
