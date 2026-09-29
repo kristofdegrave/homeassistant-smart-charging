@@ -1084,6 +1084,11 @@ def _resolve_deadline_urgency(**overrides):
         escalated_maximum_permitted_rate_a=32.0,
         pursued_occurrence=None,
         following_occurrence=None,
+        # F2 (#1482): with `pursued_occurrence` set and not yet elapsed, this default of `None`
+        # itself lands on ADR-0053's table row 3 -- the pursued date resolving to "no
+        # deadline" -- releasing the occurrence. A test that wants the steady "held, still
+        # ahead" state instead overrides this explicitly (e.g. to `pursued.time()`), as the two
+        # tests just below this section's steady-state cases do.
         departure_on_pursued_date=None,
         # Read by the non-resolvable early return, whose connected half releases the pursued
         # occurrence in the opposite direction to its state-of-charge half -- see the split's
@@ -1722,7 +1727,8 @@ def test_should_release_on_the_pursued_dates_no_deadline_when_no_reading():
 
 def test_should_declare_the_outcome_established_when_released_on_the_pursued_date():
     """ADR-0053's table, row 3: unlike the steady no-op rows, the release itself IS the
-    outcome -- separate from the release itself, which the test above pins."""
+    outcome -- separate from the release (`pursued_occurrence`/`urgent`), which the test above
+    pins."""
     # Arrange / Act -- same arrangement as the test above.
     result = _resolve_deadline_urgency(
         deadline_resolvable=False,
