@@ -143,7 +143,7 @@ count and lane holder are A4's state, and A6's titled park is a tracker read A3'
 - **The `decompose` park gains a fixed title**, and its entry rule reads only that park.
 - **Label gestures — derived from A1 and A3, not separately decided.** A label event carries an
   actor, no association, and the session acts under the human's login; so removing an epic's
-  `needs-approval`, the human's go, stays the human's. The allow-list draws the line by
+  `needs-approval`, the human's go, stays the human's. Permission rules draw the line by
   command: `gh pr edit --remove-label` admitted, `gh issue edit --remove-label needs-approval`
   and the REST label `DELETE` not, so a pull request's removal on the REST fallback parks.
 - **Harder**: a new command in any step is an allow-list change first, human-reviewed. The
