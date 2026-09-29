@@ -92,7 +92,7 @@ Fixing is re-authoring — work with the same context the original author had:
    `<!-- ai-fix-ack -->`, which tells the next run's §2 the finding was handled. A review body
    has no thread — account for it in the summary instead, mentioning the reviewer by `@login`.
 
-A post the marker rule marks, where no other marker fits, starts with `<!-- ai-fix-note -->`,
+A post the marker rule marks, where no other marker fits, carries `<!-- ai-fix-note -->`,
 which marks nothing handled — the marker rule is the **Rounds and the cap** rule (routed from
 `CLAUDE.md`'s **Contribution workflow** section).
 

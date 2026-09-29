@@ -33,7 +33,10 @@ item scores against whichever documents hold those here.
   Wherever an item below says the closing step fixes something, it scores against that rule
   rather than restating it, so the step has to be read before any such item is applied.
 - `docs/design/system-design.md` and `docs/design/project-plan.md` — the slice the body claims
-  to derive from, and the services it may name.
+  to derive from, and the services it may name. The dispatch names the epic's track; on the
+  shipped-behaviour track (a `bug` or `enhancement` epic) the body derives instead from what
+  the closing step's *Derive, don't design* names for it — the reproduction itself, a tracker
+  comment, is out of this pass's reach.
 - The analysis documents the body cites, every requirement it lists as in scope, and
   `docs/analysis/system-overview.md` for the glossary — the tree is under `CLAUDE.md`'s
   **Document structure** topic.
@@ -77,8 +80,9 @@ already-filed task the draft drops, score none of the keys there.
 
 **(5) The build order is sound.** Every task's **Blocked by** line names task ids the body
 defines, or `none` — an entry with neither is **Major**, since the filer cannot tell an
-omission from an empty set. A named id that does not exist, a cycle, or an order that
-contradicts `project-plan.md`'s (a task before the service it calls) is **Major** too.
+omission from an empty set. A named id that does not exist, a cycle, a task before the
+service it calls, or, on new behaviour, an order that contradicts `project-plan.md`'s is
+**Major** too.
 
 **(6) No task contradicts an accepted ADR.** **Major**, and **Critical** where the contradicted
 rule is a safety behaviour. An ADR gate opened *after* the task it blocks, or not identified at
@@ -87,9 +91,11 @@ all, is **Major**. There is no closed set of records a slice is ordinarily gated
 decision needed a record of its own is not yours — the worthiness test is `CLAUDE.md`'s
 **Architecture Decision Records (ADRs)** topic's.
 
-**(7) Derived, not invented.** Every task maps to a service already in `system-design.md` and a
-task in `project-plan.md`. A service, call direction or volatility the body introduces is
-**Major**: the fix is an issue against the design document, never a paragraph in the body.
+**(7) Derived, not invented.** Every task maps to a service already in `system-design.md` and to
+a source for the dispatch's track — on new behaviour, a task in `project-plan.md`; on shipped
+behaviour, *Decisions so far* or a filed `requirement`/`uc` or design change. A service, call
+direction or volatility the body introduces is **Major**: the fix is an issue against the
+design document, never a paragraph in the body.
 
 **(8) Nothing restated that another document owns.** A formula, threshold, resolution order or
 ADR rationale reproduced instead of cited is *Clutter* in its restatement form, judged by the
