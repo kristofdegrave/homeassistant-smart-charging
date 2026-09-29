@@ -283,7 +283,7 @@ shared with the human partner**.
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
   `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
   (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
-  `decompose` (an epic's body read, at most one open per epic, a method epic aside). The label
+  `decompose` (an epic's body read, at most one open per epic). The label
   set itself — every name, colour and description, and which context labels this project
   enables — is `.claude/profile.yml`'s `labels` and `work_types`, and
   `.github/setup-labels.sh` writes it to the repository. Adding or renaming a label:
