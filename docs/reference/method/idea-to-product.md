@@ -198,6 +198,12 @@ method itself — one whose strand:
 A method epic needs no spec, so it gets no `decompose` child and no closing step. Every other
 epic is an epic with a spec.
 
+**An `adr`, `uc`, `requirement` or `documentation` issue filed after this pass** under an epic
+with a `decompose` sub-issue, by anything but a `decompose` run, blocks the epic's open
+`decompose` child; with none open, a new one is filed as above, blocked by it. The filer posts
+no park and leaves `needs-approval` alone: the `decompose` work file's entry rule reads the
+edge.
+
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
 [contribution-workflow.md](contribution-workflow.md)'s **Issue conventions** owns those rules
@@ -224,8 +230,8 @@ filing checklist is `file-task-issue`'s.
 3. **The human partner reads the fixed body** and says to go on — the parked gate: the
    `decompose` work file parks the epic under `needs-approval`, and removing it is the go. The
    pass is one agent run, then that read — never repeated over one draft, carrying no round
-   cap, so its findings are answered first; a fresh draft after the work file's *Out of the
-   body* stop gets its own.
+   cap, so its findings are answered first; a fresh draft the work file's entry rule starts
+   gets its own.
 4. **The children are filed**, in build order, one issue per task.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` into concrete
@@ -267,9 +273,7 @@ entry carries these keys, one item per key:
   the filer can tell an empty set from an omission.
 - **Sources** — the documents the entry was cut from, each named at the smallest
   self-contained unit the task turns on: a section where the task turns on one, the whole file
-  where the document is argued as a whole. Naming a whole document the task needs part of makes
-  the worker re-derive the reading; anchoring so tightly that the surrounding text is needed
-  is the same fault mirrored.
+  where the document is argued as a whole.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
   `none` and why in one line. Written now, not after deployment.
 
@@ -399,9 +403,6 @@ closing step once the `decompose` child is unblocked — so requiring the body h
 an artifact this stage cannot yet have. Without it, an analysis document can merge describing
 behaviour the code does not have. The review step applies that label on a clean pass and knows
 nothing about child issues, so the same condition is checked by whoever approves the merge.
-The epic is the earliest artifact that can carry that obligation — a `development`/`testing`
-child cannot, because it is cut from that epic's body by the decomposition, so none exists
-until the spec has been written into it.
 Whether a change touches shipped behaviour is settled by the propagation step each row's work
 file carries.
 
