@@ -5,6 +5,7 @@
   "permissions": {
     "defaultMode": "dontAsk",
     "allow": [
+      "Bash(printenv SMART_CHARGING_AUTOPILOT)",
       "Edit(//**/sc-*/**)",
       "Edit(//**/scratchpad/**)"
     ],

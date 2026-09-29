@@ -75,7 +75,17 @@ session scratchpad, and sets the `env` variable `autopilot.loop_marker` names to
 (`D:/GIT/sc-wf-1501` for `workflow/1501`); the `Read` and `Edit` rules for worktrees match
 `//**/sc-*/**`, and those for scratch files `//**/scratchpad/**`. The shared allow-list's
 `Read` rules exist because the `reviewer` definition's `permissionMode: dontAsk` reaches
-interactive dispatches too. A worktree placed elsewhere is refused in the loop.
+interactive dispatches too. A worktree placed elsewhere is refused in the loop. Three shapes
+the harness itself decides, observed in a `dontAsk` session: `cd <worktree> && git …` is
+refused whatever the allow-list says, so git runs in a worktree as `git -C <worktree> …`; a
+path spelled with a Windows short name (`KRISTO~1`) is refused where its long form passes, so
+scratch files are written by the long path; and the marker is read with
+`printenv <marker>`, since an `echo` of a variable is refused.
+
+**Known gap.** `Bash(git -C *)` admits every git subcommand and global option, `-c` config
+overrides included, which can make git run a program; no rule can close it, since any `*`
+before the subcommand matches `-c` too. Only the `PreToolUse` guard could, and it does not
+today.
 
 **Label gestures.** `.claude/settings.json`'s `ask` rules match
 `gh issue edit … --remove-label … needs-approval` and any `gh api` label `DELETE`: an
