@@ -67,7 +67,8 @@ Done when the state is known: free, paused or throttled.
 
 ### 2. Parked items with news
 
-An issue is **parked** while it carries `needs-decision`, an epic `needs-approval`. A park is read per `clarify`'s *Reading a park*.
+An issue is **parked** while it carries `needs-decision`, an epic `needs-approval`. A park is
+read per `clarify`'s *Reading a park*.
 
 - **`needs-decision` on an issue.** Settled → a candidate at step 4, the dispatch naming the
   answering comment; the tick removes `needs-decision` when it dispatches. Not settled → still
