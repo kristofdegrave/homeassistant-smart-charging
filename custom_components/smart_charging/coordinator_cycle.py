@@ -652,10 +652,11 @@ class DeadlineUrgencyResult:
     `outcome_established` (ADR-0042, narrowed by ADR-0053) is `DeadlineUnreachableEdge.resolve`'s
     own further input, threaded from here to the fire site. `True` for every path that reaches
     the engine or the disconnect exit -- both genuinely resolve something. Within the
-    non-resolvable early return's state-of-charge-unavailable half, `True` also for the two
+    non-resolvable early return's state-of-charge-unavailable half, `True` also for the three
     ADR-0053 rows that settle without a reading (the occurrence having elapsed, the backstop
-    releasing the hold); `False` for the rest of that half, where nothing needing a reading has
-    happened yet (nothing pursued, or pursued but not yet elapsed)."""
+    releasing the hold, and the pursued occurrence's own date resolving to "no deadline", F2);
+    `False` for the rest of that half, where nothing needing a reading has happened yet (nothing
+    pursued, pursued but not yet elapsed, or moved but still ahead)."""
 
     required: RequiredCurrentResult
     urgent: bool
@@ -694,9 +695,9 @@ class DeadlineUrgencyInputs:
     following_occurrence: datetime | None
     # The R14 table's own resolution for the pursued occurrence's OWN date, or None -- fed
     # into `follow_pursued_occurrence` (D1) so a pending pursued occurrence follows its own
-    # date's departure time (resolution-rules.md). Not gated on `deadline_resolvable`: carried
-    # on a no-reading cycle too, unused there today (the non-resolvable early return below
-    # never reads it) until F2 (#1482) does. `None` whenever nothing is pursued.
+    # date's departure time (resolution-rules.md). Not gated on `deadline_resolvable`: read by
+    # both halves of `resolve_deadline_urgency`, the resolvable branch below and the
+    # non-resolvable early return (F2, #1482). `None` whenever nothing is pursued.
     departure_on_pursued_date: time | None
     auto_dispatchable: bool
     solar_available: bool
@@ -755,12 +756,12 @@ def resolve_deadline_urgency(
         #   and the use-case's own precondition, so it is a real exit -- and always established
         #   (ADR-0042).
         # - STATE OF CHARGE UNAVAILABLE -- deliberately NOT an exit in the same sense: no
-        #   required current can be computed, so this half establishes only what this code
-        #   covers TODAY of ADR-0053's (narrowing ADR-0042) no-reading table: the clock against
-        #   the held occurrence, and the backstop (row 3, a pending occurrence's own date
-        #   resolving to "no deadline", is F2's -- see the `outcome_established` comment
-        #   below). Anything else is held exactly as it was -- "the System holds whichever
-        #   state it was already in" -- and NOT established.
+        #   required current can be computed, so this half establishes only what ADR-0053's
+        #   (narrowing ADR-0042) no-reading table says needs no reading: the clock against the
+        #   held occurrence, the backstop, and the pursued occurrence's own date moving or
+        #   releasing (F2, #1482) -- see the `outcome_established` comment below. Anything else
+        #   is held exactly as it was -- "the System holds whichever state it was already in" --
+        #   and NOT established.
         #
         # This is reachable with a live hold: the ev_soc fault gate upstream is itself gated on
         # `is_soc_gated`, which is False for `Off` and `Power` (below), so those modes arrive
@@ -777,6 +778,23 @@ def resolve_deadline_urgency(
         # not (requirements.md R5).
         disconnected = ctx.status not in CHARGEABLE_STATES
         held = inputs.pursued_occurrence if not disconnected else None
+        # F2/ADR-0053's table, rows 3 and 4: while connected, a pursued occurrence that has not
+        # yet elapsed still follows its own date's departure time -- the same
+        # `follow_pursued_occurrence` (D1) a reading cycle uses, called here with no
+        # `next_occurrence` of its own (this half never re-anchors to it; a disconnect already
+        # set `held` to `None` above). No separate elapsed check is needed here:
+        # `follow_pursued_occurrence`'s own `pursued_occurrence <= now` branch hands an
+        # already-elapsed `held` back unchanged, so it reaches the clock check below exactly as
+        # before. The date resolving to "no deadline" releases it (row 3); otherwise it moves,
+        # in either direction (row 4) -- a move into the past reaches the clock check below on
+        # this same cycle, same as the resolvable branch's own hold entry.
+        released_on_pursued_date = False
+        if held is not None:
+            _, moved_held = follow_pursued_occurrence(
+                held, inputs.departure_on_pursued_date, None, inputs.now_dt
+            )
+            released_on_pursued_date = moved_held is None
+            held = moved_held
         backstop_fired = held is not None and missed_deadline_backstop_fired(
             held, inputs.now_dt, following_occurrence=inputs.following_occurrence
         )
@@ -789,13 +807,15 @@ def resolve_deadline_urgency(
         # it does.
         unreachable = held is not None and held <= inputs.now_dt
         # Established: a disconnect (a real exit, always established per ADR-0042), or --
-        # within ADR-0053's own no-reading table -- the occurrence having elapsed (row 1) or
-        # the backstop just releasing the hold (row 2). Row 3 (a pending occurrence's own date
-        # resolving to "no deadline") is F2's (#1482) to add once it reads
-        # `departure_on_pursued_date` here. Anything else (nothing was ever pursued, or it is
-        # pursued but not yet elapsed) settles nothing, so the edge detector holds its prior
+        # within ADR-0053's own no-reading table -- the occurrence having elapsed (row 1), the
+        # backstop just releasing the hold (row 2), or the pursued date resolving to "no
+        # deadline" (row 3, F2) -- that release is the outcome, even though `unreachable` itself
+        # stays False. Anything else (nothing was ever pursued, pursued but not yet elapsed, or
+        # moved but still ahead -- row 4) settles nothing, so the edge detector holds its prior
         # flag instead of taking this cycle's (always-False) `unreachable` at face value.
-        outcome_established = disconnected or backstop_fired or unreachable
+        outcome_established = (
+            disconnected or backstop_fired or unreachable or released_on_pursued_date
+        )
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(
                 required_a=None,
