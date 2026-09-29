@@ -111,6 +111,11 @@ labels:
     - name: enhancement
       color: a2eeef
       description: "Improvement to already-shipped behaviour — pair with a context label once the artifact is known"
+  # An issue's place in the tree; the rule is Issue conventions'.
+  structure:
+    - name: epic
+      color: 3e4b9e
+      description: "Parent tracking a strand's child issues — carries no context label, never picked as a task"
 
 # The work types this project enables, from the method's catalogue. Each names a row of
 # CLAUDE.md's Model selection table and a directory under docs/reference/work-types/ — the

@@ -59,11 +59,10 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
 ## Rule A — author/reviewer separation
 
 A change is judged by a **spawned reviewer agent**, never by the session that holds the
-author's context. What corrupts a review is the *reviewer* carrying that context, not the
-session: the session that wrote the work may run step 2, because it only dispatches to agents
-that cannot see what it saw and relays what they return. The moment it judges the work itself
-— screening findings before posting, or checking the reviewer missed nothing — the separation
-is gone.
+author's context. The session that wrote the work may still run step 2, because it only
+dispatches to agents that cannot see what it saw and relays what they return. The moment it
+judges the work itself — screening findings before posting, or checking the reviewer missed
+nothing — the separation is gone.
 
 ## Rule B — stop-and-report, per issue
 
@@ -119,7 +118,8 @@ question with no issue to park on, in its shape.
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
   by an author whose login does not end in `[bot]`, whose body carries none of the session's
   own markers (the local round, `ai-fix-`, escalation, self-grant and `clarify`'s
-  `autopilot-parked` markers; **Git identity** below), posted while an exit label was on: after its `labeled` event and before any later
+  `autopilot-parked` markers; [profile.md](../profile.md)'s **Repository and git identity**),
+  posted while an exit label was on: after its `labeled` event and before any later
   `unlabeled` one. **Marker rule:** every session post carries one — a review's inline comments via its body,
   else `fix`'s note marker — bar the hold-reason review (**Exit labels** below); every
   comment the session posts on an issue carries one, `fix`'s note marker where no other
@@ -137,10 +137,9 @@ decide. Both PR exits have one actor: the **review step**, at the end of its pas
 clean pass it applies `needs-approval` alone, removing a stale `needs-decision`.
 After the last pass the cap allows, with Critical or Major still open and no round
 self-granted, it applies `needs-decision` **alongside** `needs-approval` and posts the one
-escalation comment **Rounds and the cap** describes, so a capped PR is told from a clean one
-and `needs-approval` keeps one meaning. No other step or skill applies either label to a PR,
-bar the session putting one on hold (below), which a checklist's exit check can also do at the
-exit.
+escalation comment **Rounds and the cap** describes. No other step or skill applies either
+label to a PR, bar the session putting one on hold (below), which a checklist's exit check can
+also do at the exit.
 Neither label is a merge (**Merge and issue closing** below).
 
 On a PR, a human item (**Rounds and the cap** above) posted **while** either label is on makes it
@@ -185,8 +184,7 @@ The session applies the hold itself rather than asking the human partner to.
 - **Reply always.** Every finding gets a reply on its thread: what was done, or why not.
 - **Resolve only what was actually fixed.** A disputed, deferred or partially addressed thread
   stays open, with the reply saying why.
-- **Resolve after the push, never before.** A failed push would otherwise leave threads closed
-  over work not on the branch.
+- **Resolve after the push, never before.**
 - **Outdated is not resolved.** A thread the diff no longer shows stays open until resolved
   explicitly.
 - **Out of scope is filed, not fixed.** A comment asking for something outside the PR's scope
@@ -222,17 +220,16 @@ idea, having no PR, is closed by the work file or skill that ran it, once its fi
 with a closing comment listing them ([tracker-mechanics.md](tracker-mechanics.md)'s **Closing
 a work item**).
 
-**An epic's body is the spec, and its children are the tasks**, filed by the decomposition
-that wrote the body — the closing step of the flow `CLAUDE.md`'s **Idea-to-product flow**
-topic routes to. Each child is its own issue, implemented in its own chain.
+**An epic with a spec carries it in its body, and its children are the tasks**, filed by the
+decomposition that wrote the body — the closing step of the flow `CLAUDE.md`'s
+**Idea-to-product flow** topic routes to, whose opening pass says which epics have one. Each child is
+its own issue, implemented in its own chain.
 
 **An epic is closed by the human partner, never by a PR or by `cleanup`.** Its gate is
 [idea-to-product.md](idea-to-product.md)'s **Close** stage's; of its two conditions, step 4
 establishes the first — every child closed — and never the second, an observation on the real
 installation, the human's: `cleanup` reads the epic's open-children count once the linked issue
-is *done* and reports it; what the report says at zero is the skill's own step. It never closes:
-GitHub does not close a parent whose sub-issues are all closed, and a child PR carries `Part of`
-for its epic so a merge cannot.
+is *done* and reports it; what the report says at zero is the skill's own step. It never closes.
 
 ## Commit & push authorization
 
@@ -278,20 +275,19 @@ producer's logic.
 ## Git identity
 
 Whose account the interactive session acts under is [profile.md](../profile.md)'s **Repository
-and git identity**. This chain relies only on its being **one account, shared with the
-human partner** — which is why **Rounds and the cap** above tells a human item from the
-session's own footprint by the session's markers, never by author.
+and git identity**. **Rounds and the cap** above relies only on its being **one account,
+shared with the human partner**.
 
 ## Issue conventions
 
 - **Context label** matches the artifact type: `adr`, `uc`, `requirement`,
-  `development`/`testing` (implementation tasks, **Task issues** below), `workflow` (CI/skill/agent-authoring
-  changes), `documentation` (design-doc changes, `docs/design/**`), `decompose` (an epic's
-  body read, one child per epic). The label set itself — every name, colour and description,
-  and which context labels this project enables — is `.claude/profile.yml`'s `labels` and
-  `work_types`, and `.github/setup-labels.sh` writes it to the repository. Adding or renaming
-  a label: [ci-pipeline.md](ci-pipeline.md) lists every place this vocabulary must stay in
-  sync.
+  `development`/`testing` (implementation tasks, **Task issues** below), `workflow`
+  (CI/skill/agent-authoring changes), `documentation` (design-doc changes, `docs/design/**`),
+  `decompose` (an epic's body read, one child per epic, a method epic aside). The label set
+  itself — every name, colour and description, and which context labels this project enables
+  — is `.claude/profile.yml`'s `labels` and `work_types`, and `.github/setup-labels.sh` writes
+  it to the repository. Adding or renaming a label: [ci-pipeline.md](ci-pipeline.md) lists
+  every place this vocabulary must stay in sync.
 - **Kind-of-work labels** (`bug`, `enhancement`) are a **second, orthogonal axis**, not context
   labels. The context label says *which artifact* the work produces; the kind label says *why*
   the work exists — a defect in, or an improvement to, already-shipped behaviour. An issue
@@ -301,6 +297,11 @@ session's own footprint by the session's markers, never by author.
   [idea-to-product.md](idea-to-product.md)'s **Route** owns that track and its verify-first
   gate. Neither label substitutes for the other, and a kind label adds no Model-selection
   row.
+- **The `epic` label** marks an epic — a parent tracking its children, not a unit of work — so
+  an epic carries no context label and is never picked as a task. A kind label naming the
+  epic's own work stays beside it (a bug-track epic, filed new at the opening pass beside the
+  routed `bug` issue, keeps `bug` and never gains a context label); `epic` adds no
+  Model-selection row.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
@@ -308,8 +309,9 @@ session's own footprint by the session's markers, never by author.
   **Decompose** stage for the full cycle (when to file the epic, what to file immediately vs.
   defer). The epic is the **parent issue** and each child is a **native sub-issue** of it; a
   child that cannot start until another finishes carries a **native blocked-by
-  relationship**. Neither is body text; the commands and the read-backs that confirm an edge
-  landed are in [tracker-mechanics.md](tracker-mechanics.md).
+  relationship**, and the epic a blocked-by edge to each child — a UI convention;
+  nothing gates on it. Neither is body text; the commands and the
+  read-backs that confirm an edge landed are in [tracker-mechanics.md](tracker-mechanics.md).
   Child issue bodies still say "Part of #N" for the epic, never
   "Closes #N".
 - **Milestone** is the method's priority (ADR-0052): an ordered roadmap slice ranked by a
@@ -317,10 +319,11 @@ session's own footprint by the session's markers, never by author.
   Unprefixed milestones do not rank against each other: a picker facing a tie puts the choice
   to the human partner through `clarify` (**Rule C**). Within one milestone, between milestones
   sharing a prefix, or among unmilestoned issues, it takes the lowest-numbered (oldest)
-  unblocked issue. The roadmap session is one the human partner holds to prefix every
-  milestone; a new milestone stays unprefixed until then, and only the human partner reorders. An epic carries its milestone and filing copies it to each child routed to work.
-  Every issue routed to work carries one; an `idea` issue and an unreproduced claim are not
-  work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
+  unblocked issue not labelled `epic`. The roadmap session is one the human partner holds to
+  prefix every milestone; a new milestone stays unprefixed until then, and only the human
+  partner reorders. An epic carries its milestone and filing copies it to each child routed to
+  work. Every issue routed to work carries one; an `idea` issue and an unreproduced claim are
+  not work yet ([idea-to-product.md](idea-to-product.md)'s **Decompose** and **Route** stages say
   when the work they become is placed). Whoever picks the next issue takes an unmilestoned
   issue routed to work last, never skips it. The `gh` flags are
   [tracker-mechanics.md](tracker-mechanics.md)'s **Filing a work item**.
@@ -336,13 +339,14 @@ session's own footprint by the session's markers, never by author.
   (**Epic-first for multi-artifact strands** above has both forms).
 
 **Branch naming**: `<context-label>/<issue-number>` — label is the issue's context label,
-number is the GitHub issue number; a `decompose` issue makes no branch. **An issue carrying only a kind label** (`bug`,
-`enhancement`) has no context label to name the branch, so the kind label itself is the
-segment: `bug/<issue-number>` or `enhancement/<issue-number>` — the shipped-behaviour track's
-defined segment. Earlier branches used `dev/` and `fix/`; both spellings are historical, not
-alternatives (`development/<n>` keeps its meaning above). When both axes are present the
-**context label wins**. If extra work on the same issue needs a second PR, suffix a third
-segment describing the split: `<context-label>/<issue-number>/<slug>`.
+number is the GitHub issue number; a `decompose` issue makes no branch, nor an epic. **An
+issue carrying only a kind label** (`bug`, `enhancement`) has no context label to name the
+branch, so the kind label itself is the segment: `bug/<issue-number>` or
+`enhancement/<issue-number>` — the shipped-behaviour track's defined segment. Earlier branches
+used `dev/` and `fix/`; both spellings are historical, not alternatives (`development/<n>`
+keeps its meaning above). When both axes are present the **context label wins**. If extra work
+on the same issue needs a second PR, suffix a third segment describing the split:
+`<context-label>/<issue-number>/<slug>`.
 
 A context label's own work file — whatever `CLAUDE.md`'s **Model selection** table names in
 its row — may override the number segment for a concrete reason to key the branch off the
@@ -360,8 +364,8 @@ do not reach it, and how it is reviewed are this topic's.
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that. It explains how a specific failure got past a specific process, so the changes it
-recommends can be argued from evidence; once they land, it stays as the record of why.
+that. It explains how a specific failure got past a specific process; once its changes land, it
+stays as the record of why.
 
 ### Two rules that apply elsewhere do not apply here
 
@@ -381,5 +385,4 @@ accuracy** — a post-mortem is an argument built entirely from quotes, so a quo
 inaccurate, truncated so its meaning changes, or mined from a context that would undercut the
 point is the defect class that matters. Pick the reviewer from what the PR
 actually touches (the `workflow` checklist when it also edits `CLAUDE.md`).
-No reviewer checklist applies to the post-mortem itself: all are written against artifacts
-that assert behaviour, and none fits a narrative document.
+No reviewer checklist applies to the post-mortem itself.

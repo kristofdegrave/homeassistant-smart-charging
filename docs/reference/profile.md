@@ -81,9 +81,9 @@ them — sizing sweeps up a tier, epics carrying Size only — are
 
 ## Labels
 
-The label set — names, colours, descriptions — is `profile.yml`'s `labels`, in four groups
-(pre-triage, action, context, kind), and `.github/setup-labels.sh` writes exactly that set to
-the repository. What a group means and when an issue carries a label from it is
+The label set — names, colours, descriptions — is `profile.yml`'s `labels`, in five groups
+(pre-triage, action, context, kind, structure), and `.github/setup-labels.sh` writes exactly
+that set to the repository. What a group means and when an issue carries a label from it is
 [contribution-workflow.md](method/contribution-workflow.md)'s **Issue conventions**; the other places
 the context vocabulary is baked into are [ci-pipeline.md](method/ci-pipeline.md)'s **Label
 vocabulary sync**. The enabled context labels are also the enabled work types

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Create (or update) every label this repo's issue conventions define — context, action,
-# pre-triage and kind-of-work labels alike.
+# Create (or update) every label this repo's issue conventions define, in every group the
+# profile lists.
 #
 # The label set itself is not in this file. It is `.claude/profile.yml`'s `labels` section —
 # the one place the project's label vocabulary is spelled — and this script writes exactly

@@ -62,8 +62,8 @@ in this order of usefulness:
    them, belong to `CLAUDE.md`'s **Issue conventions** and are not stated there yet — read the
    lines as the issue gives them.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
-   whose body is the spec both sides were cut from and whose other children are often the other
-   side of the conflict.
+   whose body, where it carries a spec, is the one both sides were cut from, and whose other
+   children are often the other side of the conflict.
 4. **The owning specification document** — the analysis and design documents that `CLAUDE.md`'s
    **Document structure** section lists, reached from the issue's `Source:` lines or from the
    changed file itself.

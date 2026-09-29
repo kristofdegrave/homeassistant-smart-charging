@@ -1,6 +1,6 @@
 ---
 name: work-idea
-description: Use when picking up a GitHub issue labeled `idea` in the Smart Charging project — brainstorm it interactively until it can be decomposed into one or more properly context-labeled follow-up issues, rather than drafting an artifact directly.
+description: Use when picking up a GitHub issue labeled `idea` in the Smart Charging project — brainstorm it interactively until it can be decomposed into one or more properly context-labeled follow-up issues, and an `epic`-labelled epic where it needs one, rather than drafting an artifact directly.
 ---
 
 # Work an idea
@@ -37,22 +37,25 @@ Its issue comments follow the marker rule under `CLAUDE.md`'s **Contribution wor
    `diagnosing-bugs` skill performs this step and owns what counts as a reproduction. A claim it
    cannot reproduce is not a defect yet: say so on the issue and stop the cycle there. On the
    new-behaviour track this step does not apply.
-5. **Settle whether the strand needs an epic whose body carries the spec** — the flow document
-   says when one is required on each track, and which analysis change cannot be approved until
-   it exists. Where it is required, that epic is what step 6 files, and its body is written in
-   the closing step below rather than drafted later as a separate artifact.
-   Record the answer on the issue either way, so it is not re-argued.
+5. **Settle whether the strand needs an epic, and whether its body will carry a spec** — the
+   flow document says when each is required — by track, and by whether the brainstorm settled
+   that the strand has no `development` or `testing` task — and which analysis change cannot be
+   approved until that epic exists. Where an epic is required, it is what step 6 files, and any
+   spec is written into its body in the closing step below rather than drafted later as a
+   separate artifact. Record the answer on the issue either way, that task question included, so it is
+   not re-argued.
 6. **Decompose.** File what the strand needs with `file-task-issue` — one issue for a
-   single-artifact idea, an epic whose body is the spec plus the children cut from it for a
-   multi-artifact strand — moving the brainstormed decisions wherever the flow document says
-   they end up. The flow owns the closing step and its order, the `decompose` row's work file
-   (`CLAUDE.md`'s **Model selection**) its mechanics, so the epic body never carries a
-   checklist of them; what a child is and in what order children are filed is the flow
-   document's. A part still too fuzzy to scope keeps the `idea` label and gets worked
-   later — recursion is expected, not an error. The step ends with what it filed — the epic,
-   or the single issue — placed on a milestone per the milestone rule under `CLAUDE.md`'s **Issue
-   conventions**. A shipped-behaviour issue is placed once its claim is reproduced, per the
-   verification rule under `CLAUDE.md`'s **Idea-to-product flow**.
+   single-artifact idea; for a multi-artifact strand, an epic and the issues its opening pass
+   files, per the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to — moving the
+   brainstormed decisions wherever the flow document says they end up. The flow owns the
+   closing step and its order, the `decompose` row's work file (`CLAUDE.md`'s **Model
+   selection**) its mechanics, so the epic body never carries a checklist of them; what a child
+   is and in what order children are filed is the flow document's. A part still too fuzzy to
+   scope keeps the `idea` label and gets worked later — recursion is expected, not an error.
+   The step ends with what it filed — the epic, or the single issue — placed on a milestone per
+   the milestone rule under `CLAUDE.md`'s **Issue conventions**. A shipped-behaviour issue is
+   placed once its claim is reproduced, per the verification rule under `CLAUDE.md`'s
+   **Idea-to-product flow**.
 7. **Cross-link** — every child/epic issue body notes "Split from #NNN"; the original idea issue
    gets one comment listing everything it was split into.
 8. **Close the idea issue** once it is fully captured — either directly in child issues
