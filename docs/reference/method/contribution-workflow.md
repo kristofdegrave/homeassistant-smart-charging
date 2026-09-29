@@ -18,14 +18,15 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
    - If none exists yet, file one first, per **Issue conventions** below (context label, board
      fields). Board **Status** starts in the *backlog* column (**Project board** below).
 1. **Implement** (`implement`).
-   - Isolated `git worktree`, always, even for a one-line fix. A row whose work file makes no branch or PR skips the
-     worktree, push and PR — the `implement` skill's exception — and keeps *in progress* and
-     *done*.
+   - Isolated `git worktree`, always, even for a one-line fix;
+     `.claude/hooks/block-main-checkout-edits.sh` refuses file-tool edits in the main checkout
+     on `main`. A row whose work file makes no branch or PR skips the worktree, push and PR
+     (`implement`'s exception), keeping *in progress* and *done*.
    - Branch per **Branch naming** (under **Issue conventions** below), cut from an up-to-date
      `origin/main` (**Base `main` and stacking** below).
-   - Board **Status** → the *in progress* column when writing actually starts, not at filing
-     time. The issue's epic, if it has one, moves there with it unless it already is
-     (**Project board** below; the parent read is [tracker-mechanics.md](tracker-mechanics.md)'s
+   - Board **Status** → the *in progress* column when writing starts, not at filing. The
+     issue's epic, if it has one, moves there with it unless it already is (**Project board**
+     below; the parent read is [tracker-mechanics.md](tracker-mechanics.md)'s
      **Parent/sub-issue and blocked-by edges**).
    - Self-check against the [Definition of Done](definition-of-done.md); then push and open
      the PR against `main`, referencing the issue (**Base `main` and stacking** and **`Closes`

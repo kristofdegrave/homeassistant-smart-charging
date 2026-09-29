@@ -12,6 +12,15 @@
             "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-destructive-git.sh\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/block-main-checkout-edits.sh\""
+          }
+        ]
       }
     ]
   }
