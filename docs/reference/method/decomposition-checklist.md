@@ -91,10 +91,10 @@ decision needed a record of its own is not yours — the worthiness test is `CLA
 **Architecture Decision Records (ADRs)** topic's.
 
 **(7) Derived, not invented.** Every task maps to a service already in `system-design.md` and to
-its source: a task in `project-plan.md`; where the dispatch names the shipped-behaviour track,
-the fix *Decisions so far* records, plus, where filed, the strand's `requirement`/`uc` change and
-any plan slice its design change added. A service, call direction or volatility the body introduces is
-**Major**: the fix is an issue against the design document, never a paragraph in the body.
+a source the closing step's *Derive, don't design* names for the dispatch's track — on new
+behaviour, a task in `project-plan.md`. A service, call direction or volatility the body
+introduces is **Major**: the fix is an issue against the design document, never a paragraph in
+the body.
 
 **(8) Nothing restated that another document owns.** A formula, threshold, resolution order or
 ADR rationale reproduced instead of cited is *Clutter* in its restatement form, judged by the

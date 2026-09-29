@@ -229,10 +229,10 @@ filing checklist is `file-task-issue`'s.
 4. **The children are filed**, in build order, one issue per task.
 
 **Derive, don't design.** The body turns one approved slice of `project-plan.md` — on a `bug`
-or `enhancement` epic, the recorded `diagnosing-bugs` confirmation, the fix or decisions
-*Decisions so far* records and, where filed, the strand's `requirement`/`uc` change and any
-design change's slice — into concrete files, functions and tests, citing the analysis
-documents and the ADRs rather than restating or overriding them. A service or call direction
+or `enhancement` epic, the recorded `diagnosing-bugs` confirmation, *Decisions so far*'s fix
+or decisions and, where filed, the strand's `requirement`/`uc` change and any design change's
+slice — into concrete files, functions and tests, citing the analysis documents and the ADRs
+rather than restating or overriding them. A service or call direction
 the design does not name is not invented here: it is an issue against the design document, and
 the draft resumes after. Before writing a **behavioural** rule into the body, read the
 document that owns it and act on which of three cases it is:

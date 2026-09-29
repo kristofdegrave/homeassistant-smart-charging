@@ -6,9 +6,10 @@ description: Use when a claim is made about the shipped Smart Charging integrati
 # Diagnosing bugs
 
 Confirm or refute a claim about shipped behaviour — a reported defect or an enhancement — and
-leave behind a minimal reproduction. For an enhancement the reproduction pins the current
-behaviour the claim describes, and "confirmed" means the system behaves as it says. **It stops
-there.** No fix, no regression test, no verification — the `development` flow owns those.
+leave behind a minimal reproduction. For an enhancement the reproduction asserts the behaviour
+the claim asks for, so it goes red on current behaviour and green once changed, and "the cause"
+is the current behaviour's source, which Steps 3–4 locate. **It stops there.** No fix, no
+regression test, no verification — the `development` flow owns those.
 
 Its one job is the step nothing else here performs: judging the system against something other
 than this repo's own documents. The reporter's *observation* is the oracle, so the loop you build
@@ -20,8 +21,8 @@ version is not enough to diagnose, say so and ask.
 
 ## Step 1 — build a loop that goes red
 
-**This is the skill.** With a pass/fail signal that goes red on *this* defect the cause falls
-out; without one, reading code only produces a theory. Spend disproportionate effort here.
+**This is the skill.** Without a pass/fail signal that goes red on *this* defect, reading code
+only produces a theory. Spend disproportionate effort here.
 
 ### Pick a seam, in roughly this order
 
@@ -86,7 +87,7 @@ document, the requirement, or a worked example. Capture the exact symptom (the w
 missing unit, the event firing every cycle) so the eventual fix can be checked against it.
 
 If the loop stays green the claim is **refuted**: say so plainly with the command and its output,
-and stop. That is a finished result, not a failure.
+record it (Step 5), and stop. That is a finished result, not a failure.
 
 **Minimise.** Cut inputs, config, callers and steps one at a time, re-running after each cut, until
 every remaining element is load-bearing — removing any one turns it green.
@@ -122,11 +123,12 @@ The fix is then ordinary work: file it as a `development` issue and run it throu
 contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
 in that issue's row of `CLAUDE.md`'s **Model selection** table.
 
-**Record a confirmed claim on its issue** as a comment carrying `fix`'s note marker, per the
-marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its **Tracker mechanics**
-topic (*Commenting on a work item*) and read back: that the claim is confirmed, the one command
-and its output, and the minimal reproduction with its captured symptom. That comment is the
-reproduction the rest of the flow reads.
+**Record either verdict on the claim's issue**, redacted as above, as a comment whose first line
+is exactly `diagnosing-bugs: confirmed` or `diagnosing-bugs: refuted`, then `fix`'s note
+marker per the marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its
+**Tracker mechanics** topic and read back. It carries the one command and its output and, when
+confirmed, the minimal reproduction with its captured symptom. The rest of the flow reads the
+newest such comment.
 
 Stop here and report:
 

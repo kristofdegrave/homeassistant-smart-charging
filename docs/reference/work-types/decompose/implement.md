@@ -41,24 +41,23 @@ that test and carries none of the session's markers (*Rounds and the cap*, under
 
 ## Entry 1 — draft, pass, park
 
-1. **Confirm the gate.** The `decompose` issue has no open blocked-by edge, and its track's
-   source exists — Route's two tracks, split by kind label (`CLAUDE.md`'s **Issue
-   conventions**):
+1. **Confirm the gate.** The `decompose` issue has no open blocked-by edge, and the source
+   exists for the track the epic's kind label sets (`CLAUDE.md`'s **Issue conventions**):
    - **No kind label → new behaviour**: the scope names plan task ids, each in
      `docs/design/project-plan.md` on `origin/main`.
-   - **`bug` or `enhancement` → shipped behaviour**: on the routed issue — so labelled, filed
-     beside the epic, linked from its body — the newest comment by the session's login
-     carrying `fix`'s note marker and a `diagnosing-bugs` verdict records the claim
-     confirmed; a later refutation overrides. No `requirement`/`uc` change is required.
+   - **`bug` or `enhancement` → shipped behaviour**: exactly one issue so labelled is linked
+     from the epic body — none or several is a missing source — and on it the newest comment
+     by the session's login opening with a `diagnosing-bugs` verdict line opens with its
+     confirmed one. No `requirement`/`uc` change is required.
 
    An open edge or a missing source → stop and report which, the issue not moved: picked too
    early. Met → move it to *in progress*, never *in review* (**Project board**, under
    `CLAUDE.md`'s **Contribution workflow**).
 2. **Read the sources**: the epic body (*Decisions so far*, the scope); the track's source —
-   on shipped behaviour, that record, the fix or decisions *Decisions so far* records and,
-   where filed, the strand's `requirement`/`uc` change and any design change's plan slice;
-   the `docs/design/system-design.md` services, analysis documents and accepted ADRs the
-   source touches. Derive the slice boundary and the deferrals from them.
+   on new behaviour, the plan slice those ids name; on shipped behaviour, what the closing
+   step's *Derive, don't design* names for it; the `docs/design/system-design.md` services,
+   analysis documents and accepted ADRs the source touches. Derive the slice boundary and the
+   deferrals from them.
 3. **Draft the body** — the closing step's step 1. What the body carries, a task entry's keys,
    *Derive, don't design* and its three cases for a behavioural rule are that step's, applied
    as written. Keep *Decisions so far* in place. Write the body to the epic (**Tracker
