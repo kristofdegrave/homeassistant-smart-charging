@@ -62,5 +62,6 @@ taken, kept so the log has every number.
 | [0052](0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md) | An autopilot's controls — three human gates replace Rule B's chaining stop, auto-merge by tree behind a local guard, milestones as ordered priority (narrows [ADR-0043](0043-scheduled-upstream-drift-watcher.md) and [ADR-0048](0048-retire-the-ai-label-pipeline.md)) | Accepted |
 | [0053](0053-soc-unavailable-cycle-still-settles-what-needs-no-reading.md) | A state-of-charge-unavailable cycle still settles what needs no reading (narrows [ADR-0042](0042-soc-unavailable-cycle-holds-the-unreachable-clear.md)) | Accepted |
 | [0054](0054-autopilot-runs-dontask-and-trusts-only-write-access-authors.md) | The autopilot's security model — what an unattended run may run, write and trust | Accepted |
+| [0055](0055-session-pushes-and-opens-prs-as-a-bot-account.md) | The session pushes and opens pull requests as a bot account; the owner's account keeps approval and merge (narrows [ADR-0052](0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
