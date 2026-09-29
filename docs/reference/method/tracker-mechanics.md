@@ -485,11 +485,9 @@ their ids and current state:
 gh api graphql -f query='query{ repository(owner:"<owner>", name:"<name>") { pullRequest(number:<n>) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'
 ```
 
-`first:` is a hard cap, not a default that grows — the same trap as `item-list`'s limit. Check
-`hasNextPage` and fetch the next page with `after:"<endCursor>"` rather than assuming 100
-covered it. The values are written into the document, not passed as GraphQL variables: a `$`
-anywhere in a command is refused in a `dontAsk` session, a quoted one included, and so is a
-line break inside the quotes — hence one line.
+`first:` is a hard cap, like `item-list`'s limit: check `hasNextPage` and fetch on with
+`after:"<endCursor>"`. Values are inlined, on one line: a `dontAsk` session refuses any `$` or
+quoted line break in a command.
 
 then resolve one by its thread id:
 
