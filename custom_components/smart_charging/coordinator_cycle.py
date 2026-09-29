@@ -781,14 +781,17 @@ def resolve_deadline_urgency(
         # F2/ADR-0053's table, rows 3 and 4: while connected, a pursued occurrence that has not
         # yet elapsed still follows its own date's departure time -- the same
         # `follow_pursued_occurrence` (D1) a reading cycle uses, called here with no
-        # `next_occurrence` of its own (this half never re-anchors to it; disconnected already
-        # took the branch above, and an elapsed occurrence is left for the clock check below to
-        # read unchanged, matching `follow_pursued_occurrence`'s own elapsed guard). The date
+        # `next_occurrence` of its own (this half never re-anchors to it; a disconnect already
+        # set `held` to `None` above). `held is not None` is the only guard needed:
+        # `follow_pursued_occurrence` has its own `pursued_occurrence <= now` elapsed check
+        # (with `next_occurrence=None` here, that branch hands `held` straight back
+        # unchanged), so a held occurrence already elapsed reaches the clock check below
+        # exactly as before, without a second, hand-kept copy of that comparison here. The date
         # resolving to "no deadline" releases it (row 3); otherwise it moves, in either
         # direction (row 4) -- a move into the past reaches the clock check below on this same
         # cycle, same as the resolvable branch's own hold entry.
         released_on_pursued_date = False
-        if held is not None and held > inputs.now_dt:
+        if held is not None:
             _, moved_held = follow_pursued_occurrence(
                 held, inputs.departure_on_pursued_date, None, inputs.now_dt
             )

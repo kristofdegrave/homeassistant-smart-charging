@@ -5628,8 +5628,9 @@ async def test_should_release_on_the_pursued_dates_no_deadline_when_state_of_cha
     does with a reading -- and, unlike the steady no-op no-reading rows, the release itself IS
     established, so it fires the clear at the coordinator tier."""
     # Arrange -- cycle 1: a tight but reachable-only-with-a-reading deadline, genuinely
-    # unreachable with the occurrence still ahead (same shape as the sibling `does_not_fire`
-    # test above this file's T13 section).
+    # unreachable with the occurrence still ahead (same shape as
+    # `test_deadline_unreachable_cleared_does_not_fire_when_soc_unavailable_and_not_yet_elapsed`
+    # above, this file's T13 section).
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
@@ -5693,14 +5694,14 @@ async def test_should_hold_a_moved_no_reading_occurrence_past_its_old_time_witho
 
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
-    # Act -- cycle 1, still at 06:00: today's departure moves to 09:00, read with no reading.
+    # Arrange (cont'd) -- cycle 1, still at 06:00: today's departure moves to 09:00, read with
+    # no reading. This is setup for the behaviour under test (the OLD time passing below), not
+    # itself the assertion -- the read-back is a precondition.
     coord.departure_dow_defaults[now0.weekday()] = new_departure_time
     await coord._async_update_data()
-
-    # Assert -- followed onto 09:00, still ahead, nothing fired.
     moved = datetime.combine(now0.date(), new_departure_time, tzinfo=now0.tzinfo)
-    assert coord._pursued_occurrence == moved
-    assert len(events) == 0
+    assert coord._pursued_occurrence == moved  # precondition -- followed onto 09:00, still ahead
+    assert len(events) == 0  # precondition
 
     # Act -- 07:00, the OLD time, passes. Still no reading.
     freezer.move_to(now0 + timedelta(hours=1))

@@ -1654,9 +1654,12 @@ def test_should_declare_the_outcome_established_when_the_backstop_releases_the_h
 def test_should_move_the_pursued_occurrence_when_no_reading_and_its_date_resolves_later():
     """F2/ADR-0053's table, row 4: a no-reading cycle re-resolves the pursued occurrence's own
     date exactly as a reading cycle does (`follow_pursued_occurrence`, D1) -- the move is
-    neither a release nor an engagement, so `urgent` stays True and nothing is established."""
-    # Arrange -- pursued at 09:00, still ahead of `now_dt` (10:30 today would already be past,
-    # so use a `now_dt` before both): the occurrence's own date now resolves to 11:00 instead.
+    neither a release nor an engagement, so `urgent` stays True. Established is a separate
+    behaviour, pinned below by
+    `test_should_hold_established_false_when_no_reading_and_the_date_resolves_later`, matching
+    this section's own convention."""
+    # Arrange -- pursued at 09:30, still ahead of a 09:00 `now_dt`; its own date now resolves to
+    # 11:00 instead.
     pursued = datetime(2026, 7, 27, 9, 30)
     now_dt = datetime(2026, 7, 27, 9, 0)
     moved = datetime(2026, 7, 27, 11, 0)
@@ -1676,13 +1679,31 @@ def test_should_move_the_pursued_occurrence_when_no_reading_and_its_date_resolve
     assert result.urgent is True
     assert result.required.urgent is True
     assert result.required.unreachable is False
+
+
+def test_should_hold_established_false_when_no_reading_and_the_date_resolves_later():
+    """Separate from the move itself (the test above): row 4 settles nothing needing a
+    reading, so the edge detector must hold its prior flag rather than take this cycle's move
+    at face value -- same arrangement as the test above."""
+    # Arrange / Act -- same arrangement as the test above.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 30),
+        now_dt=datetime(2026, 7, 27, 9, 0),
+        departure_on_pursued_date=time(11, 0),
+    )
+
+    # Assert
     assert result.outcome_established is False
 
 
 def test_should_release_on_the_pursued_dates_no_deadline_when_no_reading():
     """F2/ADR-0053's table, row 3: the pursued occurrence's own date resolving to "no deadline"
-    releases it on a no-reading cycle too -- and, unlike the steady no-op rows, this one IS
-    established (the release itself is the outcome)."""
+    releases it on a no-reading cycle too. Established is a separate behaviour, pinned by
+    `test_should_declare_the_outcome_established_when_released_on_the_pursued_date` below,
+    matching this section's own convention."""
     # Arrange / Act
     result = _resolve_deadline_urgency(
         deadline_resolvable=False,
@@ -1697,6 +1718,22 @@ def test_should_release_on_the_pursued_dates_no_deadline_when_no_reading():
     assert result.required.pursued_occurrence is None
     assert result.urgent is False
     assert result.required.urgent is False
+
+
+def test_should_declare_the_outcome_established_when_released_on_the_pursued_date():
+    """ADR-0053's table, row 3: unlike the steady no-op rows, the release itself IS the
+    outcome -- separate from the release itself, which the test above pins."""
+    # Arrange / Act -- same arrangement as the test above.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 30),
+        now_dt=datetime(2026, 7, 27, 9, 0),
+        departure_on_pursued_date=None,
+    )
+
+    # Assert
     assert result.outcome_established is True
 
 
@@ -1724,13 +1761,33 @@ def test_should_begin_the_hold_when_no_reading_and_the_moved_date_has_already_pa
     assert result.required.pursued_occurrence == moved
     assert result.urgent is True
     assert result.required.unreachable is True
+
+
+def test_should_declare_the_outcome_established_when_a_moved_date_has_already_passed():
+    """ADR-0053's table, row 1, reached via a move: the occurrence having elapsed counts as
+    established whether it arrived there unchanged or through this cycle's own move -- separate
+    from the hold itself, which the test above pins."""
+    # Arrange / Act -- same arrangement as the test above.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 30),
+        now_dt=datetime(2026, 7, 27, 9, 0),
+        departure_on_pursued_date=time(8, 0),
+    )
+
+    # Assert
     assert result.outcome_established is True
 
 
 def test_should_release_whatever_the_pursued_date_resolves_to_when_disconnected():
     """F2: the disconnected half of the early return releases the occurrence outright and never
     re-resolves the pursued date at all -- a disconnect is a real exit regardless of what
-    `departure_on_pursued_date` carries (resolution-rules.md's release list)."""
+    `departure_on_pursued_date` carries (resolution-rules.md's release list). Established is
+    already pinned for a disconnect above, by
+    `test_should_declare_the_outcome_established_when_disconnected`, so it is not repeated
+    here."""
     # Arrange / Act -- disconnected, with a `departure_on_pursued_date` that would otherwise move
     # the occurrence further out; it must be ignored.
     result = _resolve_deadline_urgency(
@@ -1744,7 +1801,6 @@ def test_should_release_whatever_the_pursued_date_resolves_to_when_disconnected(
     # Assert
     assert result.required.pursued_occurrence is None
     assert result.urgent is False
-    assert result.outcome_established is True
 
 
 # --- resolve_solar_reserve_gate (ADR-0023) ---
