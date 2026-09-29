@@ -24,12 +24,13 @@ row's — `done.md`'s preamble states that split and why; the loop below is wher
 
 **The implement step (do the work)**: read, in this order, before writing anything —
 
-- the **issue body**, which is the task, the **ADR it cites**, and the **analysis behaviour**
-  it realises (`docs/analysis/control-cycle.md`, `resolution-rules.md`, `requirements.md`, the
-  relevant use-case). Where the issue carries `Source:` lines, those name what to read and
-  replace the hunt; where it does not, find the sources yourself. Any formula or threshold the
-  task states is a **test anchor** attributed to those documents: reproduce them, don't
-  reinvent them;
+- the **issue body**, which is the task, and **its sources**. Where it carries `Source:` lines
+  (`CLAUDE.md`'s **Source lines**), read what they name and stop: they replace the hunt. Where
+  that does not answer what the task requires, find the rest and state in the PR that you had
+  to and what you read. Where it carries none, find them yourself: the **ADR it cites** and the
+  **analysis behaviour** it realises (`docs/analysis/control-cycle.md`, `resolution-rules.md`,
+  `requirements.md`, the relevant use-case). Any formula or threshold the task states is a
+  **test anchor** attributed to those documents: reproduce them, don't reinvent them;
 - the **platform reference** the stack overlay names, before writing anything that touches the
   platform's APIs.
 
@@ -100,8 +101,9 @@ Mistakes in how the work is done. The defects themselves are enumerated once, in
 so none of them is restated here:
 
 - Writing implementation before the red test, or a test that passes without the code.
-- Starting from the task text alone, without the ADR it cites and the analysis behaviour
-  it realises — which is how a formula gets reinvented instead of reproduced.
+- Starting from the task text alone, without its sources — which is how a formula gets
+  reinvented instead of reproduced — or finding more than the `Source:` lines named and not
+  saying so in the PR.
 - Treating the `testing` row's files as optional because the tests were written here rather than
   under a `testing` issue — they are the same artifact.
 - Claiming "done" without running the linter and the suite, and without driving the runtime

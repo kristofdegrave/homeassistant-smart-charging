@@ -1,7 +1,7 @@
 # CI: the repository's own checks
 
 The regular CI checks whose reasons this document owns: label vocabulary sync, the docs-only
-close guard and the upstream-pin drift check.
+close guard, the upstream-pin drift check and the `Source:` line check.
 
 ## Label vocabulary sync
 
@@ -270,3 +270,35 @@ pin's scheme, touch no network. That mode exists because one unreadable row abor
 comparison and so takes every *other* row's verdict down with it; without a PR-time check, a
 malformed row would ship green and surface only as a red scheduled run, in the job that
 argument says nobody watches.
+
+## The `Source:` line check
+
+`.github/workflows/source-lines.yml` runs on every issue opened, edited or reopened whose body
+mentions `Source:`, and fails when a `Source:` line does not resolve against the default
+branch: a line not of the form `CLAUDE.md`'s **Source lines** topic fixes, a path outside
+the trees `.claude/profile.yml`'s `source_lines.trees` allows, a file that is not there, or an
+anchor matching no heading. The rule, the exit codes and every finding's wording are
+`.github/check-source-lines.py`'s, run through its `.sh` wrapper; the workflow only carries the verdict to the run's log, one
+annotation per offending line.
+
+**It exists because the lines replace the hunt.** A worker reads what the lines name and stops,
+so a pointer that resolves to nothing yields an implementation that is silently
+under-informed — nothing in the task shows the set was short. The check makes the one
+mechanical half of that failure loud; whether a line is the right one, and anchored finely
+enough, is a judgement it cannot make and the decomposition pass scores instead.
+
+**The trees are the profile's, never this file's.** Which trees a line may name is a fact about
+this project, so the script reads it from the profile and nothing under `.github/` spells it.
+Anchors are computed by the method check's own heading and slug functions, so the two checks
+cannot disagree about what an anchor is.
+
+**A failed lookup is no verdict, and passes.** The body is fetched by number at run time — the
+newest edit wins, and untrusted text is never interpolated into the step. A fetch that does not
+answer exits 3, and the run passes with a warning: failing it would mark the issue as carrying
+a broken pointer nobody checked. A line that does not resolve fails the run and names the line.
+
+It is its own workflow because it needs the `issues` trigger, which `ci.yml` does not carry. The
+same script serves before an issue exists: `file-task-issue` runs it over a drafted body with
+`--body`, and a worker, against the fetched base, with `--issue <n> --ref origin/main`. Its
+fixtures (`.github/test-check-source-lines.sh`) are offline and run in `ci.yml`'s `method` job,
+so a PR that breaks the check fails on that PR rather than on the next issue edit.
