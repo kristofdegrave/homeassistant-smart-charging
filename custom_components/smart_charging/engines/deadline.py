@@ -378,10 +378,10 @@ def resolve_required_current(
             # `_unreachable_edge` never fires `DeadlineUnreachableCleared` and the next occasion
             # goes unnotified. True of ADR-0024 alone, and still true now that ADR-0042
             # (narrowed by ADR-0053) also feeds the edge an `outcome_established` input: this
-            # release resolves a reading (`deadline_resolvable` was True to reach this branch at
-            # all), so that input is `True` here regardless -- the flag itself is still what
-            # decides whether a clear fires. The new occurrence is judged from the next cycle
-            # instead.
+            # branch is only reached on a with-reading cycle (`deadline_resolvable` was True to
+            # get here at all), so that input is `True` here regardless -- the flag itself is
+            # still what decides whether a clear fires. The new occurrence is judged from the
+            # next cycle instead.
             return RequiredCurrentResult(
                 required_a=None,
                 urgent=False,

@@ -495,10 +495,12 @@ class DeadlineUnreachableEdge:
     `outcome_established` (ADR-0042, narrowed by ADR-0053) is the further input a guard that
     short-circuits to `unreachable`'s default must supply: whether THIS cycle established an
     outcome about the deadline at all. Default `True` is deliberately the common case -- the
-    engine path and the disconnect exit both genuinely resolve something, so
-    `DeadlineUrgencyResult.outcome_established` already defaults to `True` for them and the one
-    production caller (`coordinator.py`) simply threads that value through. `False` is reserved
-    for part of the one guard that can reach this with nothing decided:
+    engine path genuinely resolves something and relies on this very default
+    (`DeadlineUrgencyResult.outcome_established`'s own); the disconnect exit resolves something
+    too, but computes its `True` explicitly in the early return below rather than relying on
+    the default. Either way the one production caller (`coordinator.py`) simply threads
+    whatever value it received through to this `resolve()`. `False` is reserved for part of
+    the one guard that can reach this with nothing decided:
     `resolve_deadline_urgency`'s non-resolvable early return, on the state-of-charge-unavailable
     half, and only where ADR-0053's own table does not mark the cycle established either. On
     `False` the prior flag is held unchanged and no clear is ever reported, exactly as ADR-0024
@@ -753,10 +755,12 @@ def resolve_deadline_urgency(
         #   and the use-case's own precondition, so it is a real exit -- and always established
         #   (ADR-0042).
         # - STATE OF CHARGE UNAVAILABLE -- deliberately NOT an exit in the same sense: no
-        #   required current can be computed, so this half establishes only what ADR-0053
-        #   (narrowing ADR-0042) says a no-reading cycle can settle without one: the clock
-        #   against the held occurrence, and the backstop. Anything else is held exactly as it
-        #   was -- "the System holds whichever state it was already in" -- and NOT established.
+        #   required current can be computed, so this half establishes only what this code
+        #   covers TODAY of ADR-0053's (narrowing ADR-0042) no-reading table: the clock against
+        #   the held occurrence, and the backstop (row 3, a pending occurrence's own date
+        #   resolving to "no deadline", is F2's -- see the `outcome_established` comment
+        #   below). Anything else is held exactly as it was -- "the System holds whichever
+        #   state it was already in" -- and NOT established.
         #
         # This is reachable with a live hold: the ev_soc fault gate upstream is itself gated on
         # `is_soc_gated`, which is False for `Off` and `Power` (below), so those modes arrive
@@ -780,8 +784,9 @@ def resolve_deadline_urgency(
             held = None
         # ADR-0053's table, row 1: the clock alone -- no reading needed -- settles whether the
         # held occurrence already lies in the past, so a hold can BEGIN (or continue) on a
-        # no-reading cycle exactly as it would with one, and the level-signal fire site below
-        # (reading `required.unreachable` alone) re-fires on every such cycle while it does.
+        # no-reading cycle exactly as it would with one, and `coordinator.py`'s level-signal
+        # fire site (reading `required.unreachable` alone) re-fires on every such cycle while
+        # it does.
         unreachable = held is not None and held <= inputs.now_dt
         # Established: a disconnect (a real exit, always established per ADR-0042), or --
         # within ADR-0053's own no-reading table -- the occurrence having elapsed (row 1) or

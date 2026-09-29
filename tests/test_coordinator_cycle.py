@@ -899,7 +899,7 @@ def test_deadline_unreachable_edge_reports_cleared_again_on_a_second_occasion():
 # default `False` reads as a genuine resolve) ---
 
 
-def test_deadline_unreachable_edge_holds_the_clear_when_the_cycle_establishes_nothing():
+def test_should_hold_the_clear_when_the_cycle_establishes_nothing():
     """Should report NO clear and the HELD prior flag -- not the (uncomputed) argument -- when
     `outcome_established=False`, after a prior cycle genuinely resolved `True`."""
     # Arrange
@@ -913,7 +913,7 @@ def test_deadline_unreachable_edge_holds_the_clear_when_the_cycle_establishes_no
     assert result == (True, False)
 
 
-def test_deadline_unreachable_edge_fires_the_held_clear_once_a_later_cycle_establishes_it():
+def test_should_fire_the_held_clear_when_a_later_cycle_establishes_it():
     """Should report the clear exactly once, off the flag a held cycle left untouched, on the
     next call that DOES establish an outcome."""
     # Arrange -- a genuine `True`, then a held cycle that changes nothing.
@@ -928,7 +928,7 @@ def test_deadline_unreachable_edge_fires_the_held_clear_once_a_later_cycle_estab
     assert result == (False, True)
 
 
-def test_deadline_unreachable_edge_holding_does_not_advance_the_flag_from_false():
+def test_should_not_advance_the_flag_when_the_cycle_establishes_nothing():
     """Should report the HELD prior flag (False) rather than advancing it to this cycle's
     argument, discriminating a `False` prior from a `True` one: an implementation that ignored
     `outcome_established` would report `(True, False)` here instead."""
@@ -1144,21 +1144,6 @@ def test_resolve_deadline_urgency_short_circuits_when_not_resolvable():
     assert result.required.unreachable is False
     assert result.urgent is False
     assert result.resolved_mode is None
-
-
-def test_should_hold_established_false_when_no_reading_and_nothing_pursued():
-    """The other steady-state case nothing needing a reading has happened yet covers: connected,
-    state of charge unavailable, and nothing was ever pursued (distinct from pursued-but-not-
-    yet-elapsed, which the sibling test above this section pins) -- not established, so a prior
-    flag (however it got set) is held rather than taken at face value."""
-    result = _resolve_deadline_urgency(
-        deadline_resolvable=False,
-        status=STATE_CONNECTED,
-        ev_soc=None,
-        pursued_occurrence=None,
-    )
-    assert result.required.pursued_occurrence is None
-    assert result.outcome_established is False
 
 
 def test_resolve_deadline_urgency_no_deadline_resolved_means_no_urgency():
@@ -1569,11 +1554,10 @@ def test_should_declare_the_outcome_established_when_the_occurrence_has_elapsed(
     assert result.outcome_established is True
 
 
-def test_should_hold_established_false_when_no_reading_and_not_yet_elapsed():
+def test_should_hold_urgency_when_no_reading_and_the_occurrence_has_not_yet_elapsed():
     """The steady-state counterpart of the tests above: the held occurrence is still AHEAD of
-    `now_dt`, so nothing needing a reading has happened yet -- `unreachable` stays False and the
-    outcome is NOT established, so the edge detector holds whichever flag it already carried
-    rather than taking this cycle's `unreachable=False` at face value."""
+    `now_dt`, so nothing needing a reading has happened yet -- `unreachable` stays False, while
+    the urgency the occurrence implies is still held."""
     # Arrange / Act -- pursued 30 minutes AFTER the default now_dt (10:00).
     pursued = datetime(2026, 7, 27, 10, 30)
     result = _resolve_deadline_urgency(
@@ -1587,6 +1571,39 @@ def test_should_hold_established_false_when_no_reading_and_not_yet_elapsed():
     assert result.required.pursued_occurrence == pursued
     assert result.urgent is True
     assert result.required.unreachable is False
+
+
+def test_should_hold_established_false_when_no_reading_and_not_yet_elapsed():
+    """Separate from the test above: nothing needing a reading has happened yet on this cycle,
+    so the outcome is NOT established, and the edge detector holds whichever flag it already
+    carried rather than taking this cycle's `unreachable=False` at face value."""
+    # Arrange / Act -- same arrangement as the test above.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=datetime(2026, 7, 27, 10, 30),
+    )
+
+    # Assert
+    assert result.outcome_established is False
+
+
+def test_should_hold_established_false_when_no_reading_and_nothing_pursued():
+    """The other steady-state case nothing needing a reading has happened yet covers: connected,
+    state of charge unavailable, and nothing was ever pursued (distinct from pursued-but-not-
+    yet-elapsed, which the pair of tests above this one pins) -- not established, so a prior
+    flag (however it got set) is held rather than taken at face value."""
+    # Arrange / Act
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=None,
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence is None
     assert result.outcome_established is False
 
 
