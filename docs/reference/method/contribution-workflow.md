@@ -298,8 +298,8 @@ shared with the human partner**.
   row.
 - **The `epic` label** marks an epic — a parent tracking its children, not a unit of work — so
   an epic carries no context label and is never picked as a task. A kind label naming the
-  epic's own work stays beside it (a bug-track epic keeps `bug` and never gains a context label); `epic` adds no
-  Model-selection row and makes no branch.
+  epic's own work stays beside it (a bug-track epic keeps `bug` and never gains a context
+  label); `epic` adds no Model-selection row and makes no branch.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
