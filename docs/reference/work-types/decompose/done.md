@@ -42,8 +42,8 @@ as `implement.md`'s *One park per human answer* rule defines it → **Major**.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
 entry rule's go reads the label's events against that comment's time — and the run added no
-other label and removed none, bar `clarify`'s own parking of the `decompose` issue — a reply
-comment to the entry rule's last-arm question removing nothing. Otherwise → **Major**.
+other label and removed none, bar `clarify`'s own parking of the `decompose` issue; a reply
+to the entry rule's last-arm question made it remove none. Otherwise → **Major**.
 
 **(6) The run filed no child.** A task issue it filed before the human's go — the label
 removal the entry rule reads from the timeline, never a marker or a label state alone →
@@ -64,8 +64,8 @@ Either missed → **Major**: the human's instruction at the gate was the point o
 
 **(10) The `decompose` issue is closed by its closing comment**, carrying what
 `implement.md`'s entry 2 step 3 lists, and it is *done* — or left open, the stop reported,
-where step 1 found an open blocked-by edge or step 3's re-read a new one. Open otherwise, or closed without the
-children listed → **Major**.
+where step 1 found an open blocked-by edge or step 3's re-read a new one. Open otherwise, or
+closed without the children listed → **Major**.
 
 **(11) No clutter** anywhere the run wrote — the body, the summary, the closing comment — as
 the *Clutter* entry named under item 3 defines it, at its severities and in its scope.
@@ -81,12 +81,12 @@ label on the epic or the `decompose` issue was added or removed beyond `clarify`
   holds.
 - Stopped as picked too early or as still parked: nothing on the tracker changed, and the run
   did not move the `decompose` issue.
-- Stopped at the entry rule's last arm with its own `clarify` park standing: nothing on the
-  tracker changed, a reply comment to that park reported, and the run did not move the issue.
+- Stopped at the entry rule's last arm with its question standing: nothing on the tracker
+  changed, a reply comment to that park reported, and the run did not move the issue.
 - Stopped at that arm without one: `clarify`'s parking rule holds on the `decompose` issue,
-  its question naming both actions that answer it — re-applying `needs-approval` on the epic
-  and removing `needs-decision` from the `decompose` issue — and the run did not move the
-  issue.
+  its question under that arm's fixed first line, naming both actions that answer it —
+  re-applying `needs-approval` on the epic and removing `needs-decision` from the `decompose`
+  issue — and the run did not move the issue.
 
 A stop that leaves a standing park readable as the go → **Critical**; any other miss →
 **Major**.

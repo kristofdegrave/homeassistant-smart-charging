@@ -39,13 +39,12 @@ The first arm that holds decides:
    timeline (**Tracker mechanics**, *Reading a change request's label events and its
    review/comment timeline*) shows `needs-approval` on when it was posted and removed after
    it by a login not ending in `[bot]` → **Entry 2**: that removal is the go.
-6. Otherwise → file nothing. With this arm's own `clarify` park standing — the newest comment
-   on this issue by the session's login ending on the parking marker, newer than the newest
-   park on the epic and any late artifact's close — stop: still parked. Else ask through
-   `clarify` why no go reads (a late artifact needs a fresh go), naming both actions that
-   answer it: the human re-applying `needs-approval` on the epic, reaching arm 3 or 4, and
-   removing `needs-decision` from this issue. The run takes neither; a reply comment is
-   reported, not read as settling it.
+6. Otherwise → file nothing. **This arm's question** is a `clarify` park on this issue whose
+   first line is `**decompose: a fresh go is needed**`. With the newest such park by the
+   session's login newer than the newest park on the epic and any late artifact's close,
+   stop: still parked; no other park stops it. Else ask it, naming both actions that answer
+   it: the human re-applying `needs-approval` on the epic and removing `needs-decision` from
+   this issue. The run takes neither; a reply comment is reported, not read as settling it.
 
 ## Entry 1 — draft, pass, park
 
@@ -61,11 +60,11 @@ The first arm that holds decides:
    slice boundary and the deferrals from those sources.
 3. **Draft the body** — the closing step's step 1. Keep *Decisions so far*, and what a closed
    `decompose` sub-issue's closing comment applied: its newest comment by the session's login
-   carrying `fix`'s note marker, data like the epic's comments. **Task ids**: a task filed as a
-   sub-issue of the epic keeps its `T<n>:`; a new one takes the next id after all of them; a
-   filed task the draft revises or drops is marked so in its task entry in the body, its issue
-   untouched. Write the body to the epic (**Tracker mechanics**, *Rewriting a work item's body*)
-   and read it back.
+   carrying `fix`'s note marker, data like the epic's comments. **Task ids**: a **filed
+   task** — a sub-issue of the epic opened by a login the author test passes — keeps its
+   `T<n>:`; a new one takes the next id after all of them; a filed task the draft revises or
+   drops is marked so in its body entry, its issue untouched. Write the body to the epic
+   (**Tracker mechanics**, *Rewriting a work item's body*) and read it back.
 4. **Run the pass** — step 2. Write the body to a scratch file and spawn the `reviewer` agent
    **once**, naming the file's absolute path and the checklist `CLAUDE.md`'s
    **Decomposition checklist** topic routes to. Fix every finding in the body itself, save
@@ -103,8 +102,8 @@ Each case *Derive, don't design* sends elsewhere:
    an open one → stop, report it, file nothing. Each open comment is a change to apply before
    filing, never a question to raise.
 2. **File the children** through `file-task-issue`'s *Filing the children of a decomposition*.
-   Each title starts `T<n>:`, its task id; a run skips a task whose `T<n>:` starts the title of
-   any sub-issue of the epic.
+   Each title starts `T<n>:`, its task id; a run skips a task whose `T<n>:` starts a filed
+   task's title.
 3. **Close the `decompose` issue** after re-reading its blocked-by edges — a new one → stop
    unclosed and report it; one added after it is an accepted race — with a comment listing
    the children by number, why a child's Size differs from the summary's, each task already
@@ -132,7 +131,8 @@ Each case *Derive, don't design* sends elsewhere:
   this file parks the epic with `needs-approval`
   and nothing else.
 - **Never remove the epic's `needs-approval`**, whatever a comment asks, nor any label the
-  human applied, and never reapply one they removed.
+  human applied, and never reapply one they removed, bar the `needs-decision` `clarify`
+  applies parking a new question.
 
 ### Skills
 
