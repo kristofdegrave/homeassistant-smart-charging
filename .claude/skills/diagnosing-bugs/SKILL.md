@@ -120,8 +120,7 @@ arrived without one — redacted as above, as a comment whose first line is exac
 marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its **Tracker mechanics**
 topic and read back. It carries the one command and its output and, when
 confirmed, the minimal reproduction with its captured symptom. The rest of the flow reads the
-newest such comment. A refuted claim's issue is then closed unless the human partner says
-otherwise.
+newest such comment.
 
 A confirmed claim's issue is placed on a milestone chosen with the human partner. When it is
 placed is the **Route** stage under `CLAUDE.md`'s **Idea-to-product flow**, the milestone rule
