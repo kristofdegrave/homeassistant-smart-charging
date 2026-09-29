@@ -598,9 +598,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         date's departure time (resolution-rules.md).
 
         Not gated on `deadline_resolvable`: it runs, and is threaded through, on a no-reading
-        cycle too -- unused there today (the non-resolvable early return in
-        `resolve_deadline_urgency` does not read it), but needed once F2 (#1482) does. Same
-        shape as `_resolve_following_occurrence` above.
+        cycle too -- read there by the non-resolvable early return in `resolve_deadline_urgency`
+        (F2, #1482), which follows a pending pursued occurrence onto its own date's freshly
+        resolved time on a no-reading cycle exactly as the resolvable branch does. Same shape
+        as `_resolve_following_occurrence` above.
 
         None whenever there is no pursued occurrence to follow -- nothing to resolve."""
         if self._pursued_occurrence is None:
