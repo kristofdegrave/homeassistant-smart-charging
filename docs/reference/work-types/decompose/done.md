@@ -31,8 +31,8 @@ park. No read-back → **Major**: the fix is then assumed.
   entry of `CLAUDE.md`'s **Authoring AI artifacts** topic, at its severities.
 - A task in the children part with no Size → **Minor**.
 - A task already filed as a sub-issue of the epic given a new id, or revised or dropped by
-  the draft without the mark `implement.md`'s entry 1 step 3 names → **Major**: entry 2 then
-  files it twice or drops it silently.
+  the draft without the mark `implement.md`'s entry 1 step 3 puts in its task entry in the
+  body → **Major**: entry 2 then files it twice or drops it silently.
 
 **(4) The comment ends in the parking marker**, as its last line, posted under a login that
 passes the entry rule's author test, and it is the only park the human has not answered.
@@ -43,8 +43,8 @@ over an unanswered park.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
 entry rule's go reads the label's events against that comment's time — and the run added no
-other label and removed none, bar `clarify`'s own parking of the `decompose` issue. Otherwise
-→ **Major**.
+other label and removed none, bar `clarify`'s own parking of the `decompose` issue — a reply
+comment to the entry rule's last-arm question removing nothing. Otherwise → **Major**.
 
 **(6) The run filed no child.** A task issue it filed before the human's go — the label
 removal the entry rule reads from the timeline, never a marker or a label state alone →
@@ -82,9 +82,11 @@ label on the epic or the `decompose` issue was added or removed beyond `clarify`
   holds.
 - Stopped as picked too early or as still parked: nothing on the tracker changed, and the run
   did not move the `decompose` issue.
-- Stopped at the entry rule's last arm: `clarify`'s parking rule holds on the `decompose`
-  issue, its question naming what resumes the run, or with `needs-decision` already on
-  nothing on the tracker changed; the run did not move the issue.
+- Stopped at the entry rule's last arm with its own `clarify` park standing: nothing on the
+  tracker changed, a reply comment to that park reported, and the run did not move the issue.
+- Stopped at that arm without one: `clarify`'s parking rule holds on the `decompose` issue,
+  its question naming re-applying `needs-approval` on the epic as the only answer, and the
+  run did not move the issue.
 
 A stop that leaves a standing park readable as the go → **Critical**; any other miss →
 **Major**.

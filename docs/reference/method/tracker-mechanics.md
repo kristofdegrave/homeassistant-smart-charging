@@ -245,7 +245,7 @@ open-children count reads. Both are the sub-issues REST API's own reads (*get pa
 ```sh
 gh api repos/$REPO/issues/<child>/parent --jq '{number, state}'
 gh api -X GET -f per_page=100 --paginate repos/$REPO/issues/<epic>/sub_issues \
-  --jq '.[] | {number, state, state_reason, closed_at, title}'
+  --jq '.[] | {number, state, state_reason, closed_at, title, labels: [.labels[].name]}'
 ```
 
 The second is a listing, so `--paginate` is mandatory here as everywhere in this file; the
