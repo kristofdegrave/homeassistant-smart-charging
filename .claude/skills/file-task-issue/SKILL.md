@@ -49,10 +49,11 @@ half-scoped.
    it untracked or its order implied by body text; the epic takes a blocked-by edge to it too,
    per **Issue conventions**. What an issue filed after the opening pass does to the epic's
    `decompose` child, blocking an open one or getting a new one filed, is the flow's opening
-   pass's, under **Idea-to-product flow** above. These edges can be set while creating the issue or added afterwards; **Tracker
-   mechanics** above routes to the commands and to the read-back that confirms each edge
-   exists. Beyond those edges, don't touch the epic's other children: their state is a call
-   for whoever owns the epic, not a side effect of filing one issue.
+   pass's, under **Idea-to-product flow** above. These edges can be set while creating the
+   issue or added afterwards; **Tracker mechanics** above routes to the commands and to the
+   read-back that confirms each edge exists. Beyond those edges, don't touch the epic's other
+   children: their state is a call for whoever owns the epic, not a side effect of filing one
+   issue.
 
 ## Filing an epic's opening issues
 

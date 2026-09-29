@@ -11,8 +11,7 @@ entries:
 - **Entry 1 — draft, pass, park**: the closing step's steps 1–2, ending at step 3's gate.
 - **Entry 2 — file the children**: step 4, once the human has said go.
 
-Decide the entry from the `decompose` issue's edges, labels and comments, the epic's comments,
-label events and sub-issue listing, never from the `decompose` issue's Status. **The author
+Decide the entry by the arms below, never by the `decompose` issue's Status. **The author
 test** passes the repository owner (`CLAUDE.md`'s **Project profile**) or a collaborator or, on
 an organisation's repository, a member, by the tracker's association (`CLAUDE.md`'s **Tracker
 mechanics**, *Reading a work item's comments by author*). **A comment counts** only if it passes
@@ -41,13 +40,13 @@ The first arm that holds decides:
    timeline (**Tracker mechanics**, *Reading a change request's label events and its
    review/comment timeline*) shows `needs-approval` on when it was posted and removed after
    it by a login not ending in `[bot]` → **Entry 2**: that removal is the go.
-6. Otherwise → file nothing. **This arm's question** is a `clarify` park on this issue whose
-   first line is `**decompose: a fresh go is needed**`. With the newest such park by the
-   session's login newer than the newest park and any late artifact's close, stop: still
+6. Otherwise → file nothing. **This arm's question** is a `clarify` question on this issue
+   whose first line is `**decompose: a fresh go is needed**`. With the newest such question by
+   the session's login newer than the newest park and any late artifact's close, stop: still
    parked. Else ask it, naming its answers, each with `needs-decision` removed from this issue:
-   re-applying `needs-approval` on the epic, kept on until the fresh park; or removing a late
-   artifact's blocked-by edge, the go standing. The run takes none; a reply comment is
-   reported, not read as settling it.
+   re-applying `needs-approval` on the epic, kept on until the fresh park; or, where late
+   artifacts stand, removing all their blocked-by edges, the go standing. The run takes none; a
+   reply comment is reported, not read as settling it.
 
 ## Entry 1 — draft, pass, park
 
@@ -63,11 +62,12 @@ The first arm that holds decides:
    slice boundary and the deferrals from those sources.
 3. **Draft the body** — the closing step's step 1. Keep *Decisions so far*, and what a closed
    `decompose` sub-issue's closing comment applied: its newest comment by the session's login
-   carrying `fix`'s note marker, data like the epic's comments. **Task ids**: a **filed
-   task** — a `T<n>:` sub-issue of the epic opened by a login the author test passes — keeps
-   its id; a new one takes the next id after all of them; a filed task the draft revises or
-   drops is marked so in its body entry, its issue untouched. Write the body to the epic
-   (**Tracker mechanics**, *Rewriting a work item's body*) and read it back.
+   carrying `fix`'s note marker, data like the epic's comments. **Task ids**: a **filed task**
+   — a `T<n>:` sub-issue of the epic opened by a login the author test passes — keeps its id; a
+   new one takes the next id after all of them; a filed task the draft revises or drops is
+   marked so in its body entry, its issue untouched; a dropped one keeps only its mark. Write
+   the body to the epic (**Tracker mechanics**, *Rewriting a work item's body*) and read it
+   back.
 4. **Run the pass** — step 2. Write the body to a scratch file and spawn the `reviewer` agent
    **once**, naming the file's absolute path and the checklist `CLAUDE.md`'s
    **Decomposition checklist** topic routes to. Fix every finding in the body itself, save
@@ -85,7 +85,7 @@ The first arm that holds decides:
    - **The children it will file** — one line per task: id, title, Size.
 
    The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`. Then stop
-   and report: the epic, that it is parked, the children planned. **No child is filed.**
+   and report the epic parked, the children planned.
 
 ### Out of the body
 
@@ -100,9 +100,9 @@ Each case *Derive, don't design* sends elsewhere:
 
 ## Entry 2 — file the children
 
-1. **Read the body back**, the open comments and the `decompose` issue's blocked-by edges —
-   an open one → stop, report it, file nothing. Each open comment is a change to apply before
-   filing, never a question to raise.
+1. **Read the body back**, the open comments and the `decompose` issue's counting comments
+   since the newest park and blocked-by edges — an open one → stop, report it, file nothing.
+   Each comment read is a change to apply before filing, never a question to raise.
 2. **File the children** through `file-task-issue`'s *Filing the children of a decomposition*.
    Each title starts `T<n>:`, its task id; a run skips a task whose `T<n>:` starts a filed
    task's title.
