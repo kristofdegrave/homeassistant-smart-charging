@@ -1,6 +1,6 @@
 ---
 name: file-task-issue
-description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the anchored `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, any `decompose` child last, and a decomposition's children.
+description: Use when creating any GitHub issue in this repo — sets the correct context label, populates the project-board Size/Estimate fields, places it on its milestone where the rule requires one (a child copies its epic's), and (for a child of a decomposition) writes the `Source:` lines correctly the first time. Also holds the mechanics of filing an epic's opening issues, any `decompose` child last, and a decomposition's children.
 ---
 
 # File a task issue
@@ -25,11 +25,13 @@ half-scoped.
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
 2. **Pick the one context label** (an epic's labels are **Issue conventions**'), set
-   Size/Estimate, and — for a child of a decomposition — write the anchored `Source:` lines.
-   What each entry's sources name, and how finely, is the closing step's, under `CLAUDE.md`'s
-   **Idea-to-product flow**; the line's own format belongs to **Issue conventions** and is not
-   stated there yet, so follow the shape the epic body's **Sources** key already uses. **Issue
-   conventions** covers the other fields. A finding against already-shipped behaviour also
+   Size/Estimate, and — for a child of a decomposition, and no other issue — write one
+   `Source:` line per source its task entry names, in the form `CLAUDE.md`'s **Source lines**
+   fixes, then run the check that topic names over the drafted body before filing — `--body` with
+   `--ref origin/main` after a fetch, the branch CI resolves against, not your working tree.
+   The lines are one provenance pointer set, not a relevance survey: copy the entry's
+   **Sources** key, never add what else the task might touch. **Issue conventions** covers the
+   other fields. A finding against already-shipped behaviour also
    takes a **kind label** (`bug`/`enhancement`); which labels that issue ends up with, and
    when, is the two-axis rule in that same section. Size/Estimate are board fields, not
    labels: setting them is its own step after the issue is on the board, per **Tracker
@@ -80,10 +82,9 @@ body is left without one.
 
 ## Common mistakes
 
-The conventions are `CLAUDE.md`'s **Issue conventions**, not this list — except the `Source:`
-lines, whose owner is item 2 above; the ones this skill's users trip on most are the context
-label, the `epic` label, those lines, Size and Estimate, the milestone, and epic edges. The
-mistakes that are this skill's own:
+The conventions are `CLAUDE.md`'s **Issue conventions** and **Source lines**, not this list;
+the ones this skill's users trip on most are the context label, the `epic` label, the `Source:`
+lines, Size and Estimate, the milestone, and epic edges. The mistakes that are this skill's own:
 
 - Forcing a context label onto work that is still fuzzy instead of filing it as an `idea`
   (item 1).
@@ -91,6 +92,8 @@ mistakes that are this skill's own:
   passed as a flag is a second step too (item 5); an issue missing them reads as filed and is
   not.
 - Filing a child without its epic's milestone (item 3).
+- A `Source:` line on an issue no decomposition cut — provenance there goes in prose — or a
+  child's lines grown past its entry's **Sources** into a survey (item 2).
 - Leaving an epic the flow's opening pass gives a `decompose` child without one, or that child
   short of an edge to an artifact-stage issue the pass filed: the closing step then never
   starts, or starts before what it derives from has merged.

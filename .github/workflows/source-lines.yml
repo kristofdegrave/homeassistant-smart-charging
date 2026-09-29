@@ -1,0 +1,71 @@
+name: Source lines
+
+# Every `Source:` line in an issue body resolves against the base branch: the file exists, under
+# a tree .claude/profile.yml's `source_lines.trees` allows, and the `#anchor`, where present,
+# matches a heading. The rule and its exit codes are .github/check-source-lines.py's; why the
+# check exists, why it is its own workflow, and why a failed lookup passes, are in
+# docs/reference/method/ci-pipeline.md's "The Source: line check" -- the single source for that
+# argument; this header does not restate it.
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  # One run per issue, the newest edit winning: the check reads the body at run time, so a run
+  # superseded by a later edit has nothing left to say.
+  group: source-lines-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    # An issue whose body names no `Source:` line at all has nothing to check. A substring test
+    # rather than the script's line rule, so it can only ever let through more than the script
+    # reads, never less.
+    if: contains(github.event.issue.body, 'Source:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+    steps:
+      # An issues event checks out the default branch's head -- the base every task branch is
+      # cut from, which is what a line must resolve against.
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pyyaml==6.0.3
+      - name: Every Source line resolves
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+        run: |
+          # The body is fetched by number, never interpolated here: it is untrusted text.
+          # `set +e` first, because a `run:` step is `bash -e`, and exit 1 and 3 must both
+          # reach the case below.
+          set +e
+          set -uo pipefail
+          out=$(bash .github/check-source-lines.sh --issue "$ISSUE")
+          rc=$?
+          # The output carries body text, so workflow commands are suspended while it is
+          # printed, under a token the issue's author cannot know.
+          token=$(python -c 'import secrets; print(secrets.token_hex(16))')
+          echo "::stop-commands::$token"
+          printf '%s\n' "$out"
+          echo "::$token::"
+          case "$rc" in
+            0) ;;
+            # Each finding line carries body text only after the script's own `line N: `
+            # prefix, and the `%` escape keeps it from being decoded as annotation escapes.
+            1) printf '%s\n' "$out" | grep '^line ' | while IFS= read -r line; do
+                 echo "::error title=Source line does not resolve (#$ISSUE)::${line//%/%25}"
+               done
+               exit 1 ;;
+            # A lookup that did not answer is no verdict on the issue: warn and pass.
+            3) echo "::warning::could not fetch issue #$ISSUE's body; its Source lines were not checked"
+               exit 0 ;;
+            *) echo "::error::check-source-lines failed (exit $rc)"; exit "$rc" ;;
+          esac

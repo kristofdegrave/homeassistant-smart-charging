@@ -271,18 +271,16 @@ entry carries these keys, one item per key:
 - **Files and test** — the exact paths, and the concrete failing test the task starts from.
 - **Test boundary** — which harness that failing test drives through.
 - **Blocked by** — the ids of the tasks it cannot start before, or `none`, stated either way.
-- **Sources** — the documents the entry was cut from, each named at the smallest
-  self-contained unit the task turns on: a section where the task turns on one, the whole file
-  where the document is argued as a whole.
+- **Sources** — the documents the entry was cut from, each as finely as `CLAUDE.md`'s
+  **Source lines** says.
 - **Verify live** — one item per observable: the entity id and the value with its unit, or
   `none` and why in one line. Written now, not after deployment.
 
 Each child issue is then filed with that entry as its body, its context label, board fields and
 the epic's milestone, its native sub-issue edge to the epic and the epic's blocked-by edge to
-it, a blocked-by edge per id the entry names, and the anchored `Source:` lines naming the
-entry's sources. The other fields are [contribution-workflow.md](contribution-workflow.md)'s
-**Issue conventions**'; the `Source:` line's format is ADR-0044's, not yet written into a
-method document.
+it, a blocked-by edge per id the entry names, and a `Source:` line per source the entry names,
+in the form `CLAUDE.md`'s **Source lines** fixes. The other fields are
+[contribution-workflow.md](contribution-workflow.md)'s **Issue conventions**.
 
 ### Artifact: the epic, and one issue per task
 
