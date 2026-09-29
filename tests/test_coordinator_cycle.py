@@ -1557,7 +1557,10 @@ def test_should_declare_the_outcome_established_when_the_occurrence_has_elapsed(
 def test_should_hold_urgency_when_no_reading_and_the_occurrence_has_not_yet_elapsed():
     """The steady-state counterpart of the tests above: the held occurrence is still AHEAD of
     `now_dt`, so nothing needing a reading has happened yet -- `unreachable` stays False, while
-    the urgency the occurrence implies is still held."""
+    the urgency the occurrence implies is still held. `departure_on_pursued_date` is pinned to
+    the pursued occurrence's own time (F2): its own date resolving to the same time it already
+    has is what "nothing needing a reading has happened yet" means once that date is re-read
+    every cycle -- distinct from the sibling tests below that pin a move or a release."""
     # Arrange / Act -- pursued 30 minutes AFTER the default now_dt (10:00).
     pursued = datetime(2026, 7, 27, 10, 30)
     result = _resolve_deadline_urgency(
@@ -1565,6 +1568,7 @@ def test_should_hold_urgency_when_no_reading_and_the_occurrence_has_not_yet_elap
         status=STATE_CONNECTED,
         ev_soc=None,
         pursued_occurrence=pursued,
+        departure_on_pursued_date=pursued.time(),
     )
 
     # Assert
@@ -1578,11 +1582,13 @@ def test_should_hold_established_false_when_no_reading_and_not_yet_elapsed():
     so the outcome is NOT established, and the edge detector holds whichever flag it already
     carried rather than taking this cycle's `unreachable=False` at face value."""
     # Arrange / Act -- same arrangement as the test above.
+    pursued = datetime(2026, 7, 27, 10, 30)
     result = _resolve_deadline_urgency(
         deadline_resolvable=False,
         status=STATE_CONNECTED,
         ev_soc=None,
-        pursued_occurrence=datetime(2026, 7, 27, 10, 30),
+        pursued_occurrence=pursued,
+        departure_on_pursued_date=pursued.time(),
     )
 
     # Assert
@@ -1642,6 +1648,102 @@ def test_should_declare_the_outcome_established_when_the_backstop_releases_the_h
     )
 
     # Assert
+    assert result.outcome_established is True
+
+
+def test_should_move_the_pursued_occurrence_when_no_reading_and_its_date_resolves_later():
+    """F2/ADR-0053's table, row 4: a no-reading cycle re-resolves the pursued occurrence's own
+    date exactly as a reading cycle does (`follow_pursued_occurrence`, D1) -- the move is
+    neither a release nor an engagement, so `urgent` stays True and nothing is established."""
+    # Arrange -- pursued at 09:00, still ahead of `now_dt` (10:30 today would already be past,
+    # so use a `now_dt` before both): the occurrence's own date now resolves to 11:00 instead.
+    pursued = datetime(2026, 7, 27, 9, 30)
+    now_dt = datetime(2026, 7, 27, 9, 0)
+    moved = datetime(2026, 7, 27, 11, 0)
+
+    # Act
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=pursued,
+        now_dt=now_dt,
+        departure_on_pursued_date=time(11, 0),
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence == moved
+    assert result.urgent is True
+    assert result.required.urgent is True
+    assert result.required.unreachable is False
+    assert result.outcome_established is False
+
+
+def test_should_release_on_the_pursued_dates_no_deadline_when_no_reading():
+    """F2/ADR-0053's table, row 3: the pursued occurrence's own date resolving to "no deadline"
+    releases it on a no-reading cycle too -- and, unlike the steady no-op rows, this one IS
+    established (the release itself is the outcome)."""
+    # Arrange / Act
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 30),
+        now_dt=datetime(2026, 7, 27, 9, 0),
+        departure_on_pursued_date=None,
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence is None
+    assert result.urgent is False
+    assert result.required.urgent is False
+    assert result.outcome_established is True
+
+
+def test_should_begin_the_hold_when_no_reading_and_the_moved_date_has_already_passed():
+    """F2: a moved occurrence that lands at or before `now_dt` begins the missed-deadline hold
+    on this very cycle -- T13's `held <= now` reading, reached via the move rather than the
+    occurrence carried in unchanged."""
+    # Arrange -- pursued at 09:30, still ahead of `now_dt` (09:00); its own date now resolves to
+    # 08:00, already past.
+    pursued = datetime(2026, 7, 27, 9, 30)
+    now_dt = datetime(2026, 7, 27, 9, 0)
+    moved = datetime(2026, 7, 27, 8, 0)
+
+    # Act
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_CONNECTED,
+        ev_soc=None,
+        pursued_occurrence=pursued,
+        now_dt=now_dt,
+        departure_on_pursued_date=time(8, 0),
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence == moved
+    assert result.urgent is True
+    assert result.required.unreachable is True
+    assert result.outcome_established is True
+
+
+def test_should_release_whatever_the_pursued_date_resolves_to_when_disconnected():
+    """F2: the disconnected half of the early return releases the occurrence outright and never
+    re-resolves the pursued date at all -- a disconnect is a real exit regardless of what
+    `departure_on_pursued_date` carries (resolution-rules.md's release list)."""
+    # Arrange / Act -- disconnected, with a `departure_on_pursued_date` that would otherwise move
+    # the occurrence further out; it must be ignored.
+    result = _resolve_deadline_urgency(
+        deadline_resolvable=False,
+        status=STATE_DISCONNECTED,
+        pursued_occurrence=datetime(2026, 7, 27, 9, 30),
+        now_dt=datetime(2026, 7, 27, 9, 0),
+        departure_on_pursued_date=time(11, 0),
+    )
+
+    # Assert
+    assert result.required.pursued_occurrence is None
+    assert result.urgent is False
     assert result.outcome_established is True
 
 
