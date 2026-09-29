@@ -22,6 +22,10 @@ table plus the few rules that must be known before any skill or document is chos
   commit-and-push rule under **Contribution workflow** defines the authorization, what it
   excludes and the merge rule, and the script is the authority on what it refuses — read it
   when a git or gh command comes back refused.
+- **An edit in the main checkout on `main` is refused mechanically.** Work is edited in the
+  task's own worktree (the **Contribution workflow** topic); a second guard,
+  `.claude/hooks/block-main-checkout-edits.sh`, denies an `Edit`, `Write` or `NotebookEdit`
+  there. A write through the shell is not caught.
 
 Only rules of this kind survive here: the two early process failures — a PR reaching the human
 without `needs-approval`, and a PR opened only once all the work was done — were cured by a
