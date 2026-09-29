@@ -54,14 +54,11 @@ class CycleContext:
     loose local variables ADR-0012 flagged. Filled progressively as steps resolve each value --
     not everything is known at construction time.
 
-    ADR-0046's body rule, stated once here rather than repeated on every field or step: a value
-    more than one later step reads lives here, as a field that step reads and (where it is the
-    one that resolves it) writes directly, never as a `_run_cycle` local threaded between calls
-    -- the floor/cap result is the one exception. A step that resolves such a field assigns it
-    onto `ctx` itself and returns nothing; a value only one later step ever reads
-    (`_resolve_deadline_and_reserve`'s own `deadline_tomorrow`/`resolve_deadline_for` return)
-    stays a plain `_run_cycle` local instead. Each field's own comment below says which step(s)
-    read it, not why the rule applies to it.
+    What belongs here as opposed to a plain `_run_cycle` local is ADR-0046's Decision, item 1
+    (docs/adl/0046-cycle-composition-rules-and-complexity-guard.md) -- authoritative there, not
+    restated here. A step that resolves such a field assigns it onto `ctx` itself and returns
+    nothing. Each field's own comment below says which step(s) read it, not why the rule
+    applies to it.
 
     issue #719: `net_w`/`charger_w`/`voltage`/`now` are each read by both of coordinator.py's
     two clamps (`_apply_peak_clamp`/`_apply_grid_ceiling_clamp`), off this same ctx rather than
@@ -106,12 +103,12 @@ class CycleContext:
     # issue #564: effective_peak_limit_kw/active_soc_limit are resolved only partway through
     # _run_cycle (see `_resolve_effective_peak_limit`'s/`_resolve_active_soc_limit`'s own
     # docstrings in coordinator.py, ADR-0046's body rule moved the per-assignment reasoning
-    # there), yet used to default to a
-    # same-typed placeholder (0.0) indistinguishable from a genuine reading. `None` instead so a
-    # future premature *arithmetic/comparison* read (active_soc_limit is already read this way
-    # today, by _dispatch_mode strictly after it resolves each cycle; effective_peak_limit_kw by
-    # _apply_peak_clamp, issue #719) raises immediately instead of silently computing on a
-    # plausible-looking wrong value. The four bool fields below (sun_is_up/sun_is_down/
+    # there), yet used to default to a same-typed placeholder (0.0) indistinguishable from a
+    # genuine reading. `None` instead so a future premature *arithmetic/comparison* read
+    # (active_soc_limit is already read this way today, by _dispatch_mode strictly after it
+    # resolves each cycle; effective_peak_limit_kw by _apply_peak_clamp, issue #719) raises
+    # immediately instead of silently computing on a plausible-looking wrong value. The four
+    # bool fields below (sun_is_up/sun_is_down/
     # low_tariff_active/solar_reserve_active) are deliberately NOT given this treatment: every
     # consumer reads them via plain truthiness (engines/soc_target.py,
     # resolve_effective_peak_limit), where `None` is indistinguishable from `False` -- it would buy
@@ -156,12 +153,23 @@ class CycleContext:
     # `effective_peak_limit_kw`/`active_soc_limit` above.
     deadline_urgency: DeadlineUrgencyResult | None = None
     # The cycle's wall-clock read (`dt_util.now()`), set by `_build_cycle_context` at
-    # construction, above both fault exits. Read by `_resolve_monthly_peak`,
+    # construction, above the ev_soc fault exit. Read by `_resolve_monthly_peak`,
     # `_resolve_deadline_and_reserve`, `_resolve_deadline_urgency_step` and
     # `_finish_successful_cycle`. Defaults to `None` only for a `CycleContext` built outside
     # `_build_cycle_context` (a test, or `_mode_desired_current`'s baseline dry run) -- none of
     # those reach the four steps above, so the default is never actually read.
     now_dt: datetime | None = None
+    # `_resolve_deadline_and_reserve`'s own R15 next-occurrence operand -- calendar tomorrow's
+    # deadline (issue #1005). Read by `_resolve_deadline_urgency_step`, two calls later rather
+    # than the next one, so it lives here per ADR-0046's Decision, item 1, not as a
+    # `_run_cycle` local.
+    deadline_tomorrow: time | None = None
+    # `_resolve_deadline_and_reserve`'s own closure over this cycle's departure-external/
+    # home-day/holiday reads (NF14/R13) -- resolves one date's deadline per call. Read by
+    # `_resolve_deadline_urgency_step` and, through it, `_read_deadline_urgency_inputs`,
+    # `_resolve_following_occurrence` and `_resolve_departure_on_pursued_date`. Same reason as
+    # `deadline_tomorrow` above for living here rather than as a `_run_cycle` local.
+    resolve_deadline_for: Callable[[date], time | None] | None = None
 
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place

@@ -63,7 +63,6 @@ from .coordinator_cycle import (
     CycleContext,
     DeadlineUnreachableEdge,
     DeadlineUrgencyInputs,
-    DeadlineUrgencyResult,
     ModeHandler,
     PeakDemandState,
     SocGateResolver,
@@ -395,10 +394,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         extracted methods. Also caches each read role's value into
         `self._role_readings` (ADR-0021) -- the three required reads cache directly here,
         grid voltage's and solar power's optional reads cache inside `_read_role` (issue #717,
-        #911). `_finish_successful_cycle`
-        decides whether to advance `self._role_readings_at`, since that depends on whether
-        this cycle succeeded as a whole (the required-adapter read succeeding is necessary
-        but not sufficient, #648)."""
+        #911). `_finish_successful_cycle` decides whether to advance
+        `self._role_readings_at`, since that depends on whether this cycle succeeded as a
+        whole (the required-adapter read succeeding is necessary but not sufficient, #648)."""
         status = await self._adapters[ROLE_CHARGER_STATUS].read()
         net_w = await self._adapters[ROLE_NET_POWER].read()
         charger_w = await self._adapters[ROLE_CHARGER_POWER].read()
@@ -421,19 +419,19 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             return None
         return status, net_w, charger_w, voltage
 
-    async def _resolve_deadline_and_reserve(
-        self, ctx: CycleContext
-    ) -> tuple[time_of_day | None, Callable[[date], time_of_day | None]]:
+    async def _resolve_deadline_and_reserve(self, ctx: CycleContext) -> None:
         """R14's departure-external/sun/low-tariff reads and the date-parameterised deadline
         table, plus R9's solar-reserve-cap gating (resolve_solar_reserve_gate,
         coordinator_cycle.py) -- the two are resolved together because R9's gate needs the
         reserved day's deadline, this same block's own result. Mutates ctx.sun_is_up/
         ctx.sun_is_down/ctx.low_tariff_active/ctx.solar_reserve_active in place (ADR-0012's
-        existing "assign onto ctx as each value resolves" pattern) and returns
-        (deadline_tomorrow, resolve_deadline_for) for _run_cycle's later use. deadline_tomorrow
-        has exactly one consumer -- R15's next-occurrence rule (issue #1005), which needs
-        calendar tomorrow whatever R9's own lookahead does -- and stays calendar tomorrow on
-        purpose (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
+        existing "assign onto ctx as each value resolves" pattern) and assigns onto
+        ctx.deadline_tomorrow/ctx.resolve_deadline_for itself, returning nothing -- read by
+        `_resolve_deadline_urgency_step`, two calls later, so ADR-0046's Decision, item 1 puts
+        them here rather than as `_run_cycle` locals. deadline_tomorrow has exactly one
+        consumer -- R15's next-occurrence rule (issue #1005), which needs calendar tomorrow
+        whatever R9's own lookahead does -- and stays calendar tomorrow on purpose
+        (#1362/#1422): R9's gate is fed the **reserved day**'s deadline instead
         (`resolve_reserved_day`, coordinator_cycle.py), a separate call through the same
         closure, so a future change to either one cannot silently move the other's date with
         it. resolve_deadline_for is the closure `_read_deadline_urgency_inputs` (below) and
@@ -537,7 +535,8 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             deadline_reserved_day_resolved=deadline_reserved_day is not None,
             missed_deadline_hold=missed_deadline_hold,
         )
-        return deadline_tomorrow, resolve_deadline_for
+        ctx.deadline_tomorrow = deadline_tomorrow
+        ctx.resolve_deadline_for = resolve_deadline_for
 
     async def _read_deadline_urgency_inputs(
         self,
@@ -627,10 +626,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         status, net_w, charger_w, voltage = inputs
         baseline_w = self._debounce_baseline(net_w, charger_w)
         ctx = self._build_cycle_context(status, net_w, charger_w, voltage, now_dt, baseline_w)
-        ctx.solar_surplus_w = self._resolve_solar_surplus(ctx)
+        self._resolve_solar_surplus(ctx)
         await self._resolve_monthly_peak(ctx)
         self._reset_mode_state_if_changed()
-        ctx.ev_soc = await self._read_ev_soc(ctx)
+        await self._read_ev_soc(ctx)
         ev_soc_fault = self._ev_soc_fault(ctx)
         if ev_soc_fault:
             return await self._fault_ev_soc(ctx)
@@ -645,12 +644,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             step_pp=self._config.solar_step_pp,
             max_solar_soc=self._config.max_solar_soc,
         )
-        deadline_tomorrow, resolve_deadline_for = await self._resolve_deadline_and_reserve(ctx)
+        await self._resolve_deadline_and_reserve(ctx)
         self._resolve_active_soc_limit(ctx)
         self._resolve_auto_dispatchable(ctx)
-        ctx.deadline_urgency = await self._resolve_deadline_urgency_step(
-            ctx, deadline_tomorrow, resolve_deadline_for
-        )
+        await self._resolve_deadline_urgency_step(ctx)
         self._resolve_deadline_bookkeeping(ctx)
         self._maybe_apply_auto_mode(ctx)
         self._reset_mode_state_if_changed()
@@ -732,14 +729,15 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             now_dt=now_dt,
         )
 
-    def _resolve_solar_surplus(self, ctx: CycleContext) -> float:
+    def _resolve_solar_surplus(self, ctx: CycleContext) -> None:
         """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary -- raw
         net_w, deliberately distinct from `ctx.surplus_w` (R10's smoothed control-path value).
         Floored at 0: a negative reading here would mean the household is drawing more than the
         charger, never actual solar surplus (glossary) -- max(), not the debounce ctx.baseline_w
         feeds, is the boundary for that (issue #990's Direction section: the two are separate
-        concerns)."""
-        return max(-ctx.baseline_w, 0.0)
+        concerns). Assigns onto `ctx.solar_surplus_w` itself and returns nothing, the file's
+        one ctx-write convention."""
+        ctx.solar_surplus_w = max(-ctx.baseline_w, 0.0)
 
     async def _resolve_monthly_peak(self, ctx: CycleContext) -> None:
         """Peak-Demand Tracker (E5) + the clamp's merged operand (ADR-0030/ADR-0032) -- runs
@@ -759,11 +757,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ctx.monthly_peak_kw = monthly_peak_kw
         ctx.peak_operand_kw = resolve_monthly_peak_operand(monthly_peak_kw, external_peak_kw)
 
-    async def _read_ev_soc(self, ctx: CycleContext) -> float | None:
+    async def _read_ev_soc(self, ctx: CycleContext) -> None:
         """ev_soc is read whenever the car is connected and the role is configured -- the
         deadline-urgency comparison needs it regardless of mode (R5 is cross-cutting), not only
-        while a solar mode or Captar is selected."""
-        return await self._read_role(ROLE_EV_SOC) if ctx.status in CHARGEABLE_STATES else None
+        while a solar mode or Captar is selected. Assigns onto `ctx.ev_soc` itself and returns
+        nothing, the file's one ctx-write convention."""
+        ctx.ev_soc = await self._read_role(ROLE_EV_SOC) if ctx.status in CHARGEABLE_STATES else None
 
     def _ev_soc_fault(self, ctx: CycleContext) -> bool:
         """C5: whether this cycle must fault for a missing `ev_soc` -- required only while a
@@ -790,11 +789,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         local the success path does not need. `_role_readings_at` deliberately does NOT advance
         -- same ADR-0021/#648 reasoning as `_fault_required_role`; `self._unreachable_edge`'s
         prior flag is held for the same reason (ADR-0024): this exit also sits upstream of its
-        call site. `ctx.monthly_peak_kw`/`ctx.solar_surplus_w` are each read by only this exit
-        and the successful cycle's own closing step, never both in the same cycle.
-        `ctx.peak_operand_kw` has more readers than that (also `_escalated_maximum_permitted_rate_a`
-        and the real, urgency-aware `_resolve_effective_peak_limit`) -- it lives on `ctx` for the
-        same reason, just not that narrower one."""
+        call site."""
         self._enter_fault(
             "ev_soc required while a solar mode is active but missing/None",
             clear_baseline_deferral=False,
@@ -849,20 +844,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             and ctx.ev_soc is not None
         )
 
-    async def _resolve_deadline_urgency_step(
-        self,
-        ctx: CycleContext,
-        deadline_tomorrow: time_of_day | None,
-        resolve_deadline_for: Callable[[date], time_of_day | None],
-    ) -> DeadlineUrgencyResult:
+    async def _resolve_deadline_urgency_step(self, ctx: CycleContext) -> None:
         """R5/R14/R15: today's departure deadline and the required-current/urgency it drives
         (ADR-0006 steps 3-6). The adapter/HA reads (today's deadline, the sensed battery
         capacity) stay coordinator-side, in `_read_deadline_urgency_inputs`; everything else is
         `resolve_deadline_urgency` itself, pure and HA-import-free (ADR-0012's boundary).
         `deadline_resolvable`/`today_date` stay local to this one step -- neither is read by any
-        other (ADR-0046). Fires `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` itself when the result says
-        so -- ADR-0046's own event rule: fired from the method that calls the resolution it
-        reports, never from `_run_cycle`'s body.
+        other (ADR-0046). Reads `ctx.deadline_tomorrow`/`ctx.resolve_deadline_for`, both set by
+        `_resolve_deadline_and_reserve`; assigns its own result onto `ctx.deadline_urgency`
+        itself and returns nothing, the file's one ctx-write convention. Fires
+        `EVENT_DEADLINE_UNREACHABLE_NOTIFIED` itself when the result says so -- ADR-0046's own
+        event rule: fired from the method that calls the resolution it reports, never from
+        `_run_cycle`'s body.
 
         engines/deadline.py saturates `required_a` to `float('inf')` for a deadline at or before
         `now` -- still the pure engine's own documented contract, and since issue #1005 all but
@@ -889,7 +882,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         ) = await self._read_deadline_urgency_inputs(
             deadline_resolvable=deadline_resolvable,
             today_date=today_date,
-            resolve_deadline_for=resolve_deadline_for,
+            resolve_deadline_for=ctx.resolve_deadline_for,
         )
         deadline_urgency = resolve_deadline_urgency(
             ctx,
@@ -897,13 +890,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 deadline_resolvable=deadline_resolvable,
                 active_mode=self.active_mode,
                 deadline_today=deadline_today,
-                deadline_tomorrow=deadline_tomorrow if deadline_resolvable else None,
+                deadline_tomorrow=ctx.deadline_tomorrow if deadline_resolvable else None,
                 now_dt=now_dt,
                 escalated_maximum_permitted_rate_a=self._escalated_maximum_permitted_rate_a(ctx),
                 pursued_occurrence=self._pursued_occurrence,
-                following_occurrence=self._resolve_following_occurrence(resolve_deadline_for),
+                following_occurrence=self._resolve_following_occurrence(ctx.resolve_deadline_for),
                 departure_on_pursued_date=self._resolve_departure_on_pursued_date(
-                    resolve_deadline_for
+                    ctx.resolve_deadline_for
                 ),
                 solar_available=self._config.solar_available,
                 captar_available=self._config.captar_available,
@@ -930,7 +923,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
                 EVENT_DEADLINE_UNREACHABLE_NOTIFIED,
                 {ATTR_REQUIRED_CURRENT_A: notified_required_a},
             )
-        return deadline_urgency
+        ctx.deadline_urgency = deadline_urgency
 
     def _resolve_deadline_bookkeeping(self, ctx: CycleContext) -> None:
         """Exposes this cycle's required-current resolution for the effective-peak-limit
@@ -1011,11 +1004,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         the success return, not right after `_read_cycle_inputs`: any exception between the
         required-adapter read and this point funnels to `_async_update_data`'s handler and must
         report a prior cycle's timestamp, not this one's) and the fault-recovery log, and builds
-        the `CycleResult` -- `_run_cycle`'s body only writes and returns what this step builds.
-        `ctx.monthly_peak_kw`/`ctx.solar_surplus_w` are each read by only this closing step and
-        the ev_soc fault exit, never both in the same cycle; `ctx.active_soc_limit` has readers
-        well beyond those two (`_dispatch_mode`, the mode handlers' SOC gate,
-        `resolve_deadline_urgency`)."""
+        the `CycleResult` -- `_run_cycle`'s body only writes and returns what this step builds."""
         peak_headroom = peak_headroom_a(
             baseline_w=ctx.baseline_w,
             voltage=ctx.voltage,

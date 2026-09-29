@@ -75,12 +75,13 @@ def test_should_use_documented_defaults_when_constructed_with_only_required_fiel
     arithmetic/comparison read fails loudly instead of silently computing on a
     plausible-looking wrong value (each has its own fail-loud test below).
 
-    `peak_operand_kw`/`monthly_peak_kw`/`solar_surplus_w`/`deadline_urgency` also start at
-    `None` (ADR-0046), but the narrower claim: every production reader of each one is a step
-    that runs strictly after the one call that resolves it, so no interleaved read of any of
-    these four ever sees the default in practice -- unlike the fail-loud group above, `None`
-    here is not exercised as a premature-read guard, only as a same-typed-placeholder-hazard
-    guard (changing one to e.g. `0.0` would silently look like a genuine reading, #564).
+    `peak_operand_kw`/`monthly_peak_kw`/`solar_surplus_w`/`deadline_urgency`/
+    `deadline_tomorrow`/`resolve_deadline_for` also start at `None` (ADR-0046), but the
+    narrower claim: every production reader of each one is a step that runs strictly after the
+    one call that resolves it, so no interleaved read of any of these six ever sees the default
+    in practice -- unlike the fail-loud group above, `None` here is not exercised as a
+    premature-read guard, only as a same-typed-placeholder-hazard guard (changing one to e.g.
+    `0.0` would silently look like a genuine reading, #564).
     `now_dt` starts `None` for a third reason: in the real cycle `_build_cycle_context` always
     sets it at construction, so the default is only ever seen by a `CycleContext` built outside
     that one call (a test, or the baseline dry run) -- again not a premature-read guard. One
@@ -114,6 +115,8 @@ def test_should_use_documented_defaults_when_constructed_with_only_required_fiel
     assert ctx.solar_surplus_w is None
     assert ctx.deadline_urgency is None
     assert ctx.now_dt is None
+    assert ctx.deadline_tomorrow is None
+    assert ctx.resolve_deadline_for is None
 
 
 def _unresolved_ctx() -> CycleContext:
