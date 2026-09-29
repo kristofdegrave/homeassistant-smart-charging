@@ -384,10 +384,11 @@ async def test_should_not_rearm_the_notice_when_state_of_charge_is_unavailable_m
 ):
     """T5's deviation guard (design doc's *Deliberate deferrals*): R5's AC states a cycle on
     which state of charge is unavailable "ends no occasion" -- it must neither notify nor
-    re-arm. T13 (D-9) builds the fix: the non-resolvable early return now distinguishes its two
-    halves for the *event* too (ADR-0042, narrowed by ADR-0053), threading an `outcome_established`
-    fact to `DeadlineUnreachableEdge` so a cycle that establishes nothing about the deadline
-    cannot fire a spurious `DeadlineUnreachableCleared` and wrongly re-arm M3's latch. Same
+    re-arm. T13 (D-9) builds the fix: this is a genuine mid-hold cycle (the pursued occurrence
+    has already elapsed), so ADR-0053's table row 1 applies -- the non-resolvable early return
+    now reports `unreachable=True` off the clock alone, with no reading needed, so
+    `DeadlineUnreachableEdge` sees True stay True and fires no clear (never re-arming M3's
+    latch) rather than the pre-fix `unreachable=False` wrongly clearing and re-arming it. Same
     public-route hold entry as this file's other two-notice tests above."""
     # Arrange -- engage, then cross the departure time into a genuine hold; the occasion's one
     # notice already delivered.

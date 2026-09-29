@@ -3508,18 +3508,21 @@ async def test_deadline_unreachable_cleared_fires_on_disconnect(hass, freezer):
     assert len(events) == 1
 
 
-async def test_deadline_unreachable_cleared_does_not_fire_on_a_no_reading_mid_hold_cycle(
+async def test_deadline_unreachable_cleared_does_not_fire_before_the_occurrence_elapses(
     hass, freezer
 ):
     """T13/ADR-0042 (narrowed by ADR-0053): the OTHER half of `deadline_resolvable` going false
-    -- state of charge becoming unavailable while the car stays connected -- establishes
-    nothing (the pursued occurrence carried over from cycle 1 is still ahead of `now`, no
-    backstop), so the edge holds its prior flag and fires no clear at all. Contrast with the
-    disconnect test above, a real exit that fires the clear on the very same prior state.
+    -- state of charge becoming unavailable while the car stays connected, with the pursued
+    occurrence still AHEAD of `now` (ADR-0053's "not established" row, not a mid-hold cycle --
+    that is row 1, covered by the pair of tests above this one) -- establishes nothing, so the
+    edge holds its prior flag and fires no clear at all. Contrast with the disconnect test
+    above, a real exit that fires the clear on the very same prior state.
 
     `Power`, not a solar mode: `is_soc_gated` is False for `Off`/`Power`, so a missing ev_soc
     reaches the non-resolvable early return instead of faulting upstream -- the same
     `is_soc_gated` trap T4 named."""
+    # Arrange -- cycle 1: a tight but reachable-only-with-a-reading deadline, genuinely
+    # unreachable (established via the engine).
     freezer.move_to("2026-01-15 12:00:00")
     adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
     coord = SmartChargingCoordinator(
@@ -3532,14 +3535,17 @@ async def test_deadline_unreachable_cleared_does_not_fire_on_a_no_reading_mid_ho
     _seed_ample_peak_headroom(coord)
     events = _listen_cleared(hass)
 
-    await coord._async_update_data()  # cycle 1: unreachable, established (a reading resolved)
-    assert coord._required_current.unreachable is True
-    assert len(events) == 0
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is True  # precondition
+    assert len(events) == 0  # precondition
 
-    # cycle 2: same frozen `now`, state of charge goes unavailable -- the pursued occurrence
-    # carried over from cycle 1 is still ~30 min ahead, so nothing is established this cycle.
+    # Act -- cycle 2: same frozen `now`, state of charge goes unavailable. The pursued
+    # occurrence carried over from cycle 1 is still ~30 min ahead of `now`, so nothing is
+    # established this cycle.
     adapters[ROLE_EV_SOC] = _FakeNumeric(None)
     await coord._async_update_data()
+
+    # Assert -- held, not cleared.
     assert coord._required_current.unreachable is False
     assert len(events) == 0
 
@@ -5450,8 +5456,8 @@ async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavai
 ):
     """A cycle on which state of charge is unavailable establishes only what ADR-0053
     (narrowing ADR-0042) says a no-reading cycle can settle without one: here, that the held
-    occurrence already lies in the past -- so `Unreachable` is entered (or continues) and the
-    level signal fires, on the clock alone, exactly as it would with a reading.
+    occurrence already lies in the past -- so `Unreachable` is entered (or continues), on the
+    clock alone, exactly as it would with a reading.
 
     Set up in `Power`, not a solar mode. `is_soc_gated` is False for `Off` and `Power`
     (coordinator_cycle.py), so those are the only modes where a missing reading reaches the
@@ -5472,6 +5478,37 @@ async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavai
     held = dt_util.now() - timedelta(hours=1)
     coord._pursued_occurrence = held
 
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert -- the cycle reached the split rather than the fault path, and held both the
+    # occurrence and the urgency it implies, raised peak limit included (UC05's `Urgent` row).
+    # `unreachable` is True on the clock alone (ADR-0053).
+    assert result.fault is False
+    assert coord._required_current.pursued_occurrence == held
+    assert coord._pursued_occurrence == held
+    assert coord._required_current.urgent is True
+    assert coord._required_current.unreachable is True
+    assert result.effective_peak_limit_kw == 7.0
+
+
+async def test_should_refire_the_unreachable_notice_every_no_reading_cycle_of_a_hold(hass, freezer):
+    """The level signal's own re-fire rule (the glossary; UC05's Domain events) applies to a
+    no-reading cycle exactly as it does to one with a reading (ADR-0053): `unreachable` stays
+    True on the clock alone across consecutive no-reading cycles, so `DeadlineUnreachableNotified`
+    fires on EVERY one of them, not only the first."""
+    # Arrange -- same live hold as the sibling test above.
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(max_peak_kw=7.0), peak_floor_kw=2.5)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_profile = PROFILE_MANUAL
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    coord._pursued_occurrence = dt_util.now() - timedelta(hours=1)
+
     events = []
 
     @callback
@@ -5481,19 +5518,12 @@ async def test_should_hold_the_pursued_occurrence_when_state_of_charge_is_unavai
     hass.bus.async_listen(EVENT_DEADLINE_UNREACHABLE_NOTIFIED, _record)
 
     # Act -- two consecutive no-reading cycles, the hold continuing across both.
-    result = await coord._async_update_data()
+    await coord._async_update_data()
     await coord._async_update_data()
 
-    # Assert -- the cycle reached the split rather than the fault path, and held both the
-    # occurrence and the urgency it implies, raised peak limit included (UC05's `Urgent` row).
-    # `unreachable` is True on the clock alone (ADR-0053), and the level signal re-fires on
-    # EVERY such cycle while the hold continues (the glossary's re-fire rule), not only once.
-    assert result.fault is False
-    assert coord._required_current.pursued_occurrence == held
-    assert coord._pursued_occurrence == held
-    assert coord._required_current.urgent is True
+    # Assert -- the level signal re-fires on every cycle, not only the first.
     assert coord._required_current.unreachable is True
-    assert result.effective_peak_limit_kw == 7.0
+    assert len(events) == 2
     assert len(events) == 2
 
 
@@ -5552,6 +5582,43 @@ async def test_should_release_a_hold_past_the_24_hour_bound_when_state_of_charge
     assert coord._pursued_occurrence is None
     assert coord._required_current.urgent is False
     assert result.effective_peak_limit_kw == 2.5
+
+
+async def test_deadline_unreachable_cleared_fires_when_the_backstop_releases_a_no_reading_hold(
+    hass, freezer
+):
+    """ADR-0053's table, row 2: the backstop releasing a hold on a no-reading cycle counts as
+    established (the PR's own recorded decision on the issue's open question), so it fires
+    `DeadlineUnreachableCleared` at the coordinator tier exactly like any other release --
+    distinct from the 24-hour-bound test above, which starts from a fresh edge (prior flag
+    already False) and so cannot observe a clear at all."""
+    # Arrange -- cycle 1/2: engage with a real reading, then a move lands the occurrence in the
+    # past, establishing `unreachable=True` on the edge (same public route as
+    # `test_should_begin_the_hold_and_notify_when_a_move_lands_in_the_past`).
+    freezer.move_to("2026-01-15 12:00:00")
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=10.0)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.soc_limit_override = 80.0
+    cleared = _listen_cleared(hass)
+    _seed_today_deadline(coord, hours_from_now=1.1)
+    await coord._async_update_data()
+    _seed_today_deadline(coord, hours_from_now=-0.1)
+    await coord._async_update_data()
+    assert coord._required_current.unreachable is True  # precondition
+    assert len(cleared) == 0  # precondition
+
+    # Act -- cycle 3: 25 h later (past the 24-hour bound), state of charge goes unavailable.
+    freezer.move_to(dt_util.now() + timedelta(hours=25))
+    adapters[ROLE_EV_SOC] = _FakeNumeric(None)
+    await coord._async_update_data()
+
+    # Assert -- the backstop released the hold, established, firing the clear exactly once.
+    assert coord._pursued_occurrence is None
+    assert coord._required_current.unreachable is False
+    assert len(cleared) == 1
 
 
 async def test_should_keep_charging_when_the_pursued_occurrence_has_passed(hass, freezer):

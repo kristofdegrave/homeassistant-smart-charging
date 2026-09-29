@@ -1209,10 +1209,8 @@ def test_should_release_the_hold_on_the_24_hour_arm_when_no_following_occurrence
     )
 
     # Assert -- UC05's state table routes this exit to `Normal`, so `unreachable` must fall
-    # too: the coordinator's `_unreachable_edge` reads this flag -- ADR-0042 (narrowed by
-    # ADR-0053) also feeds it an `outcome_established` input, `True` here since this release
-    # resolves a reading -- and it is what fires `DeadlineUnreachableCleared` and re-arms the
-    # notice for the next occasion.
+    # too (same `_unreachable_edge`/`outcome_established` reasoning as the sibling backstop
+    # test above).
     assert result.urgent is False
     assert result.unreachable is False
     assert result.required_a is None
@@ -1236,10 +1234,8 @@ def test_should_release_the_hold_on_the_24_hour_arm_when_the_following_occurrenc
     )
 
     # Assert -- UC05's state table routes this exit to `Normal`, so `unreachable` must fall
-    # too: the coordinator's `_unreachable_edge` reads this flag -- ADR-0042 (narrowed by
-    # ADR-0053) also feeds it an `outcome_established` input, `True` here since this release
-    # resolves a reading -- and it is what fires `DeadlineUnreachableCleared` and re-arms the
-    # notice for the next occasion.
+    # too (same `_unreachable_edge`/`outcome_established` reasoning as the sibling backstop
+    # test above).
     assert result.urgent is False
     assert result.unreachable is False
     assert result.required_a is None

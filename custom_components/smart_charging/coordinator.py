@@ -876,14 +876,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Exposed for the effective-peak-limit `urgent` parameter and Auto
         # mode-selection's escalation, and for tests, the same way `_step_up_gate.state` already is.
         self._required_current = required
-        # ADR-0024: reading `required.unreachable` itself (never any one upstream guard) is
-        # what makes every exit path -- required current falling back in range, a disconnect,
-        # the deadline capability withdrawn -- clear for free, since each already funnels
-        # through this same flag. ADR-0042 (narrowed by ADR-0053) adds the further input: a
+        # ADR-0024: reading `required.unreachable` itself (never any one upstream guard) was
+        # meant to make every exit path -- required current falling back in range, a
+        # disconnect, the deadline capability withdrawn -- clear for free, since each already
+        # funnels through this same flag. ADR-0042 (narrowed by ADR-0053) qualifies that: a
         # cycle that established nothing about the deadline -- the non-resolvable early
-        # return's state-of-charge-unavailable half, outside its own three no-reading
-        # outcomes -- must not decide a clear either, so that fact travels alongside the flag
-        # from `resolve_deadline_urgency` straight to this fire site.
+        # return's state-of-charge-unavailable half, on the cycles ADR-0053's own table does
+        # NOT mark established -- must not decide a clear either, so that fact travels
+        # alongside the flag from `resolve_deadline_urgency` straight to this fire site.
         _, cleared = self._unreachable_edge.resolve(
             required.unreachable, outcome_established=deadline_urgency.outcome_established
         )

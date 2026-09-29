@@ -494,14 +494,16 @@ class DeadlineUnreachableEdge:
 
     `outcome_established` (ADR-0042, narrowed by ADR-0053) is the further input a guard that
     short-circuits to `unreachable`'s default must supply: whether THIS cycle established an
-    outcome about the deadline at all. Default `True` is deliberately the common case -- every
-    caller that genuinely resolved (the engine ran, or a disconnect/withdrawn-capability real
-    exit) passes nothing extra and gets the ordinary edge check. `False` is reserved for the one
-    guard that reaches this with nothing decided: `resolve_deadline_urgency`'s non-resolvable
-    early return, on the state-of-charge-unavailable half only. On `False` the prior flag is
-    held unchanged and no clear is ever reported, exactly as ADR-0024 already does for the two
-    fault early-returns upstream of this call -- a cycle that established nothing must not
-    decide anything, including a clear."""
+    outcome about the deadline at all. Default `True` is deliberately the common case -- the
+    engine path and the disconnect exit both genuinely resolve something, so
+    `DeadlineUrgencyResult.outcome_established` already defaults to `True` for them and the one
+    production caller (`coordinator.py`) simply threads that value through. `False` is reserved
+    for part of the one guard that can reach this with nothing decided:
+    `resolve_deadline_urgency`'s non-resolvable early return, on the state-of-charge-unavailable
+    half, and only where ADR-0053's own table does not mark the cycle established either. On
+    `False` the prior flag is held unchanged and no clear is ever reported, exactly as ADR-0024
+    already does for the two fault early-returns upstream of this call -- a cycle that
+    established nothing must not decide anything, including a clear."""
 
     def __init__(self) -> None:
         self._was_unreachable = False
@@ -647,9 +649,11 @@ class DeadlineUrgencyResult:
 
     `outcome_established` (ADR-0042, narrowed by ADR-0053) is `DeadlineUnreachableEdge.resolve`'s
     own further input, threaded from here to the fire site. `True` for every path that reaches
-    the engine or the disconnect exit -- both genuinely resolve something -- and `False` only
-    for the non-resolvable early return's state-of-charge-unavailable half, which is exactly the
-    case ADR-0042 says establishes nothing a reading is needed for."""
+    the engine or the disconnect exit -- both genuinely resolve something. Within the
+    non-resolvable early return's state-of-charge-unavailable half, `True` also for the two
+    ADR-0053 rows that settle without a reading (the occurrence having elapsed, the backstop
+    releasing the hold); `False` for the rest of that half, where nothing needing a reading has
+    happened yet (nothing pursued, or pursued but not yet elapsed)."""
 
     required: RequiredCurrentResult
     urgent: bool
@@ -779,11 +783,13 @@ def resolve_deadline_urgency(
         # no-reading cycle exactly as it would with one, and the level-signal fire site below
         # (reading `required.unreachable` alone) re-fires on every such cycle while it does.
         unreachable = held is not None and held <= inputs.now_dt
-        # Established: a disconnect (real exit), the backstop just releasing the hold (row 2),
-        # or the occurrence having elapsed (row 1) -- the three no-reading outcomes ADR-0053
-        # names. Anything else here (nothing was ever pursued, or it is pursued but not yet
-        # elapsed) settles nothing, so the edge detector holds its prior flag instead of taking
-        # this cycle's (always-False) `unreachable` at face value.
+        # Established: a disconnect (a real exit, always established per ADR-0042), or --
+        # within ADR-0053's own no-reading table -- the occurrence having elapsed (row 1) or
+        # the backstop just releasing the hold (row 2). Row 3 (a pending occurrence's own date
+        # resolving to "no deadline") is F2's (#1482) to add once it reads
+        # `departure_on_pursued_date` here. Anything else (nothing was ever pursued, or it is
+        # pursued but not yet elapsed) settles nothing, so the edge detector holds its prior
+        # flag instead of taking this cycle's (always-False) `unreachable` at face value.
         outcome_established = disconnected or backstop_fired or unreachable
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(
