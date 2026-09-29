@@ -2,7 +2,6 @@
   "permissions": {
     "allow": [
       "Bash(cd *)",
-      "Bash(git -C *)",
       "Bash(git fetch *)",
       "Bash(git worktree *)",
       "Bash(git status *)",
@@ -41,7 +40,7 @@
       "Bash(gh api rate_limit*)",
       "Bash(gh api graphql -F owner=*)",
       "Bash(gh api graphql -f query='{viewer{login}}'*)",
-      "Bash(gh api graphql -f query='mutation($tid:ID!){ resolveReviewThread*)",
+      "Bash(gh api graphql -f query='mutation{ resolveReviewThread*)",
       "Bash(gh search issues *)",
       "Bash(gh search prs *)",
       "Bash(gh project view *)",
@@ -73,7 +72,7 @@
       "Bash(gh api *PATCH*labels*)",
       "Bash(gh api *labels*PATCH*)",
       "Bash(gh api graphql *LabelsFromLabelable*)",
-      "Bash(gh api graphql *Ref(*)",
+      "Bash(gh api graphql *Ref*)",
       "Bash(gh api graphql *createCommitOnBranch*)",
       "Bash(gh api graphql *updateRepository*)",
       "Bash(gh api graphql *BranchProtectionRule*)",
@@ -85,7 +84,13 @@
       "Bash(gh api graphql *updateIssue*)",
       "Bash(gh api graphql *PullRequest*)",
       "Bash(gh api *issues/*--input*)",
-      "Bash(gh api *issues/*=@*)"
+      "Bash(gh api -X PATCH *issues/*=@*)",
+      "Bash(gh api graphql *mergeBranch*)",
+      "Bash(gh api graphql -F *mutation*)",
+      "Bash(gh api graphql *operationName*)",
+      "Bash(gh api graphql *input:*input:*)",
+      "Bash(gh api repos/* -X*)",
+      "Bash(gh api *..*)"
     ]
   },
   "hooks": {

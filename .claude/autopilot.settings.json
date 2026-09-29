@@ -6,6 +6,7 @@
     "defaultMode": "dontAsk",
     "allow": [
       "Bash(printenv SMART_CHARGING_AUTOPILOT)",
+      "Bash(git -C *)",
       "Edit(//**/sc-*/**)",
       "Edit(//**/scratchpad/**)"
     ],

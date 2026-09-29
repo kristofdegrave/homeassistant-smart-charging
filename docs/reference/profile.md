@@ -75,38 +75,45 @@ session scratchpad, and sets the `env` variable `autopilot.loop_marker` names to
 (`<parent>/sc-wf-<n>` for `workflow/<n>`); the `Read` and `Edit` rules for worktrees match
 `//**/sc-*/**`, and those for scratch files `//**/scratchpad/**`. The shared allow-list's
 `Read` rules exist because the `reviewer` definition's `permissionMode: dontAsk` reaches
-interactive dispatches too. A worktree placed elsewhere is refused in the loop. Four shapes
+interactive dispatches too. A worktree placed elsewhere is refused in the loop. Six shapes
 the harness itself decides, observed in a `dontAsk` session:
 
-- **No shell variable in a command.** `gh api repos/$REPO/…` is refused where the same call
-  with the repository spelled out passes, and shell state does not survive between calls; so
-  a recipe's variables are resolved with `bash .github/profile-env.sh` and their values spelled
-  into the command, and the allow-list names this repository literally — the one place under
-  `.claude/**` a `profile.yml` value is spelled, since a settings file cannot read it.
+- **No `$` in a command.** `gh api repos/$REPO/…` is refused where the same call with the
+  repository spelled out passes, and so is a GraphQL document declaring `$tid`, even quoted;
+  shell state does not survive between calls either. So a recipe's variables are resolved with
+  `bash .github/profile-env.sh` and their values spelled into the command, a GraphQL recipe's
+  variables inlined (`resolveReviewThread(input:{threadId:"<id>"})`), and the allow-list names this repository literally; with the marker in the
+  loop file, the only `profile.yml` values spelled under `.claude/**`, since a settings file
+  cannot read the profile.
 - **Git in a worktree is `git -C <worktree> …`**: `cd <worktree> && git …` is refused
-  whatever the allow-list says.
+  whatever the allow-list says. `Bash(git -C *)` is in the loop file only, beside the denies
+  that hold its program-running forms, so an interactive session still prompts for it.
 - **Scratch paths are written long**: a Windows short name (`KRISTO~1`) is refused where its
   long form passes.
 - **The marker is read with `printenv <marker>`**, the one form the loop file admits.
+- **A rule's text holds no parenthesis**: a `Bash(…)` rule with one inside matches nothing,
+  so each rule here stops before the first `(` of the command it admits.
 - **A commit message goes in a file** (`git -C <worktree> commit -F <scratch file>`): the
   loop's text denies read an inline `-m` too, so a message naming `-c` or a push to `main`
   is refused.
 
-**`gh api` is admitted by recipe shape**, not whole: reads and `POST`/`PATCH` on this
-repository's issues and pulls, `POST` on its milestones, any `-X GET`, `rate_limit`, and the
-three GraphQL forms the recipes use, each a prefix. `ask` rules close what a prefix leaves open:
-a second method flag (`-X … -X`, `--method`), a second `query=`, a GraphQL field or an issue
-field read from a file (`=@`), and `--input` on GraphQL or an issue. So an endpoint outside
-those shapes is refused for writes; a plain `-X GET` still reads any endpoint.
+**`gh api` is admitted by recipe shape**, not whole: reads on this repository's issues and
+pulls, `POST`/`PATCH` on its issues, `POST` on its pulls and milestones, any `-X GET`,
+`rate_limit`, and the three GraphQL forms the recipes use, each a prefix. `ask` rules close
+what a prefix leaves open: a method after the path or a second method flag, `--method`, `..`
+in a path, a second `query=`, a GraphQL field or `--input` read from a file, a GraphQL
+`mutation` after `-F`, an `operationName`, a second `input:` in one document, and a body
+`PATCH` from a file. So a write outside those shapes is refused; a plain `-X GET` still reads
+any endpoint. The REST comment fallback (`-F body=@<file>`) is admitted.
 
 **Label gestures.** `.claude/settings.json`'s `ask` rules match
 `gh issue edit … --remove-label … needs-approval`, a `gh api` label `DELETE`, `PUT` or
 `PATCH`, an issue `PATCH` from `--input` or `=@`, and the GraphQL `…LabelsFromLabelable` and
 `updateIssue` mutations, with or without a leading assignment: an interactive session prompts,
-a `dontAsk` one is refused, so removing an epic's `needs-approval` takes a form no rule here
-admits. `gh pr edit --remove-label` is allowed. A single command removing another label while
-naming `needs-approval` is refused too, and parks. The same `ask` rules hold the GraphQL ref,
-commit, repository-settings, branch-protection and `…PullRequest…` mutations.
+a `dontAsk` one is refused. `gh pr edit --remove-label` is allowed. A single command removing
+another label while naming `needs-approval` is refused too, and parks. The same `ask` rules
+hold the GraphQL `mergeBranch`, `…Ref…`, commit, repository-settings, branch-protection and
+`…PullRequest…` mutations.
 
 **What the loop file refuses beyond the harness paths:** edits to any `.git` file or
 directory; git's `-c` and `--config-env` overrides, `git -C … config`, `--upload-pack`,
@@ -117,11 +124,13 @@ a writer has written.
 
 **Known gaps.** A Bash rule matches the text typed, not the program run — Claude Code's own
 permissions documentation says it is not a security boundary around the program — so each
-list above holds the forms named, and a form it does not name passes. The ones known: a
-mutation the `ask` rules do not name, sent in the one resolve-thread form the allow-list
-admits; and a bare `git -C <main checkout> push` while on `main`, which names no refspec —
-branch protection does not enforce on the owner's account, so only the `PreToolUse` guard
-can refuse it, and it does not yet.
+list above holds the forms named, and a form it does not name passes. Known ones: a label or
+mutation name in another letter case (gh matches label names case-insensitively, the rules do
+not) or split by quotes (`needs-appro''val`), which passes every substring rule, the label
+gesture included; spacing a GraphQL document the rules do not expect; and a bare
+`git -C <main checkout> push` while on `main`, which names no refspec. Branch protection does
+not enforce on the owner's account, so only the `PreToolUse` guard, which parses what it
+reads, can close these, and it does not yet.
 
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop
