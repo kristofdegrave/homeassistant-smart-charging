@@ -48,8 +48,7 @@ Always read:
 - If a changed file is `.claude/settings.json` or under `.claude/hooks/`: the other half of
   the pair — the wiring names the script, the script is what the wiring runs, and a review of
   one that never opened the other cannot tell whether the guard still fires — together with
-  its test suite, and the rule it mechanizes, which is
-  `docs/reference/method/contribution-workflow.md`'s **Commit & push authorization**.
+  its test suite, and the rule it mechanizes, which the script's header names.
 - If a changed file is under `.github/ISSUE_TEMPLATE/`: `.claude/profile.yml`'s `labels` (the
   set `.github/setup-labels.sh` writes), plus
   `docs/reference/method/contribution-workflow.md`'s **Issue conventions** — the canonical
@@ -93,7 +92,7 @@ Always read:
   skill checklist as that reference scopes it.
 - The harness configuration has no section there, deliberately — that reference says why, and
   routes its criteria here. So judge a change to `.claude/settings.json` or `.claude/hooks/`
-  on these instead. **Every fall-through to "permit" is argued where it happens.** The guard
+  on these instead. **Every fall-through to "permit" is argued where it happens.** Each guard
   this project ships is an accident guard and not a sandbox — it says so in its own header,
   and it fails *open* on an input it cannot parse, with the reasoning written at the line it
   happens. That is a decision, not a defect, and this item does not reopen it: what it scores
