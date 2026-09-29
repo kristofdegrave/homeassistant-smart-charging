@@ -17,9 +17,9 @@
 # every backslash is read as a separator. The nearest existing directory at or above the path
 # is asked, with git, whether it lies inside a working tree, and if so for that tree's top
 # level and its current branch. The tree is the repository's main worktree when its `.git` is a
-# directory, or a file whose `gitdir:` does not point into a `worktrees/` directory (a
-# submodule, a --separate-git-dir checkout); a linked worktree's `.git` is a file pointing
-# there. That test asks the filesystem, never compares two spellings of a path, so a path typed
+# directory, or a file whose `gitdir:` names a directory with no `commondir` file in it (a
+# submodule, a --separate-git-dir checkout); a linked worktree's `.git` names its admin
+# directory, which holds one. That test asks the filesystem, never compares two spellings of a path, so a path typed
 # in another letter case (`D:\git\...` for `D:\GIT\...`) or with an 8.3 short name is judged
 # the same as the canonical one. Main worktree on main -> deny, an ignored file as much as a
 # tracked one: the main checkout's `.claude/settings.local.json` cannot be edited with the file
@@ -33,10 +33,12 @@
 # one that names a guarded tool but yields no path, a relative path with no cwd, no git on PATH,
 # a git that fails for any reason but "not a git repository" (`detected dubious ownership`, a
 # corrupt repository, a branch it cannot read), or a top level whose `.git` is missing or names
-# no gitdir allows the call -- with a note on stderr, so the guard is not silently gone. An --is-inside-work-tree answer other than `true` or
-# `false` is not trusted either way: the checks below still run, a main checkout on main is
-# still refused, and any allow they reach carries the note. Only the answers git gives on a
-# readable repository, and "not a git repository", allow without one.
+# no gitdir allows the call -- with a note on stderr, so the guard is not silently gone. An
+# --is-inside-work-tree answer other than `true` or `false` is not trusted either way: the
+# checks below still run, a main checkout on main is still refused, and any allow they reach,
+# "not a git repository" included, carries the note. Only the answers git gives on a readable
+# repository, "not a git repository", and a path none of whose directories exist allow
+# without one.
 #
 # Known gap, accepted: a write through the shell tools (`sed -i`, a heredoc, a redirection,
 # `git checkout -- <path>`) never reaches this hook, and nothing here tries to cover it.
@@ -138,7 +140,7 @@ trap 'rm -f "$errfile"' EXIT
 ask() { # ask <git args...> -- sets $answer, or exits
   answer=$(LC_ALL=C git -C "$dir" "$@" 2>"$errfile") && return 0
   err=$(tr '\n' ' ' <"$errfile")
-  case "$err" in *'not a git repository'*) exit 0 ;; esac
+  case "$err" in *'not a git repository'*) allow ;; esac # defined below, looked up when called
   note_open "git $* failed in $dir (${err% })"
 }
 
@@ -162,9 +164,12 @@ top=$answer
 if [ -d "$top/.git" ]; then
   : # the main worktree
 elif [ -f "$top/.git" ]; then
-  gitdir=$(sed -n 's/^gitdir:[ \t]*//p' "$top/.git" | tr '\\' '/')
+  gitdir=$(sed -n 's/^gitdir:[[:blank:]]*//p' "$top/.git" | sed -n 1p | tr -d '\r' | tr '\\' '/')
   [ -n "$gitdir" ] || note_open "$top/.git names no gitdir"
-  case "$gitdir" in */worktrees/*) allow ;; esac # a linked worktree
+  case "$gitdir" in /* | [A-Za-z]:/*) ;; *) gitdir=$top/$gitdir ;; esac
+  # A linked worktree's admin directory holds a commondir file naming the repository it
+  # belongs to; a submodule's or a --separate-git-dir checkout's git directory does not.
+  [ -f "$gitdir/commondir" ] && allow # a linked worktree
   : # a submodule or --separate-git-dir checkout: the main worktree of its own repository
 else
   note_open "git's top level $top has no .git"

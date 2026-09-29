@@ -27,17 +27,19 @@ LINKED=$T/Linked        # a linked worktree of it, on branch task
 OTHER=$T/other          # a main worktree on another branch
 OTHERMAIN=$T/other-main # a linked worktree of $OTHER, on main
 SEP=$T/Sep              # a --separate-git-dir checkout on main: its .git is a file
+SEP2=$T/Sep2            # ... whose git dir sits under a directory named worktrees
 OUTSIDE=$T/outside      # in no repository
-mkdir -p "$MAIN" "$OTHER" "$OUTSIDE"
+mkdir -p "$MAIN" "$OTHER" "$OUTSIDE" "$T/worktrees"
 g -C "$MAIN" init -b main && echo a > "$MAIN/a.txt" && g -C "$MAIN" add a.txt &&
   g -C "$MAIN" commit -m init && g -C "$MAIN" worktree add -b task "$LINKED" &&
   g -C "$OTHER" init -b main && echo a > "$OTHER/a.txt" && g -C "$OTHER" add a.txt &&
   g -C "$OTHER" commit -m init && g -C "$OTHER" checkout -b feature &&
   g -C "$OTHER" worktree add "$OTHERMAIN" main &&
-  g init -b main --separate-git-dir "$T/sep.git" "$SEP" ||
+  g init -b main --separate-git-dir "$T/sep.git" "$SEP" &&
+  g init -b main --separate-git-dir "$T/worktrees/sep2.git" "$SEP2" ||
   { echo "could not build the throwaway repositories under $T" >&2; exit 1; }
-# Existing subdirectories: from one, git answers --git-dir absolute and --git-common-dir
-# relative, which the top level (both `.git`) never shows.
+# Existing subdirectories, so the directory walk and --show-toplevel are exercised from below
+# the top level, not only at it.
 mkdir -p "$MAIN/Docs/Deeper" "$LINKED/Docs/Deeper"
 
 # The hook runs under $HOOK_PATH (default: this PATH), so a case can hand it a stub git or none;
@@ -99,6 +101,7 @@ run BLOCK Write file_path "a.txt" "$MAIN"                 # a relative path, tak
 run BLOCK Edit file_path "sub/b.txt" "$MAIN"              # ... into a directory not made yet
 run BLOCK Edit file_path "Deeper/c.txt" "$MAIN/Docs"      # ... from a subdirectory cwd
 run BLOCK Edit file_path "$SEP/a.txt"                     # a --separate-git-dir checkout on main
+run BLOCK Edit file_path "$SEP2/a.txt"                    # ... its git dir under .../worktrees/
 
 # --- everywhere else: allowed ---
 run ALLOW Edit file_path "$LINKED/a.txt"                  # a linked worktree
@@ -165,6 +168,8 @@ stub 'case "$*" in *is-inside-work-tree*) echo ;; *) exec @GIT@ "$@" ;; esac'
 run BLOCK Edit file_path "$MAIN/a.txt"                    # blank answer, main on main
 WANT='answered'
 run NOTE Edit file_path "$LINKED/a.txt"                   # blank answer, linked worktree
+stub 'case "$*" in *is-inside-work-tree*) echo ;; *) echo "fatal: not a git repository" >&2; exit 128 ;; esac'
+run NOTE Edit file_path "$MAIN/a.txt"                     # blank answer, then "not a git repository"
 HOOK_PATH=
 
 # --- Windows spellings of the same paths (need cygpath, i.e. Git Bash / MSYS) ---
