@@ -31,8 +31,17 @@
       "Bash(gh pr create *)",
       "Bash(gh pr edit *)",
       "Bash(gh pr comment *)",
-      "Bash(gh api *)",
-      "Bash(MSYS_NO_PATHCONV=1 gh api *)",
+      "Bash(gh api repos/kristofdegrave/homeassistant-smart-charging/issues*)",
+      "Bash(gh api repos/kristofdegrave/homeassistant-smart-charging/pulls*)",
+      "Bash(gh api -X GET *)",
+      "Bash(gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/issues*)",
+      "Bash(gh api -X PATCH repos/kristofdegrave/homeassistant-smart-charging/issues*)",
+      "Bash(gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/pulls*)",
+      "Bash(gh api -X POST repos/kristofdegrave/homeassistant-smart-charging/milestones *)",
+      "Bash(gh api rate_limit*)",
+      "Bash(gh api graphql -F owner=*)",
+      "Bash(gh api graphql -f query='{viewer{login}}'*)",
+      "Bash(gh api graphql -f query='mutation($tid:ID!){ resolveReviewThread*)",
       "Bash(gh search issues *)",
       "Bash(gh search prs *)",
       "Bash(gh project view *)",
@@ -58,7 +67,16 @@
     "ask": [
       "Bash(gh issue edit *--remove-label*needs-approval*)",
       "Bash(gh api *DELETE*labels*)",
-      "Bash(gh api *labels*DELETE*)"
+      "Bash(gh api *labels*DELETE*)",
+      "Bash(gh api *PUT*labels*)",
+      "Bash(gh api *labels*PUT*)",
+      "Bash(gh api *PATCH*labels*)",
+      "Bash(gh api *labels*PATCH*)",
+      "Bash(gh api graphql *LabelsFromLabelable*)",
+      "Bash(gh api graphql *Ref(*)",
+      "Bash(gh api graphql *createCommitOnBranch*)",
+      "Bash(gh api graphql *updateRepository*)",
+      "Bash(gh api graphql *BranchProtectionRule*)"
     ]
   },
   "hooks": {

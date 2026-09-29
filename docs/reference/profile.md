@@ -75,24 +75,40 @@ session scratchpad, and sets the `env` variable `autopilot.loop_marker` names to
 (`D:/GIT/sc-wf-1501` for `workflow/1501`); the `Read` and `Edit` rules for worktrees match
 `//**/sc-*/**`, and those for scratch files `//**/scratchpad/**`. The shared allow-list's
 `Read` rules exist because the `reviewer` definition's `permissionMode: dontAsk` reaches
-interactive dispatches too. A worktree placed elsewhere is refused in the loop. Three shapes
-the harness itself decides, observed in a `dontAsk` session: `cd <worktree> && git …` is
-refused whatever the allow-list says, so git runs in a worktree as `git -C <worktree> …`; a
-path spelled with a Windows short name (`KRISTO~1`) is refused where its long form passes, so
-scratch files are written by the long path; and the marker is read with
-`printenv <marker>`, since an `echo` of a variable is refused.
+interactive dispatches too. A worktree placed elsewhere is refused in the loop. Four shapes
+the harness itself decides, observed in a `dontAsk` session:
 
-**Known gap.** `Bash(git -C *)` admits every git subcommand and global option, `-c` config
-overrides included, which can make git run a program; no rule can close it, since any `*`
-before the subcommand matches `-c` too. Only the `PreToolUse` guard could, and it does not
-today.
+- **No shell variable in a command.** `gh api repos/$REPO/…` is refused where the same call
+  with the repository spelled out passes, and shell state does not survive between calls; so
+  a recipe's variables are resolved with `bash .github/profile-env.sh` and their values spelled
+  into the command, and the allow-list names this repository literally — the one place under
+  `.claude/**` a `profile.yml` value is spelled, since a settings file cannot read it.
+- **Git in a worktree is `git -C <worktree> …`**: `cd <worktree> && git …` is refused
+  whatever the allow-list says.
+- **Scratch paths are written long**: a Windows short name (`KRISTO~1`) is refused where its
+  long form passes.
+- **The marker is read with `printenv <marker>`**, the one form the loop file admits.
+
+**`gh api` is admitted by recipe shape**, not whole: reads and `POST`/`PATCH` on this
+repository's issues and pulls, `POST` on its milestones, any `-X GET`, `rate_limit`, and the
+three GraphQL forms the recipes use. Any other endpoint — contents, refs, settings, Actions —
+is refused in the loop.
 
 **Label gestures.** `.claude/settings.json`'s `ask` rules match
-`gh issue edit … --remove-label … needs-approval` and any `gh api` label `DELETE`: an
-interactive session prompts, a `dontAsk` one is refused, so removing an epic's `needs-approval`
-stays the human's and a pull request's removal on the REST fallback parks.
+`gh issue edit … --remove-label … needs-approval`, a `gh api` label `DELETE`, `PUT` or
+`PATCH`, and the GraphQL `…LabelsFromLabelable` mutations, with or without a leading
+assignment: an interactive session prompts, a `dontAsk` one is refused, so removing an epic's
+`needs-approval` stays the human's and a pull request's removal on the REST fallback parks.
 `gh pr edit --remove-label` is allowed. A single command removing another label while naming
-`needs-approval` is refused too, and parks.
+`needs-approval` is refused too, and parks. The same `ask` rules hold the GraphQL ref, commit,
+repository-settings and branch-protection mutations.
+
+**Git options the loop refuses.** The loop file denies `-c` and `--config-env` overrides,
+`git -C … config`, `--upload-pack`, `--receive-pack`, `--exec=`, `fetch -u`, `--output`, and
+a push naming `main`. **Known gaps:** a text rule matches what is typed, so an option spelled
+another way passes it; and a bare `git -C <main checkout> push` while on `main` names no
+refspec — branch protection does not enforce on the owner's account, so only the `PreToolUse`
+guard can refuse it, and it does not yet.
 
 **Not in the list.** The WSL test runner is this machine's, not the repository's; a step that
 needs a local HA-harness run is refused in the loop and leaves the tests to CI.

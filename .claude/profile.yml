@@ -3,7 +3,9 @@
 # The method (docs/reference/**, .claude/skills/**, .claude/agents/**, the work-type files) is
 # written to travel between repositories; this file is the part that does not. A value spelled
 # here is spelled nowhere else under docs/reference/** or .claude/**: those files name the key
-# (for example `board.fields.size.id`) and whoever runs the command resolves it here. Project
+# (for example `board.fields.size.id`) and whoever runs the command resolves it here. The one
+# exception is `repo` in .claude/settings.json's allow-list, since a settings file cannot read
+# this one; docs/reference/profile.md's **Autopilot loop** says why. Project
 # facts that carry a *why* — git identity, merge strategy, what a board column means — are
 # prose, in docs/reference/profile.md; this file holds only what a script or a command needs
 # verbatim.
