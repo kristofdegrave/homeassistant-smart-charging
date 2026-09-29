@@ -137,20 +137,20 @@ count and lane holder are A4's state, and A6's titled park is a tracker read A3'
 - **A committed allow-list and a loop-only settings file** are added, the latter layered over
   the shared file so its `PreToolUse` guard still runs; the loop starts with it, and every
   agent type the loop dispatches gets a definition carrying `permissionMode: dontAsk`.
-- **No shell path around the harness deny**: since an unattended step never changes the
-  harness (A2), the loop's allow-list and the `PreToolUse` guard together refuse a commit or
-  push that touches `.claude/**`, `.github/**` or `CLAUDE.md`.
-- **The author test gets one home** beside the association recipe in **Tracker mechanics**;
-  the three drifted copies and `fix`'s collector point there, closing the stranger's-comment
-  hole.
+- **No commit or push around the harness deny — derived from A2, not separately decided.**
+  In the loop only, the `PreToolUse` guard also refuses a commit or push touching `.claude/**`,
+  `.github/**` or `CLAUDE.md`; interactive commits are unaffected. A `gh api` contents or
+  git-data write passes both, an accepted gap.
+- **The author test gets one home** in **Tracker mechanics**; the three drifted copies and
+  `fix`'s collector point there.
 - **The `decompose` park gains a fixed title**, and its entry rule reads only that park.
 - **Label gestures — derived from A1 and A3, not separately decided.** A label event carries an
   actor but no association, and an actor test cannot tell the session's own login from the
-  human's; so the loop's allow-list admits no removal of a human-owned label.
-- **Harder**: a new command in any step is an allow-list change first, human-reviewed.
-  `fix`'s stale-label removal is refused in an unattended step. The mode in the shared
-  `reviewer` definition reaches interactive dispatches too, so the allow-list must cover the
-  worktree and scratch reads they are handed.
+  human's; so the loop's allow-list admits no removal of an epic's `needs-approval`, whose
+  removal is the human's go.
+- **Harder**: a new command in any step is an allow-list change first, human-reviewed. The
+  mode in the shared `reviewer` definition reaches interactive dispatches too, so the
+  allow-list must cover the worktree and scratch reads they are handed.
 - **ADR-0052 is not narrowed**: A6 is its Consequence, and its guard stays an accident guard.
 
 **Blast radius.** One search, run from the repository root:
@@ -160,14 +160,15 @@ rg -n --hidden --glob '!.git/' --glob '!docs/postmortems/**' --glob '!docs/archi
   -e 'author_association|[Aa]uthor test|[Aa]uthor with write access|in `\[bot\]`' \
   -e 'permissionMode|[Pp]ermission mode|"permissions"|^tools:' \
   -e 'verified live before|verify-live gate|verify live: #' \
-  -e 'A park counts|The park\*\* is|parking marker|autopilot-parked' .
+  -e 'A park counts|The park\*\* is|parking marker|autopilot-parked' \
+  -e 'block-destructive-git' .
 ```
 
 Wide enough: every login test is written ``in `[bot]` `` and every association read names
 `author_association`; every agent definition has a `tools:` line; every settings file a
 `"permissions"` key; the verify-live gate names itself, and every park writer, reader and bar
-item names the park or its marker. Tick logs and agent lifecycle have no site on `main`: the
-skill that holds them is unmerged. **50** hits.
+item names the park or its marker; the guard is named by its file. Tick logs and agent
+lifecycle have no site on `main`: the skill that holds them is unmerged. **64** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
@@ -180,10 +181,14 @@ skill that holds them is unmerged. **50** hits.
 | `docs/reference/work-types/decompose/implement.md:77`, `:121` | Posts the park with the marker alone | Opens it with the fixed title |
 | `docs/reference/work-types/decompose/done.md:33` | Scores the park by its marker, passing an untitled one | Scores the title too |
 | `docs/reference/method/definition-of-done.md:93`; `docs/reference/method/idea-to-product.md:498` | The gate names no park | Held by the `verify live: #<epic>` park |
+| `.claude/hooks/block-destructive-git.sh:190`; `.claude/hooks/test-block-destructive-git.sh:2` | Refuses destructive git and out-of-class merges | In the loop, also refuses a commit or push touching the harness paths; tested |
 
-**32** hits conform: `tracker-mechanics.md:298`, `:306`, `:440`, `clarify/SKILL.md:57`, `:71`,
-`contribution-workflow.md:121`, `decompose/implement.md:140`, `decompose/done.md:34`,
-`cleanup/SKILL.md:76`, `decomposition-checklist.md:66`, ADR-0052's `:136`, and **21** in this
-record — `clarify`'s park sits under `needs-decision` on its issue, not on an epic. Out of
-scope: ADR-0052's `:166` stays a merged record's search; `testing/implement.md:3` is prose about
-writing tests; `test-check-method.sh:143` keeps feeding the method check a synthetic agent.
+**43** hits conform: `tracker-mechanics.md:298`, `:306`, `:440`; `clarify/SKILL.md:57`, `:71`,
+its park under `needs-decision` on its issue, not an epic; `contribution-workflow.md:121`,
+`decompose/implement.md:140`, `decompose/done.md:34`, `cleanup/SKILL.md:76`,
+`decomposition-checklist.md:66`, ADR-0052's `:136`; nine that only name or run the guard —
+`CLAUDE.md:21`, `settings.json:12`, `profile.yml:192`, `contribution-workflow.md:240`, the
+guard's `:125`, `:170` and its tests' `:5`, `:12`, `:618`; and **23** in this record. Out of
+scope: ADR-0052's `:166`, `:194` stay a merged record's blast radius; `testing/implement.md:3`
+is prose about writing tests; `test-check-method.sh:143` keeps feeding the method check a
+synthetic agent.
