@@ -151,8 +151,9 @@ gate does not apply; the track written on the issue is enough.
 ## 4. Decompose
 
 Every issue a strand gets is filed here — the epic, the issues the artifact stages run
-against, any `decompose` child, and one child per task of the spec. A strand that needs no
-epic files one issue and stops; which strands those are is the first bullet set below.
+against, any `decompose` child, and one child per task of the spec, or, for a method epic,
+each of its tasks. A strand that needs no epic files one issue and stops; which strands those
+are is the first bullet set below.
 
 The stage is **entered twice, with the artifact stages in between**: the issues those stages
 run against must exist before they start, and the spec derives from what they merged. The
@@ -170,7 +171,7 @@ move into its body under *Decisions so far* (**Brainstorm** above).
 
 Whether the strand needs an epic is settled here and written on the issue:
 
-- **New behaviour**: always an epic, so there is always a body for the spec.
+- **New behaviour**: always an epic, so there is always a body for a spec it carries.
 - **Bug track**: an epic only when brainstorming yields more than one slice. A one-slice fix
   goes straight from the routed issue to work.
 - **A single-artifact idea**: no epic, so no spec and no closing step — one issue, filed
@@ -184,11 +185,11 @@ covers which label such a child takes.
 
 **The last issue the pass files is the `decompose` child**: titled `decompose: <epic title>`,
 labelled `decompose`, a sub-issue of the epic, blocked by every `adr`, `uc`, `requirement` and
-`documentation` issue the pass filed. The one exception is a **method epic** — one whose
-tasks, the children beside the issues the artifact stages run against, are all `workflow`
-issues, a change to the method itself: it needs no spec, so it gets no `decompose` child and
-no closing step, and its children are filed here, at the opening pass. Every other epic is an
-epic with a spec.
+`documentation` issue the pass filed. The one exception is a **method epic**, a change to the
+method itself — one whose strand was settled at **Brainstorm** to have no `development` or
+`testing` task, every task (at least one) a `workflow` issue this pass files beside any `adr`,
+`uc`, `requirement` and `documentation` issue. It needs no spec, so it gets no `decompose`
+child and no closing step. Every other epic is an epic with a spec.
 
 **Epic membership, ordering and priority are native GitHub relationships, not body text** —
 sub-issues for membership, blocked-by edges for order, milestones for priority.
@@ -275,8 +276,8 @@ method document, so that record is its only statement until one owns it.
 ### Artifact: the epic, and one issue per task
 
 Or the single issue, where the idea is one artifact. The opening pass leaves the epic, the
-issues the artifact stages run against and any `decompose` child; the closing step
-leaves the spec in the epic's body and one child per task.
+issues the artifact stages run against, any `decompose` child and a method epic's `workflow`
+tasks; the closing step leaves the spec in the epic's body and one child per task.
 
 ### Gate: the decomposition is reviewed and read, and every issue is filed with its edges
 

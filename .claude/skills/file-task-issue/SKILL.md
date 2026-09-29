@@ -24,7 +24,7 @@ half-scoped.
 1. **Is it scoped enough to file yet?** If the work is still fuzzy (spans multiple artifacts,
    unclear boundaries), use the `work-idea` skill instead and give it the `idea` label — don't
    force a premature context label onto something that isn't scoped.
-2. **Pick the one context label** — for an epic, `epic` and no context label — set
+2. **Pick the one context label** (an epic's labels are **Issue conventions**'), set
    Size/Estimate, and — for a child of a decomposition — write the anchored `Source:` lines.
    What each entry's sources name, and how finely, is the closing step's, under `CLAUDE.md`'s
    **Idea-to-product flow**; the line's own format belongs to **Issue conventions** and is not

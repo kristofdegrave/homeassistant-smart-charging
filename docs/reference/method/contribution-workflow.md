@@ -59,9 +59,8 @@ the PR is [definition-of-done.md](definition-of-done.md)'s.
 ## Rule A — author/reviewer separation
 
 A change is judged by a **spawned reviewer agent**, never by the session that holds the
-author's context. What corrupts a review is the *reviewer* carrying that context, not the
-session: the session that wrote the work may run step 2, because it only dispatches to agents
-that cannot see what it saw and relays what they return. The moment it judges the work itself
+author's context. The session that wrote the work may still run step 2, because it only
+dispatches to agents that cannot see what it saw and relays what they return. The moment it judges the work itself
 — screening findings before posting, or checking the reviewer missed nothing — the separation
 is gone.
 
@@ -299,7 +298,7 @@ shared with the human partner**.
   row.
 - **The `epic` label** marks an epic — a parent tracking its children, not a unit of work — so
   an epic carries no context label and is never picked as a task. A kind label naming the
-  epic's own work stays beside it (a bug-track epic keeps `bug`); `epic` adds no
+  epic's own work stays beside it (a bug-track epic keeps `bug` and never gains a context label); `epic` adds no
   Model-selection row and makes no branch.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
