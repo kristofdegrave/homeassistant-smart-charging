@@ -302,6 +302,8 @@ shared with the human partner**.
   epic's own work stays beside it (a bug-track epic, filed new at the opening pass beside the
   routed `bug` issue, keeps `bug` and never gains a context label); `epic` adds no
   Model-selection row.
+- **The `control` label** `paused` is the autopilot's remote stop, put on its tracking issue by
+  the human; what it stops is the `autopilot` skill's rule.
 - **Project-board fields**: always set **Size** (XS/S/M/L/XL) and **Estimate** (points) when
   filing an issue. Size a sweep/audit-shaped task (cross-file invariant check, full-suite run,
   cross-check an ADR) up at least one tier from raw effort. **Epics get Size only, never Estimate.**
@@ -364,16 +366,14 @@ do not reach it, and how it is reviewed are this topic's.
 A post-mortem is a **snapshot of reasoning at a date**, not a source of truth for behaviour. It
 is never kept current, never cited as the reason a rule exists (the rule's own reference doc
 says that), and never consulted to answer "what does the system do" — the analysis docs own
-that. It explains how a specific failure got past a specific process; once its changes land, it
-stays as the record of why.
+that.
 
 ### Two rules that apply elsewhere do not apply here
 
 - **Tracking refs are required, not forbidden.** `CLAUDE.md`'s *Review protocol for analysis
   documents* topic forbids PR numbers and issue statuses in analysis-doc and ADR bodies. That
-  rule does not reach this directory: a post-mortem's entire evidentiary value
-  is the specific PRs, issues, commits and review comments it cites, at the dates it cites
-  them.
+  rule does not reach this directory: a post-mortem's evidence is the PRs, issues, commits and
+  review comments it cites, at the dates it cites them.
 - **It is not an analysis document.** The 6Cs/glossary-first protocol and the analysis
   tree's own review checklist do not govern it; it quotes the analysis docs as evidence
   rather than asserting behaviour.
