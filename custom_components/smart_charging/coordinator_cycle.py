@@ -490,13 +490,34 @@ class DeadlineUnreachableEdge:
     Deliberately unlike `SocGateResolver`'s first call, which always reports `changed=True`:
     the prior flag here starts `False`, so a first `resolve()` never reports a clear -- there
     is no occasion to clear before one has been observed, and a spurious clear on the very
-    first cycle would re-arm a consumer (the Notification Manager) that never notified."""
+    first cycle would re-arm a consumer (the Notification Manager) that never notified.
+
+    `outcome_established` (ADR-0042, narrowed by ADR-0053) is the further input a guard that
+    short-circuits to `unreachable`'s default must supply: whether THIS cycle established an
+    outcome about the deadline at all. Default `True` is deliberately the common case -- the
+    engine path genuinely resolves something and relies on this very default
+    (`DeadlineUrgencyResult.outcome_established`'s own); the disconnect exit resolves something
+    too, but computes its `True` explicitly in the early return below rather than relying on
+    the default. Either way the one production caller (`coordinator.py`) simply threads
+    whatever value it received through to this `resolve()`. `False` is reserved for part of
+    the one guard that can reach this with nothing decided:
+    `resolve_deadline_urgency`'s non-resolvable early return, on the state-of-charge-unavailable
+    half, and only where ADR-0053's own table does not mark the cycle established either. On
+    `False` the prior flag is held unchanged and no clear is ever reported, exactly as ADR-0024
+    already does for the two fault early-returns upstream of this call -- a cycle that
+    established nothing must not decide anything, including a clear."""
 
     def __init__(self) -> None:
         self._was_unreachable = False
 
-    def resolve(self, unreachable: bool) -> tuple[bool, bool]:
-        """Return (this cycle's `unreachable`, whether it just cleared from True to False)."""
+    def resolve(self, unreachable: bool, *, outcome_established: bool = True) -> tuple[bool, bool]:
+        """Return (this cycle's `unreachable`, whether it just cleared from True to False).
+
+        `outcome_established=False` reports the HELD prior flag (not `unreachable`, which the
+        caller could not compute) and never a clear, and leaves the prior flag itself
+        unchanged -- there is nothing this cycle to advance it to."""
+        if not outcome_established:
+            return self._was_unreachable, False
         cleared = self._was_unreachable and not unreachable
         self._was_unreachable = unreachable
         return unreachable, cleared
@@ -626,11 +647,20 @@ class DeadlineUrgencyResult:
     `DeadlineUnreachableEdge`'s own detection over this same `required.unreachable`,
     `DeadlineUnreachableCleared` (the paired clearing edge, ADR-0024) both stay the
     coordinator's own job (ADR-0009/0010: HA I/O stays coordinator-side), the same boundary
-    `SocGateResolver` already draws for `ActiveSocLimitChanged`."""
+    `SocGateResolver` already draws for `ActiveSocLimitChanged`.
+
+    `outcome_established` (ADR-0042, narrowed by ADR-0053) is `DeadlineUnreachableEdge.resolve`'s
+    own further input, threaded from here to the fire site. `True` for every path that reaches
+    the engine or the disconnect exit -- both genuinely resolve something. Within the
+    non-resolvable early return's state-of-charge-unavailable half, `True` also for the two
+    ADR-0053 rows that settle without a reading (the occurrence having elapsed, the backstop
+    releasing the hold); `False` for the rest of that half, where nothing needing a reading has
+    happened yet (nothing pursued, or pursued but not yet elapsed)."""
 
     required: RequiredCurrentResult
     urgent: bool
     resolved_mode: str | None
+    outcome_established: bool = True
 
 
 @dataclass(frozen=True)
@@ -722,11 +752,15 @@ def resolve_deadline_urgency(
         # return cannot answer them together (UC05's State model):
         #
         # - DISCONNECTED -- a release condition R5 names outright. It ends the connected session
-        #   and the use-case's own precondition, so it is a real exit.
-        # - STATE OF CHARGE UNAVAILABLE -- deliberately NOT an exit. No required current can be
-        #   computed, so the cycle establishes nothing about the deadline and "the System holds
-        #   whichever state it was already in". Collapsing the two would release a hold on a
-        #   cycle that established nothing.
+        #   and the use-case's own precondition, so it is a real exit -- and always established
+        #   (ADR-0042).
+        # - STATE OF CHARGE UNAVAILABLE -- deliberately NOT an exit in the same sense: no
+        #   required current can be computed, so this half establishes only what this code
+        #   covers TODAY of ADR-0053's (narrowing ADR-0042) no-reading table: the clock against
+        #   the held occurrence, and the backstop (row 3, a pending occurrence's own date
+        #   resolving to "no deadline", is F2's -- see the `outcome_established` comment
+        #   below). Anything else is held exactly as it was -- "the System holds whichever
+        #   state it was already in" -- and NOT established.
         #
         # This is reachable with a live hold: the ev_soc fault gate upstream is itself gated on
         # `is_soc_gated`, which is False for `Off` and `Power` (below), so those modes arrive
@@ -741,20 +775,37 @@ def resolve_deadline_urgency(
         # R5's backstop still applies: it needs only the clock and the following occurrence
         # (T7), so the hold never outlives either bound whether the reading is available or
         # not (requirements.md R5).
-        held = inputs.pursued_occurrence if ctx.status in CHARGEABLE_STATES else None
-        if held is not None and missed_deadline_backstop_fired(
+        disconnected = ctx.status not in CHARGEABLE_STATES
+        held = inputs.pursued_occurrence if not disconnected else None
+        backstop_fired = held is not None and missed_deadline_backstop_fired(
             held, inputs.now_dt, following_occurrence=inputs.following_occurrence
-        ):
+        )
+        if backstop_fired:
             held = None
+        # ADR-0053's table, row 1: the clock alone -- no reading needed -- settles whether the
+        # held occurrence already lies in the past, so a hold can BEGIN (or continue) on a
+        # no-reading cycle exactly as it would with one, and `coordinator.py`'s level-signal
+        # fire site (reading `required.unreachable` alone) re-fires on every such cycle while
+        # it does.
+        unreachable = held is not None and held <= inputs.now_dt
+        # Established: a disconnect (a real exit, always established per ADR-0042), or --
+        # within ADR-0053's own no-reading table -- the occurrence having elapsed (row 1) or
+        # the backstop just releasing the hold (row 2). Row 3 (a pending occurrence's own date
+        # resolving to "no deadline") is F2's (#1482) to add once it reads
+        # `departure_on_pursued_date` here. Anything else (nothing was ever pursued, or it is
+        # pursued but not yet elapsed) settles nothing, so the edge detector holds its prior
+        # flag instead of taking this cycle's (always-False) `unreachable` at face value.
+        outcome_established = disconnected or backstop_fired or unreachable
         return DeadlineUrgencyResult(
             required=RequiredCurrentResult(
                 required_a=None,
                 urgent=held is not None,
-                unreachable=False,
+                unreachable=unreachable,
                 pursued_occurrence=held,
             ),
             urgent=held is not None,
             resolved_mode=None,
+            outcome_established=outcome_established,
         )
 
     baseline_mode = inputs.active_mode
