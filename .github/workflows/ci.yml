@@ -138,7 +138,8 @@ jobs:
     # like `authoring`, and binds the human's merge alone: the merge guard counts every check.
     #
     # The job also carries the two PR-time halves of the upstream-drift check: its fixtures,
-    # and `--validate` over the real dependency manifest. Both belong beside the method check
+    # and `--validate` over the real dependency manifest; and the `Source:` line check's
+    # fixtures. Both belong beside the method check
     # rather than in the weekly job -- each is an agreement between files a PR edits, and the
     # weekly job is where a break would go unnoticed.
     if: github.event_name != 'workflow_dispatch'
@@ -170,6 +171,11 @@ jobs:
       # row's verdict with it, so a malformed row must not be able to ship green.
       - name: Dependency manifest is readable and every pin has a known scheme
         run: bash .github/check-upstream-drift.sh --validate
+      # The `Source:` line check runs on issue events (source-lines.yml), where a PR that broke
+      # it would surface only on the next issue edit; its fixtures are offline, so they run
+      # here, on the PR that changes it.
+      - name: Source-line check self-test
+        run: bash .github/test-check-source-lines.sh
 
   test:
     needs: changes

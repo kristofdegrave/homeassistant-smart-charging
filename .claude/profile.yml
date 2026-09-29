@@ -215,6 +215,20 @@ autopilot:
   loop_settings: null
   loop_marker: null
 
+# The targets a `Source:` line in an issue body may name. `trees` are the path prefixes a line
+# may point into -- .github/check-source-lines.py refuses any other. `whole_file` are the
+# classes of document argued as a whole, where a bare path is the default answer rather than a
+# section anchor. Why these trees and these classes is docs/reference/profile.md's **Source
+# lines**; the convention itself is the document `CLAUDE.md`'s **Source lines** topic routes to.
+source_lines:
+  trees:
+    - docs/analysis/
+    - docs/design/
+    - docs/adl/
+  whole_file:
+    - docs/analysis/use-cases/
+    - docs/adl/
+
 # A cap in words per class of process file; the first glob a path matches is its class. The
 # rule these feed, and what `added_only` means, is the header of .github/check-word-budget.py.
 word_budgets:

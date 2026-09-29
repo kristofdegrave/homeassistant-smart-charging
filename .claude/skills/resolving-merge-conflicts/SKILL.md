@@ -58,9 +58,7 @@ in this order of usefulness:
    topic.
 2. **The anchored `Source:` lines**, where the issue that commit's PR closes carries them —
    only a child of a decomposition does. They name the documents that task was cut from, which
-   state what it was allowed to change. Their required format, and which issues must carry
-   them, belong to `CLAUDE.md`'s **Issue conventions** and are not stated there yet — read the
-   lines as the issue gives them.
+   state what it was allowed to change; their form is `CLAUDE.md`'s **Source lines**.
 3. **The PR body's `Closes #<n>` / `Part of #<n>`** — follow both; `Part of` leads to the epic,
    whose body, where it carries a spec, is the one both sides were cut from, and whose other
    children are often the other side of the conflict.

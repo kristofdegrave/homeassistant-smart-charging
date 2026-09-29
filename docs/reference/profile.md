@@ -10,7 +10,8 @@ why. `.claude/profile.yml` is the other half: every value a script or a command 
 ceiling, dependency pins. Nothing here repeats a value the YAML holds; a section names the key
 instead. Between them the two files own these facts: the repository and tracker, the board and
 its ids, the label set, the enabled work types, the review cap and its ceiling, the dependency
-pins, the research sources, git identity, merge strategy and flow deviations. A method document that spells one of *those* facts is the defect — it states the rule and routes
+pins, the research sources, the trees a `Source:` line may name, git identity, merge strategy and
+flow deviations. A method document that spells one of *those* facts is the defect — it states the rule and routes
 here. Stack-specific content (Home Assistant, Python) is a different axis and is not this
 file's: it lives in the stack skills and in the per-stack overlays of the work-type files
 (`docs/reference/work-types/<label>/overlays/<stack>.md`). What the profile holds about a stack
@@ -89,6 +90,21 @@ the context vocabulary is baked into are [ci-pipeline.md](method/ci-pipeline.md)
 vocabulary sync**. The enabled context labels are also the enabled work types
 (`work_types.enabled`) — one directory each under `docs/reference/work-types/` and one row each
 in `CLAUDE.md`'s **Model selection** table.
+
+## Source lines
+
+What a `Source:` line may name, and how finely, is the method's rule
+(`CLAUDE.md`'s **Source lines**); the two lists it leaves to the project are `profile.yml`'s
+`source_lines`, which `.github/check-source-lines.py` reads.
+
+- **`trees`** — the analysis, design and decision-record trees: the documents a spec is
+  derived from, and so the only ones a task can be cut from. The method tree is left out
+  because a decomposition never cuts a task from it; post-mortems because they are dated
+  snapshots, never a source of truth; code and tests because they are what a task changes.
+- **`whole_file`** — use-cases and ADRs. Both are argued as wholes: a use-case's exception and
+  alternate flows qualify its main flow, and an ADR's decision is only as narrow as its options
+  and consequences say. A partial read drops exactly the part that makes the behaviour
+  correct, so a bare path is the default for both.
 
 ## Research sources
 

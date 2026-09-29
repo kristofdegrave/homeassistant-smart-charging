@@ -23,8 +23,12 @@ a piece that fits neither sends, are the stack overlay's.
 
 ## Writing the tests
 
-**The implement step (do the work)**: identify the unit and its layer — the stack overlay names
-the layers — pick the harness above, then:
+**The implement step (do the work)**: first the criteria the tests verify. Where the issue
+carries `Source:` lines (`CLAUDE.md`'s **Source lines**), read what they name and stop: they
+replace the hunt for the requirement, use-case or ADR. Where that does not answer what the tests
+must pin, find the rest and state in the PR that you had to and what you read. Where the issue
+carries none, find the criteria yourself. Then identify the unit and its layer — the stack
+overlay names the layers — pick the harness above, and:
 
 - **Name and structure each test as a behaviour spec.** The bar's item 3, *Traceability and
   structure*, defines both and judges them. What that means while writing:

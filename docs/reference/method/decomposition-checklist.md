@@ -105,16 +105,15 @@ Two cases are not restatements: text that says something **different** from its 
 that document — never a recommendation to cut the text here, which holds the only copy.
 
 **(9) The sources are granular enough to work from, and no more.** What is scored here is each
-task entry's **Sources** key — the pass runs before a new task's issue is filed, so the anchored
-`Source:` lines cut from it do not exist yet. Read them as the worker will: do they reach what
-the task needs without handing it the whole tree?
-A line naming a document where the task turns on one section of it is **Minor** — the worker
-re-derives the reading the decomposer already did. A line anchored so tightly that the section
-around it is needed to make sense of it is **Minor** for the mirror reason. A task whose lines
-do not reach a document it plainly requires is **Major**. Granularity is all this item scores,
-against the smallest-self-contained-unit rule the closing step states with the **Sources** key.
-The eventual `Source:` line's format is fixed by ADR-0044 and is not yet written into a method
-document — until it is, that record is its only statement, so do not score format here.
+task entry's **Sources** key — the pass runs before a task's issue is filed, so its `Source:`
+lines do not exist yet, and their form is the check's, not this item's. Read the key as the
+worker will: does it reach what the task needs without handing it the whole tree? The rule is
+`CLAUDE.md`'s **Source lines**, whole-file classes included.
+A document named where the task turns on one section of it is **Minor** — the worker
+re-derives the reading the decomposer already did. An anchor so tight that the section around
+it is needed to make sense of it, or one into a whole-file class with no reason given, is
+**Minor** for the mirror reason. A task whose sources do not reach a document it plainly
+requires is **Major**.
 
 **(10) Every task carries a usable Verify-live list.** An absent list on a task that changes
 observable runtime behaviour is **Major** — the pass is then run from memory, which is what it

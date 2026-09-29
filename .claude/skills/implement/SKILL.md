@@ -36,15 +36,12 @@ row without a work file, by `CLAUDE.md`'s **Model selection** section.
 2. Take the task from the issue itself: its body is the task text, and where the issue is a
    child of an epic with a spec, that epic's body is what it was cut from — which epics carry
    one is the opening pass of the flow `CLAUDE.md`'s **Idea-to-product flow** topic routes to,
-   and which artifact it is, its closing step. Where the issue carries anchored `Source:` lines,
-   resolve them before dispatching and read what they name; where it carries none, the work
-   file's own instruction to go and find the sources stands. The line's format, which issues
-   must carry it, and what such a line does and does not stand in for belong to `CLAUDE.md`'s
-   **Issue conventions** and are not stated there yet — so take the lines as the issue gives
-   them rather than judging their form. Where the lines do not answer what the task
-   requires, go and find the rest, and state in the PR description — or where the work file
-   reports for a row that opens none — that you had to and what you read, so the gap is
-   visible rather than absorbed.
+   and which artifact it is, its closing step. Where the issue carries `Source:` lines, run
+   the check `CLAUDE.md`'s **Source lines** names against the fetched base
+   (`--issue <n> --ref origin/main`) before dispatching: a line that does not resolve goes to
+   the human partner through `clarify`, never guessed past, and a failed lookup is no verdict.
+   What the lines stand in for, and the escape when they fall short, are that topic's and the
+   work file's.
 3. Worktree, branch and board **Status** per the implement step. The worktree is cut from the
    fetched `origin/main`, never a stale local `main`:
    `git fetch origin && git worktree add -b <branch> <path> origin/main`. When deliberately

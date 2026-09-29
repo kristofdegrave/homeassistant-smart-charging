@@ -57,7 +57,9 @@ this decision governs *today*:
 
 A hit is one matching line, as `rg -n` prints it. It is complete when every hit is a
 non-conforming row, counted as conforming, or in an out-of-scope group — not when the codebase
-has been audited. A search that genuinely returns no hits means the decision governs
+has been audited. An issue's `Source:` lines are never the search and never a hit of it
+(`CLAUDE.md`'s **Source lines**): they name what a task was cut from, not the sites a decision
+governs. A search that genuinely returns no hits means the decision governs
 no existing site; say so, and give the search. A process decision is not automatically that
 case: it usually governs a tree of its own. The shape, with invented sites:
 
