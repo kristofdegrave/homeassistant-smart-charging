@@ -42,13 +42,10 @@ merge rule allows. An ADR or
 
 - **The permission mode** the harness reports to the session is `dontAsk`; any other, or none
   reported → stop and report, posting nothing.
-- **ADR-0054's harness**, from its other Consequences, is in force: the committed allow-list
-  with its label-gesture rules; the loop-only settings file, the `env` marker it sets present
-  in the tick's shell; `permissionMode: dontAsk` in the `autopilot-writer` and `reviewer`
-  definitions; the guard's loop refusal of harness commits and pushes; the author test's one
-  home, `fix` pointing there; the `decompose` park's fixed title; a tick's dispatch counting as
-  "only this step", and no self-grant unattended (`CLAUDE.md`'s **Contribution workflow**,
-  `review`). Any missing → stop and report which.
+- **ADR-0054's harness** is in force: every site its Blast radius table names reads as that
+  row's *Follow-up* says; the allow-list carries its label-gesture rules; the
+  `autopilot-writer` definition has `permissionMode: dontAsk`; the `env` marker the loop-only
+  settings file sets is present in the tick's shell. Any missing → stop and report which.
 - **`autopilot.tracking_issue`** (`CLAUDE.md`'s **Project profile**) holds an issue number →
   else stop and report.
 
@@ -71,18 +68,19 @@ read per `clarify`'s *Reading a park*.
 
 - **`needs-decision` on an issue.** Settled → a candidate at step 4; the tick removes
   `needs-decision` when it dispatches. Not settled → still parked. Removed with no settling
-  answer → neither dispatched nor parked again, logged as a missing rule.
+  answer → neither dispatched nor parked again, logged as a missing rule. Bar the `decompose`
+  work file's arm-6 question: only a removal by a login not ending in `[bot]`, never the
+  tick's, settles it.
 - **An epic's parks** are told apart by title: a **verify-live park** opens
   `verify live: #<epic>` and is the tick's; the `decompose` park opens its work file's fixed
   title. A `needs-approval` removal by a login not ending in `[bot]` is the go of whichever
-  titled park was the epic's newest when the label came off. A `decompose` issue is no
-  candidate while its epic's newest `decompose` park, its children part not `none`, has no
-  newer counting comment and no go.
-- **Verify live** (`CLAUDE.md`'s **Idea-to-product flow**). An epic with a titled `decompose`
-  park, a closed `T<n>:` child and no verify-live park → apply `needs-approval`, then post
-  one linking the closed children's epic-body entries as the verify-live list; its label off
-  with no go → re-apply it. An epic with no titled `decompose` park predates the title: never
-  parked.
+  titled park was the epic's newest when the label came off. A `decompose` issue is a
+  candidate only when its work file's entry rule, read now, reaches no *still parked* stop.
+- **Verify live** (`CLAUDE.md`'s **Idea-to-product flow**). An epic **predates the title**
+  with no titled `decompose` park, or a `T<n>:` child closed as completed before its first:
+  never parked. Any other with `needs-approval` off, a `T<n>:` child closed as completed and
+  no verify-live park → apply `needs-approval`, then post one linking those children's
+  epic-body entries as the verify-live list. Its label off with no go → re-apply it.
 
 Done when every parked item is logged with the rule that decided it.
 
@@ -90,8 +88,8 @@ Done when every parked item is logged with the rule that decided it.
 
 Each of the state's pending merges; any other PR is the human's:
 
-- **Conflicting with `main`** → with no exit label, a review pass, whose merge of `main` reaches
-  `resolving-merge-conflicts`; with one, logged "conflict, the human's".
+- **Conflicting with `main`** → with no exit label, a review pass; with one, logged
+  "conflict, the human's".
 - **Human items** (the round-count rule under `CLAUDE.md`'s **Contribution workflow**) newer
   than its last exit label and last round → `/fix #<pr>`.
 - **Merged** → logged as cleanup owed, never dispatched; its merge commit's checks on `main`:
@@ -104,10 +102,10 @@ logged with its outcome.
 ### 4. Then one pick
 
 - **Candidates** — open issues passing the author test, not labelled `epic`, not parked bar a
-  settled one (step 2), with no open blocked-by edge, no open PR, a context label
-  whose row under `CLAUDE.md`'s **Model selection** names a work file, and no epic parent
-  with a titled `decompose` park and no verify-live go while a `T<n>:` child of it is closed
-  or has an open PR.
+  settled one (step 2), not a `T<n>:` child its epic-body entry marks dropped, with no open
+  blocked-by edge, no open PR, a context label whose row under `CLAUDE.md`'s **Model
+  selection** names a work file, and no epic parent not predating the title (step 2) with no
+  verify-live go while a `T<n>:` child of it is closed as completed or has an open PR.
 - **Order** — the milestone rule under `CLAUDE.md`'s **Issue conventions**, with its picker
   rule. A tie it sends to the human is reported in `clarify`'s no-issue form unless the state
   records it, and nothing is picked this tick.
