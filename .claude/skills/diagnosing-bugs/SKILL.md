@@ -1,12 +1,15 @@
 ---
 name: diagnosing-bugs
-description: Use when a defect is reported against the shipped Smart Charging integration — a claim that the running system misbehaves — and that claim has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
+description: Use when a claim is routed to this project's shipped-behaviour track — a defect (the running system misbehaves) or an enhancement (its current behaviour should change) — and has to be confirmed or refuted with a reproduction before anything is specified, ticketed or fixed. Not for a test that fails while implementing a planned task (the `development` work type owns that), and not for the fix itself. Interactive only — it leans on a human partner who has the running installation, so never self-invoke it in a non-interactive context.
 ---
 
 # Diagnosing bugs
 
-Confirm or refute a reported defect and leave behind a minimal reproduction. **It stops there.**
-No fix, no regression test, no verification — the `development` flow owns those.
+Confirm or refute a claim about shipped behaviour — a reported defect or an enhancement — and
+leave behind a minimal reproduction. For an enhancement the reproduction asserts the behaviour
+the claim asks for, so it goes red on current behaviour and green once changed, and "the cause"
+is the current behaviour's source, which Steps 3–4 locate. **It stops there.** No fix, no
+regression test, no verification — the `development` flow owns those.
 
 Its one job is the step nothing else here performs: judging the system against something other
 than this repo's own documents. The reporter's *observation* is the oracle, so the loop you build
@@ -18,8 +21,8 @@ version is not enough to diagnose, say so and ask.
 
 ## Step 1 — build a loop that goes red
 
-**This is the skill.** With a pass/fail signal that goes red on *this* defect the cause falls
-out; without one, reading code only produces a theory. Spend disproportionate effort here.
+**This is the skill.** Without a pass/fail signal that goes red on *this* defect, reading code
+only produces a theory. Spend disproportionate effort here.
 
 ### Pick a seam, in roughly this order
 
@@ -84,7 +87,7 @@ document, the requirement, or a worked example. Capture the exact symptom (the w
 missing unit, the event firing every cycle) so the eventual fix can be checked against it.
 
 If the loop stays green the claim is **refuted**: say so plainly with the command and its output,
-and stop. That is a finished result, not a failure.
+record it and report (both Step 5), and stop. That is a finished result, not a failure.
 
 **Minimise.** Cut inputs, config, callers and steps one at a time, re-running after each cut, until
 every remaining element is load-bearing — removing any one turns it green.
@@ -111,18 +114,23 @@ temporary log with a unique prefix — `[DEBUG-a4f2]` — so cleanup is one grep
 
 ## Step 5 — hand off
 
-A confirmed claim is placed on a milestone chosen with the human partner — on the claim's
-issue, filed first if the report arrived without one. When it is placed is the **Route**
-stage under `CLAUDE.md`'s **Idea-to-product flow**, the milestone rule is **Issue
-conventions**', and the command **Tracker mechanics**'.
+**Record either verdict on the claim's issue** — filed first, in either outcome, if the report
+arrived without one — redacted as above, as a comment whose first line is exactly
+`diagnosing-bugs: confirmed` or `diagnosing-bugs: refuted`, then `fix`'s note marker per the
+marker rule under `CLAUDE.md`'s **Contribution workflow**, posted per its **Tracker mechanics**
+topic and read back. It carries the one command and its output and, when
+confirmed, the minimal reproduction with its captured symptom. The rest of the flow reads the
+newest such comment.
 
-The fix is then ordinary work: file it as a `development` issue and run it through this project's
-contribution workflow (`CLAUDE.md`'s **Contribution workflow** topic), with the work file named
-in that issue's row of `CLAUDE.md`'s **Model selection** table.
+A confirmed claim's issue is placed on a milestone chosen with the human partner. When it is
+placed is the **Route** stage under `CLAUDE.md`'s **Idea-to-product flow**, the milestone rule
+is **Issue conventions**', and the command **Tracker mechanics**'. How the fix is then filed
+and run is that **Route** stage's too.
 
 Stop here and report:
 
-1. **Confirmed or refuted**, with the one command and its output.
+1. **Confirmed or refuted**, with the one command and its output, and the recording comment's
+   link — or that posting it failed.
 2. **The minimal reproduction** and the captured symptom.
 3. **The cause** — which hypothesis survived, which were eliminated.
 4. **Where else this shape lives** — the same wrong assumption at sibling call sites, roles or

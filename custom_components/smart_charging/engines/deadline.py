@@ -167,8 +167,11 @@ def follow_pursued_occurrence(
     elapsed, it is not `resolve_next_occurrence`'s result that `resolve_required_current`
     should judge against -- it is R14's own table, re-resolved for THAT occurrence's calendar
     date on this cycle. This function is that re-resolution, called every cycle whether or not
-    anything is pursued; its caller feeds both outputs straight into
-    `resolve_required_current`'s `deadline_at`/`pursued_occurrence` parameters.
+    anything is pursued, from two call sites: `coordinator_cycle.py`'s resolvable branch feeds
+    both outputs straight into `resolve_required_current`'s `deadline_at`/`pursued_occurrence`
+    parameters; its non-resolvable early return (F2, #1482) calls it with `next_occurrence=None`
+    and reads only the second output, since that half never re-anchors to a next occurrence and
+    computes no required current at all.
 
     Returns `(deadline_at, pursued_occurrence)`:
 
@@ -375,9 +378,13 @@ def resolve_required_current(
             # urgent but UNREACHABLE -- `required_a` above the escalated rate outright, the
             # no-margin comparison at the foot of this function, which is a strict subset of
             # the slack test -- `unreachable` never falls, so the coordinator's
-            # `_unreachable_edge`, which keys on that flag alone (ADR-0024), never fires
-            # `DeadlineUnreachableCleared` and the next occasion goes unnotified. The new
-            # occurrence is judged from the next cycle instead.
+            # `_unreachable_edge` never fires `DeadlineUnreachableCleared` and the next occasion
+            # goes unnotified. True of ADR-0024 alone, and still true now that ADR-0042
+            # (narrowed by ADR-0053) also feeds the edge an `outcome_established` input: this
+            # branch is only reached on a with-reading cycle (`deadline_resolvable` was True to
+            # get here at all), so that input is `True` here regardless -- the flag itself is
+            # still what decides whether a clear fires. The new occurrence is judged from the
+            # next cycle instead.
             return RequiredCurrentResult(
                 required_a=None,
                 urgent=False,

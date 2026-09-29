@@ -598,9 +598,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         date's departure time (resolution-rules.md).
 
         Not gated on `deadline_resolvable`: it runs, and is threaded through, on a no-reading
-        cycle too -- unused there today (the non-resolvable early return in
-        `resolve_deadline_urgency` does not read it), but needed once F2 (#1482) does. Same
-        shape as `_resolve_following_occurrence` above.
+        cycle too -- read there by the non-resolvable early return in `resolve_deadline_urgency`
+        (F2, #1482), which follows a pending pursued occurrence onto its own date's freshly
+        resolved time on a no-reading cycle exactly as the resolvable branch does. Same shape
+        as `_resolve_following_occurrence` above.
 
         None whenever there is no pursued occurrence to follow -- nothing to resolve."""
         if self._pursued_occurrence is None:
@@ -876,11 +877,17 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Exposed for the effective-peak-limit `urgent` parameter and Auto
         # mode-selection's escalation, and for tests, the same way `_step_up_gate.state` already is.
         self._required_current = required
-        # ADR-0024: reading `required.unreachable` itself (never any one upstream guard) is
-        # what makes every exit path -- required current falling back in range, a disconnect,
-        # the deadline capability withdrawn -- clear for free, since each already funnels
-        # through this same flag.
-        _, cleared = self._unreachable_edge.resolve(required.unreachable)
+        # ADR-0024: reading `required.unreachable` itself (never any one upstream guard) was
+        # meant to make every exit path -- required current falling back in range, a
+        # disconnect, the deadline capability withdrawn -- clear for free, since each already
+        # funnels through this same flag. ADR-0042 (narrowed by ADR-0053) qualifies that: a
+        # cycle that established nothing about the deadline -- the non-resolvable early
+        # return's state-of-charge-unavailable half, on the cycles ADR-0053's own table does
+        # NOT mark established -- must not decide a clear either, so that fact travels
+        # alongside the flag from `resolve_deadline_urgency` straight to this fire site.
+        _, cleared = self._unreachable_edge.resolve(
+            required.unreachable, outcome_established=deadline_urgency.outcome_established
+        )
         if cleared:
             self.hass.bus.async_fire(EVENT_DEADLINE_UNREACHABLE_CLEARED)
         if required.unreachable:
