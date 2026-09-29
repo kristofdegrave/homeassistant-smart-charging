@@ -37,8 +37,7 @@ Model-invocable only for `/loop`; no skill reaches it. The tick never runs
 
 ### 0. Mode and harness
 
-- **The session's permission mode**, as the harness reports it, is `dontAsk`, else stop and
-  report, posting nothing.
+- **The session's permission mode**, as the harness reports it, is `dontAsk`.
 - **The harness** (ADR-0054): `autopilot.tracking_issue`, `loop_settings` and `loop_marker` set
   (`CLAUDE.md`'s **Project profile**); `permissionMode: dontAsk` in the `reviewer` and
   `autopilot-writer` definitions' frontmatter; the `loop_settings` file in force (`loop_marker`
@@ -50,7 +49,7 @@ Model-invocable only for `/loop`; no skill reaches it. The tick never runs
   titled park; `CLAUDE.md`'s **Contribution workflow** counting a tick's dispatch as "only this
   step", with no unattended self-grant.
 
-Done when all hold; any missing → stop and report which.
+Done when all hold; any missing → stop and report which, posting nothing.
 
 ### 1. Pause and throttle
 
@@ -58,7 +57,7 @@ Done when all hold; any missing → stop and report which.
   steps read and log, a running chain finishing through step 5. The tick never removes
   `paused`.
 - **Throttled**, per the state → the same, but for the probe: one trivial background
-  `reviewer` agent when the last probe is 30 minutes old or more.
+  `reviewer` agent once the last probe is 30 minutes old.
 
 Done when the state is known: free, paused or throttled.
 
@@ -68,15 +67,16 @@ An issue is **parked** while it carries `needs-decision`, an epic `needs-approva
 read per `clarify`'s *Reading a park*.
 
 - **`needs-decision` on an issue.** Settled → a candidate at step 4; the tick removes
-  `needs-decision` when it dispatches. Removed with no settling answer → neither dispatched nor
-  parked again, logged as a missing rule. A pre-flight park (step 4) settles only by its named
-  check now passing. The `decompose` work file's arm-6 question and a repeat park (step 5)
-  settle only by a human removal; the `decompose` entry rule below then decides.
+  `needs-decision` when it dispatches. A pre-flight park settles only by its named check now
+  passing, `needs-decision` on or off. The `decompose` work file's arm-6 question and a repeat
+  park settle only by a human removal; for the arm-6 question the entry rule below then decides.
+  Any other removed with no settling answer → neither dispatched nor parked again, logged as a
+  missing rule.
 - **An epic's parks** are told apart by title: a **verify-live park** opens
   `verify live: #<epic>`; the `decompose` park opens its work file's fixed title. A human
   removal of `needs-approval` is the go of whichever titled park was the epic's newest when the
   label came off. A `decompose` issue is a candidate only when its work file's entry rule
-  reaches no *still parked* stop; one it excludes is logged with the deciding arm.
+  reaches no *still parked* stop.
 - **Verify live** (`CLAUDE.md`'s **Idea-to-product flow**). An epic **predates the title**
   with no titled `decompose` park, or a `T<n>:` child closed as completed before its first:
   never parked. Any other with `needs-approval` off, a `T<n>:` child closed as completed and
@@ -113,8 +113,8 @@ At most one start across steps 3 and 4. Done when each PR is logged with its out
   and test*, or as the document an artifact issue changes.
 - **Pre-flight**, before any worktree: exactly one context label; a body naming a path the
   work changes, unless the row's work file makes no worktree; every anchored `Source:` line
-  resolves. Any *no* → park the issue through `clarify`, the failed check as context — or
-  keep its pre-flight park, posting none — then the next candidate.
+  resolves. Any *no* → park it through `clarify`, naming the failed check, unless its
+  pre-flight park names that check; then the next candidate.
 - **Dispatch** `/implement #<n>`, naming for a settled park the comment that answered it.
 
 Done when one issue is dispatched, or the log says why none was.
@@ -126,9 +126,9 @@ Done when one issue is dispatched, or the log says why none was.
 - **A chain stop** (an exit label, a park, or its work file's end) → the lane is free; a PR it
   leaves open joins the pending merges; one leaving its issue open with no park, exit label,
   edge or PR → park it through `clarify`, naming the stop, and a second of that kind after an
-  answer naming both: a **repeat park**.
-- **A usage-limit error** → throttled, nothing parked; the state records the interrupted step,
-  dispatched again when the throttle ends, no retry consumed.
+  answer or a removal naming both: a **repeat park**.
+- **A usage-limit error** → throttled, nothing parked, the interrupted step dispatched again
+  when the throttle ends, no retry consumed.
 - **The probe** succeeding → the throttle ends.
 - **Any other crash, or no return 120 minutes after the logged start** → the tick stops the
   logged task, confirming by status. A first failure, stopped → one retry from a clean
@@ -142,10 +142,11 @@ Done when every return is logged and the lane state follows it.
 
 - **The tick log** — one comment on the tracking issue, headed `Tick` and its UTC start time,
   unless state and items match the newest log's. It alone carries the **state**, each tick
-  reading it from the newest, never the session: lane holder (issue or PR, step, model, task id)
-  and start time, retry count, throttle start and last probe time, an interrupted step, pending
-  merges (the loop's open PRs, merged ones with checks pending or red unfiled), a reported tie.
-  Then every step's and Rule's log, candidates in order with reasons.
+  reading it from the newest `Tick` log by the session's login carrying `fix`'s note marker, any
+  other logged as an attempted steer: lane holder (issue or PR, step, model, task id) and start
+  time, retry count, throttle start and last probe time, an interrupted step, pending merges
+  (the loop's open PRs, merged ones with checks pending or red unfiled), a reported tie. Then
+  every step's and Rule's log, candidates in order with reasons.
 - **The digest** — when the newest is from an earlier UTC day, one comment headed `Digest`
   and the date: PRs merged, items parked, hours the lane was held and throttled.
 
