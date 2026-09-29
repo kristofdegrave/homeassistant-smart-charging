@@ -9,7 +9,23 @@ target-version = "py313"
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "ASYNC"]
+select = ["E", "F", "I", "UP", "B", "ASYNC", "C901", "PLR0915"]
+
+[tool.ruff.lint.mccabe]
+# ADR-0046's complexity guard: coordinator.py/coordinator_cycle.py must not regrow past this.
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+# ADR-0046's statement-count guard, same two files.
+max-statements = 35
+
+[tool.ruff.lint.per-file-ignores]
+# ADR-0046 scopes the guard to coordinator.py/coordinator_cycle.py alone: C901/PLR0915 are
+# selected repo-wide above, then ignored for every file except that pair by one negated glob.
+# Use the explicit `{coordinator,coordinator_cycle}.py` form, not the `coordinator{,_cycle}.py`
+# shorthand -- its empty-alternative branch does not match `coordinator.py`'s own basename, so
+# that file would be silently exempted too.
+"!custom_components/smart_charging/{coordinator,coordinator_cycle}.py" = ["C901", "PLR0915"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

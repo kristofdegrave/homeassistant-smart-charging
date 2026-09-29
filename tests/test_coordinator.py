@@ -639,6 +639,24 @@ async def test_adr0007_write_adapter_fault_during_run_cycle_early_fault_return_d
     assert adapters[ROLE_CHARGER_CURRENT].written == [0.0, 0.0]
 
 
+def _coord_with_deferred_household_window(hass):
+    """Shared Arrange for the deferral-clearing and samples-unchanged ev_soc-fault tests below:
+    a SOC-gated active mode with a pending window deferral, ready for `_async_update_data`.
+    smoothing_window=4 (not this suite's usual 1): the freeze the seeded deferred_previous=True
+    stands for can only ever happen at size > 1 (`smooth_household_baseline`'s own guard), so
+    window=1 could never have produced it."""
+    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
+    config = dataclasses.replace(_config(), smoothing_window=4)
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
+    coord.soc_limit_override = 80.0
+    _seed_ample_peak_headroom(coord)
+    coord._household_window = HouseholdWindow(samples=(100.0,), deferred_previous=True)
+    return coord
+
+
 async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_pending_window_deferral(  # noqa: E501
     hass,
 ):
@@ -649,18 +667,8 @@ async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_
     baseline debounce call, which sits before this gate and so isn't affected by it), so a stale
     `deferred_previous=True` left over from an earlier cycle would wrongly freeze the household
     window on the very next (recovery) cycle instead of folding its genuine reading in."""
-    # Arrange -- smoothing_window=4 (not this suite's usual 1): the freeze this test's seeded
-    # deferred_previous=True stands for can only ever happen at size > 1
-    # (`smooth_household_baseline`'s own guard), so window=1 could never have produced it.
-    adapters = _adapters(status=STATE_CHARGING, ev_soc=None)
-    config = dataclasses.replace(_config(), smoothing_window=4)
-    coord = SmartChargingCoordinator(
-        hass, adapters=adapters, config=config, interval_s=30, store=_FakeStore({})
-    )
-    coord.active_mode = MODE_SOLAR  # SOC-gated mode, so the ev_soc-missing branch faults
-    coord.soc_limit_override = 80.0
-    _seed_ample_peak_headroom(coord)
-    coord._household_window = HouseholdWindow(samples=(100.0,), deferred_previous=True)
+    # Arrange
+    coord = _coord_with_deferred_household_window(hass)
 
     # Act
     result = await coord._async_update_data()
@@ -668,6 +676,24 @@ async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_
     # Assert
     assert result.fault is True
     assert coord._household_window.deferred_previous is False
+
+
+async def test_should_leave_household_window_samples_unchanged_when_ev_soc_faults(hass):
+    """ADR-0046's ev_soc fault exit sits UPSTREAM of `_smooth_household_baseline` (the step
+    that would otherwise fold this cycle's own reading in), so a fault cycle must leave the
+    window's samples exactly as it found them -- nothing this cycle read is admitted. Same
+    Arrange as the deferral-clearing test above, which is named for and asserts only
+    deferral-clearing; if `_smooth_household_baseline` ever moved above the fault exit this is
+    the test that would go red, not that one."""
+    # Arrange
+    coord = _coord_with_deferred_household_window(hass)
+
+    # Act
+    result = await coord._async_update_data()
+
+    # Assert
+    assert result.fault is True
+    assert coord._household_window.samples == (100.0,)
 
 
 async def test_should_not_clear_baseline_deferral_when_ev_soc_faults_after_a_command_step(hass):
@@ -3089,13 +3115,14 @@ async def test_should_resolve_todays_own_default_when_only_tomorrow_is_in_home_d
         now=0.0,
         baseline_w=0.0,
         smoothed_baseline_w=0.0,
+        now_dt=now_dt,
     )
 
     # Act
-    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+    await coord._resolve_deadline_and_reserve(ctx)
 
     # Assert
-    assert resolve_deadline_for(now_dt.date()) == time_of_day(6, 0)
+    assert ctx.resolve_deadline_for(now_dt.date()) == time_of_day(6, 0)
 
 
 async def test_should_resolve_the_override_when_tomorrow_is_in_home_day_dates(hass, freezer):
@@ -3120,14 +3147,15 @@ async def test_should_resolve_the_override_when_tomorrow_is_in_home_day_dates(ha
         now=0.0,
         baseline_w=0.0,
         smoothed_baseline_w=0.0,
+        now_dt=now_dt,
     )
 
     # Act
-    _, resolve_deadline_for = await coord._resolve_deadline_and_reserve(ctx, now_dt)
+    await coord._resolve_deadline_and_reserve(ctx)
 
     # Assert
     tomorrow_date = now_dt.date() + timedelta(days=1)
-    assert resolve_deadline_for(tomorrow_date) == time_of_day(8, 0)
+    assert ctx.resolve_deadline_for(tomorrow_date) == time_of_day(8, 0)
 
 
 async def test_tomorrow_deadline_resolved_disables_solar_reserve(hass, freezer):
@@ -4627,9 +4655,9 @@ async def test_should_hold_the_pursued_occurrence_across_an_ev_soc_fault_cycle(h
 def _escalated_rate(coord, *, smoothed_baseline_w, voltage=230.0):
     """Call the helper directly with a hand-built context.
 
-    The helper is a pure function of `ctx` + `peak_operand_kw`, so driving it directly is what
-    lets a test say "the C4 operand bound here" instead of inferring it from an urgency verdict
-    three layers away.
+    The helper is a pure function of `ctx` alone (ADR-0046: reads `ctx.peak_operand_kw`, one
+    carrier, not a second copy passed in), so driving it directly is what lets a test say "the
+    C4 operand bound here" instead of inferring it from an urgency verdict three layers away.
 
     Issue #1189/T10: both of the helper's baseline-dependent bounds now fit to
     `ctx.smoothed_baseline_w` alone -- `net_w`/`charger_w`/`baseline_w` (the raw operands the
@@ -4651,8 +4679,9 @@ def _escalated_rate(coord, *, smoothed_baseline_w, voltage=230.0):
         sun_is_down=True,
         low_tariff_active=False,
         solar_reserve_active=False,
+        peak_operand_kw=0.0,
     )
-    return coord._escalated_maximum_permitted_rate_a(ctx, peak_operand_kw=0.0)
+    return coord._escalated_maximum_permitted_rate_a(ctx)
 
 
 async def test_escalated_rate_is_bound_by_the_raised_peak_limit_when_headroom_is_tight(hass):
@@ -4996,8 +5025,8 @@ async def test_should_keep_the_escalated_rate_unchanged_when_a_charger_current_s
     captured: list[float] = []
     real_escalated = SmartChargingCoordinator._escalated_maximum_permitted_rate_a
 
-    def _spy(self, ctx, *, peak_operand_kw):
-        rate = real_escalated(self, ctx, peak_operand_kw=peak_operand_kw)
+    def _spy(self, ctx):
+        rate = real_escalated(self, ctx)
         captured.append(rate)
         return rate
 

@@ -54,13 +54,16 @@ class CycleContext:
     loose local variables ADR-0012 flagged. Filled progressively as steps resolve each value --
     not everything is known at construction time.
 
+    What belongs here as opposed to a plain `_run_cycle` local is ADR-0046's Decision, item 1
+    (docs/adl/0046-cycle-composition-rules-and-complexity-guard.md) -- authoritative there, not
+    restated here. A step that resolves such a field assigns it onto `ctx` itself and returns
+    nothing. Each field's own comment below says which step(s) read it, not why the rule
+    applies to it.
+
     issue #719: `net_w`/`charger_w`/`voltage`/`now` are each read by both of coordinator.py's
     two clamps (`_apply_peak_clamp`/`_apply_grid_ceiling_clamp`), off this same ctx rather than
     as a second, separately-passed copy for `_run_cycle` to keep in lockstep;
-    `effective_peak_limit_kw` is read by `_apply_peak_clamp` alone. `now_dt`/`monthly_peak_kw`/
-    `urgent` used to be fields here too, assigned every cycle but read by no production
-    consumer (only by this module's own tests) -- removed rather than left as dead state; a
-    future consumer that genuinely needs one adds it back for real, not speculatively."""
+    `effective_peak_limit_kw` is read by `_apply_peak_clamp` alone."""
 
     status: str
     net_w: float  # raw, not the smoothed reading (coordinator.py's separate, joint
@@ -80,27 +83,32 @@ class CycleContext:
     # tracked separately (issue #992), out of #990's own scope.
     baseline_w: float
     # Issue #1189/T10, R5's third smoothed-baseline criterion: the admitted mean in household
-    # sign (`net_w - charger_w`, `smoothed_household_w` -- `_run_cycle`'s own local receiving
-    # `smooth_household_baseline`'s return value, ADR-0051) -- both of the escalated maximum
-    # permitted rate's baseline-dependent bounds (`_escalated_maximum_permitted_rate_a`'s peak
-    # and C4 operands) fit to this, never to `baseline_w`/`net_w`/`charger_w` above, which stay
-    # the R3 clamp's and the peak-headroom readout's own raw, debounced `baseline_w`, or (C4)
-    # the raw, undebounced `net_w`/`charger_w`. A named field rather than `-ctx.surplus_w`: the
-    # two are the same value by design, and the name keeps the forecast's operand visible at
-    # the call site (D-3). Required, not defaulted, for
-    # the same #990 reason `baseline_w` above is required -- a forgotten construction site must
-    # fail loudly, not fall open onto a permissive placeholder that decides a forecast.
-    smoothed_baseline_w: float
+    # sign (`net_w - charger_w`, `smoothed_household_w` -- `_smooth_household_baseline`'s own
+    # local receiving `smooth_household_baseline`'s return value, ADR-0051) -- both of the
+    # escalated maximum permitted rate's baseline-dependent bounds
+    # (`_escalated_maximum_permitted_rate_a`'s peak and C4 operands) fit to this, never to
+    # `baseline_w`/`net_w`/`charger_w` above, which stay the R3 clamp's and the peak-headroom
+    # readout's own raw, debounced `baseline_w`, or (C4) the raw, undebounced
+    # `net_w`/`charger_w`. A named field rather than `-ctx.surplus_w`: the two are the same
+    # value by design, and the name keeps the forecast's operand visible at the call site
+    # (D-3). ADR-0046: `CycleContext` is now built before the smoothing step that resolves
+    # this field runs (`_build_cycle_context`, right after the required-role read), so it is
+    # `None` until `_smooth_household_baseline` writes the real value -- the same issue #564
+    # fail-loudly shape `effective_peak_limit_kw`/`active_soc_limit` below already use, rather
+    # than a permissive same-typed placeholder that could silently decide a forecast.
+    smoothed_baseline_w: float | None = None
     ev_soc: float | None = None
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
     # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)
     # issue #564: effective_peak_limit_kw/active_soc_limit are resolved only partway through
-    # _run_cycle (see the per-assignment comments in coordinator.py), yet used to default to a
-    # same-typed placeholder (0.0) indistinguishable from a genuine reading. `None` instead so a
-    # future premature *arithmetic/comparison* read (active_soc_limit is already read this way
-    # today, by _dispatch_mode strictly after it resolves each cycle; effective_peak_limit_kw by
-    # _apply_peak_clamp, issue #719) raises immediately instead of silently computing on a
-    # plausible-looking wrong value. The four bool fields below (sun_is_up/sun_is_down/
+    # _run_cycle (see `_resolve_effective_peak_limit`'s/`_resolve_active_soc_limit`'s own
+    # docstrings in coordinator.py, ADR-0046's body rule moved the per-assignment reasoning
+    # there), yet used to default to a same-typed placeholder (0.0) indistinguishable from a
+    # genuine reading. `None` instead so a future premature *arithmetic/comparison* read
+    # (active_soc_limit is already read this way today, by _dispatch_mode strictly after it
+    # resolves each cycle; effective_peak_limit_kw by _apply_peak_clamp, issue #719) raises
+    # immediately instead of silently computing on a plausible-looking wrong value. The four
+    # bool fields below (sun_is_up/sun_is_down/
     # low_tariff_active/solar_reserve_active) are deliberately NOT given this treatment: every
     # consumer reads them via plain truthiness (engines/soc_target.py,
     # resolve_effective_peak_limit), where `None` is indistinguishable from `False` -- it would buy
@@ -109,6 +117,17 @@ class CycleContext:
     # original, genuinely-correct starting values.
     effective_peak_limit_kw: float | None = None
     active_soc_limit: float | None = None
+    # `_resolve_monthly_peak`'s own merged peak-clamp operand (ADR-0030/ADR-0032). Read by
+    # `_fault_ev_soc`, `_resolve_deadline_urgency_step`'s escalated-rate hypothetical, and
+    # `_resolve_effective_peak_limit`.
+    peak_operand_kw: float | None = None
+    # `_resolve_monthly_peak`'s own tracked-peak return. Read by `_fault_ev_soc` and
+    # `_finish_successful_cycle` (never both in the same cycle).
+    monthly_peak_kw: float | None = None
+    # `_resolve_solar_surplus`'s own raw-baseline reading (entity-catalog.md's
+    # `sensor.smart_charging_solar_surplus_w` row). Read by `_fault_ev_soc` and
+    # `_finish_successful_cycle`, the same two-reader shape as `monthly_peak_kw` above.
+    solar_surplus_w: float | None = None
     sun_is_up: bool = False
     sun_is_down: bool = False
     low_tariff_active: bool = True
@@ -119,6 +138,38 @@ class CycleContext:
     # can read it without `CycleContext`/`ModeHandler` growing a has-charged-specific parameter
     # of their own. False default matters only before `_run_cycle` assigns the real value.
     has_charged: bool = False
+    # Whether Auto's own mode-selection dispatches this cycle at all (never WHICH mode is
+    # selected, ADR-0017's own scope), resolved by `_resolve_auto_dispatchable`. Read by
+    # `_resolve_deadline_urgency_step` and `_maybe_apply_auto_mode`.
+    auto_dispatchable: bool = False
+    # The sensed (or config-fallback) battery capacity `_read_deadline_urgency_inputs`
+    # resolves. Read by `_resolve_deadline_urgency_step` (the step that resolves it) and
+    # `_finish_successful_cycle`'s time-to-full estimate. `None` until resolved, same issue
+    # #564 fail-loud shape as `effective_peak_limit_kw`/`active_soc_limit` above.
+    effective_battery_capacity_kwh: float | None = None
+    # `_resolve_deadline_urgency_step`'s own result. Read by `_resolve_deadline_bookkeeping`,
+    # `_maybe_apply_auto_mode` and `_resolve_effective_peak_limit`'s `urgent` parameter. `None`
+    # until that step runs, same issue #564 fail-loud shape as
+    # `effective_peak_limit_kw`/`active_soc_limit` above.
+    deadline_urgency: DeadlineUrgencyResult | None = None
+    # The cycle's wall-clock read (`dt_util.now()`), set by `_build_cycle_context` at
+    # construction, above the ev_soc fault exit. Read by `_resolve_monthly_peak`,
+    # `_resolve_deadline_and_reserve`, `_resolve_deadline_urgency_step` and
+    # `_finish_successful_cycle`. Defaults to `None` only for a `CycleContext` built outside
+    # `_build_cycle_context` (a test, or `_mode_desired_current`'s baseline dry run) -- none of
+    # those reach the four steps above, so the default is never actually read.
+    now_dt: datetime | None = None
+    # `_resolve_deadline_and_reserve`'s own R15 next-occurrence operand -- calendar tomorrow's
+    # deadline (issue #1005). Read by `_resolve_deadline_urgency_step`, two calls later rather
+    # than the next one, so it lives here per ADR-0046's Decision, item 1, not as a
+    # `_run_cycle` local.
+    deadline_tomorrow: time | None = None
+    # `_resolve_deadline_and_reserve`'s own closure over this cycle's departure-external/
+    # home-day/holiday reads (NF14/R13) -- resolves one date's deadline per call. Read by
+    # `_resolve_deadline_urgency_step` and, through it, `_read_deadline_urgency_inputs`,
+    # `_resolve_following_occurrence` and `_resolve_departure_on_pursued_date`. Same reason as
+    # `deadline_tomorrow` above for living here rather than as a `_run_cycle` local.
+    resolve_deadline_for: Callable[[date], time | None] | None = None
 
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place
@@ -669,8 +720,9 @@ class DeadlineUrgencyInputs:
     """The `resolve_deadline_urgency` inputs `CycleContext` doesn't already carry (issue
     #563): per-call gating/config values, distinct from the per-cycle readings/derived state
     `ctx` holds (`ev_soc`, `active_soc_limit`, `voltage`, `surplus_w`, `sun_is_up`,
-    `sun_is_down`, `low_tariff_active`, `solar_reserve_active`) -- those are read straight off
-    `ctx` instead of being duplicated here."""
+    `sun_is_down`, `low_tariff_active`, `solar_reserve_active`, `auto_dispatchable`,
+    `effective_battery_capacity_kwh`) -- those are read straight off `ctx` instead of being
+    duplicated here (ADR-0046)."""
 
     deadline_resolvable: bool
     active_mode: str
@@ -680,7 +732,6 @@ class DeadlineUrgencyInputs:
     deadline_today: time | None
     deadline_tomorrow: time | None
     now_dt: datetime
-    effective_battery_capacity_kwh: float
     # R5's slack test is judged against the rate that WOULD be in force with the effective peak
     # limit raised to the maximum peak -- resolved by the coordinator every cycle whether or not
     # urgency is actually in effect, which is what stops the test moving the moment it fires.
@@ -699,7 +750,6 @@ class DeadlineUrgencyInputs:
     # both halves of `resolve_deadline_urgency`, the resolvable branch below and the
     # non-resolvable early return (F2, #1482). `None` whenever nothing is pursued.
     departure_on_pursued_date: time | None
-    auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
     solar_start_threshold_w: float
@@ -830,7 +880,7 @@ def resolve_deadline_urgency(
 
     baseline_mode = inputs.active_mode
     common_select_kwargs: dict[str, Any] = {}
-    if inputs.auto_dispatchable:
+    if ctx.auto_dispatchable:
         available_modes = resolve_available_modes(
             solar_available=inputs.solar_available, captar_available=inputs.captar_available
         )
@@ -877,7 +927,7 @@ def resolve_deadline_urgency(
         inputs.now_dt,
         soc=ctx.ev_soc,
         active_soc_limit=ctx.active_soc_limit,
-        ev_battery_capacity_kwh=inputs.effective_battery_capacity_kwh,
+        ev_battery_capacity_kwh=ctx.effective_battery_capacity_kwh,
         voltage=ctx.voltage,
         baseline_desired_a=baseline_desired_a,
         # Issue #1078 closed the deferral that used to sit here (this was C1's hard ceiling,
@@ -896,7 +946,7 @@ def resolve_deadline_urgency(
     urgent = required.urgent or required.unreachable
 
     resolved_mode = None
-    if inputs.auto_dispatchable:
+    if ctx.auto_dispatchable:
         # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
         # never changes here while Manual, even under urgency) -- only Auto resolves its
         # own mode, via the real (non-baseline) urgent this time.
