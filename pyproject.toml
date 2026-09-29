@@ -20,16 +20,14 @@ max-complexity = 10
 max-statements = 35
 
 [tool.ruff.lint.per-file-ignores]
-# ADR-0046 scopes the guard to coordinator.py/coordinator_cycle.py alone; every function named
-# below, pre-existing and outside that record's scope, is unchanged by it.
-"custom_components/smart_charging/adapters/factory.py" = ["C901"]
-"custom_components/smart_charging/entity.py" = ["C901"]
-"custom_components/smart_charging/modes/solar.py" = ["C901"]
-"custom_components/smart_charging/modes/solar_only.py" = ["C901"]
-".github/check-method.py" = ["C901", "PLR0915"]
-".github/check-upstream-drift.py" = ["C901", "PLR0915"]
-"tests/test_deadline_soc_management_end_to_end.py" = ["PLR0915"]
-"tests/test_init.py" = ["PLR0915"]
+# ADR-0046 scopes the guard to coordinator.py/coordinator_cycle.py alone: C901/PLR0915 are
+# selected repo-wide above, then ignored for every file except that pair by one negated glob,
+# rather than selected repo-wide and exempted file-by-file for every other violator (verified:
+# `ruff check --config` against a scratch pyproject shows this glob form -- explicit
+# `{coordinator,coordinator_cycle}.py`, not the `coordinator{,_cycle}.py` shorthand, whose
+# empty-alternative branch globset does not match -- reports on both governed files and stays
+# silent on every other one).
+"!custom_components/smart_charging/{coordinator,coordinator_cycle}.py" = ["C901", "PLR0915"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -668,6 +668,10 @@ async def test_should_clear_household_window_deferral_when_ev_soc_faults_with_a_
     # Assert
     assert result.fault is True
     assert coord._household_window.deferred_previous is False
+    # ADR-0046: the ev_soc fault exit sits UPSTREAM of `_smooth_household_baseline` (the step
+    # that would otherwise fold this cycle's own reading in), so a fault cycle must leave the
+    # window's samples exactly as it found them -- nothing this cycle read is admitted.
+    assert coord._household_window.samples == (100.0,)
 
 
 async def test_should_not_clear_baseline_deferral_when_ev_soc_faults_after_a_command_step(hass):
@@ -4627,9 +4631,9 @@ async def test_should_hold_the_pursued_occurrence_across_an_ev_soc_fault_cycle(h
 def _escalated_rate(coord, *, smoothed_baseline_w, voltage=230.0):
     """Call the helper directly with a hand-built context.
 
-    The helper is a pure function of `ctx` + `peak_operand_kw`, so driving it directly is what
-    lets a test say "the C4 operand bound here" instead of inferring it from an urgency verdict
-    three layers away.
+    The helper is a pure function of `ctx` alone (ADR-0046: reads `ctx.peak_operand_kw`, one
+    carrier, not a second copy passed in), so driving it directly is what lets a test say "the
+    C4 operand bound here" instead of inferring it from an urgency verdict three layers away.
 
     Issue #1189/T10: both of the helper's baseline-dependent bounds now fit to
     `ctx.smoothed_baseline_w` alone -- `net_w`/`charger_w`/`baseline_w` (the raw operands the
@@ -4651,8 +4655,9 @@ def _escalated_rate(coord, *, smoothed_baseline_w, voltage=230.0):
         sun_is_down=True,
         low_tariff_active=False,
         solar_reserve_active=False,
+        peak_operand_kw=0.0,
     )
-    return coord._escalated_maximum_permitted_rate_a(ctx, peak_operand_kw=0.0)
+    return coord._escalated_maximum_permitted_rate_a(ctx)
 
 
 async def test_escalated_rate_is_bound_by_the_raised_peak_limit_when_headroom_is_tight(hass):
@@ -4996,8 +5001,8 @@ async def test_should_keep_the_escalated_rate_unchanged_when_a_charger_current_s
     captured: list[float] = []
     real_escalated = SmartChargingCoordinator._escalated_maximum_permitted_rate_a
 
-    def _spy(self, ctx, *, peak_operand_kw):
-        rate = real_escalated(self, ctx, peak_operand_kw=peak_operand_kw)
+    def _spy(self, ctx):
+        rate = real_escalated(self, ctx)
         captured.append(rate)
         return rate
 

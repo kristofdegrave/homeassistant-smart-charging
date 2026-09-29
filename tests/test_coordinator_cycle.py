@@ -56,19 +56,27 @@ def _config(**overrides) -> SmartChargingConfig:
     return make_test_config(smoothing_window=1, **overrides)
 
 
-def test_cycle_context_constructs_with_required_fields_and_defaults():
+def test_should_use_documented_defaults_when_constructed_with_only_required_fields():
     """CycleContext (ADR-0012) exposes all defaulted fields with their documented starting
     values -- the required fields (status/net_w/charger_w/voltage/now/baseline_w, issue #990)
     construct with no defaults. `surplus_w` starts at a meaningful zero-surplus value (the
-    value _run_cycle's old loose locals used to start with); the four bool fields keep their
-    original, genuinely-correct starting values (only ever read via plain truthiness, so `None`
-    would buy no fail-loudness and would silently invert `low_tariff_active`'s
-    documented-correct `True` default). The fields resolved only partway through _run_cycle --
-    `smoothed_baseline_w` (issue #1189/T10, ADR-0046: `CycleContext` is now built before the
-    smoothing step that resolves it runs), `effective_peak_limit_kw`/`active_soc_limit` (issue
-    #564) and `auto_dispatchable`/`effective_battery_capacity_kwh` (ADR-0046) -- start at
-    `None`/`False`, not a same-typed placeholder, so a future premature arithmetic/comparison
-    read fails loudly instead of silently computing on a plausible-looking wrong value."""
+    value _run_cycle's old loose locals used to start with); the six bool fields
+    (`sun_is_up`/`sun_is_down`/`low_tariff_active`/`solar_reserve_active`/`has_charged`/
+    `auto_dispatchable`) keep their original, genuinely-correct starting values -- every one is
+    read only via plain truthiness (`auto_dispatchable`'s own field comment, coordinator_cycle.py),
+    so `None` would buy no fail-loudness there and, for `low_tariff_active`, would silently
+    invert its documented-correct `True` default. `auto_dispatchable`'s `False` is one of these
+    same-typed placeholders, not the fail-loud kind below: a premature read just means "Auto
+    does not dispatch", the correct answer before `_resolve_auto_dispatchable` runs. The fields
+    resolved only partway through _run_cycle -- `smoothed_baseline_w` (issue #1189/T10,
+    ADR-0046: `CycleContext` is now built before the smoothing step that resolves it runs),
+    `effective_peak_limit_kw`/`active_soc_limit` (issue #564) and `effective_battery_capacity_kwh`
+    (ADR-0046) -- start at `None`, not a same-typed placeholder, so a future premature
+    arithmetic/comparison read fails loudly instead of silently computing on a
+    plausible-looking wrong value. One behaviour (default construction), many fields checked
+    against it -- testing bar item 3 permits multiple assertions under one `# Assert` when they
+    all check the same action's outcome."""
+    # Act
     ctx = CycleContext(
         status=STATE_CHARGING,
         net_w=100.0,
@@ -77,6 +85,7 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
         now=1.0,
         baseline_w=-900.0,
     )
+    # Assert
     assert ctx.smoothed_baseline_w is None
     assert ctx.ev_soc is None
     assert ctx.surplus_w == 0.0
@@ -91,16 +100,14 @@ def test_cycle_context_constructs_with_required_fields_and_defaults():
     assert ctx.effective_battery_capacity_kwh is None
 
 
-def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use():
-    """issue #564/ADR-0046: the whole point of `None` over a same-typed placeholder for the
-    numeric fields resolved only partway through _run_cycle -- a hypothetical future
-    ModeHandler reading e.g. `ctx.effective_peak_limit_kw`/`ctx.active_soc_limit`/
-    `ctx.smoothed_baseline_w`/`ctx.effective_battery_capacity_kwh` before `_run_cycle` resolves
-    them now gets an immediate TypeError on arithmetic/comparison, not a silently-computed wrong
-    answer from a plausible-looking 0.0. (The four bool fields are deliberately excluded -- see
-    test_cycle_context_constructs_with_required_fields_and_defaults's docstring for why `None`
-    wouldn't fail loudly for those.)"""
-    ctx = CycleContext(
+def _unresolved_ctx() -> CycleContext:
+    """Shared Arrange for the fail-loud-on-premature-read tests below: a `CycleContext` whose
+    required fields are constructed but whose partway-resolved numeric fields
+    (`effective_peak_limit_kw`/`active_soc_limit`/`smoothed_baseline_w`/
+    `effective_battery_capacity_kwh`) are all still at their `None` default (issue #564/
+    ADR-0046) -- as they are between construction and whichever `_run_cycle` step resolves
+    each one."""
+    return CycleContext(
         status=STATE_CHARGING,
         net_w=0.0,
         charger_w=0.0,
@@ -109,12 +116,54 @@ def test_cycle_context_unresolved_numeric_fields_raise_loudly_on_premature_use()
         baseline_w=0.0,
         ev_soc=50.0,
     )
+
+
+def test_should_raise_type_error_when_effective_peak_limit_kw_is_read_before_it_resolves():
+    """issue #564: `effective_peak_limit_kw` stays `None` until `_resolve_effective_peak_limit`
+    (`_fault_ev_soc`'s own provisional resolution the ev_soc fault exit) runs -- a premature
+    arithmetic read fails loudly instead of silently computing on a plausible-looking 0.0."""
+    # Arrange
+    ctx = _unresolved_ctx()
+    # Act / Assert
     with pytest.raises(TypeError):
         ctx.effective_peak_limit_kw * 1000.0
+
+
+def test_should_raise_type_error_when_active_soc_limit_is_compared_before_it_resolves():
+    """issue #564: `active_soc_limit` stays `None` until `_resolve_active_soc_limit` runs -- a
+    premature comparison read fails loudly instead of silently computing on a
+    plausible-looking 0.0."""
+    # Arrange
+    ctx = _unresolved_ctx()
+    # Act / Assert
     with pytest.raises(TypeError):
         assert ctx.ev_soc >= ctx.active_soc_limit
+
+
+def test_should_raise_type_error_when_smoothed_baseline_w_is_read_before_smoothing_resolves_it():
+    """issue #1189/T10/ADR-0046: `smoothed_baseline_w` stays `None` until
+    `_smooth_household_baseline` runs -- `CycleContext` is now built before that smoothing step
+    (ADR-0046: right after the required-role read, above the ev_soc fault exit), so a premature
+    arithmetic read (e.g. from `_escalated_maximum_permitted_rate_a`, which fits its bounds to
+    this field) fails loudly instead of silently computing on a plausible-looking 0.0. This is
+    the guarantee `test_should_raise_when_smoothed_baseline_w_is_omitted_at_construction`
+    pinned before the restructure moved the resolution point; it now lives here alongside the
+    other partway-resolved numeric fields."""
+    # Arrange
+    ctx = _unresolved_ctx()
+    # Act / Assert
     with pytest.raises(TypeError):
         ctx.smoothed_baseline_w * 1000.0
+
+
+def test_should_raise_type_error_when_effective_battery_capacity_kwh_is_read_before_it_resolves():
+    """ADR-0046: `effective_battery_capacity_kwh` stays `None` until
+    `_read_deadline_urgency_inputs` runs -- a premature arithmetic read (e.g. from
+    `_finish_successful_cycle`'s time-to-full estimate) fails loudly instead of silently
+    computing on a plausible-looking 0.0."""
+    # Arrange
+    ctx = _unresolved_ctx()
+    # Act / Assert
     with pytest.raises(TypeError):
         ctx.effective_battery_capacity_kwh * 1000.0
 
@@ -1033,7 +1082,10 @@ def test_solar_step_up_gate_treats_none_soc_as_zero():
 
 
 # CycleContext fields resolve_deadline_urgency itself reads (issue #563: the rest of its old
-# 19-parameter list moved into DeadlineUrgencyInputs below).
+# 19-parameter list moved into DeadlineUrgencyInputs below). auto_dispatchable/
+# effective_battery_capacity_kwh joined this set under ADR-0046: both are now ctx fields three
+# _run_cycle steps share, so resolve_deadline_urgency reads them off ctx too rather than a
+# second copy in DeadlineUrgencyInputs (the two-sources hazard #719 exists to remove).
 _CTX_FIELD_NAMES = frozenset(
     {
         "ev_soc",
@@ -1044,6 +1096,8 @@ _CTX_FIELD_NAMES = frozenset(
         "sun_is_down",
         "low_tariff_active",
         "solar_reserve_active",
+        "auto_dispatchable",
+        "effective_battery_capacity_kwh",
     }
 )
 

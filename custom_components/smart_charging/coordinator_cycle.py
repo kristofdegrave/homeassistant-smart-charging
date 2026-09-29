@@ -80,8 +80,9 @@ class CycleContext:
     # tracked separately (issue #992), out of #990's own scope.
     baseline_w: float
     # Issue #1189/T10, R5's third smoothed-baseline criterion: the admitted mean in household
-    # sign (`net_w - charger_w`, `smoothed_household_w` -- `_run_cycle`'s own local receiving
-    # `smooth_household_baseline`'s return value, ADR-0051) -- both of the escalated maximum
+    # sign (`net_w - charger_w`, `smoothed_household_w` -- `_smooth_household_baseline`'s own
+    # local receiving `smooth_household_baseline`'s return value, ADR-0051) -- both of the
+    # escalated maximum
     # permitted rate's baseline-dependent bounds (`_escalated_maximum_permitted_rate_a`'s peak
     # and C4 operands) fit to this, never to `baseline_w`/`net_w`/`charger_w` above, which stay
     # the R3 clamp's and the peak-headroom readout's own raw, debounced `baseline_w`, or (C4)
@@ -98,7 +99,9 @@ class CycleContext:
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by
     # the Solar/SolarOnly ModeHandlers below before _run_cycle resolves the real smoothed value)
     # issue #564: effective_peak_limit_kw/active_soc_limit are resolved only partway through
-    # _run_cycle (see the per-assignment comments in coordinator.py), yet used to default to a
+    # _run_cycle (see `_resolve_effective_peak_limit`'s/`_resolve_active_soc_limit`'s own
+    # docstrings in coordinator.py, ADR-0046's body rule moved the per-assignment reasoning
+    # there), yet used to default to a
     # same-typed placeholder (0.0) indistinguishable from a genuine reading. `None` instead so a
     # future premature *arithmetic/comparison* read (active_soc_limit is already read this way
     # today, by _dispatch_mode strictly after it resolves each cycle; effective_peak_limit_kw by
@@ -112,6 +115,22 @@ class CycleContext:
     # original, genuinely-correct starting values.
     effective_peak_limit_kw: float | None = None
     active_soc_limit: float | None = None
+    # ADR-0046: the merged peak-clamp operand (ADR-0030/ADR-0032) `_resolve_monthly_peak`
+    # resolves -- read by the ev_soc fault exit, the deadline-urgency step's escalated-rate
+    # hypothetical, and the real effective-peak-limit resolution, so it lives here rather than
+    # as a `_run_cycle` local three later steps would each also have to be passed.
+    peak_operand_kw: float | None = None
+    # ADR-0046: `_resolve_monthly_peak`'s own tracked-peak return -- read by the ev_soc fault
+    # exit and the successful-cycle closing step (never both in the same cycle, but each is a
+    # later step reading a value this same call resolves), so it lives here for the same
+    # reason `peak_operand_kw` above does, rather than as a `_run_cycle` local passed
+    # separately to each exit.
+    monthly_peak_kw: float | None = None
+    # ADR-0046: `_resolve_solar_surplus`'s own raw-baseline reading (entity-catalog.md's
+    # `sensor.smart_charging_solar_surplus_w` row) -- read by the ev_soc fault exit and the
+    # successful-cycle closing step, the same two-later-steps shape `monthly_peak_kw` above is
+    # in.
+    solar_surplus_w: float | None = None
     sun_is_up: bool = False
     sun_is_down: bool = False
     low_tariff_active: bool = True
@@ -133,6 +152,12 @@ class CycleContext:
     # closing step's time-to-full estimate. `None` until that step runs, same issue #564
     # fail-loudly shape as `effective_peak_limit_kw`/`active_soc_limit` above.
     effective_battery_capacity_kwh: float | None = None
+    # ADR-0046: `_resolve_deadline_urgency_step`'s own result -- read by the bookkeeping step,
+    # the Auto-mode-apply step and the real effective-peak-limit resolution's `urgent`
+    # parameter, so it lives here rather than as a `_run_cycle` local three later steps would
+    # each also have to be passed. `None` until that step runs, same issue #564 fail-loudly
+    # shape as `effective_peak_limit_kw`/`active_soc_limit` above.
+    deadline_urgency: DeadlineUrgencyResult | None = None
 
 
 @dataclass  # deliberately not frozen -- update() mutates window/tracked_kw/tracked_month in place
@@ -683,8 +708,9 @@ class DeadlineUrgencyInputs:
     """The `resolve_deadline_urgency` inputs `CycleContext` doesn't already carry (issue
     #563): per-call gating/config values, distinct from the per-cycle readings/derived state
     `ctx` holds (`ev_soc`, `active_soc_limit`, `voltage`, `surplus_w`, `sun_is_up`,
-    `sun_is_down`, `low_tariff_active`, `solar_reserve_active`) -- those are read straight off
-    `ctx` instead of being duplicated here."""
+    `sun_is_down`, `low_tariff_active`, `solar_reserve_active`, `auto_dispatchable`,
+    `effective_battery_capacity_kwh`) -- those are read straight off `ctx` instead of being
+    duplicated here (ADR-0046)."""
 
     deadline_resolvable: bool
     active_mode: str
@@ -694,7 +720,6 @@ class DeadlineUrgencyInputs:
     deadline_today: time | None
     deadline_tomorrow: time | None
     now_dt: datetime
-    effective_battery_capacity_kwh: float
     # R5's slack test is judged against the rate that WOULD be in force with the effective peak
     # limit raised to the maximum peak -- resolved by the coordinator every cycle whether or not
     # urgency is actually in effect, which is what stops the test moving the moment it fires.
@@ -713,7 +738,6 @@ class DeadlineUrgencyInputs:
     # both halves of `resolve_deadline_urgency`, the resolvable branch below and the
     # non-resolvable early return (F2, #1482). `None` whenever nothing is pursued.
     departure_on_pursued_date: time | None
-    auto_dispatchable: bool
     solar_available: bool
     captar_available: bool
     solar_start_threshold_w: float
@@ -844,7 +868,7 @@ def resolve_deadline_urgency(
 
     baseline_mode = inputs.active_mode
     common_select_kwargs: dict[str, Any] = {}
-    if inputs.auto_dispatchable:
+    if ctx.auto_dispatchable:
         available_modes = resolve_available_modes(
             solar_available=inputs.solar_available, captar_available=inputs.captar_available
         )
@@ -891,7 +915,7 @@ def resolve_deadline_urgency(
         inputs.now_dt,
         soc=ctx.ev_soc,
         active_soc_limit=ctx.active_soc_limit,
-        ev_battery_capacity_kwh=inputs.effective_battery_capacity_kwh,
+        ev_battery_capacity_kwh=ctx.effective_battery_capacity_kwh,
         voltage=ctx.voltage,
         baseline_desired_a=baseline_desired_a,
         # Issue #1078 closed the deferral that used to sit here (this was C1's hard ceiling,
@@ -910,7 +934,7 @@ def resolve_deadline_urgency(
     urgent = required.urgent or required.unreachable
 
     resolved_mode = None
-    if inputs.auto_dispatchable:
+    if ctx.auto_dispatchable:
         # Manual dispatches via the selector unconditionally (NF2 regression: active_mode
         # never changes here while Manual, even under urgency) -- only Auto resolves its
         # own mode, via the real (non-baseline) urgent this time.
