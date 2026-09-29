@@ -19,6 +19,10 @@ after `implement.md`'s *Out of the body* stop is a fresh draft with its own sing
 a second run over the earlier one, and applies every counting comment the entry rule's
 not-ready arm names; one not applied → **Major**. A Critical or Major finding of the pass
 neither fixed in the body nor handled by that branch → **Major**.
+A run past `implement.md`'s entry 1 step 1 without the source that step's gate requires for
+the epic's track, a body drafted from other sources than step 2 names for that track, or a
+pass dispatched without the track → **Major**: the spec then derives from nothing the gate
+checked.
 
 **(2) The body on the tracker is the fixed body.** Read back after the last edit, before the
 park. No read-back → **Major**: the fix is then assumed.
