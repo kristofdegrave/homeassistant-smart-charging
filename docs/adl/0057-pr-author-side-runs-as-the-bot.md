@@ -56,7 +56,7 @@ refusing an issue that is not a pull request and any other call. Board moves, la
 review passes and the reviewer side's comments stay plain `gh`, as the owner.
 
 - Pro: a pull request's author and reviewer are told apart by login as well as by markers.
-- Pro: thread resolves spend the bot's GraphQL quota, not the owner's.
+- Pro: thread resolves spend the bot's side of the secondary limiter, not the owner's.
 - Con: the wrapper grows from one call to four, each an allow-list entry and a refusal to
   test.
 - Con: the fix step still writes as the owner when it takes stale exit labels off, so the step
@@ -76,8 +76,7 @@ reads.
   the owner's: `clarify`'s park, the self-grant count, the tick log and the `decompose` go
   read that one, and say so.
 - **The round count and the collector need no new rule.** The bot's posts carry the session's
-  markers, which is what excludes them, and pass the author test on its `write` access; that
-  test has no single home yet, and this record does not give it one.
+  markers, which is what excludes them, and pass the author test on its `write` access.
 - **The wrapper and the allow-list** gain the three calls; the owner's forms of a reply and a
   resolve go, and the owner's comment stays for the reviewer side.
 - **ADR-0055 is narrowed**, not superseded: its Option C's scope — the bot reached only to
@@ -107,23 +106,23 @@ and the markers they carry. **100** hits.
 | `docs/reference/method/tracker-mechanics.md:264`, `:271` | A comment on a pull request or issue, as the owner | The fix step's comment on a pull request through the wrapper |
 | `docs/reference/method/tracker-mechanics.md:475`, `:495` | A reply and a thread resolve, as the owner | Through the wrapper |
 | `docs/reference/method/tracker-mechanics.md:308` | The session's comments are the owner's | Under either login, each passing the author test |
+| `.claude/settings.json:34` | Allows any un-verbed call on `pulls`, a reply included once `-F` makes it a POST | Keeps reads and `pulls/<n>/reviews`; the owner's reply goes |
 | `.claude/settings.json:38`, `:43` | Allow the owner's POSTs on `pulls` and the resolve mutation | The reply and the resolve through the wrapper |
 | `docs/reference/profile.md:23`, `:26`, `:28` | One account for every step | The author and reviewer sides and their logins |
 | `docs/reference/profile.md:30` | The session's footprint on the owner's login | Split by side |
-| `docs/reference/profile.md:109` | The resolve mutation as an allow-list prefix | The wrapper's entry |
+| `docs/reference/profile.md:109` | The resolve mutation as an allow-list prefix, in a sentence granting `POST` on the pulls | The wrapper's entry; the `POST` on the pulls goes |
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's markers |
 | `.claude/skills/review/SKILL.md:29`; `.claude/skills/clarify/SKILL.md:71`; `.claude/skills/autopilot/SKILL.md:145`; `docs/reference/work-types/decompose/implement.md:44`, `:70` | Read "the session's login" | Name the owner's |
 
-52 hits conform — five of them ADR-0055's rows, which carries them:
-`block-destructive-git.sh:26`, `settings.json:34`, `submit-pr-review/SKILL.md:14`,
-`profile.md:51`, `tracker-mechanics.md:442`. The 52: `block-destructive-git.sh:26`, `:121`; `test-block-destructive-git.sh:118`, `:167`, `:346`; `settings.json:32`, `:33`, `:34`,
-`:36`, `:37`, `:42`; `autopilot/SKILL.md:18`, `:33`; `clarify/SKILL.md:76`;
-`fix/SKILL.md:26`, `:27`, `:30`, `:32`, `:35`, `:36`, `:92`, `:95`, `:110`;
-`research/SKILL.md:50`; `submit-pr-review/SKILL.md:14`, `:57`, `:58`; `CODEOWNERS:6`;
+51 hits conform. Four are ADR-0055's rows, which carries them: `block-destructive-git.sh:26`,
+`submit-pr-review/SKILL.md:14`, `profile.md:51`, `tracker-mechanics.md:442`. The other 47:
+`block-destructive-git.sh:121`; `test-block-destructive-git.sh:118`, `:167`, `:346`;
+`settings.json:32`, `:33`, `:36`, `:37`, `:42`; `autopilot/SKILL.md:18`, `:33`;
+`clarify/SKILL.md:76`; `fix/SKILL.md:26`, `:27`, `:30`, `:32`, `:35`, `:36`, `:92`, `:95`,
+`:110`; `research/SKILL.md:50`; `submit-pr-review/SKILL.md:57`, `:58`; `CODEOWNERS:6`;
 `contribution-workflow.md:120`, `:278`; `tracker-mechanics.md:48`, `:61`, `:249`, `:278`,
-`:299`, `:300`, `:305`, `:419`, `:423`, `:432`, `:433`, `:434`, `:436`, `:442`, `:517`;
-`profile.md:42`, `:51`, `:150`; `decompose/done.md:41`; `decompose/implement.md:41`, `:57`,
-`:72`.
+`:299`, `:300`, `:305`, `:419`, `:423`, `:432`, `:433`, `:434`, `:436`, `:517`;
+`profile.md:42`, `:150`; `decompose/done.md:41`; `decompose/implement.md:41`, `:57`, `:72`.
 
 Out of scope, 30 hits, each keeping what it says:
 - `account` in another sense — a domain example or "account for": 10 in
