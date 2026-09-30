@@ -15,7 +15,7 @@ requests, so an approval is one more rule of an accident guard.
 
 - **One account today.** [ADR-0052](0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md)'s
   Option C2 runs merges as the owner with `--admin`, and so left commits, pushes, pull requests,
-  comments and labels on the owner's login too; the bot account it retired is usable again.
+  comments and labels on the owner's login too; the bot account it stopped using still exists.
 - **An author cannot approve their own pull request** (GitHub answers 422). A pull request the
   session opens is the owner's, so the code-owner review branch protection on `main` requires
   is one nobody can give: every merge bypasses it.
@@ -26,7 +26,7 @@ requests, so an approval is one more rule of an accident guard.
 - **How a command picks an account.** `gh` takes `GH_TOKEN` over its stored logins, and
   `gh auth token --user <login>` reads one stored login's token; git pushes with whatever its
   credential helper returns. The merge guard refuses a `gh pr merge` behind any first word but
-  `gh`, a token prefix included, and the loop's `dontAsk` allow-list matches commands by how
+  `gh` that could run it, a token prefix included, and the loop's `dontAsk` allow-list matches commands by how
   they start.
 - **The merge decision is ADR-0052's**: the auto-merge class, its guard and the human's gate
   over every other tree. Only who runs each step is open here.
@@ -72,26 +72,27 @@ call. Approval and merge stay plain `gh`, as the owner.
 
 **Option C**, over A because A's code-owner review stays empty, and over B because B's Cons
 change every reader of the owner's login for an attribution the markers already give. Its
-first Con is accepted as ADR-0052 accepts its guard's limit.
-
-Approval stays the human's alone: the autopilot merges under ADR-0052's rule as the owner
-with `--admin`, and never approves.
+first Con is accepted because no step needs the session to approve: approval stays the
+human's alone, and the autopilot merges under ADR-0052's rule as the owner with `--admin`.
 
 ## Consequences
 
 - **The profile names the bot.** `profile.yml` gains the bot's login; `profile.md`'s
-  **Repository and git identity** states the split, the repository-local `user.name`,
-  `user.email` and `credential.https://github.com.helper` it relies on, and that the global
-  helper, `gh auth git-credential`, serves only `gh`'s active account, which stays the owner's.
+  **Repository and git identity** states the split, the bot's `write` role on the repository,
+  and the repository-local `user.name`, `user.email` and `credential.https://github.com.helper`
+  it relies on: an empty helper entry first, since the global `gh auth git-credential` answers
+  first and serves only `gh`'s active account, which stays the owner's.
 - **A wrapper opens the pull request.** One script under `.github/` sets `GH_TOKEN` from the
   profile's bot login and runs `gh pr create`, or its REST fallback on the pulls collection,
   and refuses any other call; `tracker-mechanics.md`'s **Opening a change request** and the
   allow-list name it in place of plain `gh pr create`.
 - **The guard refuses an approval**: `gh pr review --approve`, and an `APPROVE` event sent to
   a pull request's reviews, read from the `--input` payload file every review is posted with
-  and refused when that file cannot be read, with tests; `submit-pr-review`'s reason for
-  never approving becomes that rule, since its author reason no longer holds.
-- **The human's merge of a manual tree can be an approved one**, with no bypass.
+  and refused when that file cannot be read, with tests. `submit-pr-review`'s author reason
+  no longer holds: never approving becomes that rule, and never requesting changes stays its
+  own prose rule, since a request changes nothing a merge reads.
+- **The human's merge of a manual tree can be an approved one**, with no bypass; and with the
+  bot's `write` role, branch protection refuses a push to `main` the session makes.
 - **ADR-0052 is narrowed**, not superseded: its C2 Pro and Con about one account and the
   bot's last use no longer describe commits and pull requests; its guard and merge rule stand.
 - One `workflow` issue carries every row below.
@@ -121,8 +122,9 @@ the approval rule goes. **103** hits.
 |---|---|---|
 | `docs/reference/profile.md:23`, `:26`, `:28` | One account for every step, the bot retired | The split, its local git config, and the session's comments on the owner's login |
 | `docs/reference/profile.md:51` | Merges as one account instead of a bot's | The bot opens; the owner still merges |
+| `docs/reference/profile.md:145` | Only the guard closes the push gaps, branch protection not binding the owner | Branch protection binds the bot's pushes; the guard still closes the rest |
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's comments being the owner's |
-| `.claude/skills/submit-pr-review/SKILL.md:14` | The PR's opener cannot approve anyway | The guard refuses an approval |
+| `.claude/skills/submit-pr-review/SKILL.md:14` | The PR's opener cannot approve or request changes anyway | The guard refuses an approval; never requesting changes stays a prose rule |
 | `docs/reference/method/tracker-mechanics.md:360`, `:364`, `:368` | `gh pr create` and its REST fallback as the owner | Through the bot wrapper |
 | `docs/reference/method/tracker-mechanics.md:442` | A bot's login ends in `[bot]` | An app's does; the bot account is a user login |
 | `.claude/hooks/block-destructive-git.sh:5`, `:26`, `:49` | The header states a merge rule only | Gains the approval rule |
@@ -131,7 +133,7 @@ the approval rule goes. **103** hits.
 | `.claude/settings.json:30`, `:38` | Allow the owner to open a pull request, by command or by a POST on the `pulls` collection | The wrapper opens one; the owner's POST on the bare collection goes |
 | `.claude/settings.json:34` | Allows any un-verbed call on `pulls`, reads included | Keeps reads and `pulls/<n>/reviews` and `comments`; a POST on the bare collection goes |
 
-51 hits conform, since comments, reviews, labels, the board, the guard's reads and the merge
+50 hits conform, since comments, reviews, labels, the board, the guard's reads and the merge
 stay on the owner's login, which is the login the session posts under that these read:
 `block-destructive-git.sh:121`, `:234`, `:236`; `test-block-destructive-git.sh:159`;
 `settings.json:42`; `autopilot/SKILL.md:18`, `:33`, `:145`; `clarify/SKILL.md:71`, `:76`;
@@ -139,7 +141,7 @@ stay on the owner's login, which is the login the session posts under that these
 `submit-pr-review/SKILL.md:12`, `:57`, `:58`, `:63`; `CODEOWNERS:1`, `:6`;
 `contribution-workflow.md:120`, `:217`, `:278`; `idea-to-product.md:403`;
 `tracker-mechanics.md:39`, `:48`, `:249`, `:300`, `:305`, `:308`, `:419`, `:423`, `:431`,
-`:432`, `:434`, `:436`, `:452`, `:460`; `profile.md:30`, `:42`, `:105`, `:145`;
+`:432`, `:434`, `:436`, `:452`, `:460`; `profile.md:30`, `:42`, `:105`;
 `decompose/done.md:41`; `decompose/implement.md:41`, `:44`, `:57`, `:70`, `:72`.
 
 Out of scope, 33 hits, each keeping what it says:
