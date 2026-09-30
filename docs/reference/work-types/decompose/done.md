@@ -38,10 +38,11 @@ park. No read-back → **Major**: the fix is then assumed.
   dropped by the draft without the mark that step puts in its task entry in the body →
   **Major**: entry 2 then files it twice or drops it silently.
 
-**(4) The comment ends in the parking marker**, as its last line, posted under a login that
-passes the entry rule's author test, and it is the only park the human has not answered.
-Missing or elsewhere in the comment → **Critical**: the autopilot cannot then tell the park
-from any other comment, and re-parks or never proceeds. A second park over an unanswered one,
+**(4) The comment opens with the park's title and ends in the parking marker**, the title as
+its first line and the marker as its last, posted under a login that passes the entry rule's
+author test, and it is the only park the human has not answered. Either missing or elsewhere
+in the comment → **Critical**: the autopilot cannot then tell the park from any other comment,
+or from the epic's `verify live: #<epic>` park, and re-parks or never proceeds. A second park over an unanswered one,
 as `implement.md`'s *One park per human answer* rule defines it → **Major**.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the

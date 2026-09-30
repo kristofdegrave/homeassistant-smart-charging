@@ -497,8 +497,8 @@ Or on the task issue where the work has no epic — the bar says which.
 
 ### Gate: the first slice of a strand is verified live before slice two starts
 
-The bar's own rule; here it is what stops the **Implementation** stage of the next slice. It
-binds the **first** slice of a strand and no other, which is what keeps it compatible with
+The bar's own rule, held by the `verify live: #<epic>` park; it stops the next slice's
+**Implementation** stage. It binds only the **first** slice, which keeps it compatible with
 [contribution-workflow.md](contribution-workflow.md)'s **Parallel work and forward
 dependencies**: the strand pauses once, to see its foundation run, and from the second slice on
 the tasks proceed in parallel against pinned contracts as that rule allows.
