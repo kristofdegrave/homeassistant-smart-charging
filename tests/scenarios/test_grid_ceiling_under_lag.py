@@ -17,13 +17,18 @@ truth -- so the re-derived baseline is exactly right and C4's clamp holds the ce
 step.
 """
 
+import math
+
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_DEFAULT_TARGET_CURRENT,
+    CONF_GRID_CEILING_A,
+    CONF_GRID_SAFETY_OFFSET_A,
     CONF_MAX_CURRENT,
+    CONF_NOMINAL_VOLTAGE,
     CONF_SOLAR_AVAILABLE,
     DOMAIN,
     MODE_POWER,
@@ -39,7 +44,8 @@ from tests.scenarios.runner import ScenarioRunner, format_trace
 
 _HOUSEHOLD_W = 3000.0  # steady -- no household-load step in this scenario
 _TARGET_CURRENT_A = 16.0  # Power's target current -- above the ceiling-bound headroom (9 A)
-_CONTROL_INTERVAL_S = 10
+_CYCLES = 12  # several lag-driven oscillation pairs (module docstring, "every other cycle") --
+# enough for the xfail to reliably trip and for the control's steady state to show throughout.
 
 
 def _entry_data():
@@ -63,18 +69,36 @@ async def _setup(hass):
     seed_charger_states(hass, status="Charging", net_w=0.0, charger_w=0.0)
     entry = MockConfigEntry(domain=DOMAIN, data=_entry_data(), options=_entry_options())
     entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
+    if not await hass.config_entries.async_setup(entry.entry_id):
+        # A bare `assert` here would raise AssertionError, which the lag-1 test's own
+        # `xfail(strict=True, raises=AssertionError)` would then swallow as though it were the
+        # expected C4 breach -- a setup failure must surface as something else entirely.
+        raise RuntimeError(f"config entry {entry.entry_id} failed to set up")
     await hass.async_block_till_done()
     seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
     return entry.runtime_data.coordinator
 
 
+def _ceiling_current_a(options: dict) -> float:
+    """C4's effective ceiling (A): the configured grid ceiling minus its safety offset."""
+    return options[CONF_GRID_CEILING_A] - options[CONF_GRID_SAFETY_OFFSET_A]
+
+
+def _expected_ceiling_bound_current_a(options: dict, household_w: float, voltage: float) -> float:
+    """The commanded current C4 holds the control to once it binds: `ceiling_headroom_a`'s own
+    formula (`custom_components/smart_charging/engines/grid_safety.py`) -- floored to a whole
+    ampere -- against a baseline that, lag or no lag, is exactly the steady household load here.
+    Kept in one place so the control test derives it rather than hard-coding a number the entry's
+    options already determine."""
+    return float(math.floor(_ceiling_current_a(options) - household_w / voltage))
+
+
 def _assert_ceiling_held(trace, *, ceiling_w):
     """The scenario-intent assertion: true net import at or below the grid supply ceiling on
-    every step, with C4's own reaction allowance -- a swing the previous command could not have
-    foreseen (a household-load step, or household load alone above the ceiling at 0 A charger
-    current) is not a violation. The household load is steady throughout this scenario, so
-    neither exception is ever in play here: every breach below is a real one."""
+    every step. C4's own reaction allowance (a swing the previous command could not have
+    foreseen -- a household-load step, or household load alone above the ceiling at 0 A charger
+    current) is NOT implemented by this helper: the household load is steady throughout this
+    scenario, so no step needs it here. T2's load-step scenario is what adds it."""
     for t in trace:
         assert t.reading.true_import_w <= ceiling_w, (
             f"C4 breach at step {t.index}: true import {t.reading.true_import_w} W > "
@@ -95,30 +119,56 @@ def _assert_ceiling_held(trace, *, ceiling_w):
 async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_charger_reading_lags_under_power(  # noqa: E501
     hass, freezer
 ):
+    # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     coordinator = await _setup(hass)
-    plant = Plant(household_w=_HOUSEHOLD_W, voltage=230.0, lag_cycles=1)
+    options = _entry_options()
+    voltage = options[CONF_NOMINAL_VOLTAGE]
+    plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(
-        hass, coordinator, plant, freezer=freezer, control_interval_s=_CONTROL_INTERVAL_S
+        hass, coordinator, plant, freezer=freezer, grid_voltage=voltage, mode=MODE_POWER
     )
 
-    trace = await runner.run(12)
+    # Act
+    trace = await runner.run(_CYCLES)
 
+    # Assert
     # C4 (docs/analysis/requirements.md#constraints): true import never exceeds the grid
-    # supply ceiling. ceiling_a=25, offset_a=2 (entry_options_base defaults) -> 23 A effective.
-    _assert_ceiling_held(trace, ceiling_w=23.0 * 230.0)
+    # supply ceiling.
+    _assert_ceiling_held(trace, ceiling_w=_ceiling_current_a(options) * voltage)
 
 
 async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_charger_reading_does_not_lag(  # noqa: E501
     hass, freezer
 ):
+    # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     coordinator = await _setup(hass)
-    plant = Plant(household_w=_HOUSEHOLD_W, voltage=230.0, lag_cycles=0)
+    options = _entry_options()
+    voltage = options[CONF_NOMINAL_VOLTAGE]
+    plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=0)
     runner = ScenarioRunner(
-        hass, coordinator, plant, freezer=freezer, control_interval_s=_CONTROL_INTERVAL_S
+        hass, coordinator, plant, freezer=freezer, grid_voltage=voltage, mode=MODE_POWER
     )
 
-    trace = await runner.run(12)
+    # Act
+    trace = await runner.run(_CYCLES)
 
-    _assert_ceiling_held(trace, ceiling_w=23.0 * 230.0)
+    # Assert
+    _assert_ceiling_held(trace, ceiling_w=_ceiling_current_a(options) * voltage)
+    # Without lag, the plant's own ground truth can prove more than "never breached": no cycle
+    # faulted (a faulted cycle's safe write is 0 A, which would hold the ceiling vacuously), and
+    # the control actually reaches and holds C4's ceiling-bound current -- so a regression that
+    # stopped charging altogether, or broke the seeding/capture wiring, fails loudly here instead
+    # of reading as "the ceiling held".
+    assert not any(t.faulted for t in trace), (
+        f"a faulted cycle writes 0 A, which would pass the ceiling check vacuously\n"
+        f"{format_trace(trace)}"
+    )
+    expected_a = _expected_ceiling_bound_current_a(options, _HOUSEHOLD_W, voltage)
+    for t in trace:
+        assert t.commanded_current_a == expected_a, (
+            f"step {t.index}: expected the ceiling-bound current {expected_a} A, got "
+            f"{t.commanded_current_a} A -- the control never reached C4's bound\n"
+            f"{format_trace(trace)}"
+        )
