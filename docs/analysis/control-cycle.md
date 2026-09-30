@@ -100,10 +100,10 @@ flowchart TD
    The net import and charger power readings also resolve this cycle's accepted [household
    baseline](system-overview.md#ubiquitous-language), subject to R3's two deferral cases — here,
    every cycle and regardless of which [capabilities](system-overview.md#ubiquitous-language) are
-   declared, rather than inside the CapTar-gated step 5 that consumes it, since step 6, which
-   runs whatever the capabilities, and the diagnostic readouts that also read it
-   (`solar_surplus_w`, `entity-catalog.md`), which are gated on the solar capability instead,
-   must still resolve on an installation with no CapTar.
+   declared, rather than inside the CapTar-gated step 5, one of its consumers, since it must
+   still resolve on an installation with no CapTar for step 6, which runs whatever the
+   capabilities, and for the diagnostic readouts that also read it (`solar_surplus_w`,
+   `entity-catalog.md`), which are gated on the solar capability instead.
    Produces `SensorsRead`.
 2. **Smooth the solar surplus (R10).** The coordinator pairs this cycle's raw `net_w` and
    `charger_w` into one [solar surplus](system-overview.md#ubiquitous-language) sample,
