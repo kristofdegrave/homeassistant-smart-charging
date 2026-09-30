@@ -28,7 +28,7 @@ Model-invocable only for `/loop`; no skill reaches it. The tick never runs
   workflow**: each writing step (`/implement #<n>`, `/fix #<pr>`) is one background
   `autopilot-writer` agent on the row's *Work model*; each review pass the `review` step, run
   and posted by the tick with fresh `reviewer` agents. **Before any
-  `/fix`**, every item `fix` would collect passes the author test, or the PR leaves the state
+  `/fix`**, every comment `fix` would read passes the author test, or the PR leaves the state
   as the human's.
 - **One lane**, whatever `autopilot.lanes` allows: held while the state names a lane holder.
 

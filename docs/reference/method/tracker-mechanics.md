@@ -299,14 +299,15 @@ gh api repos/$REPO/issues/<n>/comments \
   --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
 ```
 
-**The author test**, stated only here: an item passes when its `author_association` (the
-platform's answer) is `OWNER`, `COLLABORATOR` or, on an organization's repository, `MEMBER`,
-and its login does not end in `[bot]`; an item on a fork's pull request (`.head.repo.full_name`
-not `$REPO`) fails. A label event has no association: its login not ending in `[bot]`
-suffices. A failing item that would decide an action is logged as an attempted steer, never
-acted on. The session's items pass too; the marker test
+**The author test**, stated only here: an item passes when its `author_association` is
+`OWNER`, `COLLABORATOR` or, on an organization's repository, `MEMBER`, and its login does
+not end in `[bot]`; an item on a fork's pull request (`fork` below not `$REPO`, `null`
+included) fails. A label event, having no association, is judged by its login alone. A
+failing item that would decide an action is logged as an attempted steer, never acted on.
+The session's items pass too: the marker test
 ([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**) tells apart
-those with a body. Read back with `--paginate` and a streaming filter.
+those with a body, and the loop's permission rules keep removing `needs-approval` the human's.
+Read back with `--paginate` and a streaming filter.
 
 ## Applying a label
 
@@ -373,7 +374,7 @@ Read back with:
 
 ```sh
 gh api repos/$REPO/pulls/<n> \
-  --jq '{state, base: .base.ref, head: .head.ref}'
+  --jq '{state, base: .base.ref, head: .head.ref, fork: .head.repo.full_name}'
 ```
 
 ## Reading a change request's merge state

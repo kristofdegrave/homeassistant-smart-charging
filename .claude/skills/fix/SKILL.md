@@ -23,17 +23,17 @@ the read-back are **Tracker mechanics**'.
 
 ## 2. Locate the findings
 
-The local review posts under a login passing the author test, so both are found as comments
-passing it (`CLAUDE.md`'s **Tracker mechanics**, *Reading a work item's comments by author*).
-A failing comment is no finding; §6 lists it.
+The review's and the human's comments are both found as comments passing the author test
+(`CLAUDE.md`'s **Tracker mechanics**, *Reading a work item's comments by author*). A failing
+comment is no finding; §6 lists it.
 
 - **Inline comments** — list the PR's review comments (`gh api
-  "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate`) and keep every one by such a login
+  "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate`) and keep every one passing it
   that does not itself carry an `<!-- ai-fix-` marker (§5) and has no later reply carrying
   `<!-- ai-fix-ack -->` in the same thread (a reply's `in_reply_to_id` is the thread's first
   comment). Such a reply means an earlier run already handled it.
 - **Review bodies** — list the PR's reviews (`gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"
-  --paginate`) and keep every non-empty body by such a login posted after the most recent
+  --paginate`) and keep every non-empty body passing it posted after the most recent
   `<!-- ai-fix-summary -->` comment (all of them when there is none). A local review's body
   holds the findings that anchor to no changed line; a finding in both a body and an inline
   comment counts once.
