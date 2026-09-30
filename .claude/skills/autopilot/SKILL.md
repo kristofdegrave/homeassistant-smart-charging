@@ -16,9 +16,10 @@ Model-invocable only for `/loop`; no skill reaches it. The tick never runs
   item's comments by author*), gates every tracker item that decides an action, an issue's own
   author and a label event included; a **human removal** is one the test passes.
 - **Logs and parks never quote** tracker text or a return, naming items by number or link.
-- **Unattended.** A question, or a step refused a grant, is parked through `clarify` (*No
-  human can answer*), never widened. Every dispatch says its run is unattended and "this step
-  only", passing issue, PR and comment numbers only.
+- **Unattended**, the tick's own session included, so no review pass it runs self-grants a
+  round. A question, or a step refused a grant, is parked through `clarify` (*No human can
+  answer*), never widened. Every dispatch says its run is unattended and "only this step",
+  passing issue, PR and comment numbers only.
 - **Every command** follows `CLAUDE.md`'s **Tracker mechanics**, read-backs included; a read
   with no recipe there is a plain read-only call, logged as a missing recipe.
 - **Every comment the tick posts carries a marker**, per the marker rule under `CLAUDE.md`'s
