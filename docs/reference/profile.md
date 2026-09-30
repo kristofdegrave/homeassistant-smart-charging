@@ -135,20 +135,22 @@ naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
 
 **Known gaps.** A Bash rule matches the text typed, not the program run — Claude Code's own
 permissions documentation says it is not a security boundary around the program — so each
-list above holds the forms named, and a form it does not name passes. Known ones: a label or
-mutation name in another letter case (gh matches label names case-insensitively, the rules do
-not) or split by quotes (`needs-appro''val`), which passes every substring rule, the label
-gesture included; spacing a GraphQL document the rules do not expect; a bare
-`git -C <main checkout> push` while on `main`, which names no refspec; and what git reads from
-disk rather than from the command — a `git -C` into a directory that is not a task worktree, or
-a hook the repository runs on checkout, merge or commit (its `core.hooksPath` is under
-`.github/`) — the guard refuses a commit only while a hook's change is uncommitted and not
-staged by a merge in progress, not once a merge has committed it; a `-C` into a directory a writer laid out as a repository by
-some path other than a `HEAD` edit; and any ref on `origin` — a branch anyone with write access
-pushed, merged or reviewed or not — whose `.github/hooks` a `git -C <wt> merge` or
-`checkout <ref>` brings in, and git runs on that checkout or merge or the next commit. Branch protection does
-not enforce on the owner's account, so only the `PreToolUse` guard, which parses what it
-reads, can close these, and it does not yet.
+list above holds the forms named, and a form it does not name passes. Behind it, the
+destructive-git guard's loop mode reads each word as sh passes it on (quotes and
+backslashes removed; case ignored where gh ignores it), refuses a word carrying `$` rather
+than guess what the shell builds from it, and its header states the rules: the label gesture
+and the named GraphQL mutations in any such spelling or spacing, a push of HEAD while `main`
+is checked out, git's global overrides and their `GIT_*` environment forms, the
+program-running options its header names,
+the subcommands this file denies, a target outside this repository's checkout and worktrees,
+and a fetch with an option it does not read, from another source, of a pull-request ref or
+an object id, or into a named destination. Still open: what neither layer names — a GraphQL
+mutation outside the guard's list, a git subcommand outside both lists, and the indirection
+the guard's header concedes (a word built by the shell, a command run by another); and any
+branch on `origin` — one anyone with write access pushed, reviewed or not — whose
+`.github/hooks` a `git -C <wt> merge` or `checkout <ref>` brings in, and git runs on that
+checkout or merge or the next commit: the guard refuses a commit only while a hook's change
+is uncommitted and not staged by a merge in progress, not once a merge has committed it.
 
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop
