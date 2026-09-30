@@ -81,7 +81,7 @@ flowchart TD
     Desired --> Peak{"Would net import exceed<br/>effective peak limit − safety margin?<br/>(raw readings — R3;<br/>skipped entirely when the CapTar<br/>capability is absent, R18;<br/>skipped if Power disables it, R17)"}
     Peak -->|yes| Clamp["Clamp to highest whole ampere<br/>that holds the target<br/>(PeakLimitClamped)"]
     Peak -->|no| Ceiling
-    Clamp --> Ceiling{"Would net import exceed<br/>grid supply ceiling − safety offset?<br/>(raw readings — C4, always)"}
+    Clamp --> Ceiling{"Would net import exceed<br/>grid supply ceiling − safety offset?<br/>(raw readings; higher of own and<br/>accepted household baseline — C4, always)"}
     Ceiling -->|yes| CeilingClamp["Clamp so net import stays below<br/>ceiling − safety offset<br/>(SupplyCeilingClamped)"]
     Ceiling -->|no| Invariant
     CeilingClamp --> Invariant["Enforce invariants:<br/>0 A or ≥ minimum current (C1);<br/>cooldown/hold/restart-debounce gating (R11)"]
@@ -100,9 +100,10 @@ flowchart TD
    The net import and charger power readings also resolve this cycle's accepted [household
    baseline](system-overview.md#ubiquitous-language), subject to R3's two deferral cases — here,
    every cycle and regardless of which [capabilities](system-overview.md#ubiquitous-language) are
-   declared, rather than inside the CapTar-gated step 5 that consumes it, since the diagnostic
-   readouts that also read it (`solar_surplus_w`, `entity-catalog.md`) are gated on the solar
-   capability instead and must still resolve on an installation with no CapTar.
+   declared, rather than inside the CapTar-gated step 5, one of its consumers, since it must
+   still resolve on an installation with no CapTar for step 6, which runs whatever the
+   capabilities, and for the diagnostic readouts that also read it (`solar_surplus_w`,
+   `entity-catalog.md`), which are gated on the solar capability instead.
    Produces `SensorsRead`.
 2. **Smooth the solar surplus (R10).** The coordinator pairs this cycle's raw `net_w` and
    `charger_w` into one [solar surplus](system-overview.md#ubiquitous-language) sample,
@@ -175,8 +176,8 @@ flowchart TD
    accepted reading stands instead — a reading taken after the System set a charger current
    differing from the previous cycle's (never two cycles running), and a reading that would
    increase headroom and has not yet held for 2 consecutive cycles. A breaching increase is
-   therefore deferred by at most a single cycle, and step 6 below is unaffected either way — it
-   always uses this cycle's own raw readings. R3 is authoritative for both cases and their bounds.
+   therefore deferred by at most a single cycle, and neither case delays an increase at step 6
+   below, whose household baseline C4 states. R3 is authoritative for both cases and their bounds.
    The effective peak limit itself is resolved by
    `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
    this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
@@ -188,7 +189,8 @@ flowchart TD
 6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode *and* regardless of any
    declared capability — and so also whenever the step 5 peak clamp was skipped, whether because
    `Power` disabled it or because the CapTar capability is absent — the coordinator reduces the current, using **raw** readings (not
-   smoothed, to avoid lag), so that net grid import stays below the
+   smoothed, to avoid lag) and solving around the household baseline C4 states — the higher of
+   this cycle's own reading and step 1's accepted one — so that net grid import stays below the
    [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
    [grid safety offset](system-overview.md#ubiquitous-language) (converted to amperes via the
    resolved supply voltage). This is the hard fuse-protection limit, the one clamp `Power`
