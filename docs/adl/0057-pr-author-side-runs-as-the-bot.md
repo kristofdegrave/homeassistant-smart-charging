@@ -72,9 +72,8 @@ reads.
 
 ## Consequences
 
-- **"The session's login" names a side.** On issues and on the reviewer side's comments it is
-  the owner's: `clarify`'s park, the self-grant count, the tick log and the `decompose` go
-  read that one, and say so.
+- **"The session's login" names a side**: on issues and on the reviewer side's comments it is
+  the owner's, and each site reading it says so.
 - **The round count and the collector need no new rule.** The bot's posts carry the session's
   markers, which is what excludes them, and pass the author test on its `write` access.
 - **The wrapper and the allow-list** gain the three calls; the owner's forms of a reply and a
@@ -122,12 +121,13 @@ and the markers they carry. **100** hits.
 `:110`; `research/SKILL.md:50`; `submit-pr-review/SKILL.md:57`, `:58`; `CODEOWNERS:6`;
 `contribution-workflow.md:120`, `:278`; `tracker-mechanics.md:48`, `:61`, `:249`, `:278`,
 `:299`, `:300`, `:305`, `:419`, `:423`, `:432`, `:433`, `:434`, `:436`, `:517`;
-`profile.md:42`, `:150`; `decompose/done.md:41`; `decompose/implement.md:41`, `:57`, `:72`.
+`profile.md:42`, `:150`; `decompose/done.md:41`; `decompose/implement.md:41`, `:57`, `:72`. `tracker-mechanics.md:517` shows the `-F body=@`
+form the owner's comments keep, where `:271` is the call the fix step's comment leaves.
 
 Out of scope, 30 hits, each keeping what it says:
 - `account` in another sense — a domain example or "account for": 10 in
   `.claude/skills/domain-driven-design/`, 2 in `.claude/vendor/`, 1 in `custom_components/`,
-  4 in `tests/`, 3 in `docs/analysis/`, 4 in `docs/design/`, and `fix/SKILL.md:93`.
+  4 in `tests/`, 3 in `docs/analysis/`, 4 in `docs/design/`, and `fix/SKILL.md:93`, whose `@login` is the reviewer's.
 - Another actor's login: the 2 in `.github/workflows/upstream-drift.yml` and
   `ci-pipeline.md:260`, the CI job's app; `setup-labels.sh:13`, the human running it;
   `profile.yml:27`, the board's owner.
