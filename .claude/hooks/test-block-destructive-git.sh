@@ -48,6 +48,18 @@ else
   echo "note: the branch checked out in $CWD has no upstream, so the rebase cases are skipped"
 fi
 
+# runr <reason substring> <command> [cwd]: a BLOCK that must be refused for that reason, so a
+# neighbouring rule cannot pass it.
+runr() {
+  want=$1
+  shift
+  run BLOCK "$@"
+  case "$out" in
+    *"$want"*) ;;
+    *) printf 'FAIL refused, but not for "%s"  %s\n%s\n' "$want" "$1" "$out"; fail=1 ;;
+  esac
+}
+
 run() { # run BLOCK|ALLOW <command> [cwd]
   expect=$1
   cmd=$2
@@ -668,6 +680,7 @@ mkdir -p "$LR/wt/src" "$LR/wt/.github" "$LR/wt/docs"
 echo a > "$LR/wt/src/a.py"; echo a > "$LR/wt/.github/ci.yml"; echo a > "$LR/wt/CLAUDE.md"
 g add -A; g commit -qm base; g remote add origin "$LR/origin.git"; g push -q origin main
 g checkout -qb task
+g worktree add -q -b side "$LR/wt2" main   # a linked worktree of the same repository
 MARKER=$(awk '/^autopilot:/{t=1} t&&/^  loop_marker:/{print $2; exit}' "$CWD/.claude/profile.yml")
 [ -n "$MARKER" ] || { echo "FAIL the real profile names no loop_marker"; fail=1; }
 
@@ -676,8 +689,9 @@ run ALLOW "git commit -m x" "$LR/wt"                                   # marker 
 export "$MARKER=0"
 run ALLOW "git commit -m x" "$LR/wt"                                   # a marker other than 1: not the loop
 export "$MARKER=1"
+export GUARD_REPO="$LR/wt"   # the repository the loop works in, which the hook itself is not part of here
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
-run BLOCK "git -C $LR/wt commit -m x"                                  # ... reached through -C
+run BLOCK "git -C $LR/wt commit -m x" "$LR/wt2"                       # ... reached through -C from a sibling worktree
 g reset -q
 run BLOCK "git commit -am x" "$LR/wt"                                  # an unstaged one, which -a would take
 g checkout -q -- .github/ci.yml
@@ -697,12 +711,124 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a renam
 g mv .github/a.py src/a.py
 echo b > "$LR/wt/src/a.py"; g add src
 run ALLOW "git commit -m x" "$LR/wt"                                   # a change outside the harness
-run ALLOW "git -C $LR/wt commit -m x"                                  # ... through -C, from another cwd
-run ALLOW "git -C \"$LR/wt\" commit -m x"                              # ... with the -C path quoted
+echo z > "$LR/wt2/.github/ci.yml"; git -C "$LR/wt2" add .github/ci.yml
+run ALLOW "git -C $LR/wt commit -m x" "$LR/wt2"                        # ... through -C, from a worktree with harness edits
+run ALLOW "git -C \"$LR/wt\" commit -m x" "$LR/wt2"                    # ... with the -C path quoted
+git -C "$LR/wt2" reset -q; git -C "$LR/wt2" checkout -q -- .github/ci.yml
+mkdir -p "$LR/other"; git init -q "$LR/other"
+run BLOCK "git -C $LR/other status" "$LR/wt"                           # a -C into another repository: its config and hooks
+run BLOCK "git -c core.pager=cat log -1" "$LR/wt"                      # a -c override
+run BLOCK "git --config-env=core.pager=P log -1" "$LR/wt"              # ... or --config-env
+run BLOCK "git log -1 --out''put=x" "$LR/wt"                           # --output, quote-split
+run BLOCK "git fetch '--upload-pack=x' origin" "$LR/wt"                # --upload-pack, quoted
+run ALLOW "git fetch origin" "$LR/wt"                                  # a plain fetch of origin
+run ALLOW "git fetch origin main" "$LR/wt"                             # ... of one branch
+run BLOCK "git fetch https://example.invalid/fork main" "$LR/wt"       # a fetch from a URL
+run BLOCK "git pull fork main" "$LR/wt"                                # a pull from another remote
+run BLOCK "git fetch origin refs/pull/1/head" "$LR/wt"                 # a pull-request ref
+runr "pull-request ref" "git fetch origin '+pull/1/head:x'" "$LR/wt"   # ... quoted, with a destination
+run BLOCK "git fetch origin task:refs/remotes/origin/main" "$LR/wt"    # a fetch that moves origin/main
+run BLOCK "git fetch . HEAD:refs/remotes/origin/main" "$LR/wt"         # ... from the repository itself (the source rule)
+run BLOCK "git remote add fork https://example.invalid/fork" "$LR/wt"  # a new remote
+run BLOCK "git remote set-url origin https://example.invalid/x" "$LR/wt" # a moved one
+run ALLOW "git remote -v" "$LR/wt"                                     # reading the remotes
+run BLOCK "gh issue edit 5 --remove-label NEEDS-APPROVAL"              # the human's go, upper case
+run BLOCK "gh issue edit 5 --remove-label needs-appro''val"            # ... quote-split
+run BLOCK "gh issue edit 5 --remove-label=needs-decision,Needs-Approval" # ... in a list
+run ALLOW "gh issue edit 5 --add-label needs-approval --remove-label needs-decision" # adding it is not removing it
+run ALLOW "gh pr edit 5 --remove-label needs-approval"                 # a pull request's label: the admitted gesture
+run BLOCK "gh api -X delete repos/o/r/issues/5/labels/Needs-Approval"  # a REST DELETE, any case
+run BLOCK "gh api -X PUT repos/o/r/issues/5/labels -f 'labels[]=workflow'" # a PUT replacing the set
+run BLOCK "gh api --method=PATCH repos/o/r/issues/5 -f 'labels[]=x'"   # an issue PATCH setting labels
+run BLOCK "gh api graphql -f query='mutation{ removeLabels''FromLabelable(input:{}){ clientMutationId } }'" # a GraphQL removal, quote-split
+run ALLOW "gh api repos/o/r/issues/5/labels"                           # reading the labels
+run BLOCK "git status" "$LR/other"                                     # a cwd that is another repository
+run BLOCK "git -C $LR/wt -C . status" "$LR/wt"                         # more than one -C: git chains them
+run BLOCK "cd $LR/wt && git status" "$LR/wt"                           # any git after a cd
+run BLOCK "git fe''tch https://example.invalid/fork main" "$LR/wt"     # a quote-split subcommand
+run BLOCK "git re''mote add fork https://example.invalid/fork" "$LR/wt"
+run BLOCK "git '-c' core.fsmonitor=x status" "$LR/wt"                  # a quoted -c
+run BLOCK "git -cfoo=bar status" "$LR/wt"                              # ... attached
+run BLOCK "git --con''fig-env=a=b status" "$LR/wt"                     # a quote-split --config-env
+run BLOCK "git --exec-path=/x fetch origin" "$LR/wt"                   # --exec-path: git runs its helpers from there
+run BLOCK "git --git''-dir=/x status" "$LR/wt"                         # --git-dir, quote-split
+run BLOCK "git --work-tree=/x status" "$LR/wt"                         # --work-tree
+run BLOCK "git push --receive-pack=x origin task" "$LR/wt"             # --receive-pack
+runr "'--exec=x' is refused" "git fetch --exec=x origin" "$LR/wt"      # --exec
+run BLOCK "git log -1 --out\\put=x" "$LR/wt"                           # --output behind a backslash escape
+run BLOCK "git remote rename origin o2" "$LR/wt"                       # the remotes: rename
+run BLOCK "git remote set-branches origin x" "$LR/wt"                  # ... set-branches
+run BLOCK "git remote set-head origin x" "$LR/wt"                      # ... set-head
+run BLOCK "git fetch --multiple origin fork" "$LR/wt"                  # --multiple makes every operand a remote
+run BLOCK "git fetch --negotiation-tip x origin main" "$LR/wt"         # an option the guard does not read
+run BLOCK "git fetch origin 0123456789abcdef0123456789abcdef01234567" "$LR/wt" # an object id
+run ALLOW "git fetch --prune origin" "$LR/wt"                          # an option it does read
+run BLOCK "git config core.hooksPath x" "$LR/wt"                       # a config write
+run ALLOW "git con''fig --get remote.origin.url" "$LR/wt"              # a config read
+run BLOCK "git sub''module foreach true" "$LR/wt"                      # a subcommand the loop file denies, quote-split
+run BLOCK "git replace HEAD HEAD~1" "$LR/wt"                           # replace refs rewrite what history reads as
+run BLOCK "git checkout main -- src/a.py" "$LR/wt"                     # a checkout of paths
+run BLOCK "gh issue edit 5 --remove-label needs-appro\\val"            # the human's go behind a backslash escape
+run BLOCK "gh api -XDELETE repos/o/r/issues/5/labels/needs-approval"   # an attached -X
+run BLOCK "gh api --method PATCH repos/o/r/issues/5 -f 'labels[]=x'"   # a separate --method
+run BLOCK "gh api graphql -f query='mutation{ clearLabelsFromLabelable(input:{}){ clientMutationId } }'"
+run BLOCK "gh api graphql -f query='mutation{ updateIssue(input:{labelIds:[]}){ clientMutationId } }'"
+run BLOCK "gh api graphql -f query='mutation{ merge''Branch(input:{}){ clientMutationId } }'" # a merge into main, quote-split
+run BLOCK "gh api graphql -f query='mutation{ updateRef (input:{}){ clientMutationId } }'"   # ... or spaced
+run BLOCK "gh api graphql -f query='mutation{ removeLabels''FromLabelable(input:{clientMutationId:\"issue edit\"}){ clientMutationId } }'" # words that read like issue edit
+runr "removing needs-approval" "A=1 gh issue edit 5 --remove-label needs-appro''val" # behind an assignment
+runr "mergebranch" "{ gh api graphql -f query='mutation{ merge''Branch(input:{}){ clientMutationId } }'; }" # behind a brace
+runr "deletelabel" "gh api graphql -f query='mutation{ deleteLabel(input:{}){ clientMutationId } }'" # deleting the label itself
+runr "sets labels" "gh api repos/o/r/issues/5 -f 'labels[]=workflow'"  # an issue write by gh's default POST
+runr "sets labels" "gh api -X POST repos/o/r/issues/5 -f 'labels[]=x'" # ... spelled out
+runr "carrying" "gh issue edit 5 --remove-label $'needs\\055approval'" # an ANSI-C quote builds the word
+runr "carrying" "git -C $LR/wt $'\\055c' core.fsmonitor=x status" "$LR/wt" # ... -c, which stripping would misread
+runr "GIT_" "GIT_CONFIG_PARAMETERS=x git status" "$LR/wt"              # the environment form of -c
+runr "GIT_" "GIT_DIR=/x git -C $LR/wt status" "$LR/wt"                 # ... of --git-dir
+runr "GIT_" "git_ssh_command=x git fetch origin" "$LR/wt"              # ... GIT_SSH_COMMAND, any case
+runr "git grep" "git gr''ep -Ocat x" "$LR/wt"                          # grep -O runs a program
+runr "git grep" "git grep --open-files-in-pager=cat x" "$LR/wt"
+runr "archive -o" "git archive -o x.tar HEAD" "$LR/wt"                 # archive -o writes a file
+runr "naming paths" "git checkout origin/main .github/hooks/pre-commit" "$LR/wt" # a path checkout without --
+run ALLOW "git checkout task" "$LR/wt"                                 # a branch checkout
+run ALLOW "git checkout task 2>/dev/null" "$LR/wt"                     # ... a redirection is not a path
+runr "naming paths" "git checkout --pathspec-from-file=f main" "$LR/wt" # paths from a file
+runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
+runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
+runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"
+runr "abbreviates" "git archive --out=x HEAD" "$LR/wt"                 # --output by a prefix
+runr "abbreviates" "git grep --op=cat x" "$LR/wt"                      # --open-files-in-pager by a prefix
+runr "-o writes" "git archive -vox HEAD" "$LR/wt"                      # -o clustered
+runr "-O runs" "git grep -nOcat x" "$LR/wt"                            # -O clustered
+runr "fetch pattern" "git fetch origin 'refs/*/1/head'" "$LR/wt"       # a glob reaching a pull-request ref
+runr "sets labels" "gh api repos/o/r/issues/5 -flabels[]=workflow"     # the field attached to -f
+runr "label delete" "gh api -X=DELETE repos/o/r/issues/5/labels/needs-approval" # -X=
+run ALLOW "gh api -X POST repos/o/r/issues/5/labels -f 'labels[]=needs-approval'" # the add-labels endpoint only adds
+run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the loop's gh steps: a comment
+run ALLOW "gh api repos/o/r/pulls/5/reviews --input /tmp/p.json"       # ... a review
+run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'" # ... the thread listing
+run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve
+run ALLOW "gh pr edit 5 --add-label needs-approval"                    # ... a label on a pull request
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
 run ALLOW "git push" "$LR/wt"                                          # no refspec: HEAD
+run ALLOW "git -C $LR/wt push -u origin task" "$LR/wt"                 # the loop's own steps: push -u
+printf 'm\n' > "$STUB/msg.txt"
+run ALLOW "git -C $LR/wt commit -F $STUB/msg.txt" "$LR/wt"             # ... commit -F
+run ALLOW "git -C $LR/wt merge origin/main" "$LR/wt"                   # ... merge origin/main
+run ALLOW "git worktree add $LR/wt3 origin/main" "$LR/wt"              # ... worktree add
+run ALLOW "git worktree add -b b3 $LR/wt3 origin/main" "$LR/wt"
+run ALLOW "git -C $LR/wt worktree remove $LR/wt2" "$LR/wt"             # ... worktree remove
+g checkout -q main
+run BLOCK "git push" "$LR/wt"                                          # no refspec while main is checked out: a push to main
+run BLOCK "git push origin HEAD" "$LR/wt"                              # ... HEAD named
+run BLOCK "git -C $LR/wt push" "$LR/wt2"                               # ... through -C
+run BLOCK "git push origin @" "$LR/wt"                                 # ... as @
+run BLOCK "git pu''sh" "$LR/wt"                                        # ... quote-split
+run BLOCK "git push origin Head" "$LR/wt"                              # ... in mixed case
+run ALLOW "git push origin HEAD:task" "$LR/wt"                         # HEAD with a destination is not a push to main
+g checkout -q task
 run ALLOW "git push -o ci.skip origin task" "$LR/wt"                   # an option's separate value is not read as the remote
 run BLOCK "git push origin --tags" "$LR/wt"                            # tags carry commits no source diff sees
 run BLOCK "git push --follow-tags origin task" "$LR/wt"                # ... followed ones too
@@ -712,6 +838,9 @@ run BLOCK "if cd $LR/wt; then git commit -m x; fi" "$LR/wt"            # ... or 
 run BLOCK "Set-Location $LR/wt; git commit -m x" "$LR/wt"              # PowerShell's, any case
 run BLOCK "env -C $LR/wt git commit -m x" "$LR/wt"                     # env -C
 echo c > "$LR/wt/.github/ci.yml"; g commit -qam harness
+g tag origin/main HEAD
+run BLOCK "git push origin task" "$LR/wt"                              # a tag named origin/main does not shadow the remote ref
+g tag -d origin/main
 run BLOCK "git push origin task" "$LR/wt"                              # a pushed commit touching .github/
 run BLOCK "git push -u origin HEAD:task" "$LR/wt"                      # ... whatever the refspec spells
 run BLOCK "git push" "$LR/wt"                                          # ... or with none
@@ -745,8 +874,15 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
-unset "$MARKER"
+unset "$MARKER" GUARD_REPO
 run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
+run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
+run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"
+run ALLOW "gh issue edit 5 --remove-label NEEDS-APPROVAL"
+run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_* prefix: interactive, unaffected
+run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
+run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
+run BLOCK "GH_X=\$(git push --force) x"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
