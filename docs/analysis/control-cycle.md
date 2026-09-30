@@ -291,10 +291,9 @@ limit for step 5.
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
-  cannot trip (C4). While the charger power reading lags the charger's actual draw and the clamp
-  binds, C4 is not yet met: a known defect C4 states, not an exception to it. This applies even
-  in `Power` mode with peak protection disabled, and on an installation without the CapTar
-  capability (R18) — in both of which it is the only active clamp.
+  cannot trip (C4). C4 states the one case in which this is not met, a known defect against it.
+  This applies even in `Power` mode with peak protection disabled, and on an installation
+  without the CapTar capability (R18) — in both of which it is the only active clamp.
 
 ## Requirements satisfied
 
