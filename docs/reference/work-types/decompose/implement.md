@@ -25,7 +25,7 @@ children part is not `none` and the close of any other `decompose` sub-issue of 
 fresh draft applies each as a change. One posted after both while the label was off is
 reported.
 
-The first arm that holds decides, never the `decompose` issue's Status:
+The first arm that holds decides, never the issue's Status:
 
 1. An open blocked-by edge → step 1's stop.
 2. No park → **Entry 1**. Else, a **verify-live park** (a passing comment opening
