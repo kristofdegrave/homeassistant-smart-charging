@@ -38,7 +38,7 @@ park. No read-back → **Major**: the fix is then assumed.
   dropped by the draft without the mark that step puts in its task entry in the body →
   **Major**: entry 2 then files it twice or drops it silently.
 
-**(4) The comment opens with the park's title and ends in the parking marker**, the title as
+**(4) The comment opens with `implement.md`'s park title and ends in the parking marker**, the title as
 its first line and the marker as its last, posted under a login that passes the entry rule's
 author test, and it is the only park the human has not answered. Either missing or elsewhere
 in the comment → **Critical**: the autopilot cannot then tell the park from any other comment,
