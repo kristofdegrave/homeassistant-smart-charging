@@ -6,8 +6,9 @@
 #
 # The two tables are the block list and the never-block list from the hook's own
 # contract in docs/reference/method/contribution-workflow.md -- add a case here before
-# changing a matching rule. The merge-rule cases at the end never reach GitHub: a stub
-# `gh` on PATH answers `pr view` and `pr checks` from the canned facts each case sets.
+# changing a matching rule. The merge-rule cases never reach GitHub: a stub `gh` on PATH
+# answers `pr view` and `pr checks` from the canned facts each case sets. The approval-rule
+# cases close the file.
 
 HOOK=$(dirname "$0")/block-destructive-git.sh
 [ -f "$HOOK" ] || { echo "cannot find $HOOK" >&2; exit 1; }
@@ -891,6 +892,21 @@ printf '{"commit_id":"a", "event" : "approve"}\n' > "$STUB/approve-spaced.json"
 printf '{"commit_id":"a","event":"COMMENT","body":"do not APPROVE yet"}\n' > "$STUB/comment.json"
 runr "posts an approval" "gh pr review 12 --approve"
 run BLOCK "gh pr review 12 --approve=true"
+run BLOCK "gh pr review 12 --approve=1"                                  # gh's bools take what ParseBool takes
+run BLOCK "gh pr review 12 --approve=T"
+run BLOCK "gh pr review 12 --approve=TRUE"
+run ALLOW "gh pr review 12 --approve=false -c -b x"                      # a false value approves nothing
+run ALLOW "gh pr review 12 --approve=0 -c -b x"
+printf 'APPROVE\n' > "$STUB/ev.txt"
+runr "reads its event from a file" "gh api repos/o/r/pulls/12/reviews -F event=@$STUB/ev.txt"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --field event=@$STUB/ev.txt"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --field=event=@$STUB/ev.txt"
+run ALLOW "gh api repos/o/r/pulls/12/reviews -f event=COMMENT -F body=@$STUB/comment.json"   # a body from a file is fine
+runr "reads its document from a file" "gh api graphql -F query=@$STUB/m.graphql"
+run BLOCK "gh api graphql --input $STUB/q.json"
+run BLOCK "gh api graphql --input=$STUB/q.json"
+run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { nodes { id } } } } }'"   # an inline document is read
+runr "changed directory" "cd $STUB && gh api repos/o/r/pulls/12/reviews --input comment.json"
 runr "posts an approval" "gh pr review 12 -a"
 run BLOCK "gh pr review 12 -ca"                                          # a cluster carrying a
 run BLOCK "gh -R o/r pr review 12 --approve"                             # flags before the path are walked past

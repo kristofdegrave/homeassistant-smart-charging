@@ -127,12 +127,15 @@
 # The approval rule. The session's pull requests are opened as the bot account
 # (docs/adl/0055-*.md), so the owner's account the session runs as could approve them; an
 # approval is the human's review, so the session is refused one. Refused: `gh pr review`
-# with `--approve`, `-a` or a short-flag cluster carrying it; `gh api` on a pull request's
-# reviews whose text names an APPROVE event; the same call with an `--input` payload that
-# carries one, that cannot be read, or that is stdin; a GraphQL review mutation naming
-# APPROVE. Its comment at gh_approve_rule below says how each is read. Conceded, as for the
-# merge rule: an approval behind a word the guard does not read as gh (an interpreter, a
-# variable), from another tool, or through the web UI.
+# with `--approve` (any value but a false one), `-a` or a short-flag cluster carrying it;
+# `gh api` on a pull request's reviews whose text names an APPROVE event, whose event field
+# is read from a file, or whose `--input` payload carries one, cannot be read, is stdin, or is
+# a relative path after a change of directory; `gh api graphql` naming a review mutation and
+# APPROVE, or reading its document from a file. Its comment at gh_approve_rule below says how
+# each is read. Conceded, as for the merge rule: an approval behind a word the guard does not
+# read as gh (an interpreter, a variable), from another tool; an escaped spelling of the event
+# in a payload (`"APPROVE"`). Refused though harmless: a read of the reviews whose text
+# holds `event=` before `APPROVE`, as a `--jq` filter on `.event` can.
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
 # `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
@@ -954,12 +957,17 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
 }
 
 # The approval rule: the session never approves a pull request. The command path is read as
-# gh_merge_rule reads it. `gh pr review` is refused with `--approve`, `-a` or a short-flag
+# gh_merge_rule reads it. `gh pr review` is refused with `--approve`, any `--approve=` value
+# but a false one (gh's bool flags take what Go's ParseBool takes), `-a`, or a short-flag
 # cluster carrying `a` before a value-taking letter (`b`, `F`). `gh api` on a pull request's
-# reviews is refused when the command text names an APPROVE event, or when its `--input`
-# payload does: that file is read, resolved against the command's cwd, and a file that
-# cannot be read (or `-`, stdin) refuses, since the event cannot be shown not to be one. A
-# GraphQL review mutation naming APPROVE is refused on its text alike.
+# reviews is refused when the command text names an APPROVE event, when its event field is
+# read from a file (`event=@...`), or when its `--input` payload names one: that file is read,
+# resolved against the payload's cwd, and a file that cannot be read, stdin (`-`), or a
+# relative path after the command changed directory refuses, since the event cannot be shown
+# not to be one. `gh api graphql` is refused when its text names a review mutation and
+# APPROVE, or when its document is read from a file (`query=@...`, `--input`), which the
+# guard does not open. The payload grep matches the event as written: an escaped spelling
+# (`"APPROVE"`) passes, a concession the header states.
 gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
   seg=$1
   shift
@@ -979,7 +987,9 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
     ' pr review')
       for a in "$@"; do
         case "$a" in
-          --approve | --approve=true) deny_approve "$seg" "'gh pr review --approve' posts an approval" ;;
+          --approve) deny_approve "$seg" "'gh pr review --approve' posts an approval" ;;
+          --approve=false | --approve=False | --approve=FALSE | --approve=f | --approve=F | --approve=0) ;;
+          --approve=*) deny_approve "$seg" "'gh pr review $a' posts an approval" ;;
           --*) ;;
           -?*)
             cl=${a#-}
@@ -995,10 +1005,21 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
         esac
       done
       ;;
-    ' api' | ' api '*)
+    ' api graphql' | ' api graphql '*)
       case "$seg" in
         *[Pp]ull[Rr]equest[Rr]eview*[Aa][Pp][Pp][Rr][Oo][Vv][Ee]* | *[Aa][Pp][Pp][Rr][Oo][Vv][Ee]*[Pp]ull[Rr]equest[Rr]eview*)
           deny_approve "$seg" "a GraphQL review mutation naming APPROVE posts an approval" ;;
+      esac
+      for a in "$@"; do
+        case "$a" in
+          [Qq][Uu][Ee][Rr][Yy]=@* | --input | --input=*)
+            deny_approve "$seg" "'gh api graphql' reads its document from a file, which the guard does not open, so it cannot show the document is not an approval" ;;
+        esac
+      done
+      return 0
+      ;;
+    ' api' | ' api '*)
+      case "$seg" in
         */reviews*) ;;
         *) return 0 ;;
       esac
@@ -1009,6 +1030,8 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
       input=''
       while [ $# -gt 0 ]; do
         case "$1" in
+          [Ee][Vv][Ee][Nn][Tt]=@* | --field=[Ee][Vv][Ee][Nn][Tt]=@* | --raw-field=[Ee][Vv][Ee][Nn][Tt]=@*)
+            deny_approve "$seg" "'gh api' on a pull request's reviews reads its event from a file, so the guard cannot show it is not APPROVE" ;;
           --input=*) input=${1#--input=} ;;
           --input) shift; input=${1:-} ;;
         esac
@@ -1020,7 +1043,11 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
       case "$input" in
         -) deny_approve "$seg" "'gh api' on a pull request's reviews reads its payload from stdin, so the guard cannot show its event is not APPROVE" ;;
         /* | [A-Za-z]:[/\\]*) ;;
-        *) input="$cwd/$input" ;;
+        *)
+          [ "$dir_moved" = 0 ] ||
+            deny_approve "$seg" "a relative review payload '$input' after the command changed directory: the guard cannot tell which file gh reads, so it cannot show its event is not APPROVE"
+          input="$cwd/$input"
+          ;;
       esac
       [ -r "$input" ] ||
         deny_approve "$seg" "the review payload '$input' cannot be read, so the guard cannot show its event is not APPROVE"

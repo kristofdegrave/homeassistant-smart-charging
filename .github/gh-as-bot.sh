@@ -19,7 +19,8 @@
 #
 # Every call is REST but the resolve, which has no REST form; opening a pull request goes
 # straight to REST, the fallback docs/reference/method/tracker-mechanics.md gives `gh pr
-# create`. Bodies are read by gh from the file (`-F body=@<path>`), never passed inline.
+# create`. Bodies are read by gh from a copy of the file (`-F body=@<path>`), never passed
+# inline; the copy is made before the token is read.
 #
 # The repository and the bot's login come from .claude/profile.yml through profile-env.sh (a
 # PROFILE in the environment is honoured, for the test suite). Its own tests:
@@ -73,6 +74,15 @@ env_out=$(bash "$(dirname "$0")/profile-env.sh") || refuse "profile-env.sh could
 eval "$env_out"
 [ -n "${REPO:-}" ] || refuse "the profile names no repo"
 [ -n "${BOT_LOGIN:-}" ] || refuse "the profile names no identity.bot_login, so there is no bot account to run as"
+
+# The body is copied before the token is read, so the file gh posts is read by a process that
+# holds no token: a path naming the process's own environment copies nothing secret.
+if [ -n "${body:-}" ]; then
+  copy=$(mktemp)
+  trap 'rm -f "$copy"' EXIT
+  cat -- "$body" > "$copy" || refuse "body file '$body' cannot be read"
+  body=$copy
+fi
 
 token=$(gh auth token --user "$BOT_LOGIN" 2>/dev/null) || token=''
 [ -n "$token" ] || refuse "gh holds no login for '$BOT_LOGIN' (gh auth login, then gh auth status)"

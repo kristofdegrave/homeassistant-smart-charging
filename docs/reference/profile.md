@@ -172,6 +172,8 @@ branch on `origin` — one anyone with write access pushed, reviewed or not — 
 `.github/hooks` a `git -C <wt> merge` or `checkout <ref>` brings in, and git runs on that
 checkout or merge or the next commit: the guard refuses a commit only while a hook's change
 is uncommitted and not staged by a merge in progress, not once a merge has committed it.
+One layer sits outside both: a push runs as the bot, whose `write` role branch protection
+binds, so the platform itself refuses a push to `main` the session makes.
 
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop

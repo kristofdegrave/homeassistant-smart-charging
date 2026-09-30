@@ -91,6 +91,15 @@ check "a body from stdin" 2 '' "$NOCALL" -- comment 7 -
 check "a thread id that is not a node id" 2 '' "$NOCALL" -- resolve 7 'x"){}'
 check "too many arguments" 2 '' "$NOCALL" -- comment 7 "$B" extra
 
+# The file gh posts is a copy made before the token was read, never the path given.
+: > "$LOG"
+bash "$WRAP" comment 7 "$B" >/dev/null 2>&1
+if grep -q "body=@$B" "$LOG" || ! grep -q 'body=@' "$LOG"; then
+  printf 'FAIL the body is posted from a copy\n  log: %s\n' "$(cat "$LOG")"; fail=1
+else
+  echo "ok   the body is posted from a copy"
+fi
+
 NO_TOKEN=1 check "no stored login for the bot refuses" 2 '' 'auth token --user b$' -- comment 7 "$B"
 PROFILE="$T/nobot.yml" check "a profile naming no bot refuses" 2 '' "$NOCALL" -- comment 7 "$B"
 
