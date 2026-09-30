@@ -90,7 +90,8 @@ and against a different standard:
   **Contribution workflow**: the observed value for each item on that list, plus a log excerpt or dashboard
   screenshot. Where the work has no epic — a single-artifact idea,
   or a one-slice fix — the comment goes on the task issue instead.
-- **The first slice of a strand is verified live before slice two starts.**
+- **The first slice of a strand is verified live before slice two starts.** An autopilot
+  holds the gate with its `verify live: #<epic>` park, distinct from the `decompose` park.
 
 The Runtime check above and this pass do not substitute for each other, and a PR that satisfies
 one has not satisfied the other. Sharing a unit is exactly why: two claims about the same

@@ -15,7 +15,8 @@ entries:
 item's comments by author*). **A comment counts** only if it passes
 that test and carries none of the session's markers (*Rounds and the cap*, under `CLAUDE.md`'s
 **Contribution workflow**). **A park counts** as a comment on the epic passing the author test
-whose last line is the parking marker, exempt from the marker exclusion. **A late
+whose first line is **the park's title**, `decompose: #<epic>`, and last the parking marker,
+exempt from the marker exclusion. **A late
 artifact** is a blocked-by issue of the `decompose` issue closed as completed after the newest
 park, where that park's children part is not `none` (**Tracker mechanics**,
 *Parent/sub-issue and blocked-by edges*). **The open comments** are the counting
@@ -37,7 +38,8 @@ The first arm that holds decides, never the `decompose` issue's Status:
 5. No late artifact, the newest park's children part is not `none`, and the epic's label
    timeline (**Tracker mechanics**, *Reading a change request's label events and its
    review/comment timeline*) shows `needs-approval` on when it was posted and removed after
-   it by a login the author test passes → **Entry 2**: that removal is the go.
+   it by a login the author test passes, with no passing comment opening
+   `verify live: #<epic>` in between → **Entry 2**.
 6. Otherwise → file nothing. **This arm's question** is a `clarify` question on this issue
    whose first line is `**decompose: a fresh go is needed**`. With the newest such question by
    the session's login newer than the newest park and any late artifact's close, stop: still
@@ -78,9 +80,9 @@ The first arm that holds decides, never the `decompose` issue's Status:
    checklist** topic routes to and the epic's track. Fix every finding in the body itself,
    save what *Out of the body* sends elsewhere, then read the body back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
-   *Applying a label*, with its read-back), then post the executive summary as the epic's
-   parking comment (*Commenting on a work item*). The summary carries five parts, one `##`
-   each, `none` and why where a part is empty:
+   *Applying a label*, with its read-back), then post the executive summary, the park's title
+   first, as the epic's parking comment (*Commenting on a work item*). The summary carries five
+   parts, one `##` each, `none` and why where a part is empty:
    - **What the slice builds** — scope and success criteria.
    - **What it defers** — every deferral; a safety-relevant one flagged as a known deviation.
    - **What it derives from** — step 2's sources for the track, by identifier.
@@ -88,7 +90,7 @@ The first arm that holds decides, never the `decompose` issue's Status:
      fix, or its *Out of the body* issue; the Minor and Nit count.
    - **The children it will file** — one line per task: id, title, Size.
 
-   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`. Then stop
+   Its last line is **the parking marker**, `<!-- autopilot-parked -->`. Then stop
    and report the epic parked, the children planned.
 
 ### Out of the body

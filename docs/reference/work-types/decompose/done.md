@@ -38,10 +38,12 @@ park. No read-back → **Major**: the fix is then assumed.
   dropped by the draft without the mark that step puts in its task entry in the body →
   **Major**: entry 2 then files it twice or drops it silently.
 
-**(4) The comment ends in the parking marker**, as its last line, posted under a login that
-passes the entry rule's author test, and it is the only park the human has not answered.
-Missing or elsewhere in the comment → **Critical**: the autopilot cannot then tell the park
-from any other comment, and re-parks or never proceeds. A second park over an unanswered one,
+**(4) The comment opens with `implement.md`'s park title and ends in the parking marker**, the title as
+its first line and the marker as its last, posted under a login that passes the entry rule's
+author test, and it is the only park the human has not answered. Either missing or elsewhere
+in the comment → **Critical**: the autopilot cannot then tell the park from any other comment,
+or from the epic's `verify live: #<epic>` park, and re-parks or never proceeds. A second park
+over an unanswered one,
 as `implement.md`'s *One park per human answer* rule defines it → **Major**.
 
 **(5) `needs-approval` is on the epic**, read back before the parking comment was posted — the
@@ -80,7 +82,7 @@ the *Clutter* entry named under item 3 defines it, at its severities and in its 
 label on the epic or the `decompose` issue was added or removed beyond `clarify`'s parking.
 - Stopped by *Out of the body*: the filed issue exists, the blocked-by edge from the
   `decompose` issue to it was read back, where a park stood a fresh one with the children
-  part `none` names that issue, and (7) holds.
+  part `none` names that issue and carries (4)'s title and marker, and (7) holds.
 - Parked through `clarify`: that skill's parking rule holds on the `decompose` issue, and (7)
   holds.
 - Stopped as picked too early or as still parked: nothing on the tracker changed, and the run
