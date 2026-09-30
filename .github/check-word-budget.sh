@@ -10,15 +10,18 @@ set -euo pipefail
 
 SCRIPT="$(cd "$(dirname "$0")" && pwd)/check-word-budget.py"
 
-# The probe runs from this script's own directory: under `-c` (and a script read from stdin)
-# Python puts the current directory first on the import path, so a `yaml.py` in the cwd -- a
-# task worktree's root, say, the pre-commit hook's cwd -- would run on every call. This
-# directory is .github/, whose files are reviewed like the script itself.
+# No module is imported from the caller's directory or from this one. Under `-c` (and a script
+# read from stdin) Python puts the cwd first on the import path, so a `yaml.py` there -- a
+# task worktree's root, the pre-commit hook's cwd -- would run on every call: the probe runs from this directory
+# instead, and PYTHONSAFEPATH=1 keeps even this directory off the path, for the probe and the
+# run (a gitignored `yaml.pyc` here is no reviewed file). That variable needs Python 3.11; an
+# older one ignores it, which leaves this directory's ignored files a gap. `-P` is not used:
+# it stops the probe on an older Python.
 HERE="$(cd "$(dirname "$0")" && pwd)"
 py=""
 for candidate in python3 python; do
   if command -v "$candidate" >/dev/null 2>&1 &&
-    (cd "$HERE" && "$candidate" -c 'import yaml') >/dev/null 2>&1; then
+    (cd "$HERE" && PYTHONSAFEPATH=1 "$candidate" -c 'import yaml') >/dev/null 2>&1; then
     py="$candidate"
     break
   fi
@@ -28,4 +31,4 @@ if [ -z "$py" ]; then
   exit 2
 fi
 
-PYTHONUTF8=1 exec "$py" "$SCRIPT" "$@"
+PYTHONUTF8=1 PYTHONSAFEPATH=1 exec "$py" "$SCRIPT" "$@"
