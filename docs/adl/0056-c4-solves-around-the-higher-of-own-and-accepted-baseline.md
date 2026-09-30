@@ -41,6 +41,9 @@ accepting that the current may alternate between adjacent values while C4 binds 
 - Con: after a step-down the stale charger reading understates the baseline, so C4 grants
   current past its target — past the ceiling itself when the lag is large enough — on a transient
   the system caused by its own actuation.
+- Con: while C4 binds on a charger whose power reading lags, the step-up's stale-low charger
+  reading looks like a rise and the step-down's stale-high one like a drop, so the current
+  alternates between adjacent values from cycle to cycle, overshooting on every down-swing.
 
 ### Option B — R3's accepted baseline as it is
 
@@ -61,20 +64,23 @@ accepting that the current may alternate between adjacent values while C4 binds 
   reading looks like a rise and is taken at once, so the current alternates between adjacent
   values from cycle to cycle, never above the ceiling.
 - Con: C4's operand now depends on R3's baseline resolution, which must therefore run every cycle
-  whatever the capabilities.
+  whatever the capabilities; were it ever gated off, C4 would fall back to Option A, overshoot
+  included.
 
 ## Decision
 
 **Option C.** It is the only option that removes Option A's overshoot without taking on Option B's
-delayed rise. Both of its Cons cost charging rate or charger steadiness, never import above the
-ceiling. The alternation is no new exposure: Option A alternates the same way while C4 binds, and
-overshoots on the down-swing as well.
+delayed rise. Its first two Cons cost charging rate or charger steadiness, never import above the
+ceiling, and the alternation is one Option A shares (its second Con) without the overshoot. Its
+third is a coupling whose cost is Option A's overshoot, returning if R3's baseline resolution were
+ever gated off; the Consequences guard against that.
 
 C4 reads the accepted baseline as a shared **input**, not a shared clamp. The resolution runs once
-per cycle, before either clamp. R17's opt-out skips R3's clamp, never R3's baseline resolution, so
-nothing that can skip R3 reaches C4, and ADR-0006's separate call sites stand. ADR-0006's step 8
-is narrowed accordingly: C4 still reads unsmoothed values, and it solves around the higher of the
-two baselines. ADR-0039's discard is not extended to C4: taking it over as it is would be Option B.
+per cycle, before either clamp. R17's opt-out skips R3's clamp, never R3's baseline resolution,
+and without the CapTar capability (R18) that resolution still runs every cycle (R3's first
+criterion), so nothing that can skip R3 reaches C4, and ADR-0006's separate call sites stand.
+ADR-0006's step 8 is narrowed accordingly: C4 still reads unsmoothed values, and it solves around
+the higher of the two baselines. ADR-0039's discard is not extended to C4: taking it over as it is would be Option B.
 
 ## Consequences
 
@@ -96,29 +102,55 @@ two baselines. ADR-0039's discard is not extended to C4: taking it over as it is
 - Nothing here changes C4's thresholds, its safety offset, or R5's forecast, which keeps fitting
   its C4 bound to the smoothed joint mean ([ADR-0051](0051-r5-forecast-reads-the-admitted-joint-mean.md)).
 
-**Blast radius.** Two searches, run as written:
+**Blast radius.** Three searches, run as written:
 
-1. `rg -n 'clamp_to_ceiling|ceiling_headroom_a' custom_components/` — 10 hits. Wide enough for the
-   product code because every C4 headroom calculation goes through `ceiling_headroom_a`, which
-   `clamp_to_ceiling` delegates to, and both names are imported only under themselves.
-2. `rg -n -i 'C4[^0-9].*raw|raw.*C4[^0-9]|ceiling.*raw|raw.*ceiling' docs/design/` — 6 hits. Wide
-   enough for the design layer because every statement of which reading C4 uses names it as raw.
+1. `rg -n 'clamp_to_ceiling|ceiling_headroom_a' custom_components/ tests/` — 26 hits. Every C4
+   headroom calculation goes through `ceiling_headroom_a`, which `clamp_to_ceiling` delegates to,
+   and both are imported only under their own names, so this finds every call and every spy.
+2. `rg -n -U -i 'C4[^0-9][^
+]*(
+[^
+]*)?raw|raw[^
+]*(
+[^
+]*)?C4[^0-9]' custom_components/ tests/`
+   — 15 matches. Comments and docstrings name C4's operand in prose, often across a line break,
+   and every such statement calls it raw.
+3. `rg -n -i 'C4[^0-9].*raw|raw.*C4[^0-9]|ceiling.*raw|raw.*ceiling' docs/design/` — 6 hits. Every
+   design statement of which reading C4 uses names it as raw.
 
 | Site | Today | Follow-up |
 |---|---|---|
 | `custom_components/smart_charging/coordinator.py:1554` | `_apply_grid_ceiling_clamp` passes this cycle's raw `net_w`/`charger_w` | Pass the higher of this cycle's own and the accepted baseline |
+| `custom_components/smart_charging/coordinator_cycle.py:81` | Says C4 keeps reading the raw `ctx.net_w`/`ctx.charger_w` | Name the higher-of baseline |
+| `custom_components/smart_charging/coordinator_cycle.py:91` | Says C4 reads the raw, undebounced `net_w`/`charger_w` | The same |
+| `custom_components/smart_charging/coordinator.py:1596` | Says the real C4 clamp still uses the raw operands | The same |
+| `custom_components/smart_charging/coordinator.py:1640` | Says C4 itself clamps against the raw `ctx.net_w`/`ctx.charger_w` | The same |
+| `tests/test_coordinator.py:4663` | Docstring: the raw operands the real C4 clamp still uses | The same |
+| `tests/test_coordinator.py:4814` | Section comment: the C4 clamp stays raw | The same |
+| `tests/test_coordinator.py:4901` (searches 1 and 2) | Docstring: the real C4 clamp must stay on the raw operand | Assert the higher-of operand |
+| `tests/test_coordinator.py:4918` | Asserts the real C4 clamp receives the raw `net_w` | The same |
+| `tests/test_coordinator.py:4919` | Asserts the real C4 clamp receives the raw `charger_w` | The same |
+| `tests/test_captar_end_to_end.py:254` | Docstring: C4 still reads raw on the cycle R3 defers | Name the higher-of baseline; the asserted 7 A stands, since the raw baseline is the higher there |
+| `tests/test_captar_end_to_end.py:262` | Comment: C4 reads raw regardless | The same |
 | `docs/design/system-design.md:476` | §5.1's sequence: "grid-supply-ceiling clamp on raw (C4, always)" | Name the higher-of baseline |
 | `docs/design/project-plan.md:394` | "the C4 clamp stays on the raw operands" | Note the change, or leave the shipped slice's history as it was |
 | `docs/design/project-plan.md:468` | "the real C4 clamp stays on the raw, undebounced `net_w`/`charger_w`" | The same |
 
-7 other hits conform:
-- the import at `coordinator.py:86`;
-- `grid_safety.py:12`, `:32` and `:42`, which solve around the operands their caller passes;
-- `system-design.md:459`, `:875` and `:876`, whose "read raw" means unsmoothed, which still holds.
+Conforming, 19 hits:
+- search 1's 13: the import at `coordinator.py:86`; `grid_safety.py:12`, `:32` and `:42`, which
+  solve around the operands their caller passes; the six in `tests/engines/test_grid_safety.py`,
+  which test that engine; and `test_coordinator.py:4333`, `:4351` and `:4837`, the step-order
+  list and a spy's registration, whose order is unchanged;
+- search 2's 3: `test_grid_safety.py:22`, `:51` and `:65`, the same engine tests;
+- search 3's 3: `system-design.md:459`, `:875` and `:876`, whose "raw" means unsmoothed, which
+  still holds.
 
-Out of scope:
-- `coordinator.py:1616`, `:1617` and `:1644`, and `grid_safety.py:52` and `:54`, are R5's
-  forecast bound and its explanation, which keep reading the smoothed joint mean (ADR-0051).
-- `docs/analysis/**` states the requirement this record realises rather than a site of the step.
-- Merged records under `docs/adl/` are immutable, and this record narrows them rather than
-  editing them.
+Out of scope, 12 hits: R5's escalated-rate forecast and its tests, which keep fitting their C4
+bound to the smoothed joint mean (ADR-0051):
+- search 1's 9: `coordinator.py:1616`, `:1617` and `:1644`; `grid_safety.py:52` and `:54`;
+  `test_coordinator.py:4835`, `:4891`, `:4962` and `:4963`;
+- search 2's 3: `coordinator.py:1660`; `test_coordinator.py:4821` and `:4870`.
+
+Reconciled: search 1, 4 rows + 13 conforming + 9 out of scope = 26; search 2, 9 rows + 3 + 3 =
+15, with `test_coordinator.py:4901` a hit of both; search 3, 3 rows + 3 conforming = 6.
