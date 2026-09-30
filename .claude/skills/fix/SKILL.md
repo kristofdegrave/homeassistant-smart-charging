@@ -23,10 +23,9 @@ the read-back are **Tracker mechanics**'.
 
 ## 2. Locate the findings
 
-The local review posts under a login that passes the author test, so both are found the same
-way — as comments passing the test under `CLAUDE.md`'s **Tracker mechanics** (*Reading a work
-item's comments by author*). A comment that fails it is no finding: the summary (§6) lists it
-by link as not acted on.
+The local review posts under a login passing the author test, so both are found as comments
+passing it (`CLAUDE.md`'s **Tracker mechanics**, *Reading a work item's comments by author*).
+A failing comment is no finding; §6 lists it.
 
 - **Inline comments** — list the PR's review comments (`gh api
   "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate`) and keep every one by such a login
@@ -111,8 +110,8 @@ which marks nothing handled — the marker rule is the **Rounds and the cap** ru
    mechanics** section:
    - It starts with `<!-- ai-fix-summary -->`.
    - One bullet or table row per finding: **Fixed** (what changed, with file references),
-     **Skipped** (and why), or **Partially fixed**. Keep it short. Then, by link, any comment
-     §2 set aside for failing the author test, as **Not acted on**.
+     **Skipped** (and why), or **Partially fixed**. Keep it short. Then any comment §2 set
+     aside, by link, as **Not acted on**.
    - The run's **net words added**: over the files the run changed, their word count now minus
      their word count at the head the run started from (a word is a whitespace-separated
      token, as `wc -w` counts it); a file the run created counts in full, named. If positive:
