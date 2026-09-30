@@ -23,7 +23,7 @@ wrapper grows from one call to four, each an allow-list entry and a refusal to t
   Board moves are both sides' bookkeeping.
 - **What reads a post's author.** The round count and `fix`'s collector take a *human item* to
   be a login not ending in `[bot]` whose body carries none of the session's markers, and every
-  session post carries one. The bot is a user login with `write` access, so
+  session post but the reviewer side's hold-reason review carries one. The bot is a user login with `write` access, so
   [ADR-0054](0054-autopilot-runs-dontask-and-trusts-only-write-access-authors.md)'s author test
   admits it. `clarify`'s park, the self-grant count, the tick log and the `decompose` go read
   "the session's login", on issues and on the reviewer side's comments.
@@ -81,7 +81,8 @@ reads.
 - **ADR-0055 is narrowed**, not superseded: its Option C's scope — the bot reached only to
   commit, push and open a pull request — the wrapper's single call, and its comment Con no
   longer describe the author side; its identity split, its approval rule and its guard stand.
-- The `workflow` issue carrying ADR-0055's rows carries these too.
+- The `workflow` issue carrying ADR-0055's rows carries these too; where both records list a
+  site, this record's row replaces ADR-0055's.
 
 **Blast radius.** One search, run from the repository root:
 
