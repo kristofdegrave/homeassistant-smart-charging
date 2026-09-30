@@ -462,7 +462,63 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=105
+# Each script that finds its Python by probing `import yaml` must not import a `yaml.py`
+# sitting in the caller's directory: run from a directory holding one that leaves a marker,
+# the marker must not appear. `--help` keeps the four checks to their probe, argument parsing
+# and module-level imports, `import yaml` among them in all four; profile-env.sh takes no
+# arguments and runs its whole reader, which is what exercises its `cd "$HERE"`.
+trap_dir=$(mktemp -d)
+printf 'open("ran", "w").write("ran")\n' > "$trap_dir/yaml.py"   # relative: the run's cwd is the trap
+for s in check-method check-source-lines check-upstream-drift check-word-budget profile-env; do
+  rm -f "$trap_dir/ran"
+  (cd "$trap_dir" && PROFILE="$HERE/../.claude/profile.yml" bash "$HERE/$s.sh" --help >/dev/null 2>&1)
+  if [ -e "$trap_dir/ran" ]; then
+    fail_case "$s.sh does not import a yaml.py from the caller's directory" "the trap's marker was written"
+  else
+    ok_case "$s.sh does not import a yaml.py from the caller's directory"
+  fi
+done
+rm -rf "$trap_dir"
+
+# Nor from the script's own directory, where a gitignored module is no reviewed file:
+# PYTHONSAFEPATH keeps it off the path on Python 3.11 and later, for the probe and the run. Each
+# script is copied beside a trap `yaml.py` (check-source-lines with the check-method.py it loads
+# by path), and runs from there. The guard reads the interpreter the probe would pick.
+own_py=''
+for candidate in python3 python; do
+  if command -v "$candidate" >/dev/null 2>&1 && (cd "$HERE" && "$candidate" -c 'import yaml') >/dev/null 2>&1; then
+    own_py=$candidate
+    break
+  fi
+done
+for s in check-method check-source-lines check-upstream-drift check-word-budget profile-env; do
+  name="$s.sh does not import a module from its own directory"
+  if [ -z "$own_py" ] || ! "$own_py" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+    ok_case "$name (skipped: Python < 3.11)"
+    continue
+  fi
+  own_dir=$(mktemp -d)
+  cp "$HERE/$s.sh" "$own_dir/"
+  [ -f "$HERE/$s.py" ] && cp "$HERE/$s.py" "$own_dir/"
+  [ "$s" = check-source-lines ] && cp "$HERE/check-method.py" "$own_dir/"
+  printf 'open("ran", "w").write("ran")\n' > "$own_dir/yaml.py"
+  (cd "$own_dir" && PROFILE="$HERE/../.claude/profile.yml" bash "$own_dir/$s.sh" --help >/dev/null 2>&1)
+  if [ -e "$own_dir/ran" ]; then
+    fail_case "$name" "the trap's marker was written"
+  else
+    ok_case "$name"
+  fi
+  rm -rf "$own_dir"
+done
+
+# A relative PROFILE override still resolves once profile-env.sh has changed directory.
+out=$(cd "$HERE/.." && PROFILE=.claude/profile.yml bash .github/profile-env.sh 2>&1)
+case "$out" in
+  *OWNER=*) ok_case "profile-env.sh reads a relative PROFILE override" ;;
+  *) fail_case "profile-env.sh reads a relative PROFILE override" "$out" ;;
+esac
+
+EXPECTED=116
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \
