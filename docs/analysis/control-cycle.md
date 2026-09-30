@@ -175,8 +175,8 @@ flowchart TD
    accepted reading stands instead — a reading taken after the System set a charger current
    differing from the previous cycle's (never two cycles running), and a reading that would
    increase headroom and has not yet held for 2 consecutive cycles. A breaching increase is
-   therefore deferred by at most a single cycle, and neither case applies at step 6
-   below, which solves around this cycle's own reading (C4). R3 is authoritative for both cases and their bounds.
+   therefore deferred by at most a single cycle. Neither case applies at step 6 below, whose
+   household baseline C4 states. R3 is authoritative for both cases and their bounds.
    The effective peak limit itself is resolved by
    `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
    this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
@@ -187,8 +187,9 @@ flowchart TD
    when this whole step is skipped for an absent CapTar capability.
 6. **Apply the grid supply ceiling clamp (C4).** Regardless of mode *and* regardless of any
    declared capability — and so also whenever the step 5 peak clamp was skipped, whether because
-   `Power` disabled it or because the CapTar capability is absent — the coordinator reduces the current, using **raw** readings (not
-   smoothed, to avoid lag) and solving around this cycle's own household baseline reading, as C4 states, so that net grid import stays below the
+   `Power` disabled it or because the CapTar capability is absent — the coordinator reduces the
+   current, using **raw** readings (not smoothed, to avoid lag) and solving around the household
+   baseline C4 states, so that net grid import stays below the
    [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
    [grid safety offset](system-overview.md#ubiquitous-language) (converted to amperes via the
    resolved supply voltage). This is the hard fuse-protection limit, the one clamp `Power`
@@ -289,7 +290,8 @@ limit for step 5.
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
-  cannot trip (C4). This applies even in `Power` mode with peak protection disabled, and on an
+  cannot trip (C4), except in the known deviation C4 states, while the charger power reading lags
+  a change of charger current. This applies even in `Power` mode with peak protection disabled, and on an
   installation without the CapTar capability (R18) — in both of which it is the only active clamp.
 
 ## Requirements satisfied
