@@ -677,6 +677,7 @@ run ALLOW "git commit -m x" "$LR/wt"                                   # marker 
 export "$MARKER=0"
 run ALLOW "git commit -m x" "$LR/wt"                                   # a marker other than 1: not the loop
 export "$MARKER=1"
+export GUARD_REPO="$LR/wt"   # the repository the loop works in, which the hook itself is not part of here
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
 run BLOCK "git -C $LR/wt commit -m x" "$LR/wt2"                       # ... reached through -C from a sibling worktree
 g reset -q
@@ -715,7 +716,7 @@ run BLOCK "git pull fork main" "$LR/wt"                                # a pull 
 run BLOCK "git fetch origin refs/pull/1/head" "$LR/wt"                 # a pull-request ref
 run BLOCK "git fetch origin '+pull/1/head:x'" "$LR/wt"                 # ... quoted, with a destination
 run BLOCK "git fetch origin task:refs/remotes/origin/main" "$LR/wt"    # a fetch that moves origin/main
-run BLOCK "git fetch . HEAD:refs/remotes/origin/main" "$LR/wt"         # ... from the repository itself
+run BLOCK "git fetch . HEAD:refs/remotes/origin/main" "$LR/wt"         # ... from the repository itself (the source rule)
 run BLOCK "git remote add fork https://example.invalid/fork" "$LR/wt"  # a new remote
 run BLOCK "git remote set-url origin https://example.invalid/x" "$LR/wt" # a moved one
 run ALLOW "git remote -v" "$LR/wt"                                     # reading the remotes
@@ -729,14 +730,57 @@ run BLOCK "gh api -X PUT repos/o/r/issues/5/labels -f 'labels[]=workflow'" # a P
 run BLOCK "gh api --method=PATCH repos/o/r/issues/5 -f 'labels[]=x'"   # an issue PATCH setting labels
 run BLOCK "gh api graphql -f query='mutation{ removeLabels''FromLabelable(input:{}){ clientMutationId } }'" # a GraphQL removal, quote-split
 run ALLOW "gh api repos/o/r/issues/5/labels"                           # reading the labels
+run BLOCK "git status" "$LR/other"                                     # a cwd that is another repository
+run BLOCK "git -C $LR/wt -C . status" "$LR/wt"                         # more than one -C: git chains them
+run BLOCK "cd $LR/wt && git status" "$LR/wt"                           # any git after a cd
+run BLOCK "git fe''tch https://example.invalid/fork main" "$LR/wt"     # a quote-split subcommand
+run BLOCK "git re''mote add fork https://example.invalid/fork" "$LR/wt"
+run BLOCK "git '-c' core.fsmonitor=x status" "$LR/wt"                  # a quoted -c
+run BLOCK "git -cfoo=bar status" "$LR/wt"                              # ... attached
+run BLOCK "git --con''fig-env=a=b status" "$LR/wt"                     # a quote-split --config-env
+run BLOCK "git --exec-path=/x fetch origin" "$LR/wt"                   # --exec-path: git runs its helpers from there
+run BLOCK "git --git''-dir=/x status" "$LR/wt"                         # --git-dir, quote-split
+run BLOCK "git --work-tree=/x status" "$LR/wt"                         # --work-tree
+run BLOCK "git push --receive-pack=x origin task" "$LR/wt"             # --receive-pack
+run BLOCK "git fetch --exec=x origin" "$LR/wt"                         # --exec
+run BLOCK "git log -1 --out\\put=x" "$LR/wt"                           # --output behind a backslash escape
+run BLOCK "git remote rename origin o2" "$LR/wt"                       # the remotes: rename
+run BLOCK "git remote set-branches origin x" "$LR/wt"                  # ... set-branches
+run BLOCK "git remote set-head origin x" "$LR/wt"                      # ... set-head
+run BLOCK "git fetch --multiple origin fork" "$LR/wt"                  # --multiple makes every operand a remote
+run BLOCK "git fetch --negotiation-tip x origin main" "$LR/wt"         # an option the guard does not read
+run BLOCK "git fetch origin 0123456789abcdef0123456789abcdef01234567" "$LR/wt" # an object id
+run ALLOW "git fetch --prune origin" "$LR/wt"                          # an option it does read
+run BLOCK "git config core.hooksPath x" "$LR/wt"                       # a config write
+run ALLOW "git con''fig --get remote.origin.url" "$LR/wt"              # a config read
+run BLOCK "git sub''module foreach true" "$LR/wt"                      # a subcommand the loop file denies, quote-split
+run BLOCK "git replace HEAD HEAD~1" "$LR/wt"                           # replace refs rewrite what history reads as
+run BLOCK "git checkout main -- src/a.py" "$LR/wt"                     # a checkout of paths
+run BLOCK "gh issue edit 5 --remove-label needs-appro\\val"            # the human's go behind a backslash escape
+run BLOCK "gh api -XDELETE repos/o/r/issues/5/labels/needs-approval"   # an attached -X
+run BLOCK "gh api --method PATCH repos/o/r/issues/5 -f 'labels[]=x'"   # a separate --method
+run BLOCK "gh api graphql -f query='mutation{ clearLabelsFromLabelable(input:{}){ clientMutationId } }'"
+run BLOCK "gh api graphql -f query='mutation{ updateIssue(input:{labelIds:[]}){ clientMutationId } }'"
+run BLOCK "gh api graphql -f query='mutation{ merge''Branch(input:{}){ clientMutationId } }'" # a merge into main, quote-split
+run BLOCK "gh api graphql -f query='mutation{ updateRef (input:{}){ clientMutationId } }'"   # ... or spaced
+run BLOCK "gh api graphql -f query='mutation{ removeLabels''FromLabelable(input:{clientMutationId:\"issue edit\"}){ clientMutationId } }'" # words that read like issue edit
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
 run ALLOW "git push" "$LR/wt"                                          # no refspec: HEAD
+run ALLOW "git -C $LR/wt push -u origin task" "$LR/wt"                 # the loop's own steps: push -u
+printf 'm\n' > "$STUB/msg.txt"
+run ALLOW "git -C $LR/wt commit -F $STUB/msg.txt" "$LR/wt"             # ... commit -F
+run ALLOW "git -C $LR/wt merge origin/main" "$LR/wt"                   # ... merge origin/main
+run ALLOW "git worktree add $LR/wt3 origin/main" "$LR/wt"              # ... worktree add
+run ALLOW "git worktree add -b b3 $LR/wt3 origin/main" "$LR/wt"
+run ALLOW "git -C $LR/wt worktree remove $LR/wt2" "$LR/wt"             # ... worktree remove
 g checkout -q main
 run BLOCK "git push" "$LR/wt"                                          # no refspec while main is checked out: a push to main
 run BLOCK "git push origin HEAD" "$LR/wt"                              # ... HEAD named
 run BLOCK "git -C $LR/wt push" "$LR/wt2"                               # ... through -C
+run BLOCK "git push origin @" "$LR/wt"                                 # ... as @
+run BLOCK "git pu''sh" "$LR/wt"                                        # ... quote-split
 g checkout -q task
 run ALLOW "git push -o ci.skip origin task" "$LR/wt"                   # an option's separate value is not read as the remote
 run BLOCK "git push origin --tags" "$LR/wt"                            # tags carry commits no source diff sees
@@ -747,6 +791,9 @@ run BLOCK "if cd $LR/wt; then git commit -m x; fi" "$LR/wt"            # ... or 
 run BLOCK "Set-Location $LR/wt; git commit -m x" "$LR/wt"              # PowerShell's, any case
 run BLOCK "env -C $LR/wt git commit -m x" "$LR/wt"                     # env -C
 echo c > "$LR/wt/.github/ci.yml"; g commit -qam harness
+g tag origin/main HEAD
+run BLOCK "git push origin task" "$LR/wt"                              # a tag named origin/main does not shadow the remote ref
+g tag -d origin/main
 run BLOCK "git push origin task" "$LR/wt"                              # a pushed commit touching .github/
 run BLOCK "git push -u origin HEAD:task" "$LR/wt"                      # ... whatever the refspec spells
 run BLOCK "git push" "$LR/wt"                                          # ... or with none
@@ -780,7 +827,7 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
-unset "$MARKER"
+unset "$MARKER" GUARD_REPO
 run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
 run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
 run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"

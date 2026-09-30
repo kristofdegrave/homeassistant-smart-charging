@@ -151,20 +151,33 @@
 # read like the trees from the profile as checked out, so editing it switches the rule off;
 # and a `gh api` contents or git-data write, which ADR-0054 accepts.
 #
-# The loop's other git and gh rules, with the marker set, read the parsed words -- quotes
-# removed and case ignored -- where the loop file's text rules read what was typed (see
-# loop_git_rule and gh_loop_label_rule). Refused: git's `-c`/`--config-env` overrides; a git
-# whose target (the cwd, or -C) is not this repository's checkout or one of its linked
-# worktrees, compared by git common directory, so a directory laid out as a repository reads
-# no config or hook of its own; `--upload-pack`, `--receive-pack`, `--exec` and `--output` in
-# any spelling; a fetch or pull from anything but `origin`, of a `pull/` ref, or into a named
-# destination (a `:` refspec), so `origin/main`, which the push rule diffs against, moves only
-# by a plain fetch; `git remote add`/`set-url`/`rename`/`set-branches`/`set-head`; a push of
-# HEAD, named or by default, while `main` is checked out; and `gh issue edit` removing
-# `needs-approval`, a `gh api` label DELETE or PUT or an issue PATCH setting `labels`, or a
-# GraphQL label removal or `labelIds` update. `gh pr edit --remove-label` passes: it is the
-# admitted gesture. Conceded: a fetch or pull whose option takes a separate value (`--depth
-# 1`) reads that value as the remote and refuses -- `--depth=1` is the workaround.
+# The loop's other git and gh rules, with the marker set, read each word as the shell passes
+# it on -- quotes, backslashes and `$` removed (unq), and case ignored where gh or the rule
+# ignores it -- where the loop file's text rules read what was typed (see loop_git_rule and
+# gh_loop_label_rule). Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`
+# and `--work-tree`, and more than one `-C`; any git after a segment that changes directory;
+# a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
+# -- its main checkout or a linked worktree, compared by git common directory, so a directory
+# laid out as a repository reads no config or hook of its own; the subcommands the loop file
+# denies (`rebase`, `submodule`, `mv`, `restore`, `update-ref`, `cherry-pick`, `switch`, ...),
+# plus `symbolic-ref` and `replace`, a `config` write and a `checkout ... -- <path>`;
+# `--upload-pack`, `--receive-pack`, `--exec` and `--output`; a fetch or pull with an option
+# outside a short list of ones that change neither source nor destination, from anything but
+# `origin`, of a `pull/` ref or an object id, or into a named destination (a `:` refspec);
+# `git remote add`/`set-url`/`rename`/`set-branches`/`set-head`/`remove`; a push of HEAD
+# (`HEAD`, `@`, or by default) while `main` is checked out; and, from gh, `gh issue edit`
+# removing `needs-approval`, a `gh api` label DELETE or PUT or an issue PATCH setting
+# `labels`, and a GraphQL label removal, `labelIds` update, or merge, ref, commit,
+# repository or branch-protection mutation. The push rule diffs against the fully named
+# `refs/remotes/origin/main`, so a tag or branch called `origin/main` does not shadow it, and
+# only a plain fetch of origin moves it. `gh pr edit --remove-label` passes: it is the
+# admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
+# single quotes is dropped, so a Windows path spelled with backslashes refuses; a fetch
+# option given its value as a separate word (`--depth 1`) refuses as unread, `--depth=1` is
+# the workaround; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
+# environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
+# older git refuses every loop git; and a word the scan does not see (the indirection class
+# above).
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
@@ -283,8 +296,8 @@ Fix the failing condition, or leave the merge to them."
 
 deny_merge() { deny "$1" "$2" "$MERGE_TAIL"; }
 
-LABEL_TAIL="Removing needs-approval from an epic is the human partner's go (docs/adl/0054-*.md,
-Consequences, \"Label gestures\"); in the autopilot loop no spelling of it runs. A pull request's
+LABEL_TAIL="Removing needs-approval from an issue is the human partner's go (docs/adl/0054-*.md,
+Consequences, \"Label gestures\"); in the autopilot loop the guard refuses it in every spelling it reads. A pull request's
 label is removed with 'gh pr edit --remove-label'."
 
 HARNESS_TAIL="In the autopilot loop the rules a run works under are never changed unattended
@@ -374,110 +387,162 @@ seg_changes_dir() {
   return 1
 }
 
-# A word with every quote character removed and lower-cased: gh matches label names without
-# regard to case, and a quote split inside a word (`needs-appro''val`) is gone once the shell
-# has read it, so the loop rules below read the words the way gh and git will.
-norm() { printf '%s' "$1" | tr -d "\"'" | tr 'A-Z' 'a-z'; }
+# A word as the shell passes it on, read without a shell: every quote character, backslash
+# and `$` removed, so a quote split (`needs-appro''val`), an escape (`--out\put`) or an
+# ANSI-C quote (`$'-c'`) reads as the word it becomes. Lossy the other way -- a backslash
+# inside single quotes is kept by the shell and dropped here -- which only makes a loop rule
+# refuse. `norm` is the same reading lower-cased, for names gh matches without regard to case.
+unq() { printf '%s' "$1" | tr -d "\"'\\\\\$"; }
+norm() { unq "$1" | tr 'A-Z' 'a-z'; }
 
 # In the loop, a gh gesture that removes a label the human's go rests on (ADR-0054, "Label
-# gestures"): `gh issue edit` removing `needs-approval`, a `gh api` label DELETE or PUT or an
-# issue PATCH setting `labels`, and the GraphQL label-removal mutations -- in any case or
-# quote split. `gh pr edit --remove-label` is the admitted gesture and is left alone.
+# gestures"), and the GraphQL mutations the settings file's `ask` rules name, read in the
+# normalized form so no spelling or spacing the shell collapses gets past: `gh issue edit`
+# removing `needs-approval`; a `gh api` label DELETE or PUT, an issue PATCH setting `labels`;
+# and a GraphQL label removal, `labelIds` update, merge, ref, commit, repository or
+# branch-protection mutation. `gh pr edit --remove-label` is the admitted gesture.
 gh_loop_label_rule() { # <segment>
   _ls=$1
   _n=$(norm "$1")
   # shellcheck disable=SC2086  # deliberate word splitting; globbing is off by then
   set -- $_n
-  case " $_n " in
-    *" issue "*"edit "*)
-      _next=0
-      for _w in "$@"; do
-        _v=''
-        if [ "$_next" = 1 ]; then _v=$_w; _next=0
-        else
-          case "$_w" in
-            --remove-label) _next=1 ;;
-            --remove-label=*) _v=${_w#--remove-label=} ;;
-          esac
-        fi
-        case ",$_v," in *,needs-approval,*)
-          deny "$_ls" "in the autopilot loop removing needs-approval from an issue is the human's go, in any spelling" "$LABEL_TAIL" ;;
-        esac
-      done
-      ;;
-    *" api "*)
-      _m='' _next=0
-      for _w in "$@"; do
-        if [ "$_next" = 1 ]; then _m=$_w; _next=0; continue; fi
+  # gh's command path: the first two words after gh itself, stepping over its flags.
+  _c1='' _c2='' _skip=0 _first=1
+  for _w in "$@"; do
+    [ "$_first" = 1 ] && { _first=0; continue; }
+    [ "$_skip" = 1 ] && { _skip=0; continue; }
+    case "$_w" in
+      -r | --repo) _skip=1 ;;
+      -*) ;;
+      *) if [ -z "$_c1" ]; then _c1=$_w; else _c2=$_w; break; fi ;;
+    esac
+  done
+  if [ "$_c1 $_c2" = "issue edit" ]; then
+    _next=0
+    for _w in "$@"; do
+      _v=''
+      if [ "$_next" = 1 ]; then _v=$_w; _next=0
+      else
         case "$_w" in
-          -x | --method) _next=1 ;;
-          --method=*) _m=${_w#--method=} ;;
-          -x?*) _m=${_w#-x} ;;
+          --remove-label) _next=1 ;;
+          --remove-label=*) _v=${_w#--remove-label=} ;;
         esac
-      done
-      case "$_n" in *removelabelsfromlabelable* | *clearlabelsfromlabelable*)
-        deny "$_ls" "in the autopilot loop a GraphQL label removal is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
+      fi
+      case ",$_v," in *,needs-approval,*)
+        deny "$_ls" "in the autopilot loop removing needs-approval from an issue is the human's go, in the spellings the guard reads" "$LABEL_TAIL" ;;
       esac
-      case "$_n" in *labelids*)
-        case "$_n" in *updateissue* | *updatepullrequest*)
-          deny "$_ls" "in the autopilot loop a GraphQL update setting labelIds is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
-        esac ;;
-      esac
-      case "$_m:$_n" in
-        delete:*/labels* | put:*/labels*)
-          deny "$_ls" "in the autopilot loop a gh api label $_m is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
-        patch:*" labels"* | patch:*"=labels"*)
-          deny "$_ls" "in the autopilot loop a gh api PATCH setting labels is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
-      esac
-      ;;
+    done
+  fi
+  [ "$_c1" = api ] || return 0
+  _m='' _next=0
+  for _w in "$@"; do
+    if [ "$_next" = 1 ]; then _m=$_w; _next=0; continue; fi
+    case "$_w" in
+      -x | --method) _next=1 ;;
+      --method=*) _m=${_w#--method=} ;;
+      -x?*) _m=${_w#-x} ;;
+    esac
+  done
+  for _mut in removelabelsfromlabelable clearlabelsfromlabelable mergebranch mergepullrequest \
+    enablepullrequestautomerge updateref deleteref createref createcommitonbranch \
+    updaterepository branchprotectionrule; do
+    case "$_n" in *"$_mut"*)
+      deny "$_ls" "in the autopilot loop the GraphQL mutation '$_mut' is refused, in any spelling: it can remove the human's go or reach main" "$LABEL_TAIL" ;;
+    esac
+  done
+  case "$_n" in *labelids*)
+    case "$_n" in *updateissue* | *updatepullrequest*)
+      deny "$_ls" "in the autopilot loop a GraphQL update setting labelIds is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
+    esac ;;
+  esac
+  case "$_m:$_n" in
+    delete:*/labels* | put:*/labels*)
+      deny "$_ls" "in the autopilot loop a gh api label $_m is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
+    patch:*" labels"* | patch:*"=labels"*)
+      deny "$_ls" "in the autopilot loop a gh api PATCH setting labels is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
   esac
 }
 
-# In the loop, the git forms the loop file's text rules cannot hold, read from the parsed
-# words: a `-c`/`--config-env` override (`$gexec`, set by the global-option walk); a target
-# that is not this repository's main checkout or one of its linked worktrees -- a directory a
-# writer laid out as a repository has a git directory of its own; an option that runs a
-# program or writes a file (`--upload-pack`, `--receive-pack`, `--exec`, `--output`), in any
-# spelling; a fetch or pull from anything but `origin`, of a pull-request ref, or into a named
-# destination (so `origin/main`, which the push rule diffs against, is not moved); and a
-# change to the remotes.
+# The repository the loop works in: the one this hook belongs to -- its main checkout and
+# linked worktrees share one git common directory. Overridable for the test suite, the way
+# PROFILE is; an override in the environment is honoured (the header concedes it).
+GUARD_REPO=${GUARD_REPO:-$(dirname "$0")}
+
+# In the loop, the git forms the loop file's text rules cannot hold, read from the words as
+# the shell passes them on (the walk has already run them through `unq`): a global override
+# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`) or more than
+# one `-C` (`$nC`); any git after a directory change; a target outside this repository's
+# checkout and worktrees; the subcommands the loop file denies, spelled any way the shell
+# collapses; `--upload-pack`, `--receive-pack`, `--exec`, `--output`; a fetch or pull with an
+# option the guard does not read, from anything but `origin`, of a `pull/` ref or an object
+# id, or into a named destination; and a change to the remotes.
 loop_git_rule() { # <segment> <subcommand> <args...>
   _seg=$1 _sub=$2
   shift 2
   [ "$gexec" = 0 ] ||
-    deny "$_seg" "in the autopilot loop git's -c and --config-env overrides are refused: a config value can make git run a program" "$HARNESS_TAIL"
-  _pc=$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    deny "$_seg" "in the autopilot loop git's global -c, --config-env, --exec-path, --git-dir and --work-tree are refused: each can make git run a program or read another repository" "$HARNESS_TAIL"
+  [ "$nC" -le 1 ] ||
+    deny "$_seg" "in the autopilot loop a git with more than one -C is refused: git chains them, and the guard checks one target" "$HARNESS_TAIL"
+  [ "$dir_moved" = 0 ] ||
+    deny "$_seg" "in the autopilot loop a git after a directory change cannot be checked: the guard reads the payload's cwd or an explicit -C, not where an earlier 'cd' moved" "$HARNESS_TAIL"
+  _pc=$(git -C "$GUARD_REPO" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
   _tc=$(git -C "$cwd" -C "$repo" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
   if [ -z "$_pc" ] || [ "$_pc" != "$_tc" ]; then
     deny "$_seg" "in the autopilot loop git runs only in this repository's checkout or one of its worktrees, and '$repo' is not one: git would read another repository's config and hooks" "$HARNESS_TAIL"
   fi
+  case "$_sub" in
+    rebase | bisect | submodule | difftool | filter-branch | clone | init | mv | restore | apply | am | \
+      hash-object | update-index | read-tree | commit-tree | update-ref | symbolic-ref | mktree | \
+      fast-import | cherry-pick | switch | replace)
+      deny "$_seg" "in the autopilot loop 'git $_sub' is refused: the chain never runs it, and it can run a program or write around the Edit deny" "$HARNESS_TAIL" ;;
+    config)
+      for _a in "$@"; do
+        case "$_a" in --get | --get-all | --get-regexp | --list | -l | --show-origin | --show-scope) return 0 ;; esac
+      done
+      deny "$_seg" "in the autopilot loop git's config is only read, never written: a config value can make git run a program" "$HARNESS_TAIL" ;;
+    checkout)
+      for _a in "$@"; do
+        [ "$_a" = -- ] &&
+          deny "$_seg" "in the autopilot loop 'git checkout ... -- <path>' is refused: it writes files around the Edit deny" "$HARNESS_TAIL"
+      done ;;
+  esac
   _i=0
   for _a in "$@"; do
-    _a=$(norm "$_a")
-    case "$_a" in
+    _l=$(printf '%s' "$_a" | tr 'A-Z' 'a-z')
+    case "$_l" in
       --upload-pack* | --upl* | --receive-pack* | --rece* | --exec* | --output | --output=*)
         deny "$_seg" "in the autopilot loop '$_a' is refused: it makes git run a program or write a file outside the Edit deny" "$HARNESS_TAIL" ;;
-      -*) continue ;;
     esac
     case "$_sub" in
       fetch | pull)
+        case "$_a" in
+          -q | --quiet | -v | --verbose | -p | --prune | --prune-tags | --no-tags | --tags | \
+            --progress | --no-progress | --ff | --ff-only | --no-ff | --no-edit | --rebase | \
+            --no-rebase | --no-recurse-submodules | --depth=* | --deepen=* | --shallow-since=*) continue ;;
+          -*)
+            deny "$_seg" "in the autopilot loop a fetch or pull option the guard does not read ('$_a') is refused: it could change what is fetched, or from where" "$HARNESS_TAIL" ;;
+        esac
         _i=$((_i + 1))
         if [ "$_i" = 1 ]; then
           [ "$_a" = origin ] ||
             deny "$_seg" "in the autopilot loop git fetches only from origin, not '$_a': another source can bring in hooks git runs" "$HARNESS_TAIL"
-        else
-          case "$_a" in *pull/*)
-            deny "$_seg" "in the autopilot loop a pull-request ref ('$_a') is not fetched: a fork's content can carry hooks git runs" "$HARNESS_TAIL" ;;
-          esac
-          case "$_a" in *:*)
-            deny "$_seg" "in the autopilot loop a fetch into a named destination ('$_a') is refused: it can move origin/main, which the push rule diffs against" "$HARNESS_TAIL" ;;
-          esac
+          continue
         fi
+        case "$_l" in *pull/*)
+          deny "$_seg" "in the autopilot loop a pull-request ref ('$_a') is not fetched: a fork's content can carry hooks git runs" "$HARNESS_TAIL" ;;
+        esac
+        case "$_a" in *:*)
+          deny "$_seg" "in the autopilot loop a fetch into a named destination ('$_a') is refused: it can move origin/main, which the push rule diffs against" "$HARNESS_TAIL" ;;
+        esac
+        case "${_l#+}" in *[!0-9a-f]* | ?????? | ????? | ???? | ??? | ?? | ?) ;; *)
+          deny "$_seg" "in the autopilot loop an object id is not fetched ('$_a'): a fork's commit is reachable by id" "$HARNESS_TAIL" ;;
+        esac
         ;;
       remote)
-        case "$_a" in add | set-url | rename | set-branches | set-head)
+        case "$_a" in add | set-url | rename | set-branches | set-head | remove | rm)
           deny "$_seg" "in the autopilot loop the remotes are not changed ('git remote $_a'): a new source can bring in hooks git runs" "$HARNESS_TAIL" ;;
         esac
+        case "$_a" in -*) continue ;; esac
         break
         ;;
     esac
@@ -1101,18 +1166,31 @@ for seg in $segments; do
   sub=''
   repo=$cwd
   gexec=0
+  nC=0
+  # In the loop, every word is read as the shell passes it on, so a quote split or an escape
+  # in the subcommand or an option does not hide it from the rules below.
+  if in_loop; then
+    n=$#
+    while [ "$n" -gt 0 ]; do
+      a=$(unq "$1")
+      shift
+      set -- "$@" "$a"
+      n=$((n - 1))
+    done
+  fi
   while [ $# -gt 0 ]; do
     case "$1" in
       -C)
         shift
+        nC=$((nC + 1))
         [ $# -gt 0 ] && { repo=${1#[\"\']}; repo=${repo%[\"\']}; shift; }
         ;;
       -c | --git-dir | --work-tree | --namespace | --exec-path)
-        [ "$1" = -c ] && gexec=1
+        case "$1" in -c | --git-dir | --work-tree) gexec=1 ;; esac
         shift
         [ $# -gt 0 ] && shift
         ;;
-      --config-env* | -c?*) gexec=1; shift ;;
+      --config-env* | -c?* | --exec-path=* | --git-dir=* | --work-tree=*) gexec=1; shift ;;
       -*) shift ;;
       *) sub=$1; shift; break ;;
     esac
@@ -1184,13 +1262,13 @@ for seg in $segments; do
         # A push of HEAD -- named or by default -- whose text does not say where it lands goes
         # to the branch checked out, so on main it is a push to main, which the refspec rule
         # above cannot see and branch protection does not refuse on the owner's account.
-        case " $srcs " in *" HEAD "*)
+        case " $srcs " in *" HEAD "* | *" @ "* | *" head "*)
           if [ "$(git -C "$cwd" -C "$repo" symbolic-ref -q --short HEAD 2>/dev/null)" = main ]; then
             deny "$seg" "in the autopilot loop a push of HEAD while main is checked out lands on main, which is a merge by another name" "$MERGE_TAIL"
           fi ;;
         esac
         for src in $srcs; do
-          if ! files=$(git -C "$cwd" -C "$repo" -c core.quotepath=false diff --no-renames --no-relative --name-only "origin/main...$src" 2>/dev/null); then
+          if ! files=$(git -C "$cwd" -C "$repo" -c core.quotepath=false diff --no-renames --no-relative --name-only "refs/remotes/origin/main...$src" 2>/dev/null); then
             deny "$seg" "in the autopilot loop a push must be shown not to touch the harness, and git could not list what '$src' changes against origin/main" "$HARNESS_TAIL"
           fi
           if hit=$(printf '%s\n' "$files" | first_harness_path); then
