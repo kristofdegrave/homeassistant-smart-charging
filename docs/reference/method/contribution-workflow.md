@@ -76,8 +76,8 @@ has a third stop, the park `clarify` makes (**Rule C**).
 It never starts the next issue off the back of the one just finished.
 
 **Invoking a step skill enters the chain there.** `/implement #N` runs through to a clean pass
-or the cap; "only this step" is something the human says explicitly. Step 4 is the one
-exception (**The chain** above).
+or the cap; "only this step" is said explicitly, by the human or an unattended dispatch.
+Step 4 is the exception (**The chain** above).
 
 ## Rule C — decisions go through `clarify`
 
@@ -98,7 +98,8 @@ question with no issue to park on, in its shape.
   Minor/Nit counts as clean once they are fixed,
   so the final round needs no further pass to confirm it.
 - **At the cap** — the last pass the count allows still has a Critical or Major finding open —
-  the session **grants itself one more round** only when all three hold:
+  the session, never an unattended one, **grants itself one more round** only when all
+  three hold:
   - (i) the author agrees with every open Critical or Major finding;
   - (ii) no fix needs a decision that is the human partner's — a product choice, or a
     trade-off the spec does not settle;
