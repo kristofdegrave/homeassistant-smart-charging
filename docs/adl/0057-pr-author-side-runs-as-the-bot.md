@@ -98,7 +98,7 @@ rg -n --hidden --glob '!.git/' --glob '!docs/adl/**' --glob '!docs/postmortems/*
 
 Wide enough: whose login a post carries is keyed on the words `login` and `account`
 themselves; the posts this record moves on the calls that make them, their allow-list entries
-and the markers they carry. **100** hits.
+and the markers they carry. **101** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
@@ -113,16 +113,17 @@ and the markers they carry. **100** hits.
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's markers |
 | `.claude/skills/review/SKILL.md:29`; `.claude/skills/clarify/SKILL.md:71`; `.claude/skills/autopilot/SKILL.md:145`; `docs/reference/work-types/decompose/implement.md:44`, `:70` | Read "the session's login" | Name the owner's |
 
-51 hits conform. Four are ADR-0055's rows, which carries them: `block-destructive-git.sh:26`,
-`submit-pr-review/SKILL.md:14`, `profile.md:51`, `tracker-mechanics.md:442`. The other 47:
-`block-destructive-git.sh:121`; `test-block-destructive-git.sh:118`, `:167`, `:346`;
-`settings.json:32`, `:33`, `:36`, `:37`, `:42`; `autopilot/SKILL.md:18`, `:33`;
+52 hits conform. Four are ADR-0055's rows, which carries them: `block-destructive-git.sh:26`,
+`submit-pr-review/SKILL.md:14`, `profile.md:51`, `tracker-mechanics.md:442`. The other 48:
+`block-destructive-git.sh:122`, `:1341`; `test-block-destructive-git.sh:130`, `:179`, `:358`,
+`:810`; `settings.json:32`, `:33`, `:36`, `:37`, `:42`; `autopilot/SKILL.md:18`, `:33`;
 `clarify/SKILL.md:76`; `fix/SKILL.md:26`, `:27`, `:30`, `:32`, `:35`, `:36`, `:92`, `:95`,
 `:110`; `research/SKILL.md:50`; `submit-pr-review/SKILL.md:57`, `:58`; `CODEOWNERS:6`;
 `contribution-workflow.md:120`, `:278`; `tracker-mechanics.md:48`, `:61`, `:249`, `:278`,
 `:299`, `:300`, `:305`, `:419`, `:423`, `:432`, `:433`, `:434`, `:436`, `:517`;
-`profile.md:42`, `:150`; `decompose/done.md:41`; `decompose/implement.md:41`, `:57`, `:72`. `tracker-mechanics.md:517` shows the `-F body=@`
-form the owner's comments keep, where `:271` is the call the fix step's comment leaves.
+`profile.md:42`; `decompose/done.md:41`; `decompose/implement.md:41`, `:57`, `:72`.
+`tracker-mechanics.md:517` shows the `-F body=@` form the owner's comments keep, where
+`:271` is the call the fix step's comment leaves.
 
 Out of scope, 30 hits, each keeping what it says:
 - `account` in another sense — a domain example or "account for": 10 in
