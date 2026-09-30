@@ -6,8 +6,8 @@ Status: Accepted
 ## Summary
 
 In the context of a pull request the bot opens while the session replies on it as the owner,
-facing one author split across two logins, we decided on Option C, the fix step's posts as
-the bot too, to tell a pull request's author and reviewer apart by login, accepting that the
+facing one author split across two logins, we decided on Option C, the author side's posts
+as the bot too, to tell a pull request's author and reviewer apart by login, accepting that the
 wrapper grows from one call to four, each an allow-list entry and a refusal to test.
 
 ## Context
@@ -27,10 +27,11 @@ wrapper grows from one call to four, each an allow-list entry and a refusal to t
   [ADR-0054](0054-autopilot-runs-dontask-and-trusts-only-write-access-authors.md)'s author test
   admits it. `clarify`'s park, the self-grant count, the tick log and the `decompose` go read
   "the session's login", on issues and on the reviewer side's comments.
-- **The calls.** A reply and a comment are REST, the comment path the same for a pull request
-  as for an issue; a thread resolve is GraphQL only, and the owner's GraphQL quota is the one
-  that has run out. The board needs the `project` scope, which the bot's token lacks, and the
-  merge rule reads the labels.
+- **The calls.** A reply is REST; a comment is GraphQL through `gh pr comment`, with a REST
+  fallback whose path is the same for a pull request as for an issue; a thread resolve is
+  GraphQL only, and a round's replies and resolves are the burst that trips the secondary
+  limiter on the account sending them. The board needs the `project` scope, which the bot's
+  token lacks, and the merge rule reads the labels.
 
 ## Considered options
 
@@ -66,7 +67,8 @@ review passes and the reviewer side's comments stay plain `gh`, as the owner.
 **Option C**, over A because A's pull request splits its author across two logins, and over B
 because B's Cons put the author's login on the labels the reviewer side and the merge rule
 own. Its first Con is accepted because each added call is the same shape as ADR-0055's one;
-its second because a label is bookkeeping, as the board is.
+its second because the labels then stay on the one login that sets them and the merge rule
+reads.
 
 ## Consequences
 
@@ -74,12 +76,13 @@ its second because a label is bookkeeping, as the board is.
   the owner's: `clarify`'s park, the self-grant count, the tick log and the `decompose` go
   read that one, and say so.
 - **The round count and the collector need no new rule.** The bot's posts carry the session's
-  markers, which is what excludes them, and pass the author test on its `write` access; the
-  one home for that test is left to its own issue.
+  markers, which is what excludes them, and pass the author test on its `write` access; that
+  test has no single home yet, and this record does not give it one.
 - **The wrapper and the allow-list** gain the three calls; the owner's forms of a reply and a
   resolve go, and the owner's comment stays for the reviewer side.
-- **ADR-0055 is narrowed**, not superseded: its Option C's comment Con no longer describes the
-  author side; its wrapper, identity split and guard stand.
+- **ADR-0055 is narrowed**, not superseded: its Option C's scope — the bot reached only to
+  commit, push and open a pull request — the wrapper's single call, and its comment Con no
+  longer describe the author side; its identity split, its approval rule and its guard stand.
 - The `workflow` issue carrying ADR-0055's rows carries these too.
 
 **Blast radius.** One search, run from the repository root:
@@ -111,8 +114,9 @@ and the markers they carry. **100** hits.
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's markers |
 | `.claude/skills/review/SKILL.md:29`; `.claude/skills/clarify/SKILL.md:71`; `.claude/skills/autopilot/SKILL.md:145`; `docs/reference/work-types/decompose/implement.md:44`, `:70` | Read "the session's login" | Name the owner's |
 
-52 hits conform — five of them rows of ADR-0055, which carries them: `block-destructive-git.sh:26`,
-`:121`; `test-block-destructive-git.sh:118`, `:167`, `:346`; `settings.json:32`, `:33`, `:34`,
+52 hits conform — five of them ADR-0055's rows, which carries them:
+`block-destructive-git.sh:26`, `settings.json:34`, `submit-pr-review/SKILL.md:14`,
+`profile.md:51`, `tracker-mechanics.md:442`. The 52: `block-destructive-git.sh:26`, `:121`; `test-block-destructive-git.sh:118`, `:167`, `:346`; `settings.json:32`, `:33`, `:34`,
 `:36`, `:37`, `:42`; `autopilot/SKILL.md:18`, `:33`; `clarify/SKILL.md:76`;
 `fix/SKILL.md:26`, `:27`, `:30`, `:32`, `:35`, `:36`, `:92`, `:95`, `:110`;
 `research/SKILL.md:50`; `submit-pr-review/SKILL.md:14`, `:57`, `:58`; `CODEOWNERS:6`;
