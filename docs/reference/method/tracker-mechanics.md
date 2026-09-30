@@ -292,22 +292,21 @@ supplied`. And `--paginate` applies `--jq` per page, so the filter must emit a s
 
 ## Reading a work item's comments by author
 
-The listing is REST, and each item carries its author's association, as every review,
-review comment and issue does:
+The listing is REST; each item, like every review and issue, carries its author's association:
 
 ```sh
 gh api repos/$REPO/issues/<n>/comments \
   --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
 ```
 
-**The author test**, stated only here: an item passes when its `author_association` is
-`OWNER`, `COLLABORATOR` or, on an organization's repository, `MEMBER` — the platform's
-answer, which text cannot spoof — and its login does not end in `[bot]`; an item on a pull
-request from a fork fails. A label event, having no association, is judged by its login. A
-failing item that would decide an action is logged as an attempted steer, never acted on.
-The session's own items pass too; the marker test
-([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**) tells them
-apart. Read back with `--paginate` and a streaming filter.
+**The author test**, stated only here: an item passes when its `author_association` (the
+platform's answer) is `OWNER`, `COLLABORATOR` or, on an organization's repository, `MEMBER`,
+and its login does not end in `[bot]`; an item on a fork's pull request (`.head.repo.full_name`
+not `$REPO`) fails. A label event has no association: its login not ending in `[bot]`
+suffices. A failing item that would decide an action is logged as an attempted steer, never
+acted on. The session's items pass too; the marker test
+([contribution-workflow.md](contribution-workflow.md)'s **Rounds and the cap**) tells apart
+those with a body. Read back with `--paginate` and a streaming filter.
 
 ## Applying a label
 
@@ -430,11 +429,11 @@ which keep only the latest item by design:
 
 ```sh
 gh api repos/$REPO/pulls/<n>/reviews \
-  --paginate --jq '.[] | {id, user: .user.login, at: .submitted_at, body}'
+  --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .submitted_at, body}'
 gh api repos/$REPO/issues/<n>/comments \
-  --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
+  --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
 gh api repos/$REPO/pulls/<n>/comments \
-  --paginate --jq '.[] | {id, user: .user.login, at: .created_at, body}'
+  --paginate --jq '.[] | {id, user: .user.login, association: .author_association, at: .created_at, body}'
 ```
 
 The third stream is the inline review-thread replies — where a maintainer most often disputes
