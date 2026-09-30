@@ -33,12 +33,7 @@ from custom_components.smart_charging.const import (
     DOMAIN,
     MODE_POWER,
 )
-from tests.helpers import (
-    entry_data_base,
-    entry_options_base,
-    seed_charger_states,
-    seed_owned_entity,
-)
+from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
 from tests.scenarios.plant import Plant
 from tests.scenarios.runner import ScenarioRunner, format_trace
 
@@ -75,8 +70,18 @@ async def _setup(hass):
         # expected C4 breach -- a setup failure must surface as something else entirely.
         raise RuntimeError(f"config entry {entry.entry_id} failed to set up")
     await hass.async_block_till_done()
-    seed_owned_entity(hass, "select.smart_charging_mode", MODE_POWER)
+    # Set once, through the real `select.select_option` service -- never `seed_owned_entity`
+    # (#1363, `tests/test_deadline_soc_management_end_to_end.py:1163-1183`'s `_select_option`):
+    # a raw state write is not what a real user action produces, and the mode select is a real,
+    # polled (`should_poll=True`) entity whose own poll would otherwise contend with a re-seed.
+    await _select_option(hass, "select.smart_charging_mode", MODE_POWER)
     return entry.runtime_data.coordinator
+
+
+async def _select_option(hass, entity_id, option):
+    await hass.services.async_call(
+        "select", "select_option", {"entity_id": entity_id, "option": option}, blocking=True
+    )
 
 
 def _ceiling_current_a(options: dict) -> float:
@@ -98,8 +103,17 @@ def _assert_ceiling_held(trace, *, ceiling_w):
     every step. C4's own reaction allowance (a swing the previous command could not have
     foreseen -- a household-load step, or household load alone above the ceiling at 0 A charger
     current) is NOT implemented by this helper: the household load is steady throughout this
-    scenario, so no step needs it here. T2's load-step scenario is what adds it."""
+    scenario, so no step needs it here. T2's load-step scenario is what adds it.
+
+    Also guards the precondition both tests share: the mode select, set once in `_setup`, must
+    still read `Power` on every step -- a real regression in the polled mode select entity
+    (#1363) would otherwise pass a breach off as C4's own defect, or a control-test green off as
+    proof C4 held, when neither ran under Power at all."""
     for t in trace:
+        assert t.active_mode == MODE_POWER, (
+            f"step {t.index}: expected active_mode {MODE_POWER!r}, got {t.active_mode!r} -- "
+            f"the mode select reverted mid-timeline\n{format_trace(trace)}"
+        )
         assert t.reading.true_import_w <= ceiling_w, (
             f"C4 breach at step {t.index}: true import {t.reading.true_import_w} W > "
             f"ceiling {ceiling_w} W\n{format_trace(trace)}"
@@ -125,9 +139,7 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     options = _entry_options()
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
-    runner = ScenarioRunner(
-        hass, coordinator, plant, freezer=freezer, grid_voltage=voltage, mode=MODE_POWER
-    )
+    runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
 
     # Act
     trace = await runner.run(_CYCLES)
@@ -147,9 +159,7 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     options = _entry_options()
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=0)
-    runner = ScenarioRunner(
-        hass, coordinator, plant, freezer=freezer, grid_voltage=voltage, mode=MODE_POWER
-    )
+    runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
 
     # Act
     trace = await runner.run(_CYCLES)
