@@ -122,6 +122,37 @@
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
 # not read.
 #
+# The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
+# `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
+# change in its working tree, staged, unstaged or untracked, touches the harness (the hook
+# reads a compound command before any of it runs, so `git add x && git commit` is read as
+# one): a path under a `.claude/` or `.github/` directory, or a `CLAUDE.md` or
+# `CLAUDE.local.md`, at any depth, case ignored. Finishing a merge is the one exception: a
+# harness path staged with MERGE_HEAD's own content, and nothing on top of it, is the merged
+# branch's change, not this one's. A `git push` is refused if any source it names -- every
+# refspec's left side after the remote, the values of options that take a separate one
+# skipped, else HEAD -- changes one against `origin/main`: a three-dot diff with renames
+# split, so what a merge of main brought in does not count and a move out of the harness
+# does, and a stale `origin/main` errs towards refusing; a push of tags (`--tags`,
+# `--follow-tags`), which the chain never makes, is refused outright. This closes the shell's
+# way round the loop file's Edit deny (ADR-0054, Option A2's Con: a subprocess write such as
+# `git checkout <ref> -- .github/...`); an interactive session, with the marker unset, is
+# unaffected, but for the quotes now stripped from a `-C` value, which the rebase probe reads
+# too. It fails CLOSED: a git that cannot list the changes, a path it had to quote, or a
+# commit or push after a segment that changes directory (its first word, past reserved words
+# and `{`, is `cd`, `pushd`, `popd`, `chdir`, `Set-Location`/`sl`/`Push-Location`/
+# `Pop-Location` in any case, or `env -C`; the rule reads the payload's cwd or an explicit
+# -C, not where the shell moved), refuses. Conceded: a commit or push spelled so the scan
+# does not read it as one (the indirection class above), a directory change it does not
+# name among them; an ignored file force-added in the same command (`git add -f`), which
+# `git status` does not list -- the push then refuses it; a commit made by another git
+# command (`merge`, `revert`, `merge --continue`), which only the push catches; a hook
+# already committed on the branch, which git runs on the next commit; the marker's name,
+# read like the trees from the profile as checked out, so editing it switches the rule off;
+# the local `origin/main` the push diffs against, which a fetch into
+# `refs/remotes/origin/main` can move forward so the diff comes up empty; and a `gh api`
+# contents or git-data write, which ADR-0054 accepts.
+#
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
 DOC='docs/reference/method/contribution-workflow.md, section "Commit & push authorization"'
@@ -239,6 +270,10 @@ Fix the failing condition, or leave the merge to them."
 
 deny_merge() { deny "$1" "$2" "$MERGE_TAIL"; }
 
+HARNESS_TAIL="In the autopilot loop the rules a run works under are never changed unattended
+(docs/adl/0054-*.md, Option A2); this script's header states the loop rule. Leave the
+change to the human partner, in an interactive session."
+
 # A trailing CR per line is gh's line ending on Windows; a CR anywhere else stays, so the
 # control-character check below refuses a path that carries one.
 strip_cr() { awk '{ sub(/\r$/, ""); print }'; }
@@ -266,6 +301,60 @@ profile_repo() {
     top && /^  name:/ { n = $2 }
     END { gsub(/["'"'"']/, "", o); gsub(/["'"'"']/, "", n); if (o != "" && n != "") print o "/" n }
   ' "$PROFILE" 2>/dev/null
+}
+
+# The name of the loop's `env` marker, from the profile's `autopilot.loop_marker`, read the
+# same way as the trees; empty when the key is unset or `null`.
+profile_loop_marker() {
+  awk '
+    { sub(/\r$/, "") }
+    /^[^ \t#]/ { top = ($0 ~ /^autopilot:/) }
+    top && /^  loop_marker:/ { m = $2; gsub(/["'"'"']/, "", m); if (m != "null") print m; exit }
+  ' "$PROFILE" 2>/dev/null
+}
+
+# Is this session the autopilot loop -- the marker the profile names set to 1 in its
+# environment? A name that is not a plain shell identifier is read as no loop.
+in_loop() {
+  _m=$(profile_loop_marker)
+  case "$_m" in '' | [!A-Za-z_]* | *[!A-Za-z0-9_]*) return 1 ;; esac
+  eval "_v=\${$_m:-}"
+  [ "$_v" = 1 ]
+}
+
+# The first harness path in a list of repository paths on stdin, one per line: anything
+# under a `.claude/` or `.github/` directory, or a `CLAUDE.md` or `CLAUDE.local.md`, at any
+# depth, case ignored as Windows does. A path git had to quote (a leading `"`) cannot be
+# read here, so it is printed as if it were one -- the loop rule fails closed.
+first_harness_path() {
+  while IFS= read -r _p; do
+    _l=$(printf '%s' "/$_p" | tr 'A-Z' 'a-z')
+    case "$_l" in
+      /\"* | */.claude/* | */.github/* | */claude.md | */claude.local.md) printf '%s' "$_p"; return 0 ;;
+    esac
+  done
+  return 1
+}
+
+# Does a segment change the shell's directory? Its first word -- after the reserved words and
+# the `{`, `(` or `|` the scan steps over, tabs read as spaces, case ignored as PowerShell
+# does -- is a directory command, or `env` with `-C`/`--chdir`.
+seg_changes_dir() {
+  # shellcheck disable=SC2046  # deliberate word splitting; globbing is off by then
+  set -- $(printf '%s' "$1" | tr '\t' ' ' | tr 'A-Z' 'a-z')
+  while [ $# -gt 0 ]; do
+    _w=${1#[|({]}
+    case "$_w" in
+      '' | if | then | else | elif | do | while | until | '!' | '{') shift ;;
+      cd | pushd | popd | chdir | set-location | sl | push-location | pop-location) return 0 ;;
+      env)
+        shift
+        case "${1:-}" in -c | -c* | --chdir | --chdir=*) return 0 ;; esac
+        ;;
+      *) return 1 ;;
+    esac
+  done
+  return 1
 }
 
 # Does a `-R`/`--repo` value name the profile's repository? gh takes `OWNER/REPO`,
@@ -753,11 +842,15 @@ set -f
 IFS='
 '
 piped_words=0
+# Set once a segment changes directory: the loop rule below reads the payload's cwd (or an
+# explicit -C), not a directory a `cd` earlier in the command moved to, so it refuses then.
+dir_moved=0
 for seg in $segments; do
   # Unset rather than saved-and-restored: an IFS arriving unset from the environment
   # would restore as the empty string, which disables word splitting altogether and
   # would fail the guard open on every command.
   unset IFS
+  seg_changes_dir "$seg" && dir_moved=1
   piped=0
   case "$seg" in
     '|'*) piped=1; seg=${seg#|} ;;
@@ -883,7 +976,7 @@ for seg in $segments; do
     case "$1" in
       -C)
         shift
-        [ $# -gt 0 ] && { repo=$1; shift; }
+        [ $# -gt 0 ] && { repo=${1#[\"\']}; repo=${repo%[\"\']}; shift; }
         ;;
       -c | --git-dir | --work-tree | --namespace | --exec-path)
         shift
@@ -929,6 +1022,80 @@ for seg in $segments; do
         esac
         remote=1
       done
+      # In the loop, a push whose commits touch the harness is refused: each pushed source's
+      # change since it left main, so content merged in from main does not count. The sources
+      # are every refspec's left side after the remote -- the values of the options that take
+      # a separate one skipped, so they are not read as the remote -- or HEAD when none is
+      # named. Renames are listed as a delete and an add, so a move out of the harness shows.
+      if in_loop; then
+        [ "$dir_moved" = 0 ] ||
+          deny "$seg" "in the autopilot loop a push after a directory change cannot be checked: the guard reads the payload's cwd or an explicit -C, not where an earlier 'cd' moved" "$HARNESS_TAIL"
+        srcs='' remote=0 skip=0
+        for t in "$@"; do
+          [ "$skip" = 1 ] && { skip=0; continue; }
+          t=${t#[\"\']}
+          t=${t%[\"\']}
+          case "$t" in
+            -o | --push-option | --repo | --receive-pack | --exec) skip=1; continue ;;
+            # Tags carry commits no source diff sees, and the chain never pushes one.
+            --ta* | --fol*)
+              deny "$seg" "in the autopilot loop a push of tags ('$t') cannot be shown not to touch the harness: the chain pushes branches only" "$HARNESS_TAIL" ;;
+            -*) continue ;;
+          esac
+          if [ "$remote" = 1 ]; then
+            t=${t%%:*}
+            [ -n "$t" ] && srcs="$srcs $t"
+          fi
+          remote=1
+        done
+        [ -n "$srcs" ] || srcs=HEAD
+        for src in $srcs; do
+          if ! files=$(git -C "$cwd" -C "$repo" -c core.quotepath=false diff --no-renames --no-relative --name-only "origin/main...$src" 2>/dev/null); then
+            deny "$seg" "in the autopilot loop a push must be shown not to touch the harness, and git could not list what '$src' changes against origin/main" "$HARNESS_TAIL"
+          fi
+          if hit=$(printf '%s\n' "$files" | first_harness_path); then
+            deny "$seg" "in the autopilot loop a push may not carry a change to the harness ('$hit'): .claude/, .github/ and CLAUDE.md stay the human's" "$HARNESS_TAIL"
+          fi
+        done
+      fi
+      ;;
+    commit)
+      # In the loop, a commit is refused when any change it could take touches the harness:
+      # staged, unstaged (for `-a` and pathspec commits) or untracked -- the hook reads the
+      # whole command before any of it runs, so a `git add` earlier in it has not staged yet.
+      # A rename's line names both paths.
+      if in_loop; then
+        [ "$dir_moved" = 0 ] ||
+          deny "$seg" "in the autopilot loop a commit after a directory change cannot be checked: the guard reads the payload's cwd or an explicit -C, not where an earlier 'cd' moved" "$HARNESS_TAIL"
+        if ! changes=$(git -C "$cwd" -C "$repo" -c core.quotepath=false status --porcelain=v1 --untracked-files=all 2>/dev/null); then
+          deny "$seg" "in the autopilot loop a commit must be shown not to touch the harness, and git could not list the working tree's changes" "$HARNESS_TAIL"
+        fi
+        # Finishing a merge: a harness path staged with MERGE_HEAD's own content, and no
+        # working-tree change on top, is what the merged branch brought, not this one's
+        # change -- the push's three-dot diff still refuses it unless that branch is main.
+        merging=0
+        git -C "$cwd" -C "$repo" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=1
+        hit=''
+        while IFS= read -r line; do
+          [ -n "$line" ] || continue
+          xy=${line%"${line#??}"}
+          p=${line#???}
+          h=$(printf '%s\n' "$p" | sed -e 's/ -> /\
+/' | first_harness_path) || continue
+          if [ "$merging" = 1 ] && [ "$h" = "$p" ] && [ "${p#\"}" = "$p" ] && [ "${xy#?}" = ' ' ]; then
+            ib=$(git -C "$cwd" -C "$repo" rev-parse -q --verify ":$p" 2>/dev/null)
+            mb=$(git -C "$cwd" -C "$repo" rev-parse -q --verify "MERGE_HEAD:$p" 2>/dev/null)
+            [ "$ib" = "$mb" ] && { [ -n "$ib" ] || [ "${xy%?}" = D ]; } && continue
+          fi
+          hit=$h
+          break
+        done <<EOF
+$changes
+EOF
+        if [ -n "$hit" ]; then
+          deny "$seg" "in the autopilot loop a commit may not touch the harness ('$hit'): .claude/, .github/ and CLAUDE.md stay the human's" "$HARNESS_TAIL"
+        fi
+      fi
       ;;
     reset)
       # --hard; --h alone is ambiguous with --help, so --ha is the shortest form.

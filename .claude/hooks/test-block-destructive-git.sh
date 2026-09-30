@@ -657,6 +657,97 @@ unset PROFILE
 STUB_REPO=kristofdegrave/homeassistant-smart-charging
 run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # and the real profile still passes
 
+# The loop rule: with the marker the real profile names set to 1, a commit or push touching
+# the harness is refused. A throwaway repository stands in for a task worktree: `main` is
+# pushed to a bare origin, then a branch is cut from it.
+LR=$STUB/loop
+git init -q -b main "$LR/origin.git" --bare
+git init -q -b main "$LR/wt"
+g() { git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1; }
+mkdir -p "$LR/wt/src" "$LR/wt/.github" "$LR/wt/docs"
+echo a > "$LR/wt/src/a.py"; echo a > "$LR/wt/.github/ci.yml"; echo a > "$LR/wt/CLAUDE.md"
+g add -A; g commit -qm base; g remote add origin "$LR/origin.git"; g push -q origin main
+g checkout -qb task
+MARKER=$(awk '/^autopilot:/{t=1} t&&/^  loop_marker:/{print $2; exit}' "$CWD/.claude/profile.yml")
+[ -n "$MARKER" ] || { echo "FAIL the real profile names no loop_marker"; fail=1; }
+
+echo b > "$LR/wt/.github/ci.yml"; g add .github/ci.yml
+run ALLOW "git commit -m x" "$LR/wt"                                   # marker unset: interactive, unaffected
+export "$MARKER=0"
+run ALLOW "git commit -m x" "$LR/wt"                                   # a marker other than 1: not the loop
+export "$MARKER=1"
+run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
+run BLOCK "git -C $LR/wt commit -m x"                                  # ... reached through -C
+g reset -q
+run BLOCK "git commit -am x" "$LR/wt"                                  # an unstaged one, which -a would take
+g checkout -q -- .github/ci.yml
+echo b > "$LR/wt/CLAUDE.md"
+run BLOCK "git commit -am x" "$LR/wt"                                  # CLAUDE.md
+g checkout -q -- CLAUDE.md
+mkdir -p "$LR/wt/docs/.Claude"; echo b > "$LR/wt/docs/.Claude/s.json"; g add docs
+run BLOCK "git commit -m x" "$LR/wt"                                   # a nested .claude/, any case
+g reset -q
+run BLOCK "git add docs && git commit -m x" "$LR/wt"                   # an untracked one a git add before it would stage
+rm -rf "$LR/wt/docs/.Claude"
+g mv .github/ci.yml src/ci.yml
+run BLOCK "git commit -m x" "$LR/wt"                                   # a rename out of .github/
+g mv src/ci.yml .github/ci.yml
+g mv src/a.py .github/a.py
+run BLOCK "git commit -m x" "$LR/wt"                                   # a rename into .github/, read only once split
+g mv .github/a.py src/a.py
+echo b > "$LR/wt/src/a.py"; g add src
+run ALLOW "git commit -m x" "$LR/wt"                                   # a change outside the harness
+run ALLOW "git -C $LR/wt commit -m x"                                  # ... through -C, from another cwd
+run ALLOW "git -C \"$LR/wt\" commit -m x"                              # ... with the -C path quoted
+run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
+g commit -qm code
+run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
+run ALLOW "git push" "$LR/wt"                                          # no refspec: HEAD
+run ALLOW "git push -o ci.skip origin task" "$LR/wt"                   # an option's separate value is not read as the remote
+run BLOCK "git push origin --tags" "$LR/wt"                            # tags carry commits no source diff sees
+run BLOCK "git push --follow-tags origin task" "$LR/wt"                # ... followed ones too
+run BLOCK "cd $LR/wt && git push origin task" "$LR/wt"                 # a push after a cd
+run BLOCK "{ cd $LR/wt; git commit -m x; }" "$LR/wt"                   # a cd behind a brace
+run BLOCK "if cd $LR/wt; then git commit -m x; fi" "$LR/wt"            # ... or a reserved word
+run BLOCK "Set-Location $LR/wt; git commit -m x" "$LR/wt"              # PowerShell's, any case
+run BLOCK "env -C $LR/wt git commit -m x" "$LR/wt"                     # env -C
+echo c > "$LR/wt/.github/ci.yml"; g commit -qam harness
+run BLOCK "git push origin task" "$LR/wt"                              # a pushed commit touching .github/
+run BLOCK "git push -u origin HEAD:task" "$LR/wt"                      # ... whatever the refspec spells
+run BLOCK "git push" "$LR/wt"                                          # ... or with none
+run BLOCK "git push -o ci.skip origin task" "$LR/wt"                   # ... behind an option's separate value
+g branch other main
+run BLOCK "git push origin other task" "$LR/wt"                        # ... as the second of two sources
+g reset -q --hard HEAD~1
+g mv .github/ci.yml src/moved.yml; g commit -qm move
+run BLOCK "git push origin task" "$LR/wt"                              # a pushed rename out of .github/
+g reset -q --hard HEAD~1
+g checkout -q main; echo m > "$LR/wt/.github/ci.yml"; g commit -qam main-harness; g push -q origin main
+g checkout -q task
+run ALLOW "git push origin task" "$LR/wt"                              # main moved on with a harness change the branch lacks: three-dot
+g merge -q --no-edit main
+run ALLOW "git push origin task" "$LR/wt"                              # a merge of main brings harness content in: not the branch's
+g checkout -q main; echo m2 > "$LR/wt/.github/ci.yml"; echo mainside > "$LR/wt/src/a.py"; g commit -qam main2; g push -q origin main
+g checkout -q task; echo taskside > "$LR/wt/src/a.py"; g commit -qam taskside; g merge main
+echo resolved > "$LR/wt/src/a.py"; g add src/a.py
+run ALLOW "git commit -m x" "$LR/wt"                                   # finishing a conflicted merge of main: its harness change is main's
+echo mine > "$LR/wt/.github/ci.yml"; g add .github/ci.yml
+run BLOCK "git commit -m x" "$LR/wt"                                   # ... but not with a harness edit on top
+g checkout -q MERGE_HEAD -- .github/ci.yml; g commit -qm merged
+echo q > "$LR/wt/src/a b.py"
+run BLOCK "git commit -m x" "$LR/wt"                                   # a path git had to quote (a space): closed
+rm -f "$LR/wt/src/a b.py"
+g checkout -q main; echo s > "$LR/wt/.github/a b.yml"; g add -A; g commit -qm spaced; g push -q origin main
+g checkout -q task; g merge -q --no-edit main; echo t > "$LR/wt/src/a.py"; g commit -qam t2
+g checkout -q main; g rm -q ".github/a b.yml"; echo u > "$LR/wt/src/a.py"; g commit -qam unspace; g push -q origin main
+g checkout -q task; g merge main; echo r > "$LR/wt/src/a.py"; g add src/a.py
+run BLOCK "git commit -m x" "$LR/wt"                                   # a merge's staged deletion of a quoted harness path: closed, not excepted
+g commit -qm merged2
+run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
+run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
+unset "$MARKER"
+run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
+
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
 exit $fail
