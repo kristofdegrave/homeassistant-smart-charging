@@ -291,8 +291,9 @@ limit for step 5.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
   cannot trip (C4), except in the known deviation C4 states, while the charger power reading lags
-  a change of charger current. This applies even in `Power` mode with peak protection disabled, and on an
-  installation without the CapTar capability (R18) — in both of which it is the only active clamp.
+  a change of charger current. This applies even in `Power` mode with peak protection disabled,
+  and on an installation without the CapTar capability (R18) — in both of which it is the only
+  active clamp.
 
 ## Requirements satisfied
 
