@@ -23,8 +23,9 @@ the read-back are **Tracker mechanics**'.
 
 ## 2. Locate the findings
 
-The local review posts under the human partner's own account, so both are found the same way —
-as comments by a login that does not end in `[bot]`:
+The local review posts under a login that passes the author test, so both are found the same
+way — as comments passing the test under `CLAUDE.md`'s **Tracker mechanics** (*Reading a work
+item's comments by author*):
 
 - **Inline comments** — list the PR's review comments (`gh api
   "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate`) and keep every one by such a login
