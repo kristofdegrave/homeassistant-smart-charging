@@ -71,7 +71,8 @@ Options A1 and A2 — it sets `defaultMode: dontAsk`, denies edits and writes to
 `.github/**` and `CLAUDE.md` in any checkout, allows edits only in a task worktree and the
 session scratchpad, and sets the `env` variable `autopilot.loop_marker` names to `1`, which the
 `autopilot` skill's first step checks and the destructive-git guard keys on: with it set, the
-guard refuses a commit or a push whose change touches `.claude/`, `.github/` or a `CLAUDE.md`,
+guard refuses a commit or a push whose change touches `.claude/`, `.github/` or a `CLAUDE.md`
+or `CLAUDE.local.md`,
 a change written by a subprocess as well as by Edit — the shell's way round the Edit deny. Its
 header states the rule and what it concedes.
 
@@ -141,8 +142,8 @@ gesture included; spacing a GraphQL document the rules do not expect; a bare
 `git -C <main checkout> push` while on `main`, which names no refspec; and what git reads from
 disk rather than from the command — a `git -C` into a directory that is not a task worktree, or
 a hook the repository runs on checkout, merge or commit (its `core.hooksPath` is under
-`.github/`) — the guard refuses a commit only while a hook's change is uncommitted, not once
-a merge has committed it; a `-C` into a directory a writer laid out as a repository by
+`.github/`) — the guard refuses a commit only while a hook's change is uncommitted and not
+staged by a merge in progress, not once a merge has committed it; a `-C` into a directory a writer laid out as a repository by
 some path other than a `HEAD` edit; and any ref on `origin` — a branch anyone with write access
 pushed, merged or reviewed or not — whose `.github/hooks` a `git -C <wt> merge` or
 `checkout <ref>` brings in, and git runs on that checkout or merge or the next commit. Branch protection does

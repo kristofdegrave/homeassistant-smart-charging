@@ -149,7 +149,9 @@
 # command (`merge`, `revert`, `merge --continue`), which only the push catches; a hook
 # already committed on the branch, which git runs on the next commit; the marker's name,
 # read like the trees from the profile as checked out, so editing it switches the rule off;
-# and a `gh api` contents or git-data write, which ADR-0054 accepts.
+# the local `origin/main` the push diffs against, which a fetch into
+# `refs/remotes/origin/main` can move forward so the diff comes up empty; and a `gh api`
+# contents or git-data write, which ADR-0054 accepts.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
@@ -1080,7 +1082,7 @@ for seg in $segments; do
           p=${line#???}
           h=$(printf '%s\n' "$p" | sed -e 's/ -> /\
 /' | first_harness_path) || continue
-          if [ "$merging" = 1 ] && [ "$h" = "$p" ] && [ "${xy#?}" = ' ' ]; then
+          if [ "$merging" = 1 ] && [ "$h" = "$p" ] && [ "${p#\"}" = "$p" ] && [ "${xy#?}" = ' ' ]; then
             ib=$(git -C "$cwd" -C "$repo" rev-parse -q --verify ":$p" 2>/dev/null)
             mb=$(git -C "$cwd" -C "$repo" rev-parse -q --verify "MERGE_HEAD:$p" 2>/dev/null)
             [ "$ib" = "$mb" ] && { [ -n "$ib" ] || [ "${xy%?}" = D ]; } && continue
