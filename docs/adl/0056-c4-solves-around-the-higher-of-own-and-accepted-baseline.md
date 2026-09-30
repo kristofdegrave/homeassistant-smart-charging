@@ -1,7 +1,7 @@
 # ADR-0056: C4 solves around the higher of this cycle's own and the accepted household baseline (narrows ADR-0006)
 
 Date: 2026-09-30
-Status: Accepted
+Status: Abandoned — the rule it chose is unsafe in closed loop under charger-power lag, and C4's baseline rule is to be chosen against the scenario tier's simulation in a new record.
 
 ## Summary
 
