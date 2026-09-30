@@ -117,7 +117,8 @@ question with no issue to park on, in its shape.
 - **Rounds are counted from the most recent reset event**, of which there are exactly two
   kinds: an escalation comment — the one posted at the cap, or the one that puts a PR on hold
   (**Exit labels** below) — and a **human item** — a review, PR comment or review-thread reply
-  by an author whose login does not end in `[bot]`, whose body carries none of the session's
+  passing the author test ([tracker-mechanics.md](tracker-mechanics.md)'s **Reading a work
+  item's comments by author**), whose body carries none of the session's
   own markers (the local round, `ai-fix-`, escalation, self-grant and `clarify`'s
   `autopilot-parked` markers; [profile.md](../profile.md)'s **Repository and git identity**),
   posted while an exit label was on: after its `labeled` event and before any later

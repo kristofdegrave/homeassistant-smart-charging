@@ -11,9 +11,8 @@ entries:
 - **Entry 1 — draft, pass, park**: the closing step's steps 1–2, ending at step 3's gate.
 - **Entry 2 — file the children**: step 4, after the go.
 
-**The author test** passes the repository owner (`CLAUDE.md`'s **Project profile**), a
-collaborator or, on an organisation's repository, a member (`CLAUDE.md`'s **Tracker
-mechanics**, *Reading a work item's comments by author*). **A comment counts** only if it passes
+**The author test** is the one `CLAUDE.md`'s **Tracker mechanics** states (*Reading a work
+item's comments by author*). **A comment counts** only if it passes
 that test and carries none of the session's markers (*Rounds and the cap*, under `CLAUDE.md`'s
 **Contribution workflow**). **A park counts** as a comment on the epic passing the author test
 whose last line is the parking marker, exempt from the marker exclusion. **A late
@@ -38,7 +37,7 @@ The first arm that holds decides, never the `decompose` issue's Status:
 5. No late artifact, the newest park's children part is not `none`, and the epic's label
    timeline (**Tracker mechanics**, *Reading a change request's label events and its
    review/comment timeline*) shows `needs-approval` on when it was posted and removed after
-   it by a login not ending in `[bot]` → **Entry 2**: that removal is the go.
+   it by a login the author test passes → **Entry 2**: that removal is the go.
 6. Otherwise → file nothing. **This arm's question** is a `clarify` question on this issue
    whose first line is `**decompose: a fresh go is needed**`. With the newest such question by
    the session's login newer than the newest park and any late artifact's close, stop: still
