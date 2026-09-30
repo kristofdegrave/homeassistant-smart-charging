@@ -21,7 +21,8 @@ requests, so an approval is one more rule of an accident guard.
   is one nobody can give: every merge bypasses it.
 - **What reads the owner's login.** [ADR-0054](0054-autopilot-runs-dontask-and-trusts-only-write-access-authors.md)'s
   author test, the round count's markers and the `decompose` go read the association or login
-  of comments the session and the human both post; the board is a Projects board of the
+  of comments the session and the human both post, and none of its decisions rests on commits
+  or pushes being the owner's; the board is a Projects board of the
   owner's personal account, which the bot's token cannot reach without the `project` scope.
 - **How a command picks an account.** `gh` takes `GH_TOKEN` over its stored logins, and
   `gh auth token --user <login>` reads one stored login's token; git pushes with whatever its
@@ -122,7 +123,7 @@ the approval rule goes. **103** hits.
 |---|---|---|
 | `docs/reference/profile.md:23`, `:26`, `:28` | One account for every step, the bot retired | The split, its local git config, and the session's comments on the owner's login |
 | `docs/reference/profile.md:51` | Merges as one account instead of a bot's | The bot opens; the owner still merges |
-| `docs/reference/profile.md:145` | Only the guard closes the push gaps, branch protection not binding the owner | Branch protection binds the bot's pushes; the guard still closes the rest |
+| `docs/reference/profile.md:145` | Only the guard closes the push gaps, branch protection not binding the owner | Branch protection now refuses the bot's push to `main`; the other gaps stay open |
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's comments being the owner's |
 | `.claude/skills/submit-pr-review/SKILL.md:14` | The PR's opener cannot approve or request changes anyway | The guard refuses an approval; never requesting changes stays a prose rule |
 | `docs/reference/method/tracker-mechanics.md:360`, `:364`, `:368` | `gh pr create` and its REST fallback as the owner | Through the bot wrapper |
