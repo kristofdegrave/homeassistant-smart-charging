@@ -175,8 +175,9 @@ flowchart TD
    accepted reading stands instead — a reading taken after the System set a charger current
    differing from the previous cycle's (never two cycles running), and a reading that would
    increase headroom and has not yet held for 2 consecutive cycles. A breaching increase is
-   therefore deferred by at most a single cycle. Neither case applies at step 6 below, whose
-   household baseline C4 states. R3 is authoritative for both cases and their bounds.
+   therefore deferred by at most a single cycle. Which baseline step 6 below solves around, and
+   whether either case applies there, C4 states. R3 is authoritative for both cases and their
+   bounds.
    The effective peak limit itself is resolved by
    `resolution-rules.md` (it rises to the maximum peak only under deadline urgency, R5/C3) —
    this is the *only* lever deadline urgency has under `Manual`: raising the ceiling lets a
@@ -290,10 +291,10 @@ limit for step 5.
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
-  cannot trip (C4), except in the known deviation C4 states, while the charger power reading lags
-  a change of charger current. This applies even in `Power` mode with peak protection disabled,
-  and on an installation without the CapTar capability (R18) — in both of which it is the only
-  active clamp.
+  cannot trip (C4). While the charger power reading lags the charger's actual draw and the clamp
+  binds, C4 is not yet met: a known defect C4 states, not an exception to it. This applies even
+  in `Power` mode with peak protection disabled, and on an installation without the CapTar
+  capability (R18) — in both of which it is the only active clamp.
 
 ## Requirements satisfied
 
