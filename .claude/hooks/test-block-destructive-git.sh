@@ -791,6 +791,24 @@ runr "git grep" "git grep --open-files-in-pager=cat x" "$LR/wt"
 runr "archive -o" "git archive -o x.tar HEAD" "$LR/wt"                 # archive -o writes a file
 runr "naming paths" "git checkout origin/main .github/hooks/pre-commit" "$LR/wt" # a path checkout without --
 run ALLOW "git checkout task" "$LR/wt"                                 # a branch checkout
+run ALLOW "git checkout task 2>/dev/null" "$LR/wt"                     # ... a redirection is not a path
+runr "naming paths" "git checkout --pathspec-from-file=f main" "$LR/wt" # paths from a file
+runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
+runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
+runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"
+runr "abbreviates" "git archive --out=x HEAD" "$LR/wt"                 # --output by a prefix
+runr "abbreviates" "git grep --op=cat x" "$LR/wt"                      # --open-files-in-pager by a prefix
+runr "-o writes" "git archive -vox HEAD" "$LR/wt"                      # -o clustered
+runr "-O runs" "git grep -nOcat x" "$LR/wt"                            # -O clustered
+runr "fetch pattern" "git fetch origin 'refs/*/1/head'" "$LR/wt"       # a glob reaching a pull-request ref
+runr "sets labels" "gh api repos/o/r/issues/5 -flabels[]=workflow"     # the field attached to -f
+runr "label delete" "gh api -X=DELETE repos/o/r/issues/5/labels/needs-approval" # -X=
+run ALLOW "gh api -X POST repos/o/r/issues/5/labels -f 'labels[]=needs-approval'" # the add-labels endpoint only adds
+run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the loop's gh steps: a comment
+run ALLOW "gh api repos/o/r/pulls/5/reviews --input /tmp/p.json"       # ... a review
+run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'" # ... the thread listing
+run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve
+run ALLOW "gh pr edit 5 --add-label needs-approval"                    # ... a label on a pull request
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
@@ -861,6 +879,10 @@ run ALLOW "git commit -m x" "$STUB"                                    # ... and
 run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
 run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"
 run ALLOW "gh issue edit 5 --remove-label NEEDS-APPROVAL"
+run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_* prefix: interactive, unaffected
+run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
+run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
+run BLOCK "GH_X=\$(git push --force) x"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

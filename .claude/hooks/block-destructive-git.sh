@@ -42,7 +42,8 @@
 # `refs/heads/main` alone, or as the destination (`HEAD:main`, `x:refs/heads/main`), and so is
 # `--all` or `--branches`, which push local main with the rest (`--tags` pushes no branch). A push
 # whose text does not decide its destination -- no refspec, `HEAD` while on main, a
-# push.default that maps -- is not.
+# push.default that maps -- is not, outside the autopilot loop (the loop rule below refuses
+# a push of HEAD while main is checked out).
 # Anyone determined to force-push can still do it; the point is that nobody does it by
 # reflex.
 #
@@ -179,7 +180,10 @@
 # admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
 # single quotes is dropped, so a Windows path spelled with backslashes refuses; a fetch
 # option given its value as a separate word (`--depth 1`) refuses as unread, `--depth=1` is
-# the workaround; the option scan reads every word, so a commit message on the command line
+# the workaround; a request body read from a file (`-F query=@file`, `--input`) is not read
+# by the label and GraphQL rules -- the settings file's `ask` rules hold those forms; a
+# `GIT_*` variable exported in an earlier segment (`export`, `set -a`) is not seen, since
+# `git_env` reads only an assignment directly before git; the option scan reads every word, so a commit message on the command line
 # naming `--output` or `--exec` refuses -- `commit -F <file>` is the workaround; PowerShell's
 # backtick escape is not read, and the loop admits no PowerShell; the repository is the
 # hook's own as checked out, or a `GUARD_REPO` in the
@@ -408,9 +412,9 @@ norm() { unq "$1" | tr 'A-Z' 'a-z'; }
 # In the loop, a gh gesture that removes a label the human's go rests on (ADR-0054, "Label
 # gestures"), and the GraphQL mutations the settings file's `ask` rules name, read in the
 # normalized form so no spelling or spacing the shell collapses gets past: `gh issue edit`
-# removing `needs-approval`; a `gh api` label DELETE or PUT, an issue PATCH setting `labels`;
-# and a GraphQL label removal, `labelIds` update, merge, ref, commit, repository or
-# branch-protection mutation. `gh pr edit --remove-label` is the admitted gesture.
+# removing `needs-approval`; a `gh api` label DELETE or PUT, or any non-GET issue write
+# setting `labels`; and a GraphQL label removal, label delete or rename, `labelIds` update,
+# merge, ref, commit, repository or branch-protection mutation. `gh pr edit --remove-label` is the admitted gesture.
 gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
   _ls=$1
   shift
@@ -427,7 +431,8 @@ gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
   for _w in "$@"; do
     [ "$_skip" = 1 ] && { _skip=0; continue; }
     case "$_w" in
-      -r | --repo) _skip=1 ;;
+      -r | --repo | -x | --method | -f | --raw-field | --field | -h | --header | --input | \
+        -q | --jq | -t | --template | -p | --preview | --cache | --hostname) _skip=1 ;;
       -*) ;;
       *) if [ -z "$_c1" ]; then _c1=$_w; else _c2=$_w; break; fi ;;
     esac
@@ -455,7 +460,7 @@ gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
     case "$_w" in
       -x | --method) _next=1 ;;
       --method=*) _m=${_w#--method=} ;;
-      -x?*) _m=${_w#-x} ;;
+      -x?*) _m=${_w#-x}; _m=${_m#=} ;;
     esac
   done
   for _mut in removelabelsfromlabelable clearlabelsfromlabelable deletelabel updatelabel; do
@@ -479,10 +484,13 @@ gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
       deny "$_ls" "in the autopilot loop a gh api label $_m is refused: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
   esac
   # Any write to an issue that sets its labels -- PATCH, or POST, which gh sends by default
-  # once a field is given -- replaces the set, needs-approval included.
-  if [ "$_m" != get ]; then
+  # once a field is given, with the field spelled apart or attached (`-flabels[]=`) --
+  # replaces the set, needs-approval included. A POST to the issue's `/labels` only adds.
+  _add=0
+  case "$_c2:$_m" in */labels: | */labels:post) _add=1 ;; esac
+  if [ "$_m" != get ] && [ "$_add" = 0 ]; then
     case "$_n" in *issues/*)
-      case " $_n" in *" labels"* | *"=labels"*)
+      case " $_n" in *" labels"* | *"=labels"* | *" -flabels"*)
         deny "$_ls" "in the autopilot loop a gh api write to an issue that sets labels is refused, whatever its method: it can take needs-approval, the human's go" "$LABEL_TAIL" ;;
       esac ;;
     esac
@@ -496,12 +504,15 @@ GUARD_REPO=${GUARD_REPO:-$(dirname "$0")}
 
 # In the loop, the git forms the loop file's text rules cannot hold, read from the words as
 # the shell passes them on (the walk has already run them through `unq`): a global override
-# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`) or more than
-# one `-C` (`$nC`); any git after a directory change; a target outside this repository's
-# checkout and worktrees; the subcommands the loop file denies, spelled any way the shell
-# collapses; `--upload-pack`, `--receive-pack`, `--exec`, `--output`; a fetch or pull with an
-# option the guard does not read, from anything but `origin`, of a `pull/` ref or an object
-# id, or into a named destination; and a change to the remotes.
+# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`), its `GIT_*=`
+# environment form (`$git_env`), or more than one `-C` (`$nC`); any git after a directory
+# change; a target outside this repository's checkout and worktrees; the subcommands the loop
+# file denies, spelled any way the shell collapses, a config write and a checkout naming
+# paths; any prefix of `--upload-pack`, `--receive-pack`, `--exec`, `--output`,
+# `--output-directory`, `--extcmd` or `--open-files-in-pager`, and `grep -O`, `archive -o` and
+# `format-patch -o` clustered or not; a fetch or pull with an option the guard does not read,
+# from anything but `origin`, of a glob, a `pull/` ref or an object id, or into a named
+# destination; and a change to the remotes.
 loop_git_rule() { # <segment> <subcommand> <args...>
   _seg=$1 _sub=$2
   shift 2
@@ -537,7 +548,9 @@ loop_git_rule() { # <segment> <subcommand> <args...>
           --)
             deny "$_seg" "in the autopilot loop 'git checkout ... -- <path>' is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
           -b | -B | --orphan) _skip=1 ;;
-          -*) ;;
+          --pathspec-from-file*)
+            deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
+          -* | *'>'* | *'<'*) ;;
           *) _ops=$((_ops + 1)) ;;
         esac
       done
@@ -547,15 +560,24 @@ loop_git_rule() { # <segment> <subcommand> <args...>
   _i=0
   for _a in "$@"; do
     _l=$(printf '%s' "$_a" | tr 'A-Z' 'a-z')
+    # git takes any unambiguous prefix of a long option, so a word that is a prefix of one
+    # that runs a program or writes a file is refused, whatever it abbreviates to here.
     case "$_l" in
-      --upload-pack* | --upl* | --receive-pack* | --rece* | --exec* | --output | --output=* | --extcmd*)
-        deny "$_seg" "in the autopilot loop '$_a' is refused: it makes git run a program or write a file outside the Edit deny" "$HARNESS_TAIL" ;;
+      --?*)
+        _o=${_l%%=*}
+        for _d in --upload-pack --receive-pack --exec --output --output-directory --extcmd \
+          --open-files-in-pager; do
+          case "$_d" in "$_o"*)
+            deny "$_seg" "in the autopilot loop '$_a' is refused: it is (or abbreviates) '$_d', which makes git run a program or write a file outside the Edit deny" "$HARNESS_TAIL" ;;
+          esac
+        done ;;
     esac
+    # Short options cluster (`-nO<prog>`), so a single-dash word carrying the letter counts.
     case "$_sub:$_a" in
-      grep:-O* | grep:--open*)
-        deny "$_seg" "in the autopilot loop 'git grep $_a' is refused: it runs a program on the matches" "$HARNESS_TAIL" ;;
-      archive:-o*)
-        deny "$_seg" "in the autopilot loop 'git archive -o' is refused: it writes a file outside the Edit deny" "$HARNESS_TAIL" ;;
+      grep:-[!-]*O* | grep:-O*)
+        deny "$_seg" "in the autopilot loop 'git grep $_a' is refused: -O runs a program on the matches" "$HARNESS_TAIL" ;;
+      archive:-[!-]*o* | archive:-o* | format-patch:-[!-]*o* | format-patch:-o*)
+        deny "$_seg" "in the autopilot loop 'git $_sub $_a' is refused: -o writes outside the Edit deny" "$HARNESS_TAIL" ;;
     esac
     case "$_sub" in
       fetch | pull)
@@ -572,6 +594,9 @@ loop_git_rule() { # <segment> <subcommand> <args...>
             deny "$_seg" "in the autopilot loop git fetches only from origin, not '$_a': another source can bring in hooks git runs" "$HARNESS_TAIL"
           continue
         fi
+        case "$_a" in *'*'* | *'?'* | *'['*)
+          deny "$_seg" "in the autopilot loop a fetch pattern ('$_a') is refused: a glob can match a pull-request ref" "$HARNESS_TAIL" ;;
+        esac
         case "$_l" in *pull/*)
           deny "$_seg" "in the autopilot loop a pull-request ref ('$_a') is not fetched: a fork's content can carry hooks git runs" "$HARNESS_TAIL" ;;
         esac
@@ -1136,8 +1161,10 @@ for seg in $segments; do
       # A lone & (PowerShell's call operator) or a reserved word heads the command behind
       # it, so it is stepped over.
       '' | if | then | else | elif | do | while | until | '!' | '{') shift; continue ;;
-      GH_*=*) gh_env=1; shift; continue ;;
-      [Gg][Ii][Tt]_*=*) git_env=1; shift; continue ;;
+      GH_*=*) gh_env=1 ;;
+      [Gg][Ii][Tt]_*=*) git_env=1 ;;
+    esac
+    case "$tok" in
       # An assignment whose value is a command substitution (`r=$(gh pr merge ...)`) runs
       # that command: read it as the next word, and a merge there as a wrapped one.
       *='$('?* | *='`'?* | *='"$('?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; continue ;;
