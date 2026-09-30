@@ -668,6 +668,7 @@ mkdir -p "$LR/wt/src" "$LR/wt/.github" "$LR/wt/docs"
 echo a > "$LR/wt/src/a.py"; echo a > "$LR/wt/.github/ci.yml"; echo a > "$LR/wt/CLAUDE.md"
 g add -A; g commit -qm base; g remote add origin "$LR/origin.git"; g push -q origin main
 g checkout -qb task
+g worktree add -q -b side "$LR/wt2" main   # a linked worktree of the same repository
 MARKER=$(awk '/^autopilot:/{t=1} t&&/^  loop_marker:/{print $2; exit}' "$CWD/.claude/profile.yml")
 [ -n "$MARKER" ] || { echo "FAIL the real profile names no loop_marker"; fail=1; }
 
@@ -677,7 +678,7 @@ export "$MARKER=0"
 run ALLOW "git commit -m x" "$LR/wt"                                   # a marker other than 1: not the loop
 export "$MARKER=1"
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
-run BLOCK "git -C $LR/wt commit -m x"                                  # ... reached through -C
+run BLOCK "git -C $LR/wt commit -m x" "$LR/wt2"                       # ... reached through -C from a sibling worktree
 g reset -q
 run BLOCK "git commit -am x" "$LR/wt"                                  # an unstaged one, which -a would take
 g checkout -q -- .github/ci.yml
@@ -697,12 +698,46 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a renam
 g mv .github/a.py src/a.py
 echo b > "$LR/wt/src/a.py"; g add src
 run ALLOW "git commit -m x" "$LR/wt"                                   # a change outside the harness
-run ALLOW "git -C $LR/wt commit -m x"                                  # ... through -C, from another cwd
-run ALLOW "git -C \"$LR/wt\" commit -m x"                              # ... with the -C path quoted
+echo z > "$LR/wt2/.github/ci.yml"; git -C "$LR/wt2" add .github/ci.yml
+run ALLOW "git -C $LR/wt commit -m x" "$LR/wt2"                        # ... through -C, from a worktree with harness edits
+run ALLOW "git -C \"$LR/wt\" commit -m x" "$LR/wt2"                    # ... with the -C path quoted
+git -C "$LR/wt2" reset -q; git -C "$LR/wt2" checkout -q -- .github/ci.yml
+mkdir -p "$LR/other"; git init -q "$LR/other"
+run BLOCK "git -C $LR/other status" "$LR/wt"                           # a -C into another repository: its config and hooks
+run BLOCK "git -c core.pager=cat log -1" "$LR/wt"                      # a -c override
+run BLOCK "git --config-env=core.pager=P log -1" "$LR/wt"              # ... or --config-env
+run BLOCK "git log -1 --out''put=x" "$LR/wt"                           # --output, quote-split
+run BLOCK "git fetch '--upload-pack=x' origin" "$LR/wt"                # --upload-pack, quoted
+run ALLOW "git fetch origin" "$LR/wt"                                  # a plain fetch of origin
+run ALLOW "git fetch origin main" "$LR/wt"                             # ... of one branch
+run BLOCK "git fetch https://example.invalid/fork main" "$LR/wt"       # a fetch from a URL
+run BLOCK "git pull fork main" "$LR/wt"                                # a pull from another remote
+run BLOCK "git fetch origin refs/pull/1/head" "$LR/wt"                 # a pull-request ref
+run BLOCK "git fetch origin '+pull/1/head:x'" "$LR/wt"                 # ... quoted, with a destination
+run BLOCK "git fetch origin task:refs/remotes/origin/main" "$LR/wt"    # a fetch that moves origin/main
+run BLOCK "git fetch . HEAD:refs/remotes/origin/main" "$LR/wt"         # ... from the repository itself
+run BLOCK "git remote add fork https://example.invalid/fork" "$LR/wt"  # a new remote
+run BLOCK "git remote set-url origin https://example.invalid/x" "$LR/wt" # a moved one
+run ALLOW "git remote -v" "$LR/wt"                                     # reading the remotes
+run BLOCK "gh issue edit 5 --remove-label NEEDS-APPROVAL"              # the human's go, upper case
+run BLOCK "gh issue edit 5 --remove-label needs-appro''val"            # ... quote-split
+run BLOCK "gh issue edit 5 --remove-label=needs-decision,Needs-Approval" # ... in a list
+run ALLOW "gh issue edit 5 --add-label needs-approval --remove-label needs-decision" # adding it is not removing it
+run ALLOW "gh pr edit 5 --remove-label needs-approval"                 # a pull request's label: the admitted gesture
+run BLOCK "gh api -X delete repos/o/r/issues/5/labels/Needs-Approval"  # a REST DELETE, any case
+run BLOCK "gh api -X PUT repos/o/r/issues/5/labels -f 'labels[]=workflow'" # a PUT replacing the set
+run BLOCK "gh api --method=PATCH repos/o/r/issues/5 -f 'labels[]=x'"   # an issue PATCH setting labels
+run BLOCK "gh api graphql -f query='mutation{ removeLabels''FromLabelable(input:{}){ clientMutationId } }'" # a GraphQL removal, quote-split
+run ALLOW "gh api repos/o/r/issues/5/labels"                           # reading the labels
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
 run ALLOW "git push" "$LR/wt"                                          # no refspec: HEAD
+g checkout -q main
+run BLOCK "git push" "$LR/wt"                                          # no refspec while main is checked out: a push to main
+run BLOCK "git push origin HEAD" "$LR/wt"                              # ... HEAD named
+run BLOCK "git -C $LR/wt push" "$LR/wt2"                               # ... through -C
+g checkout -q task
 run ALLOW "git push -o ci.skip origin task" "$LR/wt"                   # an option's separate value is not read as the remote
 run BLOCK "git push origin --tags" "$LR/wt"                            # tags carry commits no source diff sees
 run BLOCK "git push --follow-tags origin task" "$LR/wt"                # ... followed ones too
@@ -747,6 +782,9 @@ run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a sourc
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
 unset "$MARKER"
 run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
+run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
+run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"
+run ALLOW "gh issue edit 5 --remove-label NEEDS-APPROVAL"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

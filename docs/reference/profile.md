@@ -135,20 +135,18 @@ naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
 
 **Known gaps.** A Bash rule matches the text typed, not the program run — Claude Code's own
 permissions documentation says it is not a security boundary around the program — so each
-list above holds the forms named, and a form it does not name passes. Known ones: a label or
-mutation name in another letter case (gh matches label names case-insensitively, the rules do
-not) or split by quotes (`needs-appro''val`), which passes every substring rule, the label
-gesture included; spacing a GraphQL document the rules do not expect; a bare
-`git -C <main checkout> push` while on `main`, which names no refspec; and what git reads from
-disk rather than from the command — a `git -C` into a directory that is not a task worktree, or
-a hook the repository runs on checkout, merge or commit (its `core.hooksPath` is under
-`.github/`) — the guard refuses a commit only while a hook's change is uncommitted and not
-staged by a merge in progress, not once a merge has committed it; a `-C` into a directory a writer laid out as a repository by
-some path other than a `HEAD` edit; and any ref on `origin` — a branch anyone with write access
-pushed, merged or reviewed or not — whose `.github/hooks` a `git -C <wt> merge` or
-`checkout <ref>` brings in, and git runs on that checkout or merge or the next commit. Branch protection does
-not enforce on the owner's account, so only the `PreToolUse` guard, which parses what it
-reads, can close these, and it does not yet.
+list above holds the forms named, and a form it does not name passes. Where that matters most,
+the destructive-git guard's loop mode reads the parsed words instead, and its header states
+how: the label gesture in any letter case or quote split, a push of HEAD while `main` is
+checked out, a `git -C` into anything but this repository's checkout or one of its worktrees
+(so no repository a writer laid out by hand), git's program-running options however spelled,
+and a fetch from another source, of a pull-request ref, or into a named destination. Still
+open: a GraphQL mutation the `ask` rules do not name, or one spaced the way they do not expect
+(`updateRef (input:…)`); and any branch on `origin` — one anyone with write access pushed,
+reviewed or not — whose `.github/hooks` a `git -C <wt> merge` or `checkout <ref>` brings in,
+and git runs on that checkout or merge or the next commit: the guard refuses a commit only
+while a hook's change is uncommitted and not staged by a merge in progress, not once a merge
+has committed it.
 
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop
