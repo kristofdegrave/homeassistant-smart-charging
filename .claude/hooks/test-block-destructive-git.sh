@@ -48,6 +48,18 @@ else
   echo "note: the branch checked out in $CWD has no upstream, so the rebase cases are skipped"
 fi
 
+# runr <reason substring> <command> [cwd]: a BLOCK that must be refused for that reason, so a
+# neighbouring rule cannot pass it.
+runr() {
+  want=$1
+  shift
+  run BLOCK "$@"
+  case "$out" in
+    *"$want"*) ;;
+    *) printf 'FAIL refused, but not for "%s"  %s\n%s\n' "$want" "$1" "$out"; fail=1 ;;
+  esac
+}
+
 run() { # run BLOCK|ALLOW <command> [cwd]
   expect=$1
   cmd=$2
@@ -714,7 +726,7 @@ run ALLOW "git fetch origin main" "$LR/wt"                             # ... of 
 run BLOCK "git fetch https://example.invalid/fork main" "$LR/wt"       # a fetch from a URL
 run BLOCK "git pull fork main" "$LR/wt"                                # a pull from another remote
 run BLOCK "git fetch origin refs/pull/1/head" "$LR/wt"                 # a pull-request ref
-run BLOCK "git fetch origin '+pull/1/head:x'" "$LR/wt"                 # ... quoted, with a destination
+runr "pull-request ref" "git fetch origin '+pull/1/head:x'" "$LR/wt"   # ... quoted, with a destination
 run BLOCK "git fetch origin task:refs/remotes/origin/main" "$LR/wt"    # a fetch that moves origin/main
 run BLOCK "git fetch . HEAD:refs/remotes/origin/main" "$LR/wt"         # ... from the repository itself (the source rule)
 run BLOCK "git remote add fork https://example.invalid/fork" "$LR/wt"  # a new remote
@@ -742,7 +754,7 @@ run BLOCK "git --exec-path=/x fetch origin" "$LR/wt"                   # --exec-
 run BLOCK "git --git''-dir=/x status" "$LR/wt"                         # --git-dir, quote-split
 run BLOCK "git --work-tree=/x status" "$LR/wt"                         # --work-tree
 run BLOCK "git push --receive-pack=x origin task" "$LR/wt"             # --receive-pack
-run BLOCK "git fetch --exec=x origin" "$LR/wt"                         # --exec
+runr "'--exec=x' is refused" "git fetch --exec=x origin" "$LR/wt"      # --exec
 run BLOCK "git log -1 --out\\put=x" "$LR/wt"                           # --output behind a backslash escape
 run BLOCK "git remote rename origin o2" "$LR/wt"                       # the remotes: rename
 run BLOCK "git remote set-branches origin x" "$LR/wt"                  # ... set-branches
@@ -764,6 +776,21 @@ run BLOCK "gh api graphql -f query='mutation{ updateIssue(input:{labelIds:[]}){ 
 run BLOCK "gh api graphql -f query='mutation{ merge''Branch(input:{}){ clientMutationId } }'" # a merge into main, quote-split
 run BLOCK "gh api graphql -f query='mutation{ updateRef (input:{}){ clientMutationId } }'"   # ... or spaced
 run BLOCK "gh api graphql -f query='mutation{ removeLabels''FromLabelable(input:{clientMutationId:\"issue edit\"}){ clientMutationId } }'" # words that read like issue edit
+runr "removing needs-approval" "A=1 gh issue edit 5 --remove-label needs-appro''val" # behind an assignment
+runr "mergebranch" "{ gh api graphql -f query='mutation{ merge''Branch(input:{}){ clientMutationId } }'; }" # behind a brace
+runr "deletelabel" "gh api graphql -f query='mutation{ deleteLabel(input:{}){ clientMutationId } }'" # deleting the label itself
+runr "sets labels" "gh api repos/o/r/issues/5 -f 'labels[]=workflow'"  # an issue write by gh's default POST
+runr "sets labels" "gh api -X POST repos/o/r/issues/5 -f 'labels[]=x'" # ... spelled out
+runr "carrying" "gh issue edit 5 --remove-label $'needs\\055approval'" # an ANSI-C quote builds the word
+runr "carrying" "git -C $LR/wt $'\\055c' core.fsmonitor=x status" "$LR/wt" # ... -c, which stripping would misread
+runr "GIT_" "GIT_CONFIG_PARAMETERS=x git status" "$LR/wt"              # the environment form of -c
+runr "GIT_" "GIT_DIR=/x git -C $LR/wt status" "$LR/wt"                 # ... of --git-dir
+runr "GIT_" "git_ssh_command=x git fetch origin" "$LR/wt"              # ... GIT_SSH_COMMAND, any case
+runr "git grep" "git gr''ep -Ocat x" "$LR/wt"                          # grep -O runs a program
+runr "git grep" "git grep --open-files-in-pager=cat x" "$LR/wt"
+runr "archive -o" "git archive -o x.tar HEAD" "$LR/wt"                 # archive -o writes a file
+runr "naming paths" "git checkout origin/main .github/hooks/pre-commit" "$LR/wt" # a path checkout without --
+run ALLOW "git checkout task" "$LR/wt"                                 # a branch checkout
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
 run ALLOW "git push origin task" "$LR/wt"                              # a push of code only
@@ -781,6 +808,8 @@ run BLOCK "git push origin HEAD" "$LR/wt"                              # ... HEA
 run BLOCK "git -C $LR/wt push" "$LR/wt2"                               # ... through -C
 run BLOCK "git push origin @" "$LR/wt"                                 # ... as @
 run BLOCK "git pu''sh" "$LR/wt"                                        # ... quote-split
+run BLOCK "git push origin Head" "$LR/wt"                              # ... in mixed case
+run ALLOW "git push origin HEAD:task" "$LR/wt"                         # HEAD with a destination is not a push to main
 g checkout -q task
 run ALLOW "git push -o ci.skip origin task" "$LR/wt"                   # an option's separate value is not read as the remote
 run BLOCK "git push origin --tags" "$LR/wt"                            # tags carry commits no source diff sees

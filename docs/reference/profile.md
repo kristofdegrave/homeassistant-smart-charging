@@ -136,10 +136,12 @@ naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
 **Known gaps.** A Bash rule matches the text typed, not the program run — Claude Code's own
 permissions documentation says it is not a security boundary around the program — so each
 list above holds the forms named, and a form it does not name passes. Behind it, the
-destructive-git guard's loop mode reads each word as the shell passes it on (quotes,
-backslashes and `$` removed; case ignored where gh ignores it) and its header states the
-rules: the label gesture and the named GraphQL mutations in any such spelling or spacing, a
-push of HEAD while `main` is checked out, git's global overrides and program-running options,
+destructive-git guard's loop mode reads each word as sh passes it on (quotes and
+backslashes removed; case ignored where gh ignores it), refuses a word carrying `$` rather
+than guess what the shell builds from it, and its header states the rules: the label gesture
+and the named GraphQL mutations in any such spelling or spacing, a push of HEAD while `main`
+is checked out, git's global overrides and their `GIT_*` environment forms, the
+program-running options its header names,
 the subcommands this file denies, a target outside this repository's checkout and worktrees,
 and a fetch with an option it does not read, from another source, of a pull-request ref or
 an object id, or into a named destination. Still open: what neither layer names — a GraphQL
