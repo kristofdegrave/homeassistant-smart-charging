@@ -53,7 +53,8 @@ owner's through a committed wrapper the guard trusts as a second first word.
 
 ### Option C — The owner's account stays the default; the bot is reached only to commit, push and open a pull request
 
-Commits carry the bot's name and noreply email through the repository-local git config; pushes use a repository-local credential helper returning the bot's stored token; a pull
+Commits carry the bot's name and noreply email through the repository-local git config;
+pushes use a repository-local credential helper returning the bot's stored token; a pull
 request is opened through one committed wrapper that sets `GH_TOKEN` to it and runs only that
 call. Approval and merge stay plain `gh`, as the owner.
 
@@ -88,8 +89,8 @@ with `--admin`, and never approves.
   allow-list name it in place of plain `gh pr create`.
 - **The guard refuses an approval**: `gh pr review --approve`, and an `APPROVE` event sent to
   a pull request's reviews, read from the `--input` payload file every review is posted with
-  and refused when that file cannot be read, with tests; `submit-pr-review`'s reason for never approving
-  becomes that rule, since its author reason no longer holds.
+  and refused when that file cannot be read, with tests; `submit-pr-review`'s reason for
+  never approving becomes that rule, since its author reason no longer holds.
 - **The human's merge of a manual tree can be an approved one**, with no bypass.
 - **ADR-0052 is narrowed**, not superseded: its C2 Pro and Con about one account and the
   bot's last use no longer describe commits and pull requests; its guard and merge rule stand.
@@ -100,36 +101,53 @@ with `--admin`, and never approves.
 ```sh
 rg -n --hidden --glob '!.git/' --glob '!docs/adl/**' --glob '!docs/postmortems/**' \
   --glob '!docs/archive/**' --glob '!docs/plans/**' --glob '!CHANGELOG.md' \
-  -e 'self-approv|cannot approve|can.t approve|approve or request changes' \
-  -e 'one account|own GitHub account|owner.s login|human.s login|same login|under the owner|as the owner|as the maintainer|as the human' \
+  -e 'self-approv|cannot approve|can.t approve|approve or request changes|\bapproves\b' \
+  -e '\b(login|account)s?\b|owner.s login|same login|under the owner|as the owner' \
+  -e 'as the maintainer|as the human' \
   -e 'kristofdegrave-bot|bot (account|identity|author|login)|[Oo]nly commits carry' \
   -e 'gh pr create|gh pr review|APPROVE' -e '/pulls(\*|[^/a-z]|$)|/pulls/<[a-z]+>/reviews' \
   -e 'commit identity|git config user|credential\.' \
-  -e 'gh pr merge. outside|merge outside the auto-merge|goes to the merge rule|^# The merge rule|same hook mechanizes|Table-driven test for block-destructive' .
+  -e 'gh pr merge. outside|merge outside the auto-merge|goes to the merge rule' \
+  -e '^# The merge rule|same hook mechanizes|Table-driven test for block-destructive' .
 ```
 
-Wide enough: the decision governs whose login each step runs under and who may approve, and
-every site stating either names the account, the bot, the approval, or the command or the
-`pulls` endpoint that opens or reviews a pull request; and every statement of what the guard
-refuses names the merge rule, beside which the approval rule goes. **40** hits.
+Wide enough: whose login a step runs under is keyed on the words `login` and `account`
+themselves, not on phrasings of them; who may approve on the approval phrasings, the
+`needs-approval` label excluded; opening or reviewing a pull request on the command and the
+`pulls` endpoint; and what the guard refuses on each statement of the merge rule, beside which
+the approval rule goes. **103** hits.
 
 | Site | Today | Follow-up |
 |---|---|---|
-| `docs/reference/profile.md:23`, `:26`, `:28` | One account for every step, the bot retired | The split and its local git config |
+| `docs/reference/profile.md:23`, `:26`, `:28` | One account for every step, the bot retired | The split, its local git config, and the session's comments on the owner's login |
 | `docs/reference/profile.md:51` | Merges as one account instead of a bot's | The bot opens; the owner still merges |
 | `docs/reference/method/contribution-workflow.md:279` | The cap relies on one account | Relies on the session's comments being the owner's |
 | `.claude/skills/submit-pr-review/SKILL.md:14` | The PR's opener cannot approve anyway | The guard refuses an approval |
 | `docs/reference/method/tracker-mechanics.md:360`, `:364`, `:368` | `gh pr create` and its REST fallback as the owner | Through the bot wrapper |
+| `docs/reference/method/tracker-mechanics.md:442` | A bot's login ends in `[bot]` | An app's does; the bot account is a user login |
 | `.claude/hooks/block-destructive-git.sh:5`, `:26`, `:49` | The header states a merge rule only | Gains the approval rule |
 | `.claude/hooks/test-block-destructive-git.sh:2` | Tests the git and merge rules | Gains the approval cases |
 | `CLAUDE.md:18`; `docs/reference/method/contribution-workflow.md:247` | The guard refuses destructive git and a merge | And an approval |
-| `.claude/settings.json:30`, `:34`, `:38` | Allow the owner to open a pull request, by command or over REST | The wrapper opens one; the owner's calls on the `pulls` collection narrowed to reviews and comments |
+| `.claude/settings.json:30`, `:38` | Allow the owner to open a pull request, by command or by a POST on the `pulls` collection | The wrapper opens one; the owner's POST on the bare collection goes |
+| `.claude/settings.json:34` | Allows any un-verbed call on `pulls`, reads included | Keeps reads and `pulls/<n>/reviews` and `comments`; a POST on the bare collection goes |
 
-18 hits conform: `block-destructive-git.sh:234`, `:236`, `profile.md:30`, `:42`,
-`contribution-workflow.md:217`, `tracker-mechanics.md:39`, `:308`, `:431`, `:452`, `:460`,
-`CODEOWNERS:6`, `review/SKILL.md:105`, `submit-pr-review/SKILL.md:12`, `:63`,
-`fix/SKILL.md:34`, `autopilot/SKILL.md:33`, `decompose/implement.md:57`,
-`test-block-destructive-git.sh:159`.
-Out of scope: `profile.yml:27` names the board's owner, `test-check-authoring-rules.sh:23` a
-throwaway repository's identity, `ci-pipeline.md:260` the retired job's app login, and
-`ai-authoring.md:281` a recipe named as an authoring example; each keeps saying so.
+51 hits conform, since comments, reviews, labels, the board, the guard's reads and the merge
+stay on the owner's login, which is the login the session posts under that these read:
+`block-destructive-git.sh:121`, `:234`, `:236`; `test-block-destructive-git.sh:159`;
+`settings.json:42`; `autopilot/SKILL.md:18`, `:33`, `:145`; `clarify/SKILL.md:71`, `:76`;
+`fix/SKILL.md:26`, `:27`, `:30`, `:34`, `:35`; `review/SKILL.md:29`, `:105`;
+`submit-pr-review/SKILL.md:12`, `:57`, `:58`, `:63`; `CODEOWNERS:1`, `:6`;
+`contribution-workflow.md:120`, `:217`, `:278`; `idea-to-product.md:403`;
+`tracker-mechanics.md:39`, `:48`, `:249`, `:300`, `:305`, `:308`, `:419`, `:423`, `:431`,
+`:432`, `:434`, `:436`, `:452`, `:460`; `profile.md:30`, `:42`, `:105`, `:145`;
+`decompose/done.md:41`; `decompose/implement.md:41`, `:44`, `:57`, `:70`, `:72`.
+
+Out of scope, 33 hits, each keeping what it says:
+- `account` in another sense — a domain example or "account for": 11 in
+  `.claude/skills/domain-driven-design/`, 2 in `.claude/vendor/`, 1 in `custom_components/`,
+  4 in `tests/`, 3 in `docs/analysis/`, 4 in `docs/design/`, and `fix/SKILL.md:93`.
+- Another actor's login: the 2 in `.github/workflows/upstream-drift.yml` and
+  `ci-pipeline.md:260`, the CI job's app; `setup-labels.sh:13`, the human running it;
+  `profile.yml:27`, the board's owner; `test-check-authoring-rules.sh:23`, a throwaway
+  repository's identity.
+- `ai-authoring.md:281`, a recipe named as an authoring example.
