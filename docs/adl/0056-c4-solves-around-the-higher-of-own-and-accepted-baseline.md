@@ -1,0 +1,124 @@
+# ADR-0056: C4 solves around the higher of this cycle's own and the accepted household baseline (narrows ADR-0006)
+
+Date: 2026-09-30
+Status: Accepted
+
+## Summary
+
+In the context of the C4 clamp solving around a household baseline built from two sensors with
+different latencies, facing a stale charger power reading after a step-down that lets it grant
+current past its target, we decided on the higher of this cycle's own and the accepted baseline
+so that no stale reading ever widens C4's headroom and a genuine rise still applies at once,
+accepting that the current may alternate between adjacent values while C4 binds on a lagging charger.
+
+## Context
+
+- **C4's requirement changed.** The C4 constraint in
+  [requirements.md](../analysis/requirements.md) now names the
+  [household baseline](../analysis/system-overview.md#ubiquitous-language) the clamp solves
+  around: the higher of this control cycle's own reading and the accepted one R3 resolves. It
+  also accepts the alternation that follows while the clamp binds on a lagging charger.
+- **Which reading a step consumes is ADR-0006's.** [ADR-0006](0006-coordinator-and-data-flow.md)'s
+  step 8 applies C4 "on raw readings", and its Consequences make a change to a step's reading a
+  new ADR, not a silent refactor.
+- **The two sensors lag differently.** Just after the system lowers the charger current, the net
+  meter already shows the drop while the charger power reading still shows the old draw. The
+  baseline, `net_w - charger_w`, then reads too low, and a clamp solving around it overstates its
+  headroom. [ADR-0039](0039-baseline-reading-during-own-actuation.md) settled this for R3's clamp
+  and left C4's version of it undecided.
+- **C4 is the one unconditional limit (C3).** No opt-out may reach it, and it must react to a
+  genuine household rise on the cycle it happens: that is why it reads raw values rather than
+  smoothed ones.
+- **The clamps stay separate call sites (ADR-0006).** Whatever C4 reads must not become a shared
+  clamp or a shared opt-out with R3.
+
+## Considered options
+
+### Option A — Keep this cycle's raw baseline alone
+
+- Pro: C4 depends on nothing R3 resolves, and a genuine household rise always reaches it on the
+  cycle it happens.
+- Con: after a step-down the stale charger reading understates the baseline, so C4 grants
+  current past its target — past the ceiling itself when the lag is large enough — on a transient
+  the system caused by its own actuation.
+
+### Option B — R3's accepted baseline as it is
+
+- Pro: one baseline for both clamps, already resolved every cycle, and the stale-low transient
+  after a step-down is ignored.
+- Con: ADR-0039's discard on a cycle the command changed works in either direction, so a genuine
+  household rise landing on such a cycle reaches C4 a cycle late — the sudden swing C4's raw
+  reading exists to catch.
+
+### Option C — The higher of this cycle's own and the accepted baseline
+
+- Pro: never less conservative than Option A, so no reading can widen C4's headroom past what the
+  raw reading allows; the stale-low transient is ignored, and a genuine rise applies on the cycle
+  it happens.
+- Con: a genuine household drop reaches C4 only once R3 accepts it, which costs headroom for up
+  to a few cycles.
+- Con: while C4 binds on a charger whose power reading lags, the step-up's stale-low charger
+  reading looks like a rise and is taken at once, so the current alternates between adjacent
+  values from cycle to cycle, never above the ceiling.
+- Con: C4's operand now depends on R3's baseline resolution, which must therefore run every cycle
+  whatever the capabilities.
+
+## Decision
+
+**Option C.** It is the only option that removes Option A's overshoot without taking on Option B's
+delayed rise. Both of its Cons cost charging rate or charger steadiness, never import above the
+ceiling. The alternation is no new exposure: Option A alternates the same way while C4 binds, and
+overshoots on the down-swing as well.
+
+C4 reads the accepted baseline as a shared **input**, not a shared clamp. The resolution runs once
+per cycle, before either clamp. R17's opt-out skips R3's clamp, never R3's baseline resolution, so
+nothing that can skip R3 reaches C4, and ADR-0006's separate call sites stand. ADR-0006's step 8
+is narrowed accordingly: C4 still reads unsmoothed values, and it solves around the higher of the
+two baselines. ADR-0039's discard is not extended to C4: taking it over as it is would be Option B.
+
+## Consequences
+
+- **The C4 call site passes the higher of the two baselines.** The Grid-Safety Engine needs no
+  change: it solves around the operands it is handed and cannot tell which baseline they came
+  from. The change lands as its own development task, reproduced first as a scenario in
+  ADR-0037's tier, the lag class that tier exists for.
+- **The baseline resolution becomes load-bearing for C4 on every installation.** A later change
+  that gates it on a capability, or skips it with R3's clamp, would put C4 back on this cycle's
+  reading alone without any test naming C4 failing, so the scenario tier's C4 invariant has to
+  cover an installation without the CapTar capability.
+- **The alternation is accepted, and the tier's bounded-oscillation invariant has to say so.**
+  R10's steady-input criterion already exempts C4 while it binds. An invariant that counts
+  set-point direction flips excludes the cycles on which C4 binds, or allows this two-cycle
+  alternation there.
+- **The design documents follow.** `system-design.md` §5.1's sequence and §8.3's account, and
+  `project-plan.md`'s shipped-slice notes, still describe C4 as solving around raw operands alone.
+- **ADR-0039's open case for C4 is closed** by this record, and its discard stays R3's alone.
+- Nothing here changes C4's thresholds, its safety offset, or R5's forecast, which keeps fitting
+  its C4 bound to the smoothed joint mean ([ADR-0051](0051-r5-forecast-reads-the-admitted-joint-mean.md)).
+
+**Blast radius.** Two searches, run as written:
+
+1. `rg -n 'clamp_to_ceiling|ceiling_headroom_a' custom_components/` — 10 hits. Wide enough for the
+   product code because every C4 headroom calculation goes through `ceiling_headroom_a`, which
+   `clamp_to_ceiling` delegates to, and both names are imported only under themselves.
+2. `rg -n -i 'C4[^0-9].*raw|raw.*C4[^0-9]|ceiling.*raw|raw.*ceiling' docs/design/` — 6 hits. Wide
+   enough for the design layer because every statement of which reading C4 uses names it as raw.
+
+| Site | Today | Follow-up |
+|---|---|---|
+| `custom_components/smart_charging/coordinator.py:1554` | `_apply_grid_ceiling_clamp` passes this cycle's raw `net_w`/`charger_w` | Pass the higher of this cycle's own and the accepted baseline |
+| `docs/design/system-design.md:476` | §5.1's sequence: "grid-supply-ceiling clamp on raw (C4, always)" | Name the higher-of baseline |
+| `docs/design/project-plan.md:394` | "the C4 clamp stays on the raw operands" | Note the change, or leave the shipped slice's history as it was |
+| `docs/design/project-plan.md:468` | "the real C4 clamp stays on the raw, undebounced `net_w`/`charger_w`" | The same |
+
+7 other hits conform:
+- the import at `coordinator.py:86`;
+- `grid_safety.py:12`, `:32` and `:42`, which solve around the operands their caller passes;
+- `system-design.md:459`, `:875` and `:876`, whose "read raw" means unsmoothed, which still holds.
+
+Out of scope:
+- `coordinator.py:1616`, `:1617` and `:1644`, and `grid_safety.py:52` and `:54`, are R5's
+  forecast bound and its explanation, which keep reading the smoothed joint mean (ADR-0051).
+- `docs/analysis/**` states the requirement this record realises rather than a site of the step.
+- Merged records under `docs/adl/` are immutable, and this record narrows them rather than
+  editing them.
