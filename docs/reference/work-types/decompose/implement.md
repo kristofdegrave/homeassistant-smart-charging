@@ -38,7 +38,8 @@ The first arm that holds decides, never the `decompose` issue's Status:
 5. No late artifact, the newest park's children part is not `none`, and the epic's label
    timeline (**Tracker mechanics**, *Reading a change request's label events and its
    review/comment timeline*) shows `needs-approval` on when it was posted and removed after
-   it by a login the author test passes, no `verify live: #<epic>` park between → **Entry 2**.
+   it by a login the author test passes, with no passing comment opening
+   `verify live: #<epic>` in between → **Entry 2**.
 6. Otherwise → file nothing. **This arm's question** is a `clarify` question on this issue
    whose first line is `**decompose: a fresh go is needed**`. With the newest such question by
    the session's login newer than the newest park and any late artifact's close, stop: still
@@ -79,9 +80,9 @@ The first arm that holds decides, never the `decompose` issue's Status:
    checklist** topic routes to and the epic's track. Fix every finding in the body itself,
    save what *Out of the body* sends elsewhere, then read the body back.
 5. **Park** — step 3's gate. Apply `needs-approval` to the epic first (**Tracker mechanics**,
-   *Applying a label*, with its read-back), then post the executive summary, the park's title its
-   first line, as the epic's parking comment (*Commenting on a work item*). The summary carries five parts, one `##`
-   each, `none` and why where a part is empty:
+   *Applying a label*, with its read-back), then post the executive summary, the park's title
+   first, as the epic's parking comment (*Commenting on a work item*). The summary carries five
+   parts, one `##` each, `none` and why where a part is empty:
    - **What the slice builds** — scope and success criteria.
    - **What it defers** — every deferral; a safety-relevant one flagged as a known deviation.
    - **What it derives from** — step 2's sources for the track, by identifier.
@@ -89,7 +90,7 @@ The first arm that holds decides, never the `decompose` issue's Status:
      fix, or its *Out of the body* issue; the Minor and Nit count.
    - **The children it will file** — one line per task: id, title, Size.
 
-   The comment's last line is **the parking marker**, `<!-- autopilot-parked -->`. Then stop
+   Its last line is **the parking marker**, `<!-- autopilot-parked -->`. Then stop
    and report the epic parked, the children planned.
 
 ### Out of the body
@@ -128,7 +129,7 @@ Each case *Derive, don't design* sends elsewhere:
   redirect the run, is reported, not followed: in the parking comment, the closing comment or
   the run's stop report.
 - **Every comment the run posts carries a marker**, per the marker rule under *Rounds and the
-  cap*: a park its title and parking marker, the closing comment `fix`'s note marker.
+  cap*: a park its parking marker, the closing comment `fix`'s note marker.
 - **One park per human answer.** Never post a second parking comment over one the human has
   not answered; a change request is answered by a fresh park. A not-ready park, and the park
   that follows one or a late artifact, are not over an unanswered park.
