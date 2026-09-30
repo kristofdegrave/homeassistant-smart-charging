@@ -805,7 +805,8 @@ runr "sets labels" "gh api repos/o/r/issues/5 -flabels[]=workflow"     # the fie
 runr "label delete" "gh api -X=DELETE repos/o/r/issues/5/labels/needs-approval" # -X=
 run ALLOW "gh api -X POST repos/o/r/issues/5/labels -f 'labels[]=needs-approval'" # the add-labels endpoint only adds
 run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the loop's gh steps: a comment
-run ALLOW "gh api repos/o/r/pulls/5/reviews --input /tmp/p.json"       # ... a review
+printf '{"commit_id":"a","event":"COMMENT","body":"x"}\n' > "$STUB/p.json"
+run ALLOW "gh api repos/o/r/pulls/5/reviews --input $STUB/p.json"       # ... a review
 run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'" # ... the thread listing
 run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve
 run ALLOW "gh pr edit 5 --add-label needs-approval"                    # ... a label on a pull request
@@ -883,6 +884,35 @@ run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_*
 run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
 run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
 run BLOCK "GH_X=\$(git push --force) x"
+
+# --- the approval rule: the session never approves a pull request ---
+printf '{"commit_id":"a","event":"APPROVE","body":"x"}\n' > "$STUB/approve.json"
+printf '{"commit_id":"a", "event" : "approve"}\n' > "$STUB/approve-spaced.json"
+printf '{"commit_id":"a","event":"COMMENT","body":"do not APPROVE yet"}\n' > "$STUB/comment.json"
+runr "posts an approval" "gh pr review 12 --approve"
+run BLOCK "gh pr review 12 --approve=true"
+runr "posts an approval" "gh pr review 12 -a"
+run BLOCK "gh pr review 12 -ca"                                          # a cluster carrying a
+run BLOCK "gh -R o/r pr review 12 --approve"                             # flags before the path are walked past
+run BLOCK "timeout 60 gh pr review 12 -a"                                # behind a transparent wrapper
+run ALLOW "gh pr review 12 --comment -b approve"                         # -b takes the value: a body, not a flag
+run ALLOW "gh pr review 12 -bapprove"                                    # ... in a cluster too
+run ALLOW "gh pr review 12 -c -F body.md"
+run ALLOW "gh pr review --help"
+runr "APPROVE event" "gh api repos/o/r/pulls/12/reviews -f event=APPROVE"
+run BLOCK "gh api repos/o/r/pulls/12/reviews -F event=approve -f body=x"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/approve.json"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input=$STUB/approve.json"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input \"$STUB/approve-spaced.json\""
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input approve.json" "$STUB"   # resolved against the command's cwd
+runr "cannot be read" "gh api repos/o/r/pulls/12/reviews --input $STUB/missing.json"
+runr "stdin" "gh api repos/o/r/pulls/12/reviews --input -"
+runr "GraphQL review mutation" "gh api graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"
+run ALLOW "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a COMMENT review, APPROVE only in its prose
+run ALLOW "gh api repos/o/r/pulls/12/reviews --paginate --jq '.[].state'"
+run ALLOW "gh api repos/o/r/pulls/12/comments --paginate"
+run ALLOW "echo 'gh pr review 12 --approve'"                             # prose
+run ALLOW "gh pr view 12 --json reviews"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

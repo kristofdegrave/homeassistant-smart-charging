@@ -7,7 +7,8 @@
 # Emits OWNER, REPO_NAME, REPO (owner/name), BOARD, PROJECT_ID, the three field ids
 # (SIZE_FIELD, ESTIMATE_FIELD, STATUS_FIELD), one SIZE_<tier> per Size option and one
 # STATUS_<Column> per Status option (spaces in a column name become underscores:
-# STATUS_In_progress). Every value comes from .claude/profile.yml and nowhere else.
+# STATUS_In_progress), and BOT_LOGIN when the profile names `identity.bot_login`. Every value
+# comes from .claude/profile.yml and nowhere else.
 #
 # Needs a Python with PyYAML — present in this repo's test environment
 # (requirements-test.txt pulls it in through homeassistant). `jq` is deliberately not used:
@@ -68,6 +69,10 @@ out = {
     "ESTIMATE_FIELD": fields["estimate"]["id"],
     "STATUS_FIELD": fields["status"]["id"],
 }
+# Optional: a profile whose sessions run as one account names no bot.
+bot = (profile.get("identity") or {}).get("bot_login")
+if bot:
+    out["BOT_LOGIN"] = bot
 # Keys are sanitised as well as values: the documented call site is `eval`, so an option name
 # is executed as part of an assignment, and only [A-Za-z0-9_] may reach it.
 for tier, option_id in fields["size"]["options"].items():

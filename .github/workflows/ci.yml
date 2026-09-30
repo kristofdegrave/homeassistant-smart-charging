@@ -176,6 +176,10 @@ jobs:
       # here, on the PR that changes it.
       - name: Source-line check self-test
         run: bash .github/test-check-source-lines.sh
+      # The bot wrapper opens pull requests and posts the fix step's replies as the bot, so a
+      # PR that breaks its closed list or its refusals fails here; its tests stub gh, offline.
+      - name: Bot wrapper self-test
+        run: bash .github/test-gh-as-bot.sh
 
   test:
     needs: changes

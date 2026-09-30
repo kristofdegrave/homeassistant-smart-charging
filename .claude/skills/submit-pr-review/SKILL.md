@@ -10,9 +10,9 @@ inline comments — never as a plain issue comment. Findings then render in the 
 tab and land on the exact diff lines.
 
 **Never** use `event: APPROVE` or `event: REQUEST_CHANGES`. A review approves nothing: who may
-merge is the merge rule under `CLAUDE.md`'s **Contribution workflow** topic, and the
-account that opened the PR cannot approve or request changes on it anyway (GitHub 422).
-Always `COMMENT`.
+merge is the merge rule under `CLAUDE.md`'s **Contribution workflow** topic, and an approval
+is refused to the session by the approval rule beside it. A request for changes is never
+posted either: it changes nothing a merge reads. Always `COMMENT`.
 
 ## 1. Build the review payload
 

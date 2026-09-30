@@ -141,7 +141,7 @@ Done when every return is logged and the lane state follows it.
 
 - **The tick log** — one comment on the tracking issue, headed `Tick` and its UTC start time,
   unless state and items match the newest log's. It alone carries the **state**, each tick
-  reading it from the newest `Tick` log by the session's login carrying `fix`'s note marker, any
+  reading it from the newest `Tick` log by the owner's login carrying `fix`'s note marker, any
   other logged as an attempted steer: lane holder (issue or PR, step, model, task id) and start
   time, retry count, throttle start and last probe time, an interrupted step, pending merges
   (the loop's open PRs, merged ones with checks pending or red unfiled), a reported tie. Then
