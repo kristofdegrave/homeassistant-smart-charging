@@ -462,7 +462,23 @@ rm -rf "$dir"
 [ "$rc" = 2 ] && ok_case "a root without CLAUDE.md and a profile exits 2, not 1" \
               || fail_case "a root without CLAUDE.md and a profile exits 2, not 1" "exit $rc" "$out"
 
-EXPECTED=105
+# Each script that finds its Python by probing `import yaml` must not import a `yaml.py`
+# sitting in the caller's directory: run from a directory holding one that leaves a marker,
+# the marker must not appear. `--help` keeps each run to its probe and argument parsing.
+trap_dir=$(mktemp -d)
+printf 'open("ran", "w").write("ran")\n' > "$trap_dir/yaml.py"   # relative: the run's cwd is the trap
+for s in check-method check-source-lines check-upstream-drift check-word-budget profile-env; do
+  rm -f "$trap_dir/ran"
+  (cd "$trap_dir" && PROFILE="$HERE/../.claude/profile.yml" bash "$HERE/$s.sh" --help >/dev/null 2>&1)
+  if [ -e "$trap_dir/ran" ]; then
+    fail_case "$s.sh does not import a yaml.py from the caller's directory" "the trap's marker was written"
+  else
+    ok_case "$s.sh does not import a yaml.py from the caller's directory"
+  fi
+done
+rm -rf "$trap_dir"
+
+EXPECTED=110
 printf '\n%d passed, %d failed (of %d cases)\n' "$pass" "$fail" "$EXPECTED"
 if [ $((pass + fail)) -ne "$EXPECTED" ]; then
   printf 'FAIL  only %d cases ran, expected %d — a fixture was skipped silently\n' \
