@@ -887,8 +887,8 @@ run BLOCK "GIT_X=\$(git push --force) true"                           # an assig
 run BLOCK "GH_X=\$(git push --force) x"
 
 # --- the approval rule: the session never approves a pull request ---
-printf '{"commit_id":"a","event":"APPROVE","body":"x"}\n' > "$STUB/approve.json"
-printf '{"commit_id":"a", "event" : "approve"}\n' > "$STUB/approve-spaced.json"
+printf '{"commit_id":"a","event":"APPROVE","body":"x"}\n' > "$STUB/ev-event.json"
+printf '{"commit_id":"a", "event" : "approve"}\n' > "$STUB/ev-spaced.json"
 printf '{"commit_id":"a","event":"COMMENT","body":"do not APPROVE yet"}\n' > "$STUB/comment.json"
 runr "posts an approval" "gh pr review 12 --approve"
 run BLOCK "gh pr review 12 --approve=true"
@@ -926,10 +926,10 @@ run ALLOW "gh pr review 12 -c -F body.md"
 run ALLOW "gh pr review --help"
 runr "names APPROVE" "gh api repos/o/r/pulls/12/reviews -f event=APPROVE"
 run BLOCK "gh api repos/o/r/pulls/12/reviews -F event=approve -f body=x"
-runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/approve.json"
-run BLOCK "gh api repos/o/r/pulls/12/reviews --input=$STUB/approve.json"
-run BLOCK "gh api repos/o/r/pulls/12/reviews --input \"$STUB/approve-spaced.json\""
-run BLOCK "gh api repos/o/r/pulls/12/reviews --input approve.json" "$STUB"   # resolved against the command's cwd
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/ev-event.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input=$STUB/ev-event.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input \"$STUB/ev-spaced.json\""
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input ev-event.json" "$STUB"   # resolved against the command's cwd
 runr "cannot be read" "gh api repos/o/r/pulls/12/reviews --input $STUB/missing.json"
 runr "stdin" "gh api repos/o/r/pulls/12/reviews --input -"
 runr "names APPROVE" "gh api graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"
@@ -943,8 +943,8 @@ printf '{
   "event":
     "APPROVE"
 }
-' > "$STUB/approve-multiline.json"
-runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/approve-multiline.json"   # split across lines
+' > "$STUB/ev-split.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/ev-split.json"   # split across lines
 run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@$STUB/review.md"   # an issue comment from a file named review: no review target
 run ALLOW "gh api repos/o/r/pulls/12/reviews --paginate --jq '.[].state'"
 run ALLOW "gh api repos/o/r/pulls/12/comments --paginate"
