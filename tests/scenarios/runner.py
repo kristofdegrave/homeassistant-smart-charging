@@ -7,8 +7,15 @@ grace period and R11's holds/cooldowns see real elapsed time, then call
 `coordinator.async_refresh()` -- through the same `tests/helpers.py` seeding path
 (`seed_charger_states`/`capture_charger_current_writes`) every other HA-harness suite uses, not
 a replacement for it.
+
+T2 wires the shared invariant set (`invariants.py`) in here, as `run`'s own `judge` callback,
+rather than leaving a scenario to loop back over the whole trace afterwards: every cycle of
+every scenario is judged the moment it is recorded, and a breach is reported -- as
+`InvariantViolation`, naming the first violating cycle with its context -- from the cycle it
+first appears in rather than from some later, unrelated assertion.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.util import dt as dt_util
@@ -61,9 +68,18 @@ class ScenarioRunner:
         # previous command in force, explicitly, rather than reaching into the whole history.
         self.trace: list[CycleTrace] = []
 
-    async def run(self, cycles: int) -> list[CycleTrace]:
+    async def run(
+        self, cycles: int, *, judge: Callable[[list[CycleTrace]], None] | None = None
+    ) -> list[CycleTrace]:
         """Run `cycles` further control cycles, appending each one's trace to `self.trace`
-        (so a scenario driving `run` more than once keeps the whole timeline)."""
+        (so a scenario driving `run` more than once keeps the whole timeline). `judge`, when
+        given, is called with `self.trace` right after each cycle is appended -- so a violation
+        raises (`InvariantViolation`, `invariants.py`) from the cycle it first appears in; the
+        gain is stopping right there, instead of scanning the whole trace after the fact. A
+        scenario composes which invariants apply to it and passes the result here -- `run` itself
+        knows nothing about which invariants exist; `invariants.judge_all` composes a list of
+        them in one place, though a scenario may build its `judge` callback by hand instead
+        (T1's own `judge`, composing a harness-only mode guard ahead of `check_c4`)."""
         for _ in range(cycles):
             reading = self._plant.step()
             seed_charger_states(
@@ -107,23 +123,32 @@ class ScenarioRunner:
                     active_mode=self._coordinator.active_mode,
                 )
             )
+            if judge is not None:
+                judge(self.trace)
         return self.trace
 
 
-def format_trace(trace: list[CycleTrace]) -> str:
+def format_trace(trace: list[CycleTrace], *, target_w: float | None = None) -> str:
     """A per-step trace table for a failure message -- commanded current, true draw, reported
     reading, true import, fault status and active mode at each step, so a violation is legible
-    without re-running."""
+    without re-running. `target_w`, when given, adds a headroom column (`target_w` minus that
+    step's true import) against the limit a caller is judging -- the surrounding cycles' own
+    headroom, not only the violating one's, as an invariant's failure message needs."""
     header = (
         f"{'step':>4} {'commanded_a':>12} {'true_draw_a':>12} "
         f"{'reported_w':>11} {'true_import_w':>14} {'fault':>6} {'active_mode':>12}"
     )
+    if target_w is not None:
+        header += f" {'headroom_w':>11}"
     lines = [header]
     for t in trace:
         r = t.reading
-        lines.append(
+        line = (
             f"{t.index:>4} {t.commanded_current_a:>12.1f} {r.true_draw_a:>12.1f} "
             f"{r.reported_charger_w:>11.1f} {r.true_import_w:>14.1f} {t.faulted!s:>6} "
             f"{t.active_mode:>12}"
         )
+        if target_w is not None:
+            line += f" {target_w - r.true_import_w:>11.1f}"
+        lines.append(line)
     return "\n".join(lines)
