@@ -793,7 +793,61 @@ runr "archive -o" "git archive -o x.tar HEAD" "$LR/wt"                 # archive
 runr "naming paths" "git checkout origin/main .github/hooks/pre-commit" "$LR/wt" # a path checkout without --
 run ALLOW "git checkout task" "$LR/wt"                                 # a branch checkout
 run ALLOW "git checkout task 2>/dev/null" "$LR/wt"                     # ... a redirection is not a path
+runr "is no commit" "git checkout .github/hooks/pre-commit" "$LR/wt"   # one operand that is no commit: a path
+runr "tracked path" "git checkout --ours .github/ci.yml" "$LR/wt"      # ... a tracked one behind --ours
+runr "naming paths" "git checkout --pathspec-fr=f main" "$LR/wt"       # --pathspec-from-file by a prefix
+runr "global" "git --bare status" "$LR/wt"                             # --bare: the cwd as the git directory
+runr "bash would expand" "git -C $LR/wt {-c,} core.fsmonitor=x status" "$LR/wt" # a brace list rebuilds -c
+runr "bash would expand" "git log HEAD{1..2}" "$LR/wt"                 # ... a brace range
+runr "bash would expand" "git log -[c]" "$LR/wt"                       # ... an unquoted glob
+run ALLOW "git ls-files '*.md'" "$LR/wt"                               # a quoted pathspec is no expansion
+run ALLOW "git log -1 HEAD@{1}" "$LR/wt"                               # a reflog brace is no list
+runr "would expand" "gh issue edit 5 --remove-label=needs-appro{v,v}al" # a brace list rebuilds the label
+runr "sets labels" "gh api 'repos/o/r/issues/5?/labels' -f 'labels[]=workflow'" # a query string fools no exemption
 runr "naming paths" "git checkout --pathspec-from-file=f main" "$LR/wt" # paths from a file
+runr "bash would expand" "git ''{-c,core.fsmonitor=x} status" "$LR/wt"  # a quoted prefix hides no brace
+runr "bash would expand" "git '-'[c] status" "$LR/wt"                   # ... nor a glob
+runr "bash would expand" "git log HEAD@{1,2}" "$LR/wt"                  # a reflog brace with a comma is a list
+runr "bash would expand" "gh issue edit 5 {--remove-label,needs-approval}" # a brace list rebuilds the option
+runr "bash would expand" "gh api -X {DELETE,} repos/o/r/issues/5/labels/needs-approval" # ... or the method
+runr "is no commit" "git checkout '.github/hooks/pre-commi[!>]'" "$LR/wt" # a quoted > is no redirection
+runr "is no commit" "git checkout ':!>'" "$LR/wt"                       # ... an exclude-only pathspec
+runr "sets labels" "gh api repos/o/r/issues/5x/labels -f 'labels[]=workflow'" # <n> is digits only
+run ALLOW "git log HEAD@{1}..HEAD" "$LR/wt"                             # a reflog range is no brace list
+run ALLOW "git log --grep=\"a b?\" --format='[%h]'" "$LR/wt"            # quoted text split on its space
+run ALLOW "git checkout -b x origin/main" "$LR/wt"                      # a new branch from a commit
+run ALLOW "git checkout main" "$LR/wt"                                  # a branch
+g update-ref refs/remotes/origin/only HEAD
+run ALLOW "git checkout only" "$LR/wt"                                  # a branch only origin has: tracking
+echo a > "$LR/wt/only"; g add only
+runr "tracked path" "git checkout --no-guess only" "$LR/wt"             # ... that is also a path git restores
+g rm -q --cached only; rm -f "$LR/wt/only"
+runr "bash would expand" "git {-c,'alias.zz=!touch /tmp/p #'{}} zz" "$LR/wt" # a nested brace hides no list
+runr "bash would expand" "gh issue edit 5 {--remove-label=needs-approval,--title=t{}}"
+runr "sets labels" "gh api 'repos/o/r/issues/5?a=/6/labels' -f 'labels[]=x'" # a query string ending in <n>/labels
+runr "sets labels" "gh api 'repos/o/r/issues/5#/6/labels' -f 'labels[]=x'"   # ... a fragment
+runr "bash would expand" "git -C $LR/wt @(-c) core.fsmonitor=x status" "$LR/wt" # an extended glob
+runr "--patch" "git checkout -p main" "$LR/wt"                           # hunks written into paths
+runr "--patch" "git checkout --patc main" "$LR/wt"                       # ... by a prefix
+runr "--patch" "git checkout -fp main" "$LR/wt"                          # ... in a cluster
+run ALLOW "git checkout -bpatch main" "$LR/wt"                          # a -b cluster names a branch
+runr "bash would expand" "git status # why?" "$LR/wt"                   # a comment is read as text: conceded
+# An awk that fails while `expands` reads counts as expanding: a stub awk fails that call
+# alone (the one passing `sq=`) and hands every other to the real one.
+mkdir -p "$STUB/awkfail"
+printf '#!/bin/sh\ncase " $* " in *" sq="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/awkfail/awk"
+chmod +x "$STUB/awkfail/awk"
+OLD_PATH=$PATH
+PATH="$STUB/awkfail:$PATH"
+runr "bash would expand" "git status" "$LR/wt"                          # fails closed
+PATH=$OLD_PATH
+run ALLOW "bash .github/gh-as-bot.sh pr-create workflow/1 \"t?\" /tmp/b.md" # the author-side wrapper: bash, not gh
+runr "bash would expand" "gh issue edit 5 --title ''# {--remove-label,needs-approval}" # a # inside a word is no comment
+runr "bash would expand" "git --namespace ''# {-c,core.fsmonitor=x} status" "$LR/wt"   # ... before git's -c
+runr "bash would expand" "gh issue edit 5 --title \\ # {--remove-label,needs-approval}" # ... after an escaped blank
+runr "segment carrying" "A=\$'\\'' gh issue edit 5 {--remove-label,needs-approval}" # an ANSI-C quote unreads the rest
+runr "segment carrying" "A=\$'\\'' git {-c,core.fsmonitor=x} status" "$LR/wt"     # ... before git
+run ALLOW "git checkout -Bpx main" "$LR/wt"                             # a -B cluster names a branch
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
 runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"
@@ -802,7 +856,7 @@ runr "abbreviates" "git grep --op=cat x" "$LR/wt"                      # --open-
 runr "-o writes" "git archive -vox HEAD" "$LR/wt"                      # -o clustered
 runr "-O runs" "git grep -nOcat x" "$LR/wt"                            # -O clustered
 runr "fetch pattern" "git fetch origin 'refs/*/1/head'" "$LR/wt"       # a glob reaching a pull-request ref
-runr "sets labels" "gh api repos/o/r/issues/5 -flabels[]=workflow"     # the field attached to -f
+runr "sets labels" "gh api repos/o/r/issues/5 '-flabels[]=workflow'"     # the field attached to -f
 runr "label delete" "gh api -X=DELETE repos/o/r/issues/5/labels/needs-approval" # -X=
 run ALLOW "gh api -X POST repos/o/r/issues/5/labels -f 'labels[]=needs-approval'" # the add-labels endpoint only adds
 run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the loop's gh steps: a comment
@@ -881,6 +935,7 @@ run ALLOW "git commit -m x" "$STUB"                                    # ... and
 run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
 run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"
 run ALLOW "gh issue edit 5 --remove-label NEEDS-APPROVAL"
+run ALLOW "git log HEAD{1..2}" "$LR/wt"                                # the expansion rule: interactive, unaffected
 run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_* prefix: interactive, unaffected
 run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
 run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read

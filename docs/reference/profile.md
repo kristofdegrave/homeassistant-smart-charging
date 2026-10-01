@@ -159,14 +159,15 @@ naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
 permissions documentation says it is not a security boundary around the program — so each
 list above holds the forms named, and a form it does not name passes. Behind it, the
 destructive-git guard's loop mode reads each word as sh passes it on (quotes and
-backslashes removed; case ignored where gh ignores it), refuses a word carrying `$` rather
-than guess what the shell builds from it, and its header states the rules: the label gesture
-and the named GraphQL mutations in any such spelling or spacing, a push of HEAD while `main`
-is checked out, git's global overrides and their `GIT_*` environment forms, the
-program-running options its header names,
-the subcommands this file denies, a target outside this repository's checkout and worktrees,
-and a fetch with an option it does not read, from another source, of a pull-request ref or
-an object id, or into a named destination. Still open: what neither layer names — a GraphQL
+backslashes removed; case ignored where gh ignores it), refuses a git or gh command carrying
+`$` anywhere, a prefix assignment included, or one bash would expand (a brace list, a glob outside quotes), rather than guess
+what the shell builds from it, and its header states the rules: the label gesture and the
+named GraphQL mutations in any such spelling or spacing, a push of HEAD while `main` is
+checked out, git's global overrides and their `GIT_*` environment forms, the
+program-running options its header names, the subcommands this file denies, a `checkout` of
+a path, a target outside this repository's checkout and worktrees, and a fetch with an
+option it does not read, from another source, of a pull-request ref or an object id, or into
+a named destination. Still open: what neither layer names — a GraphQL
 mutation outside the guard's list, a git subcommand outside both lists, and the indirection
 the guard's header concedes (a word built by the shell, a command run by another); and any
 branch on `origin` — one anyone with write access pushed, reviewed or not — whose
@@ -179,7 +180,7 @@ binds, so the platform itself refuses a push to `main` the session makes.
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop
 and leaves the tests to CI. Merge conflicts: taking one side with `checkout --ours`/`--theirs
--- <path>` is refused, so a conflict is resolved by editing the file, and one in a harness file
+<path>` is refused, so a conflict is resolved by editing the file, and one in a harness file
 parks. Web access: neither `WebFetch` nor `WebSearch` is listed, so a
 `research` step parks.
 
