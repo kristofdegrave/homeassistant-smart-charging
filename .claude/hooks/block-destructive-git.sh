@@ -191,14 +191,15 @@
 # `GIT_*` variable exported in an earlier segment (`export`, `set -a`) is not seen, since
 # `git_env` reads only an assignment directly before git; the option scan reads every word,
 # so a commit message on the command line naming `--output` or `--exec` refuses -- `commit
-# -F <file>` is the workaround; an unquoted `?`, `*` or `[`, or a `{` with a later `,` or
-# `..` and `}`, refuses where bash would leave it as typed (a `gh api` path with a query
-# string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the workaround; a checkout of a branch that is
-# also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
+# -F <file>` is the workaround; an unquoted `?`, `*` or `[`, `@(`, `+(` or `!(`, or a `{`
+# with a later `,` or `..` and `}`, refuses where bash would leave it as typed (a `gh api`
+# path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
+# workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
+# checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
 # no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
 # older git refuses every loop git; and a word the scan does not see (the indirection class
-# above).
+# above), a brace or glob in the command word itself (`{gh,}`, `g?t`) included.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
@@ -422,8 +423,15 @@ norm() { unq "$1" | tr 'A-Z' 'a-z'; }
 # dropped -- a `{` with a later `,` or `..` and `}` (`{-c,}`, `{1..2}`), or a glob
 # character. A reflog `@{1}` has neither, and a quoted `'*.md'` or `-m "why?"` is no
 # unquoted text.
+# The quote tracking reads `'` and `"` only; a `$'...'` quote reads otherwise, which is why
+# the walk refuses a segment carrying `$` before it asks.
+# Nesting is not counted: bash splits `{a,b{}}` on the outer comma, so any `{` with a later
+# `,` or `..` and a later `}` refuses; so does an extended glob (`@(`, `+(`, `!(`), should
+# the shell have extglob on. A bash comment is read like any text: telling a `#` that opens
+# a word from one inside it (`''#`) is not this text's to judge. The match is the awk's own
+# exit status, 1 for no expansion; any other -- an awk that fails -- counts as expanding.
 expands() {
-  _u=$(printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+  printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
     q = ""; o = ""
     for (i = 1; i <= length(s); i++) {
       c = substr(s, i, 1)
@@ -433,13 +441,8 @@ expands() {
       if (c == sq || c == dq) { q = c; continue }
       o = o c
     }
-    printf "%s", o }') || return 0
-  # Nesting is not counted: bash splits `{a,b{}}` on the outer comma, so any `{` with a
-  # later `,` or `..` and a later `}` refuses; so does an extended glob (`@(`, `+(`, `!(`),
-  # should the shell have extglob on. A bash comment is read like any text: telling a `#`
-  # that opens a word from one inside it (`''#`) is not this text's to judge. An awk that
-  # fails counts as expanding.
-  printf '%s' "$_u" | grep -Eq '[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]'
+    exit (o ~ /[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]/) ? 0 : 1 }'
+  [ $? != 1 ]
 }
 
 # In the loop, a gh gesture that removes a label the human's go rests on (ADR-0054, "Label
@@ -612,8 +615,9 @@ loop_git_rule() { # <segment> <subcommand> <args...>
       done
       [ "$_ops" -le 1 ] ||
         deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL"
-      # A branch only `origin` has is git's tracking checkout, a commit too -- unless the
-      # operand also names a tracked path, which `--no-guess` makes git restore instead.
+      # Any single operand that also names a tracked path refuses, a local branch's
+      # included, since `--no-guess` makes git restore the path; otherwise a branch only
+      # `origin` has is git's tracking checkout, a commit too.
       if [ "$_ops" = 1 ]; then
         if [ -n "$(git -C "$cwd" -C "$repo" ls-files -- ":(literal)$_op" 2>/dev/null)" ]; then
           deny "$_seg" "in the autopilot loop 'git checkout $_op' is refused: '$_op' names a tracked path, which git can read it as and write" "$HARNESS_TAIL"
@@ -1295,9 +1299,16 @@ for seg in $segments; do
     done
   fi
   # Nor a segment bash rebuilds by expansion -- a brace list or range (`{-c,}`), or an
-  # unquoted glob, which can match a file named like an option.
-  if in_loop && expands "$seg"; then
-    deny "$seg" "in the autopilot loop a $found command bash would expand (a brace list or range, or a glob, outside quotes) is refused: the guard reads it as typed, $found gets what it expands to" "$HARNESS_TAIL"
+  # unquoted glob, which can match a file named like an option -- and, so `expands` reads
+  # every quote it is told of, not one carrying `$` anywhere, a prefix assignment included.
+  if in_loop; then
+    _tail=$HARNESS_TAIL
+    [ "$found" = gh ] && _tail=$LABEL_TAIL
+    case "$seg" in *'$'*)
+      deny "$seg" "in the autopilot loop a $found segment carrying \$ is refused, a prefix assignment included: the shell builds it (an ANSI-C quote, a variable) where the guard cannot read it" "$_tail" ;;
+    esac
+    expands "$seg" &&
+      deny "$seg" "in the autopilot loop a $found command bash would expand (a brace list or range, or a glob, outside quotes) is refused: the guard reads it as typed, $found gets what it expands to" "$_tail"
   fi
   if [ "$found" = gh ]; then
     [ "$wrapper" = 0 ] || gh_wrapped=1
