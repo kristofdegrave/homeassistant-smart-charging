@@ -792,6 +792,17 @@ runr "archive -o" "git archive -o x.tar HEAD" "$LR/wt"                 # archive
 runr "naming paths" "git checkout origin/main .github/hooks/pre-commit" "$LR/wt" # a path checkout without --
 run ALLOW "git checkout task" "$LR/wt"                                 # a branch checkout
 run ALLOW "git checkout task 2>/dev/null" "$LR/wt"                     # ... a redirection is not a path
+runr "is no commit" "git checkout .github/hooks/pre-commit" "$LR/wt"   # one operand that is no commit: a path
+runr "is no commit" "git checkout --ours .github/ci.yml" "$LR/wt"      # ... behind --ours
+runr "naming paths" "git checkout --pathspec-fr=f main" "$LR/wt"       # --pathspec-from-file by a prefix
+runr "global" "git --bare status" "$LR/wt"                             # --bare: the cwd as the git directory
+runr "bash would expand" "git -C $LR/wt {-c,} core.fsmonitor=x status" "$LR/wt" # a brace list rebuilds -c
+runr "bash would expand" "git log HEAD{1..2}" "$LR/wt"                 # ... a brace range
+runr "bash would expand" "git log -[c]" "$LR/wt"                       # ... an unquoted glob
+run ALLOW "git ls-files '*.md'" "$LR/wt"                               # a quoted pathspec is no expansion
+run ALLOW "git log -1 HEAD@{1}" "$LR/wt"                               # a reflog brace is no list
+runr "would expand" "gh issue edit 5 --remove-label=needs-appro{v,v}al" # a brace list rebuilds the label
+runr "sets labels" "gh api repos/o/r/issues/5?/labels -f 'labels[]=workflow'" # a query string fools no exemption
 runr "naming paths" "git checkout --pathspec-from-file=f main" "$LR/wt" # paths from a file
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
@@ -879,6 +890,7 @@ run ALLOW "git commit -m x" "$STUB"                                    # ... and
 run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
 run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"
 run ALLOW "gh issue edit 5 --remove-label NEEDS-APPROVAL"
+run ALLOW "git log HEAD{1..2}" "$LR/wt"                                # the expansion rule: interactive, unaffected
 run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_* prefix: interactive, unaffected
 run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
 run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
