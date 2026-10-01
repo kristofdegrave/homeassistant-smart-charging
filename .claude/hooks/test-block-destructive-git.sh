@@ -897,13 +897,22 @@ run BLOCK "gh pr review 12 --approve=T"
 run BLOCK "gh pr review 12 --approve=TRUE"
 run ALLOW "gh pr review 12 --approve=false -c -b x"                      # a false value approves nothing
 run ALLOW "gh pr review 12 --approve=0 -c -b x"
+run ALLOW "gh pr review 12 --approve=False -c -b x"
+run ALLOW "gh pr review 12 --approve=FALSE -c -b x"
+run ALLOW "gh pr review 12 --approve=f -c -b x"
+run ALLOW "gh pr review 12 --approve=F -c -b x"
 printf 'APPROVE\n' > "$STUB/ev.txt"
-runr "reads its event from a file" "gh api repos/o/r/pulls/12/reviews -F event=@$STUB/ev.txt"
+runr "reads a value from a file" "gh api repos/o/r/pulls/12/reviews -F event=@$STUB/ev.txt"
 run BLOCK "gh api repos/o/r/pulls/12/reviews --field event=@$STUB/ev.txt"
 run BLOCK "gh api repos/o/r/pulls/12/reviews --field=event=@$STUB/ev.txt"
-run ALLOW "gh api repos/o/r/pulls/12/reviews -f event=COMMENT -F body=@$STUB/comment.json"   # a body from a file is fine
-runr "reads its document from a file" "gh api graphql -F query=@$STUB/m.graphql"
-run BLOCK "gh api graphql --input $STUB/q.json"
+run BLOCK "gh api repos/o/r/pulls/12/reviews -f event=COMMENT -F body=@$STUB/comment.json"   # any value from a file on a review call
+run BLOCK "gh api repos/o/r/pulls/12/reviews -Fevent=@$STUB/ev.txt"     # attached to the flag
+run BLOCK "gh api repos/o/r/pulls/12/reviews --field=event=@$STUB/ev.txt"
+runr "reads a value from a file" "gh api graphql -F query=@$STUB/m.graphql"
+run BLOCK "gh api graphql -Fquery=@$STUB/m.graphql"
+run BLOCK "gh api graphql --field=query=@$STUB/m.graphql"
+run BLOCK "gh api graphql -f query='mutation(\$e: PullRequestReviewEvent!){ addPullRequestReview(input:{pullRequestId:\"x\",event:\$e}){ clientMutationId } }' -F e=@$STUB/ev.txt"   # a variable from a file
+runr "from --input" "gh api graphql --input $STUB/q.json"
 run BLOCK "gh api graphql --input=$STUB/q.json"
 run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { nodes { id } } } } }'"   # an inline document is read
 runr "changed directory" "cd $STUB && gh api repos/o/r/pulls/12/reviews --input comment.json"
@@ -915,7 +924,7 @@ run ALLOW "gh pr review 12 --comment -b approve"                         # -b ta
 run ALLOW "gh pr review 12 -bapprove"                                    # ... in a cluster too
 run ALLOW "gh pr review 12 -c -F body.md"
 run ALLOW "gh pr review --help"
-runr "APPROVE event" "gh api repos/o/r/pulls/12/reviews -f event=APPROVE"
+runr "names APPROVE" "gh api repos/o/r/pulls/12/reviews -f event=APPROVE"
 run BLOCK "gh api repos/o/r/pulls/12/reviews -F event=approve -f body=x"
 runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/approve.json"
 run BLOCK "gh api repos/o/r/pulls/12/reviews --input=$STUB/approve.json"
@@ -923,8 +932,20 @@ run BLOCK "gh api repos/o/r/pulls/12/reviews --input \"$STUB/approve-spaced.json
 run BLOCK "gh api repos/o/r/pulls/12/reviews --input approve.json" "$STUB"   # resolved against the command's cwd
 runr "cannot be read" "gh api repos/o/r/pulls/12/reviews --input $STUB/missing.json"
 runr "stdin" "gh api repos/o/r/pulls/12/reviews --input -"
-runr "GraphQL review mutation" "gh api graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"
+runr "names APPROVE" "gh api graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"
+run BLOCK "gh api --silent graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"   # a boolean flag before the endpoint
+run BLOCK "gh api -i --paginate graphql -f query='mutation{ submitPullRequestReview(input:{pullRequestReviewId:\"x\",event:APPROVE}){ clientMutationId } }'"
+run BLOCK "gh api /graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"   # the endpoint spelled as a path
+run BLOCK "gh api repos/o/r/pulls/12/reviews/9/events -f event=APPROVE"   # submitting a pending review
 run ALLOW "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a COMMENT review, APPROVE only in its prose
+printf '{
+  "commit_id": "a",
+  "event":
+    "APPROVE"
+}
+' > "$STUB/approve-multiline.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/approve-multiline.json"   # split across lines
+run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@$STUB/review.md"   # an issue comment from a file named review: no review target
 run ALLOW "gh api repos/o/r/pulls/12/reviews --paginate --jq '.[].state'"
 run ALLOW "gh api repos/o/r/pulls/12/comments --paginate"
 run ALLOW "echo 'gh pr review 12 --approve'"                             # prose

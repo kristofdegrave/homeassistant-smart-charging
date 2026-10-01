@@ -22,8 +22,12 @@
 # create`. Bodies are read by gh from a copy of the file (`-F body=@<path>`), never passed
 # inline; the copy is made before the token is read.
 #
-# The repository and the bot's login come from .claude/profile.yml through profile-env.sh (a
-# PROFILE in the environment is honoured, for the test suite). Its own tests:
+# The repository and the bot's login come from this checkout's .claude/profile.yml through
+# profile-env.sh; only GH_AS_BOT_PROFILE, set by the test suite, names another file, so a
+# PROFILE in the environment does not retarget the repository. A profile naming no
+# `identity.bot_login` belongs to a project whose sessions run as one account: the same calls
+# then run as gh's active account, so the recipes that name this script hold there too. Its
+# own tests:
 #   bash .github/test-gh-as-bot.sh
 #
 # Exit 0 done; 2 refused; gh's own status when a gh call fails.
@@ -70,10 +74,11 @@ case "$sub" in
   *) refuse "'$sub' is not an author-side call; $usage" ;;
 esac
 
-env_out=$(bash "$(dirname "$0")/profile-env.sh") || refuse "profile-env.sh could not read the profile"
+here=$(cd "$(dirname "$0")" && pwd)
+profile=${GH_AS_BOT_PROFILE:-$here/../.claude/profile.yml}
+env_out=$(PROFILE="$profile" bash "$here/profile-env.sh") || refuse "profile-env.sh could not read the profile"
 eval "$env_out"
 [ -n "${REPO:-}" ] || refuse "the profile names no repo"
-[ -n "${BOT_LOGIN:-}" ] || refuse "the profile names no identity.bot_login, so there is no bot account to run as"
 
 # The body is copied before the token is read, so the file gh posts is read by a process that
 # holds no token: a path naming the process's own environment copies nothing secret.
@@ -84,9 +89,11 @@ if [ -n "${body:-}" ]; then
   body=$copy
 fi
 
-token=$(gh auth token --user "$BOT_LOGIN" 2>/dev/null) || token=''
-[ -n "$token" ] || refuse "gh holds no login for '$BOT_LOGIN' (gh auth login, then gh auth status)"
-export GH_TOKEN="$token"
+if [ -n "${BOT_LOGIN:-}" ]; then
+  token=$(gh auth token --user "$BOT_LOGIN" 2>/dev/null) || token=''
+  [ -n "$token" ] || refuse "gh holds no login for '$BOT_LOGIN' (gh auth login, then gh auth status)"
+  export GH_TOKEN="$token"
+fi
 
 case "$sub" in
   pr-create)

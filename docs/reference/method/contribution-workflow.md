@@ -278,7 +278,7 @@ producer's logic.
 ## Git identity
 
 Whose account each side of a PR acts under is [profile.md](../profile.md)'s **Repository and
-git identity**; **Rounds and the cap** reads markers, never authors.
+git identity**; **Rounds and the cap** tells posts by marker, not login.
 
 ## Issue conventions
 

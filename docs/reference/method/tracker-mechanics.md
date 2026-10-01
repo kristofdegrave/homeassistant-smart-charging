@@ -361,8 +361,8 @@ Read back with `gh api repos/$REPO/issues/<n> --jq '.state'`, which must print `
 
 ## Opening a change request
 
-Opened as the bot, the author side, over REST (`gh pr create` is GraphQL, refused while REST
-works); it bases `main` and prints the URL:
+Opened as the bot, the author side, over REST (`gh pr create` is GraphQL,
+refused first by the limiter); it bases `main` and prints the URL:
 
 ```sh
 bash .github/gh-as-bot.sh pr-create <branch> "<title>" <path>

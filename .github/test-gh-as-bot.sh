@@ -45,7 +45,7 @@ esac
 EOF
 chmod +x "$T/bin/gh"
 printf 'body\n' > "$T/body.md"
-export PATH="$T/bin:$PATH" LOG="$T/log" PROFILE="$T/profile.yml"
+export PATH="$T/bin:$PATH" LOG="$T/log" GH_AS_BOT_PROFILE="$T/profile.yml"
 
 # check <name> <want-exit> <want-stdout> <want-log-pattern> -- <args...>
 check() {
@@ -101,7 +101,8 @@ else
 fi
 
 NO_TOKEN=1 check "no stored login for the bot refuses" 2 '' 'auth token --user b$' -- comment 7 "$B"
-PROFILE="$T/nobot.yml" check "a profile naming no bot refuses" 2 '' "$NOCALL" -- comment 7 "$B"
+GH_AS_BOT_PROFILE="$T/nobot.yml" check "a profile naming no bot runs as gh's active account" 0 22 '^\|api repos/o/r/pulls/7 --jq .number' -- comment 7 "$B"
+PROFILE="$T/nobot.yml" check "a PROFILE in the environment does not retarget the wrapper" 0 22 'tok-b\|api -X POST repos/o/r/issues/7' -- comment 7 "$B"
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
