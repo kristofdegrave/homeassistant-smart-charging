@@ -9,37 +9,31 @@ target is chosen so R3's nominal headroom equals C4's ceiling headroom (13 A eac
 household load, so neither clamp is held non-binding by the other, and Power's target alone
 (16 A) would take true import past the ceiling, so C4's limit is at stake and not only its clamp.
 
-**What the run shows.** C4's known defect (`docs/analysis/requirements.md#constraints`, C4's row)
--- `clamp_to_ceiling` re-deriving the household from the lagged `charger_w` every cycle -- makes
-the commanded current bang between 0 A and the binding headroom (13 A here). That oscillation
-corrupts R3's baseline through its debounce (`debounce_baseline_w`, ADR-0039): the high lagged
-readings, which would reset the decrease-debounce's count, fall on command-changed cycles and
-are discarded (`pending_cycles` carries through a discarded cycle); the corrupted low readings
-between them reach `BASELINE_DEBOUNCE_CYCLES` and are committed, and R3 grants the full target
-current on a fresh but wrong baseline. On the next cycle true import breaches both limits; the
-set judges C4 first, so the run goes red through C4.
+**What the run shows.** Before ADR-0058, C4 re-derived the household from the lagged `charger_w`
+alone, so the commanded current banged between 0 A and the binding headroom; that oscillation
+corrupted R3's baseline through its debounce (`debounce_baseline_w`, ADR-0039), and on step 5
+true import breached both limits. With C4 solving around the lower of the reading and the last
+set charger current (ADR-0058, C4's row in `docs/analysis/requirements.md#constraints`), the
+command holds and the whole invariant set judges every step green.
 
-**R3's own exposure.** That the debounce commits a corrupted reading under a sustained command
+**R3's own exposure.** That R3's debounce commits a corrupted reading under a sustained command
 oscillation is R3's criteria at work, not only C4's: any oscillating command, Solar's moving
-request among them (`debounce_baseline_w`'s docstring), can trigger it. #1584 records it. This
-scenario's xfail is C4's alone, since C4-first ordering reports C4's breach.
+request among them (`debounce_baseline_w`'s docstring), can trigger it. #1584 records it; this
+world no longer oscillates, so it no longer exercises that exposure.
 
 **Attribution.** The R3-alone test (C4 bypassed) shows R3 holding its own headroom on this
 world under a *steady* command; it does not show R3 stable under an oscillating one (#1584). The
-C4-alone test (R3 bypassed) shows C4 alone oscillating between 0 A and the target on this world,
-independent of R3, and at this household the target alone exceeds the ceiling: the oscillation,
-and so the breach, are C4's.
+C4-alone test (R3 bypassed) shows C4 alone holding the grid supply ceiling on this world, where
+Power's target alone would exceed it.
 
 **Parameters** (ADR-0037's invariant-oracle rule: honest, not tuned to dodge a member). One
-steady household load, no step: the oscillation is self-sustaining from the startup transient
-alone. `max_peak_kw == peak_floor_kw`, so `resolve_effective_peak_limit` returns exactly
-`max_peak_kw`, from which `effective_peak_limit_w` derives, whatever the tracked monthly peak
-(T2's own `_PEAK_KW` comment).
+steady household load, no step: before ADR-0058 the oscillation was self-sustaining from the
+startup transient alone. `max_peak_kw == peak_floor_kw`, so `resolve_effective_peak_limit`
+returns exactly `max_peak_kw`, from which `effective_peak_limit_w` derives, whatever the
+tracked monthly peak (T2's own `_PEAK_KW` comment).
 """
 
 import math
-
-import pytest
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
@@ -57,7 +51,7 @@ from custom_components.smart_charging.const import (
     MODE_POWER,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
-from tests.scenarios.invariants import InvariantViolation
+from tests.scenarios.invariants import check_c4
 from tests.scenarios.plant import Plant
 from tests.scenarios.runner import ScenarioRunner, format_trace
 from tests.scenarios.scenario_setup import (
@@ -77,9 +71,7 @@ _PEAK_FLOOR_KW = 5.6  # pinned equal to _MAX_PEAK_KW (module docstring).
 _PEAK_GRACE_MIN = 2.0  # default
 _CONTROL_INTERVAL_S = 10.0  # default
 
-_CYCLES = 12  # T1's value; a fix that moves the first breach within these cycles fails the
-# step pin rather than XPASSing.
-_FIRST_BREACH_STEP = 5  # the known first violation on main (the xfail test's pin).
+_CYCLES = 12  # T1's value: several lag-driven step pairs.
 
 
 def entry_data():
@@ -121,9 +113,8 @@ def _r3_headroom_a(options: dict, household_w: float) -> int:
 
 
 def _judge_with_mode_guard(options: dict):
-    """The whole invariant set (`judge_c4_then_r3`), with T1's mode-select guard ahead of it: a
-    mid-run mode revert (#1363) raises a plain `AssertionError` that the xfail's
-    `raises=InvariantViolation` cannot swallow as C4's defect (T1's `_assert_mode_select_held`
+    """The whole invariant set (`judge_c4_then_r3`), with T1's mode-select guard ahead of it, so
+    a mid-run mode revert (#1363) fails on the step it happens (T1's `_assert_mode_select_held`
     docstring has the reasoning)."""
     judge = judge_c4_then_r3(options)
 
@@ -144,19 +135,6 @@ def _bypass_peak_clamp(desired_current, *, tracker, **_kwargs):
     return desired_current, tracker, False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=InvariantViolation,
-    reason=(
-        "C4's known defect under charger-power lag (C4's row, "
-        "docs/analysis/requirements.md#constraints): clamp_to_ceiling re-derives the household "
-        "from the lagged reading every cycle, so the command oscillates and true import breaches "
-        "the grid supply ceiling while the swing lasts. R3's debounce lets the same swing "
-        "through (two corrupted low readings reach its count and the second is committed), "
-        "which is #1584's, not this marker's. Choosing C4's lag-case rule and fixing it are the "
-        "epic #996 second slice's, after this task."
-    ),
-)
 async def test_should_keep_true_import_within_both_limits_when_r3_and_c4_headrooms_coincide_under_lag(  # noqa: E501
     hass, freezer
 ):
@@ -167,22 +145,13 @@ async def test_should_keep_true_import_within_both_limits_when_r3_and_c4_headroo
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    known_breach = (
-        f"C4 breach at step {_FIRST_BREACH_STEP}: true import "
-        f"{_HOUSEHOLD_W + _TARGET_CURRENT_A * voltage} W > grid supply ceiling "
-        f"{options[CONF_GRID_CEILING_A] * voltage} W"
-    )
 
     # Act
-    # The whole invariant set judges every step. A violation other than the known one (another
-    # member or step) fails the pin below as a plain AssertionError rather than being absorbed
-    # by `raises=InvariantViolation`; no violation at all is an XPASS, which `strict` fails.
-    try:
-        await runner.run(_CYCLES, judge=_judge_with_mode_guard(options))
-    except InvariantViolation as exc:
-        # Assert
-        assert str(exc).startswith(known_breach), f"expected {known_breach!r}, got: {exc}"
-        raise
+    await runner.run(_CYCLES, judge=_judge_with_mode_guard(options))
+
+    # Assert
+    # C4 and R3 (docs/analysis/requirements.md): true import stays within both limits, judged by
+    # the whole invariant set every step; a breach raises `InvariantViolation` inside `run`.
 
 
 async def test_should_hold_r3s_headroom_every_cycle_when_c4_is_bypassed_under_lag(
@@ -214,14 +183,11 @@ async def test_should_hold_r3s_headroom_every_cycle_when_c4_is_bypassed_under_la
         )
 
 
-async def test_should_bang_between_zero_and_the_target_when_r3_is_bypassed_under_lag(
+async def test_should_hold_the_grid_supply_ceiling_every_cycle_when_r3_is_bypassed_under_lag(
     hass, freezer, monkeypatch
 ):
     """Attribution evidence (module docstring): C4 alone, `apply_peak_clamp` passed straight
-    through, oscillates on this world independent of R3. This pins C4's known defect as a green
-    test, so it goes red the day C4 is fixed -- that is expected, and the fix retires it with the
-    xfail above. Step 0 is skipped: it commits C4's nominal headroom from the startup reading,
-    before the first lagged reading arrives."""
+    through, holds the ceiling on this world, where Power's 16 A target alone would exceed it."""
     # Arrange
     monkeypatch.setattr(
         "custom_components.smart_charging.coordinator.apply_peak_clamp",
@@ -233,20 +199,11 @@ async def test_should_bang_between_zero_and_the_target_when_r3_is_bypassed_under
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
+    ceiling_w = options[CONF_GRID_CEILING_A] * voltage
 
     # Act
-    trace = await runner.run(_CYCLES)
+    await runner.run(_CYCLES, judge=lambda trace: check_c4(trace, ceiling_w=ceiling_w))
 
     # Assert
-    # Every consecutive pair from step 1 differs, and the only values are 0 A and the target.
-    tail = trace[1:]
-    for previous, current in zip(tail, tail[1:], strict=False):
-        assert current.commanded_current_a != previous.commanded_current_a, (
-            f"C4 alone should oscillate every cycle from step 1, never settling\n"
-            f"{format_trace(trace)}"
-        )
-    observed = {t.commanded_current_a for t in tail}
-    assert observed == {0.0, _TARGET_CURRENT_A}, (
-        f"expected C4 alone to bang between 0 A and the target ({_TARGET_CURRENT_A} A), got "
-        f"{observed}\n{format_trace(trace)}"
-    )
+    # C4 (docs/analysis/requirements.md#constraints): judged by the shared C4 member every step;
+    # a breach raises `InvariantViolation` inside `run`.
