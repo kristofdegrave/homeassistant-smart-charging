@@ -473,7 +473,7 @@ sequenceDiagram
     B-->>C: peak-clamped current
     C->>B: peak headroom under that IN-FORCE limit, fitted to the RAW baseline,<br/>for the readout (headroom, not clamp)
     B-->>C: peak headroom — surfaced as sensor.smart_charging_peak_headroom_a
-    C->>G: grid-supply-ceiling clamp on raw (C4, always)
+    C->>G: grid-supply-ceiling clamp on raw (C4, always) · charger draw: the lower of<br/>the charger power reading and the last set charger current, at the resolved supply voltage (ADR-0058)
     G-->>C: ceiling-clamped current
     C->>I: R11 cooldown/hold gating + C1 floor/cap
     I-->>C: final current
@@ -828,15 +828,16 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 
 ### 8.3 ADRs written after 0019
 
-This section accounts for every ADR in `docs/adl/` numbered after 0019 — 32 records, ADR-0020
-through ADR-0051 at the time of writing. Each is in exactly one of two tables. The first holds
-the 21 that decide something about the product, reconciled the way
+This section accounts for the ADRs in `docs/adl/` numbered after 0019 — 33 records, ADR-0020
+through ADR-0051 at the time of writing, and ADR-0058, which narrows a control-cycle step this
+design draws; ADR-0052 to ADR-0057 are not yet reconciled here. Each is in exactly one of two tables. The first holds the 22 that decide something
+about the product, reconciled the way
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
 this design's boundary, narrow it, or extend it? The second holds the 11 that decide how the
 project works or how it verifies behaviour, which this design has no service for, each with its
 reason.
 
-As in §8.2, no ADR in this range contradicts the decomposition. Five required a change to the
+As in §8.2, no ADR in this range contradicts the decomposition. Six required a change to the
 text above, and each is reflected there rather than left as a divergence: ADR-0024's clear event
 ([§4](#4-static-architecture) rule 5,
 [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing),
@@ -844,8 +845,9 @@ text above, and each is reflected there rather than left as a divergence: ADR-00
 ([§3](#3-service-catalog)'s Resource Access list), ADR-0036's smoothed set (§3's
 Signal-Conditioning row and
 [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step),
-ADR-0049's jointly smoothed solar surplus, in the same two places, and ADR-0051's forecast
-baseline, in §3's Signal-Conditioning row. The same
+ADR-0049's jointly smoothed solar surplus, in the same two places, ADR-0051's forecast
+baseline, in §3's Signal-Conditioning row, and ADR-0058's C4 charger operand, in
+[§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s C4 step. The same
 Resource Access bullet defers to [C5](../analysis/requirements.md#constraints)'s role table for
 which roles fault when unavailable, which several rows below cite.
 
@@ -874,6 +876,7 @@ which roles fault when unavailable, which several rows below cite.
 | 0047 | A user's own enable of a capability-gated entity is recorded in its registry options | **Narrows ADR-0028; consistent** | The enable lives in the entity's own registry row, under this integration's key, and `sync_disabled_by` reads it at setup before ADR-0028's flip — the same setup-time shape, not a runtime Client→Engine call. No service, edge or event is added, and it delivers the 0028 row's rule that a user's own enable or disable is never overridden by a capability change. |
 | 0049 | Step 6's solar surplus is smoothed from net import and charger power together | **Narrows ADR-0006 step 2 and ADR-0036; reflected above** | [§3](#3-service-catalog)'s Signal-Conditioning row and [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step smooth one sample per cycle, raw `net_w` paired with raw `charger_w`, and every charging-rate decision that reads the solar surplus reads that mean — the `Solar` and `SolarOnly` dispatch, `Auto`'s surplus test and the baseline query. A sample from a cycle the charger current just changed is not admitted: the Coordinator passes the command-changed signal it already holds for ADR-0039, and the Engine keeps the decision and the flag, threaded as state. It gains a parameter, not a dependency, so it stays a stateful Engine under [§3](#3-service-catalog)'s signature test. The R3 and C4 clamps and the displayed `solar_surplus_w` still read raw, and R5's escalated rate reads the same admitted mean, negated, as its smoothed household baseline, without R3's deferrals, as ADR-0051 decides. |
 | 0051 | R5's escalated-rate forecast reads R10's admitted joint mean | **Narrows ADR-0006 step 2 and ADR-0036; reflected above** | Both of R5's household-dependent bounds, the C4 ceiling headroom and the peak headroom under the raised limit, are fitted to the Signal-Conditioning Engine's admitted mean, negated, which [§3](#3-service-catalog)'s Signal-Conditioning row names as the forecast's baseline. The Engine gains no second output, parameter or state: the forecast reads the value the solar modes already dispatch on, and the Coordinator hands it to the Billing-Protection and Grid-Safety Engines as a parameter, as the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence draws. The R3 and C4 clamps and the peak-headroom readout still read raw. |
+| 0058 | C4's charger draw is the lower of the charger power reading and the last set charger current | **Narrows ADR-0006 step 8; reflected above** | [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s C4 step solves around the lower of this cycle's raw charger power reading and the charger current last set, at the resolved supply voltage. The Coordinator already holds that current for ADR-0039 and passes the lower operand to the Grid-Safety Engine, which takes its operands as parameters and is unchanged, so V7 stays a pure Engine, split from billing. R5's escalated rate still fits its C4 bound to the smoothed mean (ADR-0051). |
 
 **Out of scope: process and test method.** These decide how the project works or how behaviour is
 verified. None adds, moves or relies on a service boundary, so there is nothing for this design to
@@ -916,7 +919,7 @@ reconcile — the same reasoning [§8.1](#81-adrs-that-predate-this-design-0001-
   ADRs 0010–0019 are reconciled in [§8.2](#82-adrs-written-after-this-design-0010-0019) — none
   contradicts the decomposition, and the two that changed a described mechanism (ADR-0011's event
   vocabulary, ADR-0018's Store) are reflected in [§4](#4-static-architecture) and
-  [§5](#5-dynamic-architecture) above. Every ADR after 0019 is accounted for in
+  [§5](#5-dynamic-architecture) above. Every ADR after 0019 that §8.3's preamble names is accounted for in
   [§8.3](#83-adrs-written-after-0019): reconciled as a product decision, or listed as process or
   test method with its reason.
 
