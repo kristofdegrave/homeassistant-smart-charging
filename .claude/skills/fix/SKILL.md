@@ -32,8 +32,8 @@ comment is no finding; §6 lists it.
   that does not itself carry an `<!-- ai-fix-` marker (§5) and has no later reply carrying
   `<!-- ai-fix-ack -->` in the same thread (a reply's `in_reply_to_id` is the thread's first
   comment). Such a reply means an earlier run already handled it.
-- **Review bodies** — list the PR's reviews (`gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"
-  --paginate`) and keep every non-empty body passing it posted after the most recent
+- **Review bodies** — list the PR's reviews (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews
+  --paginate`, the path unquoted, which the allow-list's rule matches) and keep every non-empty body passing it posted after the most recent
   `<!-- ai-fix-summary -->` comment (all of them when there is none). A local review's body
   holds the findings that anchor to no changed line; a finding in both a body and an inline
   comment counts once.

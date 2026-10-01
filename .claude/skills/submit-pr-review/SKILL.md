@@ -60,11 +60,13 @@ reference.
 ## 5. Submit — and recover from a 422
 
 ```
-gh api "repos/<owner>/<repo>/pulls/<pr>/reviews" --input <payload-file>
+gh api repos/<owner>/<repo>/pulls/<pr>/reviews --input <payload-file>
 ```
 
 Run it as a command of its own, the repository spelled out and the payload path absolute: the
 guard refuses a review post that shares its command or names a relative path after a `cd`.
+Leave the path unquoted: the allow-list's rule matches it as typed, so a quoted path is
+refused in a `dontAsk` session.
 
 If it fails with HTTP 422 on an inline anchor, resubmit with that one comment removed from
 `comments` and its text appended to the summary body. Do **not** fall back to a plain issue
