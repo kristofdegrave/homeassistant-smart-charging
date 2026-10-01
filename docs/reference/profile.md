@@ -143,8 +143,9 @@ what the shell builds from it, and its header states the rules: the label gestur
 named GraphQL mutations in any such spelling or spacing, a push of HEAD while `main` is
 checked out, git's global overrides and their `GIT_*` environment forms, the
 program-running options its header names, the subcommands this file denies, a `checkout` of
-a path, a target outside this repository's checkout and worktrees, and a fetch with an option it does not read, from another source, of a pull-request ref or
-an object id, or into a named destination. Still open: what neither layer names — a GraphQL
+a path, a target outside this repository's checkout and worktrees, and a fetch with an
+option it does not read, from another source, of a pull-request ref or an object id, or into
+a named destination. Still open: what neither layer names — a GraphQL
 mutation outside the guard's list, a git subcommand outside both lists, and the indirection
 the guard's header concedes (a word built by the shell, a command run by another); and any
 branch on `origin` — one anyone with write access pushed, reviewed or not — whose

@@ -823,6 +823,14 @@ runr "tracked path" "git checkout --no-guess only" "$LR/wt"             # ... th
 g rm -q --cached only; rm -f "$LR/wt/only"
 runr "bash would expand" "git {-c,'alias.zz=!touch /tmp/p #'{}} zz" "$LR/wt" # a nested brace hides no list
 runr "bash would expand" "gh issue edit 5 {--remove-label=needs-approval,--title=t{}}"
+runr "sets labels" "gh api 'repos/o/r/issues/5?a=/6/labels' -f 'labels[]=x'" # a query string ending in <n>/labels
+runr "sets labels" "gh api 'repos/o/r/issues/5#/6/labels' -f 'labels[]=x'"   # ... a fragment
+runr "bash would expand" "git -C $LR/wt @(-c) core.fsmonitor=x status" "$LR/wt" # an extended glob
+runr "--patch" "git checkout -p main" "$LR/wt"                           # hunks written into paths
+runr "--patch" "git checkout --patc main" "$LR/wt"                       # ... by a prefix
+runr "--patch" "git checkout -fp main" "$LR/wt"                          # ... in a cluster
+run ALLOW "git checkout -bpatch main" "$LR/wt"                          # a -b cluster names a branch
+run ALLOW "git status # why?" "$LR/wt"                                  # bash's comment is not read
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
 runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"

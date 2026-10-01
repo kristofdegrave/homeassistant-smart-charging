@@ -166,8 +166,8 @@
 # laid out as a repository reads no config or hook of its own; the subcommands the loop file
 # denies (`rebase`, `submodule`, `mv`, `restore`, `update-ref`, `cherry-pick`, `switch`, ...),
 # plus `symbolic-ref` and `replace`, a `config` write and a `checkout` naming paths (an
-# operand that names a tracked path or is no commit, here or as a branch of `origin`, or
-# `--pathspec-from-file` by any prefix);
+# operand that names a tracked path or is no commit, here or as a branch of `origin`,
+# `--pathspec-from-file` by any prefix, or `-p`/`--patch`);
 # `--upload-pack`, `--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O` and
 # `archive -o`; a fetch or pull with an option
 # outside a short list of ones that change neither source nor destination, from anything but
@@ -430,12 +430,15 @@ expands() {
       if (c == bs) { i++; continue }
       if (q == dq) { if (c == dq) q = ""; continue }
       if (c == sq || c == dq) { q = c; continue }
+      if (c == "#" && (o == "" || substr(o, length(o), 1) ~ /[ \t]/)) break
       o = o c
     }
     printf "%s", o }') || return 0
   # Nesting is not counted: bash splits `{a,b{}}` on the outer comma, so any `{` with a
-  # later `,` or `..` and a later `}` refuses. An awk that fails counts as expanding.
-  printf '%s' "$_u" | grep -Eq '[{].*(,|[.][.]).*[}]|[[*?]'
+  # later `,` or `..` and a later `}` refuses; so does an extended glob (`@(`, `+(`, `!(`),
+  # should the shell have extglob on. A `#` opening a word starts bash's comment, which is
+  # not read. An awk that fails counts as expanding.
+  printf '%s' "$_u" | grep -Eq '[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]'
 }
 
 # In the loop, a gh gesture that removes a label the human's go rests on (ADR-0054, "Label
@@ -591,6 +594,14 @@ loop_git_rule() { # <segment> <subcommand> <args...>
           --?*)
             case "--pathspec-from-file" in "${_a%%=*}"*)
               deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
+            esac
+            case "--patch" in "${_a%%=*}"*)
+              deny "$_seg" "in the autopilot loop 'git checkout --patch' is refused: it writes hunks into paths around the Edit deny" "$HARNESS_TAIL" ;;
+            esac ;;
+          # `-p` in a cluster, unless a `-b`/`-B` before it makes the rest a branch name.
+          -*p*)
+            case "${_a%%p*}" in *[bB]*) ;; *)
+              deny "$_seg" "in the autopilot loop 'git checkout --patch' is refused: it writes hunks into paths around the Edit deny" "$HARNESS_TAIL" ;;
             esac ;;
           # A redirection: a word opening with one, read after unq, so a quoted leading `>`
           # passes too -- as a pathspec it names only paths opening with `>`.
