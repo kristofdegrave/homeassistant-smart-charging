@@ -793,7 +793,7 @@ runr "naming paths" "git checkout origin/main .github/hooks/pre-commit" "$LR/wt"
 run ALLOW "git checkout task" "$LR/wt"                                 # a branch checkout
 run ALLOW "git checkout task 2>/dev/null" "$LR/wt"                     # ... a redirection is not a path
 runr "is no commit" "git checkout .github/hooks/pre-commit" "$LR/wt"   # one operand that is no commit: a path
-runr "is no commit" "git checkout --ours .github/ci.yml" "$LR/wt"      # ... behind --ours
+runr "tracked path" "git checkout --ours .github/ci.yml" "$LR/wt"      # ... a tracked one behind --ours
 runr "naming paths" "git checkout --pathspec-fr=f main" "$LR/wt"       # --pathspec-from-file by a prefix
 runr "global" "git --bare status" "$LR/wt"                             # --bare: the cwd as the git directory
 runr "bash would expand" "git -C $LR/wt {-c,} core.fsmonitor=x status" "$LR/wt" # a brace list rebuilds -c
@@ -818,6 +818,11 @@ run ALLOW "git checkout -b x origin/main" "$LR/wt"                      # a new 
 run ALLOW "git checkout main" "$LR/wt"                                  # a branch
 g update-ref refs/remotes/origin/only HEAD
 run ALLOW "git checkout only" "$LR/wt"                                  # a branch only origin has: tracking
+echo a > "$LR/wt/only"; g add only
+runr "tracked path" "git checkout --no-guess only" "$LR/wt"             # ... that is also a path git restores
+g rm -q --cached only; rm -f "$LR/wt/only"
+runr "bash would expand" "git {-c,'alias.zz=!touch /tmp/p #'{}} zz" "$LR/wt" # a nested brace hides no list
+runr "bash would expand" "gh issue edit 5 {--remove-label=needs-approval,--title=t{}}"
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
 runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"

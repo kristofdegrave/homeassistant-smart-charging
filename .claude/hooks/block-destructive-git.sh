@@ -166,8 +166,8 @@
 # laid out as a repository reads no config or hook of its own; the subcommands the loop file
 # denies (`rebase`, `submodule`, `mv`, `restore`, `update-ref`, `cherry-pick`, `switch`, ...),
 # plus `symbolic-ref` and `replace`, a `config` write and a `checkout` naming paths (an
-# operand that is no commit, here or as a branch of `origin`, or `--pathspec-from-file` by
-# any prefix);
+# operand that names a tracked path or is no commit, here or as a branch of `origin`, or
+# `--pathspec-from-file` by any prefix);
 # `--upload-pack`, `--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O` and
 # `archive -o`; a fetch or pull with an option
 # outside a short list of ones that change neither source nor destination, from anything but
@@ -177,22 +177,24 @@
 # and, from gh, read from gh's own words after the walk, `gh issue edit` removing
 # `needs-approval`, a `gh api` label DELETE or PUT or any issue write setting `labels`
 # (PATCH, or the POST gh sends by default; only an `issues/<digits>/labels` path is the
-# add-labels exemption), and a GraphQL label removal, label delete or rename, `labelIds` update, or merge, ref, commit, repository or branch-protection mutation.
-# The push rule diffs against the fully named `refs/remotes/origin/main`, so a tag or branch
-# called `origin/main` does not shadow it; a fetch of origin moves it, and so can a push into
-# it, whose own diff against the ref as it stands still guards that push. `gh pr edit --remove-label` passes: it is the
-# admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
+# add-labels exemption), and a GraphQL label removal, label delete or rename, `labelIds`
+# update, or merge, ref, commit, repository or branch-protection mutation. The push rule
+# diffs against the fully named `refs/remotes/origin/main`, so a tag or branch called
+# `origin/main` does not shadow it; a fetch of origin moves it, and so can a push into it,
+# whose own diff against the ref as it stands still guards that push. `gh pr edit
+# --remove-label` passes: it is the admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
 # single quotes is dropped, so a Windows path spelled with backslashes refuses; a fetch
 # option given its value as a separate word (`--depth 1`) refuses as unread, `--depth=1` is
 # the workaround; a request body read from a file (`-F query=@file`, `--input`) is not read
 # by the label and GraphQL rules -- the settings file's `ask` rules hold those forms; a
 # `GIT_*` variable exported in an earlier segment (`export`, `set -a`) is not seen, since
-# `git_env` reads only an assignment directly before git; the option scan reads every word, so a commit message on the command line
-# naming `--output` or `--exec` refuses -- `commit -F <file>` is the workaround; an unquoted
-# `?`, `*` or `[` refuses where bash would leave it as typed (a `gh api` path with a query
-# string) -- quoting it is the workaround; PowerShell's
-# backtick escape is not read, and the loop admits no PowerShell; the repository is the
-# hook's own as checked out, or a `GUARD_REPO` in the
+# `git_env` reads only an assignment directly before git; the option scan reads every word,
+# so a commit message on the command line naming `--output` or `--exec` refuses -- `commit
+# -F <file>` is the workaround; an unquoted `?`, `*` or `[`, or a `{` with a later `,` or
+# `..` and `}`, refuses where bash would leave it as typed (a `gh api` path with a query
+# string, `@{1}..x@{1}`) -- quoting it is the workaround; a checkout of a branch that is
+# also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
+# no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
 # older git refuses every loop git; and a word the scan does not see (the indirection class
 # above).
@@ -416,10 +418,11 @@ unq() { printf '%s' "$1" | tr -d "\"'\\\\\$"; }
 norm() { unq "$1" | tr 'A-Z' 'a-z'; }
 # In the loop, whether bash would expand a segment before git or gh reads it: in the text it
 # leaves unquoted -- quotes tracked across the guard's space split, an escaped character
-# dropped -- a brace holding a comma or `..` (`{-c,}`, `{1..2}`), or a glob character. A
-# reflog `@{1}` holds neither, and a quoted `'*.md'` or `-m "why?"` is no unquoted text.
+# dropped -- a `{` with a later `,` or `..` and `}` (`{-c,}`, `{1..2}`), or a glob
+# character. A reflog `@{1}` has neither, and a quoted `'*.md'` or `-m "why?"` is no
+# unquoted text.
 expands() {
-  printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+  _u=$(printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
     q = ""; o = ""
     for (i = 1; i <= length(s); i++) {
       c = substr(s, i, 1)
@@ -429,7 +432,10 @@ expands() {
       if (c == sq || c == dq) { q = c; continue }
       o = o c
     }
-    printf "%s", o }' | grep -Eq '[{][^{}]*(,|[.][.])[^{}]*[}]|[[*?]'
+    printf "%s", o }') || return 0
+  # Nesting is not counted: bash splits `{a,b{}}` on the outer comma, so any `{` with a
+  # later `,` or `..` and a later `}` refuses. An awk that fails counts as expanding.
+  printf '%s' "$_u" | grep -Eq '[{].*(,|[.][.]).*[}]|[[*?]'
 }
 
 # In the loop, a gh gesture that removes a label the human's go rests on (ADR-0054, "Label
@@ -536,10 +542,9 @@ GUARD_REPO=${GUARD_REPO:-$(dirname "$0")}
 
 # In the loop, the git forms the loop file's text rules cannot hold, read from the words as
 # the shell passes them on (the walk has already run them through `unq`): a global override
-# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`, `--bare`), its
-# `GIT_*=`
-# environment form (`$git_env`), or more than one `-C` (`$nC`); any git after a directory
-# change; a target outside this repository's checkout and worktrees; the subcommands the loop
+# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`, `--bare`),
+# its `GIT_*=` environment form (`$git_env`), or more than one `-C` (`$nC`); any git after a
+# directory change; a target outside this repository's checkout and worktrees; the subcommands the loop
 # file denies, spelled any way the shell collapses, a config write and a checkout naming
 # paths; any prefix of `--upload-pack`, `--receive-pack`, `--exec`, `--output`,
 # `--output-directory`, `--extcmd` or `--open-files-in-pager`, and `grep -O`, `archive -o` and
@@ -587,17 +592,24 @@ loop_git_rule() { # <segment> <subcommand> <args...>
             case "--pathspec-from-file" in "${_a%%=*}"*)
               deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
             esac ;;
+          # A redirection: a word opening with one, read after unq, so a quoted leading `>`
+          # passes too -- as a pathspec it names only paths opening with `>`.
           -* | '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'*) ;;
           *) _ops=$((_ops + 1)); _op=$_a ;;
         esac
       done
       [ "$_ops" -le 1 ] ||
         deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL"
-      # A branch only `origin` has is git's tracking checkout, a commit too.
-      if [ "$_ops" = 1 ] &&
-        ! git -C "$cwd" -C "$repo" rev-parse -q --verify "$_op^{commit}" >/dev/null 2>&1 &&
-        ! git -C "$cwd" -C "$repo" rev-parse -q --verify "refs/remotes/origin/$_op^{commit}" >/dev/null 2>&1; then
-        deny "$_seg" "in the autopilot loop 'git checkout $_op' is refused: '$_op' is no commit, so git reads it as a path to write" "$HARNESS_TAIL"
+      # A branch only `origin` has is git's tracking checkout, a commit too -- unless the
+      # operand also names a tracked path, which `--no-guess` makes git restore instead.
+      if [ "$_ops" = 1 ]; then
+        if [ -n "$(git -C "$cwd" -C "$repo" ls-files -- ":(literal)$_op" 2>/dev/null)" ]; then
+          deny "$_seg" "in the autopilot loop 'git checkout $_op' is refused: '$_op' names a tracked path, which git can read it as and write" "$HARNESS_TAIL"
+        fi
+        if ! git -C "$cwd" -C "$repo" rev-parse -q --verify "$_op^{commit}" >/dev/null 2>&1 &&
+          ! git -C "$cwd" -C "$repo" rev-parse -q --verify "refs/remotes/origin/$_op^{commit}" >/dev/null 2>&1; then
+          deny "$_seg" "in the autopilot loop 'git checkout $_op' is refused: '$_op' is no commit, so git reads it as a path to write" "$HARNESS_TAIL"
+        fi
       fi ;;
   esac
   _i=0
