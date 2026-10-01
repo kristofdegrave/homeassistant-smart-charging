@@ -35,7 +35,8 @@ timers, the has-charged flag and restart-debounce timer (R11), the step-up/reser
 hold](system-overview.md#ubiquitous-language) is read from rather than separately tracked), both
 threaded in step 4, and the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
-charger currents that R3's deferral cases and R10's admission rule key on, and whether R10's
+charger currents that R3's deferral cases and R10's admission rule key on (the more recent of them
+also bounds C4's charger draw), and whether R10's
 window left the previous cycle's sample out — each
 homed in the rule or use-case that defines its lifecycle.
 
@@ -289,10 +290,11 @@ limit for step 5.
   still running, even if it had charged before.
 - **Mode requests a current below the minimum.** The invariant in step 7 resolves it to 0 A or
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
-- **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
-  grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
-  cannot trip (C4). A household load rise can take net import above the ceiling until the
-  next control cycle reacts, which is at most one control interval (C4).
+- **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so the
+  current the System sets keeps net grid import below the grid supply ceiling minus the grid
+  safety offset (C4). A household load rise that takes import above the ceiling is answered on
+  the next control cycle; one the household load causes on its own is not the System's to end
+  (C4).
   This applies even in `Power` mode with peak protection disabled, and on an installation
   without the CapTar capability (R18) — in both of which it is the only active clamp.
 
