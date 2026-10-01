@@ -13,12 +13,14 @@ while C4 binds on a lagging reading, charging at a reduced rate.
 
 ## Context
 
-- **C4's requirement changed.** The C4 constraint in
-  [requirements.md](../analysis/requirements.md) now names the charger draw the clamp solves
-  around: the lower of this control cycle's charger power reading and the charger current the
-  System last set, the reading alone until it has set one since the last restart or reload. It
-  accepts an alternation while the clamp binds on a lagging reading, and records a car lowering
-  its own draw under a lagging reading as a known defect against the constraint.
+- **C4's requirement constrains any choice.** The C4 constraint in
+  [requirements.md](../analysis/requirements.md) asks that the charger current the System sets
+  never takes net import above the grid supply ceiling, and that a household rise is answered on
+  the next control cycle. It accepts the set current alternating while the clamp binds on a
+  lagging reading, and records a car lowering its own draw under a lagging reading as a known
+  defect against the constraint. Neither of R3's deferral cases applies to C4: discarding a
+  reading taken on a command-changed cycle, the shape ADR-0039 left for C4, delays a genuine
+  rise by a cycle.
 - **Which reading a step consumes is ADR-0006's.** [ADR-0006](0006-coordinator-and-data-flow.md)'s
   step 8 applies C4 "on raw readings", and its Consequences make a change to a step's reading a
   new record. [ADR-0039](0039-baseline-reading-during-own-actuation.md) settled R3's version of
@@ -44,7 +46,7 @@ capability.
 
 - Pro: nothing new to hold, and a car drawing less than it was set to is read as it draws.
 - Con: after a step down the stale reading understates the household, so C4 grants current past
-  the ceiling; the tier breaches at every lag of 1 or more.
+  the ceiling; the tier breaches at every lag of 1 or more without the CapTar capability.
 
 ### Option B — The higher of the raw and R3's accepted baseline (ADR-0056)
 
@@ -78,9 +80,9 @@ capability.
 
 ## Decision
 
-**Option D.** It is the only option that breached nowhere in the tier while assuming nothing
-the tier cannot check: Options A and B breach there, and C and E rest on a car following its
-set current. Its costs are charging rate while C4 binds, and the uncovered case of its second
+**Option D.** It is the only option that breached nowhere in the tier without relying on the
+car following its set current: Options A and B breach there, and C and E rest on that
+assumption, which D's Pro removes for a car drawing less. Its costs are charging rate while C4 binds, and the uncovered case of its second
 Con. That case is recorded as a known defect against C4 rather than accepted as an exception.
 
 ADR-0006's step 8 is narrowed accordingly. C4 still reads unsmoothed values, a separate call
@@ -92,17 +94,17 @@ deferral stays R3's alone.
 
 - **The C4 call site passes the lower charger operand.** The Grid-Safety Engine is unchanged: it
   solves around the operands it is handed. The last set current is the one the coordinator
-  already holds for ADR-0039. A fault path's write of 0 A counts as a set current, which keeps
+  already holds for ADR-0039. A fault path's write of 0 A that succeeds counts as a set current, which keeps
   the operand conservative on the recovery cycle.
 - **The scenario tier's strict expected failures turn into failures** the day this lands, as
-  they were written to. The task that lands it removes T1's and T3's markers and replaces T3's
-  C4-alone oscillation test with one that expects C4 to hold the ceiling.
+  they were written to. The task that lands it removes the strict xfails in
+  `test_grid_ceiling_under_lag.py` and `test_peak_and_ceiling_under_lag.py`, and replaces the
+  latter's C4-alone oscillation test with one that expects C4 to hold the ceiling.
 - **The alternation is accepted.** R10's steady-input criterion already exempts C4 while it
   binds. An oscillation invariant the tier adds later has to allow it on the cycles C4 binds.
 - **The uncovered case needs the tier first.** The plant must model a car drawing below its set
   current before a rule for it, such as Option E, can be judged.
-- **The control interval's 30 s upper bound** (NF11) follows from C4's excursion bound in the
-  same requirement change. It is a requirement, not part of this decision: ADR-0005 fixes where
+- **The control interval's 30 s upper bound is NF11's**, not this record's: ADR-0005 fixes where
   the interval is kept, not its range.
 - **The design documents follow.** `system-design.md` §5.1's sequence still draws C4 on raw
   operands alone.
@@ -110,23 +112,28 @@ deferral stays R3's alone.
   its C4 bound to the smoothed joint mean
   ([ADR-0051](0051-r5-forecast-reads-the-admitted-joint-mean.md)).
 
-**Blast radius.** Three searches, run as written:
+**Blast radius.** Four searches, run as written:
 
 1. `rg -n 'clamp_to_ceiling|ceiling_headroom_a' custom_components/ tests/`: 37 hits. Every C4
    headroom calculation goes through `ceiling_headroom_a`, which `clamp_to_ceiling` delegates
    to, and both are imported only under their own names, so this finds every call and spy.
 2. `rg -n -U -i 'C4[^0-9][^\n]*(\n[^\n]*)?raw|raw[^\n]*(\n[^\n]*)?C4[^0-9]' custom_components/ tests/`:
-   15 matches, each listed by its first line. Comments and docstrings name C4's operand in
+   15 matches (27 lines), each listed by its first line. Comments and docstrings name C4's operand in
    prose, often across a line break, and every such statement calls it raw.
 3. `rg -n -i 'C4[^0-9].*raw|raw.*C4[^0-9]|ceiling.*raw|raw.*ceiling' docs/design/`: 6 hits.
    Every design statement of which reading C4 uses names it as raw.
+4. `rg -n "C4's known defect|C4 alone" tests/scenarios/`: 10 hits. The scenario tier's
+   reproductions name the defect or the C4-alone run, and some patch the other clamp, so no
+   other search reaches them.
 
 | Site | Today | Follow-up |
 |---|---|---|
 | `custom_components/smart_charging/coordinator.py:1554` (search 1) | `_apply_grid_ceiling_clamp` passes this cycle's `ctx.charger_w` | Pass the lower of it and the last set current at the supply voltage |
+| `custom_components/smart_charging/coordinator.py:1596` (search 2) | Says the real R3/C4 clamps still use the raw `ctx.net_w`/`ctx.charger_w` | Name the lower charger operand |
 | `custom_components/smart_charging/coordinator.py:1640` (search 2) | Says C4 clamps against the raw `ctx.net_w`/`ctx.charger_w` | Name the lower charger operand |
 | `custom_components/smart_charging/coordinator_cycle.py:81` (search 2) | Says C4 keeps reading the raw `ctx.net_w`/`ctx.charger_w`, with the same staleness exposure | Name the lower charger operand; the exposure is closed |
 | `custom_components/smart_charging/coordinator_cycle.py:91` (search 2) | Says C4 reads the raw, undebounced `net_w`/`charger_w` | The same |
+| `tests/test_coordinator.py:4663` (search 2) | Docstring: `net_w`/`charger_w` are the raw operands the real R3/C4 clamps still use | Name the lower charger operand |
 | `tests/test_coordinator.py:4901` (searches 1 and 2) | Docstring: the real C4 clamp stays on the raw operand | Name the lower charger operand |
 | `tests/test_coordinator.py:4919` (search 1) | Asserts the real C4 clamp receives the raw 500 W `charger_w` | Assert the lower of 500 W and the last set current at the supply voltage |
 | `tests/scenarios/test_grid_ceiling_under_lag.py:5` (search 1) | Module docstring: `clamp_to_ceiling` re-derives its baseline from the lagged reading | Describe the held ceiling |
@@ -134,19 +141,31 @@ deferral stays R3's alone.
 | `tests/scenarios/test_peak_and_ceiling_under_lag.py:13` (search 1) | Module docstring: C4's lag defect drives the oscillation | Describe the held ceiling |
 | `tests/scenarios/test_peak_and_ceiling_under_lag.py:152` (search 1) | The strict xfail's reason names C4's lag defect | Remove the marker |
 | `docs/design/system-design.md:476` (search 3) | §5.1's sequence: "grid-supply-ceiling clamp on raw (C4, always)" | Name the lower charger operand |
+| `tests/scenarios/test_grid_ceiling_under_lag.py:1` (search 4) | Module docstring: reproduces C4's known defect | Describe the held ceiling |
+| `tests/scenarios/test_grid_ceiling_under_lag.py:13` (search 4) | Module docstring: red on `main` through C4's known defect | The same |
+| `tests/scenarios/test_grid_ceiling_under_lag.py:141` (search 4) | The strict xfail's reason, as at `:142` | Remove the marker |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:12` (search 4) | Module docstring: C4's known defect drives the run | Describe the held ceiling |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:29` (search 4) | Module docstring: C4 alone oscillates on this world | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:151` (search 4) | The strict xfail's reason, as at `:152` | Remove the marker |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:220` (search 4) | The C4-alone test's docstring: C4 alone oscillates | Replace the test with one that C4 holds the ceiling |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:221` (search 4) | The same docstring: it pins C4's known defect green | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:245` (search 4) | Asserts C4 alone oscillates every cycle | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:250` (search 4) | Asserts C4 alone bangs between 0 A and the target | The same |
 
 The remaining hits conform:
-- **22 of search 1:** the Engine and its tests, the call-order spies, the scenario tier's
-  bypass mutations and target formulas, the import, and `tests/test_coordinator.py:4918`'s
-  `net_w` assertion, which the decision leaves as it is.
-- **5 of search 2:** the Engine's worked examples, and `tests/test_captar_end_to_end.py:254` and
-  `:262`, whose charger reading of 0 W is already the lower operand.
+- **23 of search 1:** the Engine and its tests, the call-order spies and the spy registration
+  at `tests/test_coordinator.py:4837`, the scenario tier's bypass mutations and target formulas,
+  the import, and `tests/test_coordinator.py:4918`'s `net_w` assertion, which the decision
+  leaves as it is.
+- **6 of search 2:** the Engine's worked examples; `tests/test_captar_end_to_end.py:254` and
+  `:262`, whose charger reading of 0 W is already the lower operand; and
+  `tests/test_coordinator.py:4814`, which says only that the clamps stay unsmoothed.
 - **3 of search 3:** §5.1's forecast note and the ADR-0049 and ADR-0051 table rows, which state
   that the clamps do not read the smoothed baseline.
 
 Out of scope:
 - **R5's escalated-rate forecast** keeps fitting its C4 bound to the smoothed joint mean
-  (ADR-0051). That is the other 8 hits of search 1 (`coordinator.py:1616`, `:1617`, `:1644`;
-  `test_coordinator.py:4835`, `:4837`, `:4891`, `:4962`, `:4963`) and 6 of search 2
-  (`coordinator.py:1596`, `:1660`; `test_coordinator.py:4663`, `:4814`, `:4821`, `:4870`).
+  (ADR-0051). That is the other 7 hits of search 1 (`coordinator.py:1616`, `:1617`, `:1644`;
+  `test_coordinator.py:4835`, `:4891`, `:4962`, `:4963`) and 3 of search 2 (`coordinator.py:1660`;
+  `test_coordinator.py:4821`, `:4870`).
 - **`docs/design/project-plan.md:394` and `:468`** keep recording what earlier slices shipped.
