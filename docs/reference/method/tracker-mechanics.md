@@ -272,8 +272,8 @@ gh api -X POST repos/$REPO/issues/<n>/comments \
   -F body=@<path>
 ```
 
-The fix step's PR comment runs as the bot, the author side
-([profile.md](../profile.md)'s **Repository and git identity**):
+The fix step's PR comment runs as the bot, the author side (`CLAUDE.md`'s
+**Project profile**):
 `bash .github/gh-as-bot.sh comment <pr> <path>`.
 
 Read back with:

@@ -43,13 +43,12 @@ repository's local config, which every worktree shares, and no global config is 
 The bot's `gh` login carries the `repo` and `workflow` scopes, not `project`, which is why the
 board stays the owner's.
 
-**Why:** [ADR-0055](../adl/0055-session-pushes-and-opens-prs-as-a-bot-account.md) puts the
-author side on the bot so the owner can give the code-owner review a pull request needs, and
-[ADR-0057](../adl/0057-pr-author-side-runs-as-the-bot.md) draws the line between the sides.
-Older squash merges carry either account's author line. **Why it matters:** both logins pass
-the author test, so [contribution-workflow.md](method/contribution-workflow.md)'s **Rounds and
-the cap** tells the session's posts from a human item by the session's markers, never by
-author. Whether a session merges is **Merge strategy** below.
+**Why:** an author cannot approve their own pull request, so only one the bot opened is one the
+owner can give the code-owner review; and with the sides on separate logins, a pull request's
+author and reviewer are told apart by login. Older squash merges carry either account's author
+line. **Why it matters:** both logins pass the author test, so `CLAUDE.md`'s **Contribution
+workflow** topic's **Rounds and the cap** tells the session's posts from a human item by the
+session's markers, never by author. Whether a session merges is **Merge strategy** below.
 
 The repository is `profile.yml`'s `repo`; the tracker is GitHub issues, pull requests, review
 threads and labels on it, driven with the recipes in
