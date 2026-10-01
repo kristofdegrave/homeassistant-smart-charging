@@ -26,8 +26,8 @@ interactive-only wording precisely because it sits in every run's index.
    - Find the most recent reset event as the rule defines it, excluding the session markers
      that rule lists.
    - Rounds so far = marker-carrying reviews posted after that event (all of them when there
-     is none). Count self-grant comments since that event apart — only those by the owner's
-     login, which the review step posts under, so a marker pasted by anyone else raises nothing: each raises
+     is none). Count self-grant comments since that event apart — only those by the login
+     the session posts under, so a marker pasted by anyone else raises nothing: each raises
      the cap, not the rounds. The cap, what raises it and its ceiling are **read from the doc
      routed above**, never from memory. If an exit label is still on and the count was reset
      — by either kind of reset event — take both exit labels off before the pass (**Exit

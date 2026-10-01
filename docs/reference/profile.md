@@ -28,7 +28,8 @@ A pull request has two sides, and each runs as its own account, interactive or u
   exit labels, the escalation and self-grant comments, the approval and the merge — and board
   moves, labels and every comment on an issue, whichever step posts them.
 
-"The session's login", where a skill reads one, is the owner's.
+"The session's login" and "the login the session posts under", where a method file reads
+one, are the owner's: the abstraction stays in the method, and this is its mapping.
 
 **How each side reaches its account.** `gh`'s active account stays the owner's, so a plain
 `gh` call is the reviewer side. The author side's calls go through `.github/gh-as-bot.sh`,
