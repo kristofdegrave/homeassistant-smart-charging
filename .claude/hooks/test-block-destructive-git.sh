@@ -802,8 +802,22 @@ runr "bash would expand" "git log -[c]" "$LR/wt"                       # ... an 
 run ALLOW "git ls-files '*.md'" "$LR/wt"                               # a quoted pathspec is no expansion
 run ALLOW "git log -1 HEAD@{1}" "$LR/wt"                               # a reflog brace is no list
 runr "would expand" "gh issue edit 5 --remove-label=needs-appro{v,v}al" # a brace list rebuilds the label
-runr "sets labels" "gh api repos/o/r/issues/5?/labels -f 'labels[]=workflow'" # a query string fools no exemption
+runr "sets labels" "gh api 'repos/o/r/issues/5?/labels' -f 'labels[]=workflow'" # a query string fools no exemption
 runr "naming paths" "git checkout --pathspec-from-file=f main" "$LR/wt" # paths from a file
+runr "bash would expand" "git ''{-c,core.fsmonitor=x} status" "$LR/wt"  # a quoted prefix hides no brace
+runr "bash would expand" "git '-'[c] status" "$LR/wt"                   # ... nor a glob
+runr "bash would expand" "git log HEAD@{1,2}" "$LR/wt"                  # a reflog brace with a comma is a list
+runr "bash would expand" "gh issue edit 5 {--remove-label,needs-approval}" # a brace list rebuilds the option
+runr "bash would expand" "gh api -X {DELETE,} repos/o/r/issues/5/labels/needs-approval" # ... or the method
+runr "is no commit" "git checkout '.github/hooks/pre-commi[!>]'" "$LR/wt" # a quoted > is no redirection
+runr "is no commit" "git checkout ':!>'" "$LR/wt"                       # ... an exclude-only pathspec
+runr "sets labels" "gh api repos/o/r/issues/5x/labels -f 'labels[]=workflow'" # <n> is digits only
+run ALLOW "git log HEAD@{1}..HEAD" "$LR/wt"                             # a reflog range is no brace list
+run ALLOW "git log --grep=\"a b?\" --format='[%h]'" "$LR/wt"            # quoted text split on its space
+run ALLOW "git checkout -b x origin/main" "$LR/wt"                      # a new branch from a commit
+run ALLOW "git checkout main" "$LR/wt"                                  # a branch
+g update-ref refs/remotes/origin/only HEAD
+run ALLOW "git checkout only" "$LR/wt"                                  # a branch only origin has: tracking
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
 runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"
@@ -812,7 +826,7 @@ runr "abbreviates" "git grep --op=cat x" "$LR/wt"                      # --open-
 runr "-o writes" "git archive -vox HEAD" "$LR/wt"                      # -o clustered
 runr "-O runs" "git grep -nOcat x" "$LR/wt"                            # -O clustered
 runr "fetch pattern" "git fetch origin 'refs/*/1/head'" "$LR/wt"       # a glob reaching a pull-request ref
-runr "sets labels" "gh api repos/o/r/issues/5 -flabels[]=workflow"     # the field attached to -f
+runr "sets labels" "gh api repos/o/r/issues/5 '-flabels[]=workflow'"     # the field attached to -f
 runr "label delete" "gh api -X=DELETE repos/o/r/issues/5/labels/needs-approval" # -X=
 run ALLOW "gh api -X POST repos/o/r/issues/5/labels -f 'labels[]=needs-approval'" # the add-labels endpoint only adds
 run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the loop's gh steps: a comment
