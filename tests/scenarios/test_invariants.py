@@ -30,7 +30,6 @@ from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
     CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_TARGET_CURRENT,
-    CONF_GRID_CEILING_A,
     CONF_MAX_PEAK_KW,
     CONF_MIN_CURRENT,
     CONF_NOMINAL_VOLTAGE,
@@ -49,7 +48,11 @@ from tests.scenarios import test_grid_ceiling_under_lag as t1
 from tests.scenarios.invariants import InvariantViolation, check_c4, check_r3, judge_all
 from tests.scenarios.plant import Plant, StepReading
 from tests.scenarios.runner import CycleTrace, ScenarioRunner
-from tests.scenarios.scenario_setup import setup_coordinator
+from tests.scenarios.scenario_setup import (
+    effective_peak_limit_w,
+    judge_c4_then_r3,
+    setup_coordinator,
+)
 
 # --- C4 member: T1's own lag-0 world, with the clamp itself bypassed -------------------------
 
@@ -266,42 +269,9 @@ async def _r3_setup(hass):
     )
 
 
-def _effective_peak_limit_w(options: dict) -> float:
-    """R3's own target: `resolve_effective_peak_limit`'s formula, pinned for this scenario by
-    `max_peak_kw == peak_floor_kw` (above) to exactly `max_peak_kw` regardless of the
-    internally-tracked monthly peak -- not restated as a bare number."""
-    return options[CONF_MAX_PEAK_KW] * 1000.0 - options[CONF_SAFETY_MARGIN_W]
-
-
-def _judge_r3(options: dict):
-    """Every cycle of this scenario is judged by the whole invariant set (the issue's own
-    title), not R3 alone: `check_c4` is wired in ahead of `check_r3` via `judge_all`
-    (`judge_all`'s own ordering rule -- C4 first, since R3 only ever applies where C4 does too),
-    even though this scenario's loads never reach C4's ceiling (5750 W at the default 25 A/230 V
-    -- well above anything this module's household/charger totals produce) -- so C4 stays quiet
-    throughout and every breach seen here is still, correctly, R3's."""
-    target_w = _effective_peak_limit_w(options)
-    min_current_a = options[CONF_MIN_CURRENT]
-    grace_period_s = options[CONF_PEAK_GRACE_MIN] * 60.0
-    control_interval_s = options[CONF_CONTROL_INTERVAL_S]
-    ceiling_w = options[CONF_GRID_CEILING_A] * options[CONF_NOMINAL_VOLTAGE]
-
-    def _check_c4(trace):
-        check_c4(trace, ceiling_w=ceiling_w)
-
-    def _check_r3(trace):
-        check_r3(
-            trace,
-            effective_peak_limit_w=target_w,
-            min_current_a=min_current_a,
-            grace_period_s=grace_period_s,
-            control_interval_s=control_interval_s,
-        )
-
-    def _judge(trace):
-        judge_all(trace, [_check_c4, _check_r3])
-
-    return _judge
+# `_effective_peak_limit_w`/`_judge_r3` moved to `scenario_setup.py` as `effective_peak_limit_w`/
+# `judge_c4_then_r3` -- a later tier (T3) needs both and reuses them from there rather than
+# reaching into this module's private names.
 
 
 async def test_should_report_a_peak_breach_when_the_baseline_debounce_is_bypassed(
@@ -335,10 +305,10 @@ async def test_should_report_a_peak_breach_when_the_baseline_debounce_is_bypasse
     # headroom the household no longer has -- the breach lands once the over-granted current
     # has actually been drawn, one cycle after the household itself last changed, with no
     # command change of its own to defer it a further cycle.
-    await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(_HOUSEHOLD_W + _HOUSEHOLD_STEP_W)
     with pytest.raises(InvariantViolation) as excinfo:
-        await runner.run(_STEP_CYCLES, judge=_judge_r3(options))
+        await runner.run(_STEP_CYCLES, judge=judge_c4_then_r3(options))
 
     # Assert
     # Pinned exactly: step 9, true import 2940 W (household 1100 W + 8 A * 230 V) against the
@@ -363,12 +333,12 @@ async def test_should_keep_the_effective_peak_limit_when_the_baseline_debounce_i
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    target_w = _effective_peak_limit_w(options)
+    target_w = effective_peak_limit_w(options)
 
     # Act
-    await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(_HOUSEHOLD_W + _HOUSEHOLD_STEP_W)
-    trace = await runner.run(_STEP_CYCLES, judge=_judge_r3(options))
+    trace = await runner.run(_STEP_CYCLES, judge=judge_c4_then_r3(options))
 
     # Assert
     # No InvariantViolation raised above is the control's own point; this additionally pins the
@@ -403,14 +373,14 @@ async def test_should_sanction_the_breach_when_a_case_a_deferral_delays_the_incr
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    target_w = _effective_peak_limit_w(options)
+    target_w = effective_peak_limit_w(options)
 
     # Act
-    trace = await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    trace = await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(1100.0)
-    trace = await runner.run(1, judge=_judge_r3(options))
+    trace = await runner.run(1, judge=judge_c4_then_r3(options))
     plant.set_household_w(1300.0)
-    trace = await runner.run(6, judge=_judge_r3(options))
+    trace = await runner.run(6, judge=judge_c4_then_r3(options))
 
     # Assert
     # Nothing raised above is this test's own point. This additionally proves step 9 really did
@@ -488,7 +458,7 @@ def test_should_report_an_over_grant_when_it_lands_on_a_case_a_deferred_cycle():
         # floor((3000 - 1000) / 230) = 8 A here, not 10 A.
     ]
 
-    # Act / Assert
+    # Act
     with pytest.raises(InvariantViolation) as excinfo:
         check_r3(
             trace,
@@ -497,7 +467,147 @@ def test_should_report_an_over_grant_when_it_lands_on_a_case_a_deferred_cycle():
             grace_period_s=120.0,
             control_interval_s=10.0,
         )
+
+    # Assert
     assert "R3 breach at step 4" in str(excinfo.value)
+
+
+# --- the grace-period allowance's own two self-tests: the extension's `break`, 0 A reset/re-arm
+
+
+def _grace_row(index, *, true_draw_a, true_charger_w, household_w, commanded_a=None):
+    """One hand-built `CycleTrace` row for the grace-period cap's own self-tests below -- unlike
+    `_row` above (the deferral cause check's own helper), `true_charger_w` is passed explicitly
+    rather than derived from `true_draw_a * 230.0`, since the `break` self-test below needs one
+    row's `true_charger_w` deliberately out of step with its own `true_draw_a` to isolate the
+    extension loop's own ordering from the cause check's arithmetic -- a synthetic reading no
+    real plant ever reports, same as the over-grant test above isolates its own check with an
+    unphysical over-grant."""
+    if commanded_a is None:
+        commanded_a = true_draw_a
+    return CycleTrace(
+        index=index,
+        commanded_current_a=commanded_a,
+        reading=StepReading(
+            true_draw_a=true_draw_a,
+            true_charger_w=true_charger_w,
+            reported_charger_w=true_charger_w,
+            household_w=household_w,
+            true_import_w=true_charger_w + household_w,
+            net_w=true_charger_w + household_w,
+        ),
+        faulted=False,
+        active_mode=MODE_POWER,
+    )
+
+
+def test_should_report_a_breach_when_a_pre_existing_breach_gets_no_leading_cycle_extension():
+    """The extension loop's own `break` (`_grace_period_allowed`): once the run's first cycle
+    fails both leading-cycle checks, no LATER cycle's own pass may still extend the cap -- a
+    cycle deeper in the run merely happening to satisfy one of those checks is not one of the
+    run's own leading divergences (that function's own docstring). Proven here by a run whose
+    very first cycle (index 0, so `_household_reaction_allowed`/`_deferred_reaction_allowed` are
+    both trivially `False` -- each gated on `index > 0` and `index >= 2` respectively) is already
+    breaching with no prior cycle to react to -- a pre-existing breach, not something the clamp
+    could have been expected to foresee -- while index 1's own check is deliberately engineered
+    to pass (`true_charger_w` set out of step with `true_draw_a` there, see `_grace_row`): with
+    the `break` intact, that pass is never reached, so the 13-cycle run (one past the bare
+    12-cycle cap) still reports.
+
+    Temporarily deleting the `break` (replacing it with a bare `extension += 1`, no `else`) flips
+    this test green -- the removal proof's own run is quoted in this PR's own body."""
+    # Arrange
+    target_w = 3000.0
+    min_current_a = 6.0
+    trace = [
+        _grace_row(0, true_draw_a=6.0, true_charger_w=1380.0, household_w=1700.0),
+        # Index 1's own check is engineered to pass if ever reached: true_charger_w lowered to
+        # 1000.0 (not 6.0 * 230.0) so its cause check (1000.0 + 1700.0 <= 3000.0) clears, while
+        # the household increase (1700.0 -> 2050.0) still keeps this cycle itself breaching
+        # (1000.0 + 2050.0 = 3050.0 > 3000.0) and at the minimum current.
+        _grace_row(1, true_draw_a=6.0, true_charger_w=1000.0, household_w=2050.0),
+    ] + [
+        _grace_row(i, true_draw_a=6.0, true_charger_w=1380.0, household_w=2050.0)
+        for i in range(2, 13)
+    ]
+
+    # Act
+    with pytest.raises(InvariantViolation) as excinfo:
+        check_r3(
+            trace,
+            effective_peak_limit_w=target_w,
+            min_current_a=min_current_a,
+            grace_period_s=120.0,
+            control_interval_s=10.0,
+        )
+
+    # Assert
+    assert "R3 breach at step 12" in str(excinfo.value)
+
+
+def test_should_stay_quiet_when_a_momentary_0a_cycle_re_arms_a_fresh_grace_period():
+    """The 0 A cycle's own reset/re-arm (`_grace_period_allowed`'s own docstring): a momentary
+    0 A cycle -- the force-stop itself -- ends the counted run rather than letting it continue
+    through, so a breach that resumes right after is a FRESH occurrence with its own, fully
+    budgeted cap. 12 breaching-at-minimum cycles, one 0 A (non-breaching) cycle, then 12 more
+    breaching-at-minimum cycles stays quiet throughout -- each run is within the bare 12-cycle
+    cap on its own -- while the SAME 13 cycles with no 0 A cycle between them (the control
+    directly below) reports, proving the quiet run above is not simply "under the cap either
+    way"."""
+    # Arrange
+    target_w = 3000.0
+    min_current_a = 6.0
+    first_run = [
+        _grace_row(i, true_draw_a=6.0, true_charger_w=1380.0, household_w=2000.0) for i in range(12)
+    ]
+    force_stop = [
+        _grace_row(12, true_draw_a=0.0, true_charger_w=0.0, household_w=2000.0, commanded_a=0.0)
+    ]
+    second_run = [
+        _grace_row(i, true_draw_a=6.0, true_charger_w=1380.0, household_w=2000.0)
+        for i in range(13, 25)
+    ]
+    trace = first_run + force_stop + second_run
+
+    # Act
+    check_r3(
+        trace,
+        effective_peak_limit_w=target_w,
+        min_current_a=min_current_a,
+        grace_period_s=120.0,
+        control_interval_s=10.0,
+    )
+
+    # Assert
+    # No InvariantViolation raised above is this test's own point -- the control below proves the
+    # same 25-cycle shape, minus the 0 A re-arm, does NOT stay quiet.
+
+
+def test_should_report_a_breach_when_13_consecutive_cycles_never_re_arm_the_grace_period():
+    """Control for the test above: the SAME breaching-at-minimum cycles, with no 0 A cycle to
+    reset the count -- 13 consecutive cycles overruns the bare 12-cycle cap (no leading-cycle
+    extension applies here either -- index 0 of this run is its own trace's first cycle, same as
+    the `break` self-test above) and must report, proving the quiet 12/0A/12 shape above is
+    genuinely due to the reset, not to both runs independently fitting under the cap regardless."""
+    # Arrange
+    target_w = 3000.0
+    min_current_a = 6.0
+    trace = [
+        _grace_row(i, true_draw_a=6.0, true_charger_w=1380.0, household_w=2000.0) for i in range(13)
+    ]
+
+    # Act
+    with pytest.raises(InvariantViolation) as excinfo:
+        check_r3(
+            trace,
+            effective_peak_limit_w=target_w,
+            min_current_a=min_current_a,
+            grace_period_s=120.0,
+            control_interval_s=10.0,
+        )
+
+    # Assert
+    assert "R3 breach at step 12" in str(excinfo.value)
 
 
 # --- the grace-period allowance: cap, extension and non-reset on a household wiggle ------------
@@ -518,18 +628,18 @@ async def test_should_sanction_the_breach_when_the_grace_period_at_the_minimum_c
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    target_w = _effective_peak_limit_w(options)
+    target_w = effective_peak_limit_w(options)
 
     # Act
-    await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(2400.0)
-    trace = await runner.run(6, judge=_judge_r3(options))
+    trace = await runner.run(6, judge=judge_c4_then_r3(options))
 
     # Assert
     # Nothing raised above is this test's own point. This additionally proves the breach was
     # real (not vacuous) and that it is genuinely the grace period doing the sanctioning: the
     # charger is already down at the minimum current (6 A) and stays breaching for several
-    # cycles running, well inside the configured grace period's cap (12 cycles -- the default
+    # cycles running, well inside the configured grace period's cap (12 cycles -- the pinned
     # 2 min grace at a 10 s control interval, `ceil(120 / 10)`) -- never once reaching 0 A.
     held_at_minimum = trace[_WARMUP_CYCLES + 1 :]
     assert len(held_at_minimum) >= 5
@@ -580,12 +690,12 @@ async def test_should_sanction_the_breach_through_the_grace_period_when_already_
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    target_w = _effective_peak_limit_w(options)
+    target_w = effective_peak_limit_w(options)
 
     # Act
-    await runner.run(15, judge=_judge_r3(options))
+    await runner.run(15, judge=judge_c4_then_r3(options))
     plant.set_household_w(2400.0)
-    trace = await runner.run(_GRACE_CAP_CYCLES + 1, judge=_judge_r3(options))
+    trace = await runner.run(_GRACE_CAP_CYCLES + 1, judge=judge_c4_then_r3(options))
 
     # Assert
     # Nothing raised above is this test's own point. This additionally proves the breach was
@@ -596,6 +706,9 @@ async def test_should_sanction_the_breach_through_the_grace_period_when_already_
     for t in breaching[:-1]:
         assert t.reading.true_draw_a == options[CONF_MIN_CURRENT]
         assert t.reading.true_import_w > target_w, "the hold should have genuinely breached"
+    # Precondition, not a second behaviour under test: the force-stop landing exactly on schedule
+    # is what makes `breaching`'s own slicing above correct (the cap's extension is this test's
+    # one point) -- not itself asserted as a separate outcome.
     assert breaching[-1].commanded_current_a == 0.0, (
         "the force-stop command should have fired by now, on schedule"
     )
@@ -604,15 +717,19 @@ async def test_should_sanction_the_breach_through_the_grace_period_when_already_
 async def test_should_sanction_the_breach_when_a_case_a_deferral_delays_the_grace_timer_start(  # noqa: E501
     hass, freezer
 ):
-    """Round 3's second Major: a case-(a) deferral delaying the household increase that starts
-    the breach also delays when true draw first reaches the minimum and genuinely breaches --
-    one cycle later than the product's own request-side timer (gated on the request, not the
-    lagged true draw) may already have started counting from. Without the cap's own extension
-    for that leading, deferred cycle, the oracle would overrun by one and fire on this CORRECT,
-    unmutated world.
+    """A case-(a) deferral delaying the household increase that starts this run's breach delays,
+    by that same cycle, the PRODUCT's own request-side timer start (`apply_peak_clamp`'s own
+    `is_breaching`, computed from the debounced baseline the deferral holds stale) -- not true
+    draw, which still lags whatever is actually commanded by its usual one cycle either way. This
+    run also engages the OTHER leading-cycle extension (`_household_reaction_allowed`'s own cycle,
+    step 13, where the jump itself lands on a command already coincidentally at the minimum),
+    stacked with the deferral's own extension (step 14) -- together widening the cap from 12 to
+    14, exactly the breaching run's own length. Without both extensions the oracle would overrun
+    by two and fire on this CORRECT, unmutated world.
 
     Repro: 7 cycles at 500 W, ~5 at 1100 W, 1 at 1300 W, then 14 at 2400 W -- expect quiet
-    throughout, including well past the point the undefended cap alone would have fired."""
+    throughout; the breaching run itself spans steps 13..26 (14 cycles, ending one cycle past the
+    point the undefended 12-cycle cap alone would have fired)."""
     # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     coordinator = await _r3_setup(hass)
@@ -620,21 +737,30 @@ async def test_should_sanction_the_breach_when_a_case_a_deferral_delays_the_grac
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    target_w = _effective_peak_limit_w(options)
+    target_w = effective_peak_limit_w(options)
 
     # Act
-    await runner.run(7, judge=_judge_r3(options))
+    await runner.run(7, judge=judge_c4_then_r3(options))
     plant.set_household_w(1100.0)
-    await runner.run(5, judge=_judge_r3(options))
+    await runner.run(5, judge=judge_c4_then_r3(options))
     plant.set_household_w(1300.0)
-    await runner.run(1, judge=_judge_r3(options))
+    await runner.run(1, judge=judge_c4_then_r3(options))
     plant.set_household_w(2400.0)
-    trace = await runner.run(14, judge=_judge_r3(options))
+    trace = await runner.run(14, judge=judge_c4_then_r3(options))
 
     # Assert
-    # Nothing raised above is this test's own point: the deferral's one-cycle timer delay is
-    # exactly what the cap's own extension accounts for. This additionally proves the tail end
-    # genuinely breached at the minimum current, so the allowance was actually exercised.
+    # Nothing raised above is this test's own point: both leading-cycle extensions engage here
+    # (the at-minimum coincidence at step 13, the deferral's own at step 14), widening the cap
+    # from 12 to 14 -- exactly the breaching run's own length pinned below. This additionally
+    # proves the tail end genuinely breached at the minimum current, so the allowances were
+    # actually exercised, not vacuously unneeded.
+    breaching_run = trace[13:]
+    assert len(breaching_run) == 14, (
+        "the run should span steps 13..26 -- the cap's own 12 plus both leading-cycle extensions"
+    )
+    assert breaching_run[0].reading.true_draw_a == options[CONF_MIN_CURRENT], (
+        "step 13, the run's own leading cycle, should already sit at the minimum"
+    )
     assert trace[-1].reading.true_draw_a == options[CONF_MIN_CURRENT]
     assert trace[-1].reading.true_import_w > target_w, "the tail should have genuinely breached"
 
@@ -689,28 +815,30 @@ async def test_should_report_a_breach_when_the_force_stop_never_lands(hass, free
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
 
     # Act
-    await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(2400.0)
     with pytest.raises(InvariantViolation) as excinfo:
-        await runner.run(_GRACE_CAP_CYCLES + 2, judge=_judge_r3(options))
+        await runner.run(_GRACE_CAP_CYCLES + 2, judge=judge_c4_then_r3(options))
 
     # Assert
     # Pinned to the exact cycle the cap says must be the first violating one -- the first
     # breaching-at-minimum cycle is step 8 (_WARMUP_CYCLES + 1, the plant's one-cycle lag after
     # the household step), so the cap's own count (12 further cycles still allowed) puts the
-    # first unsanctioned one at step 8 + 12 = 20.
-    assert "R3 breach at step 20" in str(excinfo.value)
+    # first unsanctioned one at step 8 + 12 = 20, still drawing the minimum current.
+    message = str(excinfo.value)
+    assert "R3 breach at step 20" in message
+    assert "true draw 6.0 A" in message
 
 
-async def test_should_report_a_breach_when_a_mid_run_household_wiggle_does_not_reset_the_grace_count(  # noqa: E501
+async def test_should_report_a_breach_when_a_household_wiggle_lands_mid_run(
     hass, freezer, monkeypatch
 ):
-    """Round 3's first Major: a household change PARTWAY through an already-running breach must
-    not reset, or break, the grace count -- R3's "continuously" tracks true import against
-    target, not the household trace, and `apply_peak_clamp`'s own timer does not reset on a
-    household change either. The force-stop is disabled, same as the mutation above, so the
-    breach is genuinely never-ending on its own; a small household wiggle midway through
-    (2400 -> 2410 W) must not let it ride out indefinitely by restarting the count each time."""
+    """A household change PARTWAY through an already-running breach must not reset, or break,
+    the grace count -- R3's "continuously" tracks true import against target, not the household
+    trace, and `apply_peak_clamp`'s own timer does not reset on a household change either. The
+    force-stop is disabled, same as the mutation above, so the breach is genuinely never-ending
+    on its own; a small household wiggle midway through (2400 -> 2410 W) must not let it ride out
+    indefinitely by restarting the count each time."""
     # Arrange
     monkeypatch.setattr(
         "custom_components.smart_charging.coordinator.apply_peak_clamp",
@@ -727,19 +855,21 @@ async def test_should_report_a_breach_when_a_mid_run_household_wiggle_does_not_r
     # The breach run starts at step 8 (the plant's one-cycle lag after the household step), same
     # as the mutation above -- the first 6 further cycles (steps 7-12) stay within the cap, same
     # as the committed grace-period control above, before the wiggle lands.
-    await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(2400.0)
-    await runner.run(6, judge=_judge_r3(options))
+    await runner.run(6, judge=judge_c4_then_r3(options))
     plant.set_household_w(2410.0)  # a small mid-run wiggle -- well after the run's own leading
     # cycle, and not itself exempted by any allowance (the increase alone does not clear the
     # cause check at this headroom) -- must not restart the count.
     with pytest.raises(InvariantViolation) as excinfo:
-        await runner.run(_GRACE_CAP_CYCLES + 2 - 6, judge=_judge_r3(options))
+        await runner.run(_GRACE_CAP_CYCLES + 2 - 6, judge=judge_c4_then_r3(options))
 
     # Assert
     # The same first-cycle-past-the-cap step (8 + 12 = 20) as the mutation above -- the wiggle,
     # mid-run, changed nothing about where the cap bites.
-    assert "R3 breach at step 20" in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "R3 breach at step 20" in message
+    assert "true draw 6.0 A" in message
 
 
 def _apply_peak_clamp_stopping_one_cycle_late(
@@ -793,13 +923,15 @@ async def test_should_report_a_breach_when_the_force_stop_lands_one_cycle_late(
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
 
     # Act
-    await runner.run(_WARMUP_CYCLES, judge=_judge_r3(options))
+    await runner.run(_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
     plant.set_household_w(2400.0)
     with pytest.raises(InvariantViolation) as excinfo:
-        await runner.run(_GRACE_CAP_CYCLES + 2, judge=_judge_r3(options))
+        await runner.run(_GRACE_CAP_CYCLES + 2, judge=judge_c4_then_r3(options))
 
     # Assert
-    assert "R3 breach at step 20" in str(excinfo.value)
+    message = str(excinfo.value)
+    assert "R3 breach at step 20" in message
+    assert "true draw 6.0 A" in message
 
 
 # --- judge_all's own ordering -------------------------------------------------------------

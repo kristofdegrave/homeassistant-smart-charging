@@ -61,9 +61,11 @@ def _household_reaction_allowed(trace: list[CycleTrace], index: int, target_w: f
     same allowance's other named case -- there is no commanded current left to react with, so
     causation does not apply to it.
 
-    R3's own criteria state the identical one-cycle bound (`docs/analysis/requirements.md#r3--
-    captar-peak-protection`), not merely a borrowed allowance -- `check_r3` below composes this
-    same function rather than restating it."""
+    R3's own criteria state the identical one-cycle bound, not merely a borrowed allowance --
+    "When net import would exceed the effective peak limit minus the safety margin, the charger
+    current is reduced -- within the same control cycle in which the accepted household baseline
+    shows it" (`docs/analysis/requirements.md#r3--captar-peak-protection`) -- so `check_r3` below
+    composes this same function rather than restating it."""
     t = trace[index]
     household_increased = index > 0 and t.reading.household_w > trace[index - 1].reading.household_w
     caused_by_the_increase = index > 0 and (
@@ -80,7 +82,24 @@ def _case_a_deferred(trace: list[CycleTrace], index: int) -> bool:
     it set before that, since such a reading partly measures the System's own actuation rather
     than the household. Never two cycles running: case (a) does not apply on a cycle immediately
     following one it already deferred, which is what the recursive `not _case_a_deferred(...,
-    index - 1)` term below encodes."""
+    index - 1)` term below encodes.
+
+    `index < 2` is the base case the recursion bottoms out on: `index`'s own command is compared
+    against `index - 1`'s and `index - 1`'s against `index - 2`'s, so the check needs two prior
+    cycles to exist at all (`index - 2 >= 0`) before it can say anything -- a trace's first two
+    cycles (0 and 1) have no such pair yet, so case (a) can never apply to either.
+
+    Out of scope: a trace containing a faulted cycle (`CycleTrace.faulted`). `commanded_current_a`
+    alone cannot tell apart a genuine command change from a fault's forced 0 A write, and the two
+    faulted cycles that write it mean two different things for this function: a required-adapter
+    fault returns before `debounce_baseline_w` is ever reached and clears `deferred_previous`
+    (`coordinator.py`'s `_clear_baseline_deferral`/`_enter_fault`), so it deferred nothing despite
+    the command change its own 0 A write produces; the ev_soc fault runs after that call and
+    leaves the flag exactly as that cycle's own, legitimate call set it. A trace built from a
+    faulted cycle can therefore shape a command change this function would treat as a genuine
+    case-(a) deferral when it is really a fault's forced stop, or the reverse -- and nothing in
+    `CycleTrace` lets this function (or `check_r3`, which refuses such a trace outright -- see its
+    own docstring) tell the two apart."""
     if index < 2:
         return False
     commanded_changed = trace[index - 1].commanded_current_a != trace[index - 2].commanded_current_a
@@ -109,7 +128,13 @@ def _deferred_reaction_allowed(trace: list[CycleTrace], index: int, target_w: fl
     Case (b)'s deferral is deliberately not modelled here: R3's own criterion caps a breaching
     increase's deferral at one control cycle (case (b) never defers a headroom-*decreasing*
     reading, and case (a) never defers two cycles in a row), so no reading can ever reach a
-    breaching headroom by way of case (b) alone and needs an allowance against this check."""
+    breaching headroom by way of case (b) alone, and case (b) needs no allowance of its own
+    against this check. That is a statement about correct product behaviour, not a blind spot
+    this oracle accepts: if a lag-contaminated case-(b) sequence ever did defer a real,
+    headroom-decreasing increase, nothing here (or in `_household_reaction_allowed`) would exempt
+    the breach it then caused -- `check_r3` would correctly report it as a violation, since that
+    would be the product failing to meet R3's own cap rather than a shape this oracle fails to
+    recognise."""
     if index < 2:
         return False
     previous = index - 1
@@ -158,31 +183,43 @@ def _grace_period_allowed(
     `min_current_a` for every cycle its own timer has not yet reached `grace_period_s`; the
     number of commanded-minimum cycles before the force-stop command is the smallest integer `j`
     with `j * control_interval_s >= grace_period_s`, i.e. `ceil(grace_period_s /
-    control_interval_s)`. The plant's one-cycle write lag shifts WHEN those commands are seen as
-    true draw, including the force-stop's own 0 A, but shifts the whole window rather than adding
-    a cycle to it, so the true-draw run is capped at that same number -- EXTENDED, though, by the
-    run's own leading cycle(s) the product's timer could not yet have counted:
+    control_interval_s)`. This bare count bounds the oracle's run of OBSERVED true-draw cycles --
+    it matches what R3 itself sanctions for the trace the oracle actually sees, which is the only
+    thing this oracle has access to (ADR-0037); it is not a reconstruction of the product's
+    internal `breached_since` timer cycle-for-cycle, and the two can and do diverge by a cycle in
+    either of the two ways below without the true-draw run being any less sanctioned. The cap is
+    therefore EXTENDED by one for each divergence that holds, in order from the run's own first
+    cycle:
 
     - the charger already sitting at `min_current_a` on its own account (Power's own target
-      current, not yet any clamp reaction) when a household jump lands on that same cycle --
-      true draw happens to already equal `min_current_a` by coincidence, one cycle before the
-      clamp's own reaction to the jump could possibly reach true draw (the plant's one-cycle
-      write lag); that leading cycle is the shared same-cycle allowance's own cycle
-      (`_household_reaction_allowed`), not a cycle the product's own timer has started on yet;
-    - a case-(a) deferral (`_deferred_reaction_allowed`) delaying when a household increase
-      reaches true draw by one control cycle delays, by that same cycle, when true draw first
-      reaches the minimum and genuinely breaches -- which is one cycle later than the product's
-      own request-side timer (gated on the request, not the lagged true draw) may already have
-      started counting from.
+      current, not yet any clamp reaction) when a household jump lands on that same cycle -- the
+      product's own request-side timer DOES start counting on this very cycle (`is_breaching`
+      turns true there too, same as any other breaching cycle), but true draw reaches
+      `min_current_a` one cycle EARLIER than the clamp's own new reaction to the jump could
+      possibly land there (the plant's one-cycle write lag): what true draw shows this cycle is
+      the charger's pre-existing command, already coincidentally at the minimum, not yet the
+      clamp's reaction. That leading cycle is the shared same-cycle allowance's own cycle
+      (`_household_reaction_allowed`) -- the timer and the true-draw run both start counting this
+      cycle, but for unrelated reasons, and the true-draw run gets one cycle it would not have
+      without the coincidence;
+    - a case-(a) deferral (`_deferred_reaction_allowed`) delaying, by one control cycle, which
+      reading `apply_peak_clamp` itself reacts to -- `debounce_baseline_w`'s own output IS the
+      `baseline_w` that call's `is_breaching` is computed from (`billing_protection.py`), so a
+      deferred reading delays the PRODUCT's own timer start by that same cycle, not true draw:
+      true draw still lags whatever command is actually written by its usual one cycle, deferral
+      or not. The true-draw run the oracle counts therefore starts one cycle later than it would
+      without the deferral, exactly matching the timer's own one-cycle-later start -- so nothing
+      here is left uncounted, and the extension is what keeps the cap matching that later start
+      rather than the earlier one a lag-naive count would assume.
 
     At most two such leading cycles can stack (a same-cycle reaction, then one cycle later a
     deferred one) -- `_household_reaction_allowed`/`_deferred_reaction_allowed` are checked,
     forwards from the run's own first cycle, for up to two cycles, and the cap is extended by
     one for each that holds, stopping at the first that does not: a cycle deeper in the run that
-    merely happens to satisfy one of those checks is not a leading cycle the product's timer
-    missed, and must not extend the cap (the mid-run-wiggle case above only ever reaches this
-    point because the run is never broken on it; its own household change is never close enough
-    to the run's start to extend anything here).
+    merely happens to satisfy one of those checks is not one of these two leading divergences, and
+    must not extend the cap (the mid-run-wiggle case above only ever reaches this point because
+    the run is never broken on it; its own household change is never close enough to the run's
+    start to extend anything here).
 
     A 0 A cycle (the force-stop itself, or any other cycle the charger is not drawing the
     minimum) ends the counted run: a faithful reading of R3's "continuously", not a gap -- the
@@ -290,10 +327,26 @@ def check_r3(
     - the grace period at the minimum charging current (`_grace_period_allowed`) -- R3's own
       stop condition rides out a continuous breach for the configured grace period once already
       at the minimum current, capped at `ceil(grace_period_s / control_interval_s)` consecutive
-      cycles that are both at the minimum and genuinely breaching, extended by the run's own
-      leading cycle(s) the product's timer could not yet have counted (that function's own
-      docstring derives both the cap and the extension from `apply_peak_clamp`'s timer).
+      cycles that are both at the minimum and genuinely breaching, extended by up to two of the
+      run's own leading cycles where the observed true-draw trace and the product's own timer
+      diverge by one cycle (that function's own docstring derives the cap and both divergences
+      from `apply_peak_clamp`'s timer) -- matching what R3 sanctions for the trace this oracle
+      sees, not a cycle-for-cycle reconstruction of that timer.
+
+    Out of scope: a trace containing any faulted cycle (`CycleTrace.faulted`). `_case_a_deferred`
+    cannot tell a fault's forced command change apart from a genuine one (its own docstring says
+    why), so a faulted cycle could make this check silently misjudge either allowance above in
+    either direction; refusing the trace outright, with a `ValueError` rather than an
+    `InvariantViolation` (which a caller's `pytest.raises(InvariantViolation)` would otherwise
+    swallow as though it were a reported breach), keeps a future fault scenario from getting a
+    wrong verdict quietly instead of an explicit refusal to judge it at all.
     """
+    for t in trace:
+        if t.faulted:
+            raise ValueError(
+                f"check_r3 does not judge a trace containing a faulted cycle (step {t.index}) -- "
+                "see this function's own docstring and _case_a_deferred's"
+            )
 
     def _r3_reaction_allowed(t: list[CycleTrace], index: int) -> bool:
         return (
