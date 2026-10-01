@@ -18,7 +18,7 @@ from collections.abc import Callable
 
 from tests.scenarios.runner import CycleTrace, format_trace
 
-_CONTEXT_RADIUS = 2  # cycles of context either side of the violating one in a failure message.
+_CONTEXT_RADIUS = 2  # cycles of context preceding the violating one in a failure message.
 
 
 class InvariantViolation(AssertionError):
@@ -46,18 +46,17 @@ def _violation_message(
 
 
 def _household_reaction_allowed(trace: list[CycleTrace], index: int, target_w: float) -> bool:
-    """The one-cycle reaction allowance C4 and R3 share: a breach on a step where the household
-    load itself increased -- and is the sole cause of the breach -- is not a violation, since the
-    previous control cycle's command could not have foreseen it (C4's own row,
+    """C4's own one-cycle reaction allowance: a breach on a step where the household load itself
+    increased -- and is the sole cause of the breach -- is not a violation, since the previous
+    control cycle's command could not have foreseen it (C4's own row,
     `docs/analysis/requirements.md#constraints`: "a sudden swing cannot trip the main fuse before
-    the next control cycle reacts"; R3's own criteria, `#r3--captar-peak-protection`, defer such
-    a reading by exactly the same one cycle). Narrowed to only the breach the change itself
-    caused: a decrease is never exempted, and nor is an increase that would still have breached
-    against the PREVIOUS cycle's household reading (`true_charger_w` unchanged, `household_w`
-    rolled back one cycle) -- such a breach was there already and the change is not what
-    "could not have [been] foreseen". Household load alone already above the limit while the
-    charger draws 0 A is the same allowance's other named case -- there is no commanded current
-    left to react with, so causation does not apply to it."""
+    the next control cycle reacts"). Narrowed to only the breach the change itself caused: a
+    decrease is never exempted, and nor is an increase that would still have breached against the
+    PREVIOUS cycle's household reading (`true_charger_w` unchanged, `household_w` rolled back one
+    cycle) -- such a breach was there already and the change is not what "could not have [been]
+    foreseen". Household load alone already above the limit while the charger draws 0 A is the
+    same allowance's other named case -- there is no commanded current left to react with, so
+    causation does not apply to it."""
     t = trace[index]
     household_increased = index > 0 and t.reading.household_w > trace[index - 1].reading.household_w
     caused_by_the_increase = index > 0 and (
@@ -108,9 +107,11 @@ def judge_all(trace: list[CycleTrace], invariants: list[Invariant]) -> None:
     """Run every invariant in `invariants` against `trace`, in order -- the first one that raises
     wins, and that is the ONLY one that gets to report: a cycle that would break more than one
     invariant is reported under whichever one appears earlier in `invariants`, and the others are
-    never even evaluated against it. `ScenarioRunner.run`'s own `judge` callback is normally built
-    from this, so a scenario composes its invariant set in one place rather than chaining calls
-    itself. When a scenario wires more than one invariant, list the harder, unconditional limit
+    never even evaluated against it. A scenario wiring more than one invariant can build
+    `ScenarioRunner.run`'s own `judge` callback from this, composing its invariant set in one
+    place rather than chaining calls itself -- though it may compose `judge` by hand instead
+    (T1's own `judge`, which composes a harness-only mode guard ahead of `check_c4`). When a
+    scenario wires more than one invariant, list the harder, unconditional limit
     first -- C4 (the grid supply ceiling, in force in every mode and under every capability
     declaration) ahead of any narrower, conditionally-applicable one -- so a cycle that breaks
     both is reported under the limit that always applies, not a narrower one that happens to

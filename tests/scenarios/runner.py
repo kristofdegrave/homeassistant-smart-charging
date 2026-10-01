@@ -74,12 +74,12 @@ class ScenarioRunner:
         """Run `cycles` further control cycles, appending each one's trace to `self.trace`
         (so a scenario driving `run` more than once keeps the whole timeline). `judge`, when
         given, is called with `self.trace` right after each cycle is appended -- so a violation
-        raises (`InvariantViolation`, `invariants.py`) from the cycle it first appears in,
-        naming the first violating cycle rather than some later one a full-trace scan would
-        also find. A scenario composes which invariants apply to it (R3 only where it applies
-        at all -- CapTar present, and in `Power` its own option enabled) via
-        `invariants.judge_all` and passes the result here; `run` itself knows nothing about
-        which invariants exist."""
+        raises (`InvariantViolation`, `invariants.py`) from the cycle it first appears in; the
+        gain is stopping right there, instead of scanning the whole trace after the fact. A
+        scenario composes which invariants apply to it and passes the result here -- `run` itself
+        knows nothing about which invariants exist; `invariants.judge_all` composes a list of
+        them in one place, though a scenario may build its `judge` callback by hand instead
+        (T1's own `judge`, composing a harness-only mode guard ahead of `check_c4`)."""
         for _ in range(cycles):
             reading = self._plant.step()
             seed_charger_states(

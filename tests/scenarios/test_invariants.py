@@ -7,11 +7,11 @@ rule cuts both ways: the invariant must be quiet on a correct world, and must fi
 genuinely wrong one): it bypasses `clamp_to_ceiling` entirely (T1's own world, lag 0) --
 `check_c4` must catch what a disabled clamp lets through.
 
-The ordering tests further down (`judge_all`'s own list-order behaviour) build their trace by
-hand rather than through the coordinator/plant seam: they are pure oracle self-tests, proving
-`judge_all`'s own tooling behaviour directly rather than a scenario outcome, so a hand-built
-trace is the right seam for them -- unlike the mutation test above, which must run through the
-real stack.
+The reaction-allowance self-tests and the ordering tests further down (the allowance helper's
+own branches; `judge_all`'s own list-order behaviour) build their trace by hand rather than
+through the coordinator/plant seam: they are pure oracle self-tests, proving the oracle's own
+tooling behaviour directly rather than a scenario outcome, so a hand-built trace is the right
+seam for them -- unlike the mutation test above, which must run through the real stack.
 
 Further invariant members (R3 and beyond) follow in a later task.
 """
@@ -24,7 +24,7 @@ from tests.scenarios import test_grid_ceiling_under_lag as t1
 from tests.scenarios.invariants import InvariantViolation, check_c4, judge_all
 from tests.scenarios.plant import Plant, StepReading
 from tests.scenarios.runner import CycleTrace, ScenarioRunner
-from tests.scenarios.setup import setup_coordinator
+from tests.scenarios.scenario_setup import setup_coordinator
 
 # --- C4 member: T1's own lag-0 world, with the clamp itself bypassed -------------------------
 
@@ -65,9 +65,123 @@ async def test_should_report_the_first_violating_cycle_with_its_context_when_the
     # delay too.
     message = str(excinfo.value)
     assert "C4 breach at step 1: true import 6680.0 W > grid supply ceiling 5750.0 W" in message
+    assert "(headroom -930.0 W)" in message
     assert "active_mode 'Power'" in message
-    assert "commanded 16.0 A, true draw 16.0 A" in message
-    assert "   0         16.0          0.0" in message  # step 0's own row, in the context table
+    assert "commanded 16.0 A, true draw 16.0 A, reported charger 3680.0 W" in message
+    # Step 0's own row, in the context table -- its headroom (2750.0 W) too, so a reader sees
+    # the actuation delay's own headroom, not only the breaching step's.
+    assert (
+        "   0         16.0          0.0         0.0         3000.0  False        Power      2750.0"
+        in message
+    )
+
+
+# --- C4 member: the reaction allowance's own oracle self-tests -------------------------------
+
+
+def _reaction_trace(*steps: tuple[float, float, float]) -> list[CycleTrace]:
+    """Builds a hand-built trace for `_household_reaction_allowed`'s own self-tests below, one
+    `CycleTrace` per `(household_w, true_charger_w, true_draw_a)` triple. `reported_charger_w`
+    and `net_w` never matter to the allowance (it reads only `household_w`, `true_charger_w`
+    and `true_draw_a`), so both are set equal to their true counterparts."""
+    trace = []
+    for index, (household_w, true_charger_w, true_draw_a) in enumerate(steps):
+        true_import_w = true_charger_w + household_w
+        reading = StepReading(
+            true_draw_a=true_draw_a,
+            true_charger_w=true_charger_w,
+            reported_charger_w=true_charger_w,
+            household_w=household_w,
+            true_import_w=true_import_w,
+            net_w=true_import_w,
+        )
+        trace.append(
+            CycleTrace(
+                index=index,
+                commanded_current_a=true_draw_a,
+                reading=reading,
+                faulted=False,
+                active_mode=MODE_POWER,
+            )
+        )
+    return trace
+
+
+def test_should_not_report_a_breach_when_a_household_increase_alone_caused_it():
+    """(i) An increase whose breach the change itself caused is exempt on that step: step 0
+    sits exactly at the 4000 W ceiling, step 1's household rises by 500 W with the charger's
+    draw unchanged -- against the PREVIOUS cycle's household reading the charger alone would not
+    have breached (2000 + 2000 W <= 4000 W ceiling), so step 1's breach is the household swing's
+    own, which the previous control cycle could not have foreseen."""
+    # Arrange
+    trace = _reaction_trace((2000.0, 2000.0, 8.0), (2500.0, 2000.0, 8.0))
+
+    # Act
+    check_c4(trace, ceiling_w=4000.0)
+
+    # Assert
+    # No InvariantViolation raised: the Act call above completing is the assertion -- the
+    # allowance exempts this step from C4's otherwise-breaching 4500 W true import.
+
+
+def test_should_report_a_breach_when_a_household_decrease_caused_it():
+    """(ii) A decrease is never exempted -- even here, where it is the charger's own rising
+    draw, not the household, that causes the breach: step 1's household actually FALLS from
+    step 0's (3000 W to 2500 W) while the charger's draw rises enough to breach on its own."""
+    # Arrange
+    trace = _reaction_trace((3000.0, 0.0, 0.0), (2500.0, 2000.0, 8.0))
+
+    # Act
+    with pytest.raises(InvariantViolation) as excinfo:
+        check_c4(trace, ceiling_w=4000.0)
+
+    # Assert
+    assert "C4 breach at step 1" in str(excinfo.value)
+
+
+def test_should_report_a_breach_already_present_before_the_increase():
+    """(iii) A breach already present against the PREVIOUS cycle's household reading is not
+    exempted just because the household also rose this step: step 1's charger draw alone
+    against step 0's household (3800 W) already breaches (2000 + 3800 W > 4000 W ceiling), so
+    the 200 W household rise did not cause it and was not "unforeseen"."""
+    # Arrange
+    trace = _reaction_trace((3800.0, 0.0, 0.0), (4000.0, 2000.0, 8.0))
+
+    # Act
+    with pytest.raises(InvariantViolation) as excinfo:
+        check_c4(trace, ceiling_w=4000.0)
+
+    # Assert
+    assert "C4 breach at step 1" in str(excinfo.value)
+
+
+def test_should_not_report_a_breach_when_the_household_alone_is_above_the_ceiling_at_zero_draw():
+    """(iv) Household load alone above the ceiling while the charger draws 0 A is not a
+    violation -- there is no commanded current left to react with, so causation does not apply
+    (`_household_reaction_allowed`'s own docstring)."""
+    # Arrange
+    trace = _reaction_trace((4500.0, 0.0, 0.0))
+
+    # Act
+    check_c4(trace, ceiling_w=4000.0)
+
+    # Assert
+    # No InvariantViolation raised: the Act call above completing is the assertion.
+
+
+def test_should_report_a_breach_on_the_step_after_an_exempt_one():
+    """(v) An exempt step does not exempt the one after it: step 1 repeats scenario (i)'s own
+    exemption, but step 2 holds the same household and charger draw as step 1 -- no further
+    household increase to exempt it -- so step 2's breach is judged and reported."""
+    # Arrange
+    trace = _reaction_trace((2000.0, 2000.0, 8.0), (2500.0, 2000.0, 8.0), (2500.0, 2000.0, 8.0))
+
+    # Act
+    with pytest.raises(InvariantViolation) as excinfo:
+        check_c4(trace, ceiling_w=4000.0)
+
+    # Assert
+    assert "C4 breach at step 2" in str(excinfo.value)
 
 
 # --- judge_all's own ordering -------------------------------------------------------------
@@ -114,9 +228,11 @@ def test_should_report_the_first_listed_invariant_when_more_than_one_would_fire(
     # Arrange
     trace = _both_breaching_trace()
 
-    # Act / Assert
+    # Act
     with pytest.raises(InvariantViolation) as excinfo:
         judge_all(trace, [_c4_breaching, _other_breaching])
+
+    # Assert
     assert str(excinfo.value).startswith("C4 breach")
 
 
@@ -127,7 +243,9 @@ def test_should_report_the_second_listed_invariant_when_it_is_listed_first_inste
     # Arrange
     trace = _both_breaching_trace()
 
-    # Act / Assert
+    # Act
     with pytest.raises(InvariantViolation) as excinfo:
         judge_all(trace, [_other_breaching, _c4_breaching])
+
+    # Assert
     assert str(excinfo.value).startswith("OTHER breach")

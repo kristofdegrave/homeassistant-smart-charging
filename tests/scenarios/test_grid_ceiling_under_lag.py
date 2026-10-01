@@ -40,7 +40,7 @@ from tests.helpers import entry_data_base, entry_options_base, seed_charger_stat
 from tests.scenarios.invariants import InvariantViolation, check_c4
 from tests.scenarios.plant import Plant
 from tests.scenarios.runner import ScenarioRunner, format_trace
-from tests.scenarios.setup import setup_coordinator
+from tests.scenarios.scenario_setup import setup_coordinator
 
 HOUSEHOLD_W = 3000.0  # steady -- no household-load step in this scenario
 _TARGET_CURRENT_A = 16.0  # Power's target current -- above the ceiling-bound headroom (9 A)
@@ -157,10 +157,14 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     ceiling_w = ceiling_a(options) * voltage
 
     # Act
+    await runner.run(CYCLES, judge=_judge_c4_with_mode_guard(ceiling_w))
+
+    # Assert
     # C4 (docs/analysis/requirements.md#constraints): true import never exceeds the grid
     # supply ceiling, judged by the shared invariant set every cycle (T2, `invariants.py`) --
-    # the mode-select guard runs first (`_judge_c4_with_mode_guard`'s own docstring).
-    await runner.run(CYCLES, judge=_judge_c4_with_mode_guard(ceiling_w))
+    # the mode-select guard runs first (`_judge_c4_with_mode_guard`'s own docstring). The
+    # assertion is the `xfail` above: the expected breach raises `InvariantViolation` from
+    # inside `run` itself, caught there rather than by a statement down here.
 
 
 async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_charger_reading_does_not_lag(  # noqa: E501
