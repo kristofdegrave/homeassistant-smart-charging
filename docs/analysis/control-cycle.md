@@ -191,7 +191,7 @@ flowchart TD
    declared capability — and so also whenever the step 5 peak clamp was skipped, whether because
    `Power` disabled it or because the CapTar capability is absent — the coordinator reduces the
    current, using **raw** readings (not smoothed, to avoid lag) and solving around the household
-   baseline C4 states, so that net grid import stays below the
+   baseline C4 states, so that the current it sets keeps net grid import below the
    [grid supply ceiling](system-overview.md#ubiquitous-language) minus the
    [grid safety offset](system-overview.md#ubiquitous-language) (converted to amperes via the
    resolved supply voltage). This is the hard fuse-protection limit, the one clamp `Power`
@@ -292,9 +292,8 @@ limit for step 5.
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so the
   current the System sets keeps net grid import below the grid supply ceiling minus the grid
-  safety offset (C4). A household load rise that takes import above the ceiling is answered on
-  the next control cycle; one the household load causes on its own is not the System's to end
-  (C4).
+  safety offset (C4). How long an excursion above the ceiling may last, and whose it is to end,
+  is C4's.
   This applies even in `Power` mode with peak protection disabled, and on an installation
   without the CapTar capability (R18) — in both of which it is the only active clamp.
 
