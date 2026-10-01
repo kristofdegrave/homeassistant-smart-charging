@@ -128,20 +128,27 @@ class ScenarioRunner:
         return self.trace
 
 
-def format_trace(trace: list[CycleTrace]) -> str:
+def format_trace(trace: list[CycleTrace], *, target_w: float | None = None) -> str:
     """A per-step trace table for a failure message -- commanded current, true draw, reported
     reading, true import, fault status and active mode at each step, so a violation is legible
-    without re-running."""
+    without re-running. `target_w`, when given, adds a headroom column (`target_w` minus that
+    step's true import) against the limit a caller is judging -- the surrounding cycles' own
+    headroom, not only the violating one's, as an invariant's failure message needs."""
     header = (
         f"{'step':>4} {'commanded_a':>12} {'true_draw_a':>12} "
         f"{'reported_w':>11} {'true_import_w':>14} {'fault':>6} {'active_mode':>12}"
     )
+    if target_w is not None:
+        header += f" {'headroom_w':>11}"
     lines = [header]
     for t in trace:
         r = t.reading
-        lines.append(
+        line = (
             f"{t.index:>4} {t.commanded_current_a:>12.1f} {r.true_draw_a:>12.1f} "
             f"{r.reported_charger_w:>11.1f} {r.true_import_w:>14.1f} {t.faulted!s:>6} "
             f"{t.active_mode:>12}"
         )
+        if target_w is not None:
+            line += f" {target_w - r.true_import_w:>11.1f}"
+        lines.append(line)
     return "\n".join(lines)
