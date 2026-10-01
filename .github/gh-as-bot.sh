@@ -30,6 +30,11 @@
 # own tests:
 #   bash .github/test-gh-as-bot.sh
 #
+# The list is closed only as far as this file is: the allow-list admits this path in whatever
+# checkout runs it, so an edited copy runs with the bot's token. The autopilot loop's deny on
+# edits to .github/** holds that unattended; in an interactive session, the review of any change
+# to this file is the gate.
+#
 # Exit 0 done; 2 refused; gh's own status when a gh call fails.
 
 set -euo pipefail

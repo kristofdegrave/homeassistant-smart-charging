@@ -25,7 +25,7 @@ A pull request has two sides, and each runs as its own account, interactive or u
   with the `write` role: every commit and push, opening the pull request, and the fix step's
   thread replies, summary and note comments and thread resolves.
 - **The reviewer side runs as the owner**, `profile.yml`'s `repo.owner`: the review passes, the
-  exit labels, the escalation and self-grant comments, the approval and the merge — and board
+  exit labels, the escalation and self-grant comments, the merge, and the human's approval — and board
   moves, labels and every comment on an issue, whichever step posts them.
 
 "The session's login" and "the login the session posts under", where a method file reads
@@ -123,7 +123,7 @@ the harness itself decides, observed in a `dontAsk` session:
   is refused.
 
 **`gh api` is admitted by recipe shape**, not whole: reads on this repository's issues and
-pulls, `POST`/`PATCH` on its issues, `POST` on its milestones, any `-X GET`, `rate_limit`,
+pulls, an un-verbed `POST` under `pulls/<n>/` (the review post, `--input` to its reviews), `POST`/`PATCH` on its issues, `POST` on its milestones, any `-X GET`, `rate_limit`,
 and the two GraphQL recipes' opening words (`query{ repository`, `{viewer{login}}`), each a
 prefix. The author side's calls are admitted as `bash .github/gh-as-bot.sh`, whose closed
 list is the script's own; an owner's reply in a thread, and a call on the bare `pulls`

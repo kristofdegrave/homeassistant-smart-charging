@@ -809,7 +809,7 @@ run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the 
 printf '{"commit_id":"a","event":"COMMENT","body":"x"}\n' > "$STUB/p.json"
 run ALLOW "gh api repos/o/r/pulls/5/reviews --input $STUB/p.json"       # ... a review
 run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'" # ... the thread listing
-run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve
+run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve mutation the guard does not refuse; the loop resolves through the wrapper
 run ALLOW "gh pr edit 5 --add-label needs-approval"                    # ... a label on a pull request
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
@@ -930,7 +930,13 @@ runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB
 runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input=$STUB/ev-event.json"
 runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input \"$STUB/ev-spaced.json\""
 runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input ev-event.json" "$STUB"   # resolved against the command's cwd
-runr "cannot be read" "gh api repos/o/r/pulls/12/reviews --input $STUB/missing.json"
+runr "not a readable regular file" "gh api repos/o/r/pulls/12/reviews --input $STUB/missing.json"
+runr "device or process file" "gh api repos/o/r/pulls/12/reviews --input /dev/stdin"   # stdin by another name
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input /dev/fd/0"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input /proc/self/fd/0"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input $STUB"            # a directory, not a regular file
+runr "command of its own" "printf x > $STUB/comment.json && gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # another segment could write the payload first
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json; echo done"
 runr "stdin" "gh api repos/o/r/pulls/12/reviews --input -"
 runr "names APPROVE" "gh api graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"
 run BLOCK "gh api --silent graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"   # a boolean flag before the endpoint

@@ -131,12 +131,16 @@
 # `gh api` segment whose text names a review target -- a reviews endpoint, a review mutation,
 # GraphQL -- when that text names APPROVE, when an argument reads a value from a file (`=@`),
 # when a GraphQL document comes from `--input`, or when a REST payload from `--input` carries
-# an APPROVE event, cannot be read, is stdin, or is relative after a change of directory. The
-# text is matched whole rather than parsed, so no flag placement or endpoint spelling escapes it;
-# its comment at gh_approve_rule below says how. Conceded, as for the merge rule: an approval
-# behind a word the guard does not read as gh (an interpreter, a variable) or from another tool;
-# a JSON unicode escape of a letter of the event in a payload. Refused though harmless: a review
-# or GraphQL read whose text names APPROVE, such as a filter on approved reviews.
+# an APPROVE event, is not a readable regular file (stdin, a device or process file included),
+# is relative after a change of directory, or shares its command with another segment, which
+# could write it before gh reads it. The text is matched whole rather than parsed, so no flag
+# placement or endpoint spelling escapes it; its comment at gh_approve_rule below says how.
+# Conceded, as for the merge rule: a split or quoted letter (`rev''iews`, `APP''ROVE`), an
+# approval behind a word the guard does not read as gh (an interpreter, a variable, a
+# PowerShell assignment) or from another tool; a JSON unicode escape of a letter of the event
+# in a payload. Refused though harmless: a review or GraphQL read whose text names APPROVE, such
+# as a filter on approved reviews; a call naming a file whose path holds `/reviews` or
+# `graphql`; and a `gh pr review` body word starting `-a`, read as the flag.
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
 # `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
@@ -971,9 +975,11 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
 # listing spellings; when any argument reads a value from a file (`=@`, attached to a flag or
 # not), which the guard does not open; and, on a GraphQL call, when its document comes from
 # `--input`. A REST review call's `--input` payload is read instead, its line breaks removed,
-# and refused when it carries an APPROVE event, cannot be read, is stdin (`-`), or is a relative
-# path after the command changed directory. A JSON unicode escape of a letter of the event
-# passes the payload match, a concession the header states.
+# and refused when it carries an APPROVE event, is stdin (`-`), is not a readable regular file
+# (a device or process file included), is a relative path after the command changed directory,
+# or shares its command with another segment, since the guard reads it before any of the
+# command runs. A JSON unicode escape of a letter of the event passes the payload match, a
+# concession the header states.
 gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
   seg=$1
   shift
@@ -1049,8 +1055,16 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
       input="$cwd/$input"
       ;;
   esac
-  [ -r "$input" ] ||
-    deny_approve "$seg" "the review payload '$input' cannot be read, so the guard cannot show its event is not APPROVE"
+  case "$input" in
+    /dev/* | /proc/*)
+      deny_approve "$seg" "the review payload '$input' is a device or process file, not a file the guard can read ahead of gh, so it cannot show its event is not APPROVE" ;;
+  esac
+  [ -f "$input" ] && [ -r "$input" ] ||
+    deny_approve "$seg" "the review payload '$input' is not a readable regular file, so the guard cannot show its event is not APPROVE"
+  # The guard reads the payload before any of the command runs, so another segment could write
+  # it first: a review post is one command, and one sharing its line with another refuses.
+  [ "$(printf '%s\n' "$segments" | grep -c '[^[:space:]]')" -le 1 ] ||
+    deny_approve "$seg" "the review payload is read before the rest of the command runs, which could write it first; post the review as a command of its own"
   tr -d '\r\n' < "$input" | grep -Eiq '"event"[[:space:]]*:[[:space:]]*"APPROVE"' &&
     deny_approve "$seg" "the review payload '$input' carries an APPROVE event, which posts an approval"
   return 0

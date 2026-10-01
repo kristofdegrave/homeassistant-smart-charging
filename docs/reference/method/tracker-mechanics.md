@@ -272,7 +272,7 @@ gh api -X POST repos/$REPO/issues/<n>/comments \
   -F body=@<path>
 ```
 
-The fix step's PR comment runs as the bot, the author side (`CLAUDE.md`'s
+The fix step's PR comment runs as the author side (`CLAUDE.md`'s
 **Project profile**):
 `bash .github/gh-as-bot.sh comment <pr> <path>`.
 
@@ -361,7 +361,7 @@ Read back with `gh api repos/$REPO/issues/<n> --jq '.state'`, which must print `
 
 ## Opening a change request
 
-Opened as the bot, the author side, over REST (`gh pr create` is GraphQL,
+Opened as the author side, over REST (`gh pr create` is GraphQL,
 refused first by the limiter); it bases `main` and prints the URL:
 
 ```sh
@@ -470,7 +470,7 @@ gh api repos/$REPO/pulls/<n>/comments \
   --paginate --jq '.[] | {id, path, line}'
 ```
 
-The fix step replies as the bot; the printed id is the read-back:
+The fix step replies as the author side; the printed id is the read-back:
 
 ```sh
 bash .github/gh-as-bot.sh reply <n> <comment-id> <path>
@@ -487,7 +487,7 @@ gh api graphql -f query='query{ repository(owner:"<owner>", name:"<name>") { pul
 `reviewThreads(first:100, after:"<endCursor>")`. `<owner>` and `<name>` are `profile-env.sh`'s
 `OWNER` and `REPO_NAME`; these two are inlined on one line so a `dontAsk` session admits them.
 
-then resolve one as the bot, which checks the thread is that PR's:
+then resolve one as the author side, which checks the thread is that PR's:
 
 ```sh
 bash .github/gh-as-bot.sh resolve <n> <thread-id>

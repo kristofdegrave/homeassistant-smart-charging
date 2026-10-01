@@ -97,7 +97,8 @@
       "Bash(gh api *pulls/*/comments* -F *)",
       "Bash(gh api *pulls/*/comments*--input*)",
       "Bash(gh api repos/kristofdegrave/homeassistant-smart-charging/pulls *)",
-      "Bash(gh api repos/kristofdegrave/homeassistant-smart-charging/pulls?*)"
+      "Bash(gh api repos/kristofdegrave/homeassistant-smart-charging/pulls?*)",
+      "Bash(gh api repos/kristofdegrave/homeassistant-smart-charging/pulls/ *)"
     ]
   },
   "hooks": {
