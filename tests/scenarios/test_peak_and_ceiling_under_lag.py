@@ -5,8 +5,9 @@ both binding), on top of T1's single-clamp C4 reproduction and T2's per-member m
 `Power` with CapTar present and its own peak-protection option left at its default (R17's
 default, `DEFAULT_POWER_RESPECT_PEAK = True`): both clamps run on every cycle (`_apply_peak_clamp`
 then `_apply_grid_ceiling_clamp`, in that order, `coordinator.py`'s `_run_cycle`). CapTar's peak
-target is chosen so R3's nominal headroom equals C4's ceiling headroom (14 A each) at a steady
-household load, so neither clamp is held non-binding by the other.
+target is chosen so R3's nominal headroom equals C4's ceiling headroom (13 A each) at a steady
+household load, so neither clamp is held non-binding by the other, and Power's target alone
+(16 A) would take true import past the ceiling, so C4's limit is at stake and not only its clamp.
 
 **What the run shows.** C4's known defect (`docs/analysis/requirements.md#constraints`, C4's row)
 -- `clamp_to_ceiling` re-deriving the household from the lagged `charger_w` every cycle -- makes
@@ -15,13 +16,19 @@ baseline through its debounce (`debounce_baseline_w`, ADR-0039): the high lagged
 would reset the decrease-debounce's count, fall on command-changed cycles and are discarded
 (`pending_cycles` carries through a discarded cycle); the corrupted low readings between them
 reach `BASELINE_DEBOUNCE_CYCLES` and are committed, and R3 grants the full target current on a
-fresh but wrong baseline. The trace breaches **R3's** target before it reaches C4's ceiling.
+fresh but wrong baseline. On the next cycle true import breaches both limits; the set judges C4
+first, so the run goes red through C4.
 
-**Attribution.** `test_should_hold_r3s_headroom_every_cycle_when_c4_is_bypassed_under_lag` shows
-R3 stable at its own headroom on this world under a *steady* command; it does not show R3 stable
-under an oscillating command from any source (`debounce_baseline_w`'s docstring names Solar's
-moving request as another). `test_should_bang_between_zero_and_the_target_when_r3_is_bypassed_
-under_lag` shows C4 alone oscillates on this world, independent of R3.
+**R3's own exposure.** That the debounce commits a corrupted reading under a sustained command
+oscillation is R3's criteria at work, not only C4's: any oscillating command, Solar's moving
+request among them (`debounce_baseline_w`'s docstring), can trigger it. #1584 records it. This
+scenario's xfail is C4's alone, since C4-first ordering reports C4's breach.
+
+**Attribution.** The R3-alone test (C4 bypassed) shows R3 holding its own headroom on this
+world under a *steady* command; it does not show R3 stable under an oscillating one (#1584). The
+C4-alone test (R3 bypassed) shows C4 alone oscillating between 0 A and the target on this world,
+independent of R3, and at this household the target alone exceeds the ceiling: the oscillation,
+and so the breach, are C4's.
 
 **Parameters** (ADR-0037's invariant-oracle rule: honest, not tuned to dodge a member). One
 steady household load, no step: the oscillation is self-sustaining from the startup transient
@@ -58,18 +65,18 @@ from tests.scenarios.scenario_setup import (
     setup_coordinator,
 )
 
-_HOUSEHOLD_W = 2000.0  # steady throughout (module docstring).
+_HOUSEHOLD_W = 2300.0  # steady throughout (module docstring).
 _TARGET_CURRENT_A = 16.0
 _MAX_CURRENT_A = 32.0  # above _TARGET_CURRENT_A so E8 never caps it independently.
 _GRID_CEILING_A = 25.0
 _GRID_SAFETY_OFFSET_A = 2.0
 _SAFETY_MARGIN_W = 250.0  # default
-_MAX_PEAK_KW = 5.65
-_PEAK_FLOOR_KW = 5.65  # pinned equal to _MAX_PEAK_KW (module docstring).
+_MAX_PEAK_KW = 5.6
+_PEAK_FLOOR_KW = 5.6  # pinned equal to _MAX_PEAK_KW (module docstring).
 _PEAK_GRACE_MIN = 2.0  # default
 _CONTROL_INTERVAL_S = 10.0  # default
 
-_CYCLES = 12  # T1's own CYCLES: long enough that a C4 fix which only delays R3's first breach
+_CYCLES = 12  # T1's own CYCLES: long enough that a C4 fix which only delays the first breach
 # past the known step still shows up as a breach rather than as "fixed".
 _FIRST_BREACH_STEP = 5  # the known first violation on main (the xfail test's pin).
 
@@ -81,7 +88,7 @@ def entry_data():
 def entry_options():
     """Peak protection left at its own default (R17) -- this scenario's point is that Power's
     *default* peak protection is live. R3's and C4's nominal headroom coincide at
-    `_HOUSEHOLD_W` (14 A each: C4 = floor(23 - 2000/230), R3 = floor((5400 - 2000)/230))."""
+    `_HOUSEHOLD_W` (13 A each: C4 = floor(23 - 2300/230), R3 = floor((5350 - 2300)/230))."""
     return entry_options_base(
         **{
             CONF_MAX_CURRENT: _MAX_CURRENT_A,
@@ -141,12 +148,12 @@ def _bypass_peak_clamp(desired_current, *, tracker, **_kwargs):
     raises=InvariantViolation,
     reason=(
         "C4's known defect under charger-power lag (C4's row, "
-        "docs/analysis/requirements.md#constraints) surfacing through R3: clamp_to_ceiling's "
-        "undebounced recompute makes the command oscillate, and on the command-changed cycles "
-        "R3's debounce (debounce_baseline_w, ADR-0039) discards the high lagged readings that "
-        "would reset its count, so two corrupted low readings are committed and R3 grants the "
-        "full target on a fresh but wrong baseline. Choosing C4's lag-case rule and fixing it "
-        "are the epic #996 second slice's, after this task."
+        "docs/analysis/requirements.md#constraints): clamp_to_ceiling re-derives the household "
+        "from the lagged reading every cycle, so the command oscillates and true import breaches "
+        "the grid supply ceiling while the swing lasts. R3's debounce lets the same swing "
+        "through (two corrupted low readings reach its count and the second is committed), "
+        "which is #1584's, not this marker's. Choosing C4's lag-case rule and fixing it are the "
+        "epic #996 second slice's, after this task."
     ),
 )
 async def test_should_keep_true_import_within_both_limits_when_r3_and_c4_headrooms_coincide_under_lag(  # noqa: E501
@@ -160,9 +167,9 @@ async def test_should_keep_true_import_within_both_limits_when_r3_and_c4_headroo
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
     known_breach = (
-        f"R3 breach at step {_FIRST_BREACH_STEP}: true import "
-        f"{_HOUSEHOLD_W + _TARGET_CURRENT_A * voltage} W > effective peak limit "
-        f"{effective_peak_limit_w(options)} W"
+        f"C4 breach at step {_FIRST_BREACH_STEP}: true import "
+        f"{_HOUSEHOLD_W + _TARGET_CURRENT_A * voltage} W > grid supply ceiling "
+        f"{options[CONF_GRID_CEILING_A] * voltage} W"
     )
 
     # Act
