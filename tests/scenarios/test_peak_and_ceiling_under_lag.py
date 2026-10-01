@@ -4,54 +4,84 @@ both binding), on top of T1's single-clamp C4 reproduction and T2's per-member m
 
 `Power` with CapTar present and its own peak-protection option left at its default (R17's
 default, `DEFAULT_POWER_RESPECT_PEAK = True`): both clamps run on every cycle (`_apply_peak_clamp`
-then `_apply_grid_ceiling_clamp`, in that order, `coordinator.py`'s `_run_cycle`) against a world
-that reuses T1's own proven grid-ceiling numbers (same `household_w`, `_TARGET_CURRENT_A`,
-grid ceiling and offset, max current) -- the exact world T1 already validated against #992's
-confirmed shape -- with CapTar's peak protection layered on top, and a household-load step up
-that makes R3 step its own commanded current down (#990's shape, the same trigger T2's R3
-mutation test uses).
+then `_apply_grid_ceiling_clamp`, in that order, `coordinator.py`'s `_run_cycle`). This module
+carries TWO scenarios, both reproducing C4's known defect (`docs/analysis/requirements.md
+#constraints`, C4's row) but through different routes, because the first attempt at a single
+combined world (quoted in this PR's own notes) surfaced a second, distinct way the defect shows
+up -- not a dead end, so it is kept as the second scenario rather than discarded.
+
+**Scenario 1**
+(`test_should_keep_true_import_within_both_limits_when_household_load_steps_up_under_power`)
+reuses T1's own proven grid-ceiling numbers (same `household_w`, `_TARGET_CURRENT_A`, grid
+ceiling and offset, max current) -- the exact world T1 already validated against #992's confirmed
+shape -- with CapTar's peak protection layered on top and kept deliberately LOOSER than C4 at
+every household level, and a household-load step up that makes R3 step its own commanded current
+down (#990's shape, the same trigger T2's R3 mutation test uses). C4 stays the binding clamp
+throughout; its own breach is what this scenario's xfail is.
+
+**Scenario 2**
+(`test_should_surface_r3_breach_as_a_consequence_of_c4s_lag_defect_when_headrooms_nearly_equal`)
+sets CapTar's peak target so its own nominal headroom nearly equals C4's ceiling headroom at the
+same steady household load. Running it shows C4's own undebounced lag defect (the same mechanism
+as scenario 1 and T1) producing a self-sustaining bang-bang oscillation (0 A / the target current)
+that keeps re-triggering R3's own `command_changed`-gated deferral (`debounce_baseline_w`,
+ADR-0039) every cycle -- so R3 perpetually holds a stale baseline and over-grants on it, and the
+combined trace breaches **R3's** (tighter) target before it ever reaches C4's own (looser)
+ceiling. This is a genuine finding, recorded against #996/#992: C4's already-known lag defect
+contaminating R3's own protection through the shared `command_changed` debounce gate, not an
+independent R3 defect -- `test_should_stay_stable_through_r3_alone_when_headrooms_nearly_equal`
+and `test_should_oscillate_through_c4_alone_when_headrooms_nearly_equal` isolate each clamp on
+this exact world to prove it: R3 alone is quiet and stable; C4 alone reproduces the same
+oscillation on its own, independent of R3 entirely.
 
 Parameter reasoning (ADR-0037's invariant-oracle rule: honest parameters, not tuned to dodge a
 member):
 
-- **Why C4 stays the binding clamp throughout, reusing T1's own numbers unchanged.** `min()`
-  (both `_apply_peak_clamp` then `_apply_grid_ceiling_clamp` only ever REDUCE what they are
-  given, never raise it) means whichever clamp's own headroom is smaller decides the committed
-  current every cycle, regardless of what the other clamp would have allowed. An early version of
-  this test tried to pick R3's own target so its headroom nearly equalled C4's, hoping to see
-  each bind at a different moment -- running it (this PR's own notes quote the trace) showed that
-  only widens the startup transient into a full bang-bang oscillation between 0 A and the target
-  current, which breaches R3's own target during warm-up for a reason that has nothing to do with
-  C4's lag defect at all (an oracle-genuine, but uninteresting, R3 violation). T1's own gap (the
-  ceiling's headroom comfortably below Power's target every cycle, never the reverse) is what
-  keeps the oscillation BOUNDED and reliably reproduces the known defect instead -- so this test
-  keeps that gap exactly as T1 has it, and picks CapTar's own peak target to stay looser than C4
-  throughout (`_TARGET_PEAK_W`, chosen well above T1's own observed overshoot) rather than
-  fighting it.
-- **Why this does not make R3 a no-op, and how R3's own bind is actually shown.** Because `min()`
-  always reports the smaller value, R3's own reduction at the household step is real (its own
-  headroom genuinely drops, `_r3_headroom_a` below) but never visible in the commanded current
-  THIS test's combined run writes -- C4's own headroom is smaller at every step regardless, so
-  the committed value is always C4's.
+- **Why scenario 1 keeps C4 the binding clamp throughout, reusing T1's own numbers unchanged.**
+  `min()` (both `_apply_peak_clamp` then `_apply_grid_ceiling_clamp` only ever REDUCE what they
+  are given, never raise it) means whichever clamp's own headroom is smaller decides the
+  committed current every cycle, regardless of what the other clamp would have allowed. T1's own
+  gap (the ceiling's headroom comfortably below Power's target every cycle, never the reverse) is
+  what keeps scenario 1's oscillation BOUNDED and reliably reproducing the known defect through
+  C4's own criterion -- so scenario 1 keeps that gap exactly as T1 has it, and picks CapTar's own
+  peak target to stay looser than C4 throughout (`_TARGET_PEAK_W`, chosen well above T1's own
+  observed overshoot) rather than narrowing it.
+- **Why this does not make R3 a no-op in scenario 1, and how R3's own bind is actually shown.**
+  Because `min()` always reports the smaller value, R3's own reduction at the household step is
+  real (its own headroom genuinely drops, `_r3_headroom_a` below) but never visible in the
+  commanded current scenario 1's combined run writes -- C4's own headroom is smaller at every
+  step regardless, so the committed value is always C4's.
   `test_should_step_the_current_down_through_r3_alone_at_the_household_step` isolates R3 from C4
   (`clamp_to_ceiling` bypassed to a pass-through) on the EXACT SAME entry/household script to
   show R3's own clamp genuinely reduces the commanded current at the step, in this exact world --
-  not a different, cherry-picked one. C4's own bind, in turn, is what the main test's own xfail
-  IS: `clamp_to_ceiling` only ever reduces toward its own headroom, so a true-import breach past
-  the raw ceiling cannot happen unless C4's clamp was the active, binding one at the breaching
-  cycle.
-- **Why the peak target does not cap the swing below the ceiling.** `_TARGET_PEAK_W` sits well
-  above the ceiling (`_ceiling_w`) at both household levels, so C4's own clamp is never fed an
-  already-safe value by R3 upstream -- the literal case the issue warns against (a peak target cut
-  deep enough that even full pass-through stays under the ceiling, which would make the ceiling
-  unreachable through C4 at all).
-- **Household step size.** Kept identical in magnitude's spirit to T1's own single-world design:
-  modest enough that the post-step ceiling headroom (`_c4_headroom_a`) stays comfortably positive
-  (never collapsing to a permanent, vacuously-safe "household alone exceeds the ceiling" floor-cap
-  stop, C4's own other allowance), while still large enough that R3's own isolated post-step
-  reduction (`_r3_headroom_a`) is an unambiguous multi-ampere drop, clear of
+  not a different, cherry-picked one. C4's own bind, in turn, is what scenario 1's own xfail IS:
+  `clamp_to_ceiling` only ever reduces toward its own headroom, so a true-import breach past the
+  raw ceiling cannot happen unless C4's clamp was the active, binding one at the breaching cycle.
+- **Why the peak target does not cap the swing below the ceiling (scenario 1).** `_TARGET_PEAK_W`
+  sits well above the ceiling (`_ceiling_w`) at both household levels, so C4's own clamp is never
+  fed an already-safe value by R3 upstream -- the literal case the issue warns against (a peak
+  target cut deep enough that even full pass-through stays under the ceiling, which would make
+  the ceiling unreachable through C4 at all).
+- **Household step size (scenario 1).** Kept identical in magnitude's spirit to T1's own
+  single-world design: modest enough that the post-step ceiling headroom (`_c4_headroom_a`) stays
+  comfortably positive (never collapsing to a permanent, vacuously-safe "household alone exceeds
+  the ceiling" floor-cap stop, C4's own other allowance), while still large enough that R3's own
+  isolated post-step reduction (`_r3_headroom_a`) is an unambiguous multi-ampere drop, clear of
   `CONF_MIN_CURRENT`/the grace-period branch (a separate, already-sanctioned mechanism T2's own
   grace-period tests cover, not this scenario's point).
+- **Why scenario 2's parameters are what they are.** `_CONTAM_GRID_CEILING_A`/
+  `_CONTAM_GRID_SAFETY_OFFSET_A` and `_CONTAM_MAX_PEAK_KW`/`_CONTAM_PEAK_FLOOR_KW`/
+  `_CONTAM_SAFETY_MARGIN_W` are chosen so C4's and R3's nominal headroom floor to the SAME whole
+  ampere (14 A) at `_CONTAM_HOUSEHOLD_W` -- a steady household, no step, since the contamination
+  this scenario is about needs no external trigger: C4's own undebounced recompute is
+  self-sustaining from the startup transient alone (same root cause as T1 and scenario 1, just
+  with a small household relative to the swing turning it into a full-amplitude 0 A/target-current
+  oscillation rather than a bounded one). `_CONTAM_WARMUP_CYCLES` is pinned to the exact cycle
+  count that reaches the known first violation (step 5) -- the xfail test wraps the run and
+  asserts the caught `InvariantViolation`'s own message starts with that exact step and limit
+  before re-raising it, so a DIFFERENT failure (a regression that changed which step/member
+  breaches first) surfaces as a real failure rather than being silently accepted as "the expected
+  one".
 """
 
 import math
@@ -290,4 +320,182 @@ async def test_should_clamp_to_the_ceiling_headroom_through_c4_before_the_defect
         f"expected C4's own ceiling-bound current {expected_a} A, got "
         f"{runner.trace[0].commanded_current_a} A -- C4 should already be the binding clamp\n"
         f"{format_trace(runner.trace, target_w=_ceiling_w(options))}"
+    )
+
+
+# --- Scenario 2: C4's lag defect contaminates R3 through the shared command-changed debounce
+# gate, when both clamps' nominal headroom nearly coincide (module docstring's own section) ------
+
+_CONTAM_HOUSEHOLD_W = 2000.0  # steady throughout -- no step: the contamination needs no external
+# trigger (module docstring).
+_CONTAM_TARGET_CURRENT_A = 16.0
+_CONTAM_MAX_CURRENT_A = 32.0
+_CONTAM_GRID_CEILING_A = 25.0
+_CONTAM_GRID_SAFETY_OFFSET_A = 2.0
+_CONTAM_SAFETY_MARGIN_W = 250.0
+_CONTAM_MAX_PEAK_KW = 5.65
+_CONTAM_PEAK_FLOOR_KW = 5.65  # pinned equal to _CONTAM_MAX_PEAK_KW -- same identity as the main
+# scenario's own _MAX_PEAK_KW/_PEAK_FLOOR_KW (T2's own `_PEAK_KW` comment).
+_CONTAM_PEAK_GRACE_MIN = 2.0  # default
+_CONTAM_CONTROL_INTERVAL_S = 10.0  # default
+
+_CONTAM_WARMUP_CYCLES = 6  # pinned to the exact cycle count that reaches the known first
+# violation (step 5, index 5 of a 6-cycle run) -- module docstring's own reasoning.
+
+
+def _contam_entry_data():
+    return entry_data_base(**{CONF_SOLAR_AVAILABLE: False, CONF_CAPTAR_AVAILABLE: True})
+
+
+def _contam_entry_options():
+    """Peak protection left at its own default (R17), same as the main scenario's `entry_options`
+    -- this world's own point is the two clamps' nominal headroom nearly coinciding at
+    `_CONTAM_HOUSEHOLD_W` (14 A each: C4 = floor(23 - 2000/230), R3 = floor((5400-2000)/230))."""
+    return entry_options_base(
+        **{
+            CONF_MAX_CURRENT: _CONTAM_MAX_CURRENT_A,
+            CONF_DEFAULT_TARGET_CURRENT: _CONTAM_TARGET_CURRENT_A,
+            CONF_GRID_CEILING_A: _CONTAM_GRID_CEILING_A,
+            CONF_GRID_SAFETY_OFFSET_A: _CONTAM_GRID_SAFETY_OFFSET_A,
+            CONF_MAX_PEAK_KW: _CONTAM_MAX_PEAK_KW,
+            CONF_PEAK_FLOOR_KW: _CONTAM_PEAK_FLOOR_KW,
+            CONF_SAFETY_MARGIN_W: _CONTAM_SAFETY_MARGIN_W,
+            CONF_PEAK_GRACE_MIN: _CONTAM_PEAK_GRACE_MIN,
+            CONF_CONTROL_INTERVAL_S: _CONTAM_CONTROL_INTERVAL_S,
+        }
+    )
+
+
+async def _contam_setup(hass):
+    seed_charger_states(hass, status="Charging", net_w=0.0, charger_w=0.0)
+    return await setup_coordinator(
+        hass,
+        entry_data=_contam_entry_data(),
+        entry_options=_contam_entry_options(),
+        mode=MODE_POWER,
+    )
+
+
+def _bypass_peak_clamp(desired_current, *, tracker, **_kwargs):
+    """Mutation for the isolation tests below: R3's own clamp (`apply_peak_clamp`) passed
+    straight through, tracker unchanged -- same pass-through technique the main scenario's own
+    `clamp_to_ceiling` bypass uses, applied to the other clamp instead."""
+    return desired_current, tracker, False
+
+
+@pytest.mark.xfail(
+    strict=True,
+    raises=InvariantViolation,
+    reason=(
+        "R3's breach here is a CONSEQUENCE of C4's known lag defect (C4's row, "
+        "docs/analysis/requirements.md#constraints), not an independent R3 defect: "
+        "clamp_to_ceiling's own undebounced recompute produces a self-sustaining command "
+        "oscillation, which keeps re-triggering R3's own command-changed-gated deferral "
+        "(debounce_baseline_w, ADR-0039) every cycle, so R3 perpetually over-grants on a stale "
+        "baseline. Isolation (test_should_stay_stable_through_r3_alone_when_headrooms_nearly_"
+        "equal) shows R3 alone is quiet and stable at its own correct headroom in this exact "
+        "world -- the defect is C4's. Choosing C4's lag-case rule and fixing it are the epic "
+        "#996 second slice's, after this task."
+    ),
+)
+async def test_should_surface_r3_breach_as_a_consequence_of_c4s_lag_defect_when_headrooms_nearly_equal(  # noqa: E501
+    hass, freezer
+):
+    # Arrange
+    freezer.move_to("2026-01-15 12:00:00")
+    coordinator = await _contam_setup(hass)
+    options = _contam_entry_options()
+    voltage = options[CONF_NOMINAL_VOLTAGE]
+    plant = Plant(household_w=_CONTAM_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
+    runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
+
+    # Act
+    # Pin the violation to exactly the known one (R3 breach at step 5) rather than letting the
+    # xfail's own `raises=InvariantViolation` accept ANY InvariantViolation -- a regression that
+    # changed which member/step breaches first must surface as a real failure, not be silently
+    # absorbed as "the expected one" (module docstring's own reasoning).
+    try:
+        await runner.run(_CONTAM_WARMUP_CYCLES, judge=judge_c4_then_r3(options))
+    except InvariantViolation as exc:
+        assert str(exc).startswith(
+            "R3 breach at step 5: true import 5680.0 W > effective peak limit 5400.0 W"
+        ), f"expected the pinned R3-via-C4-contamination violation, got: {exc}"
+        raise
+    pytest.fail("expected an InvariantViolation (R3 breach at step 5) to have been raised")
+
+    # Assert
+    # The assertion is the `xfail` above, pinned to the exact violation by the `try`/`except`
+    # block: the expected breach raises `InvariantViolation` from inside `run`, its message
+    # checked before being re-raised.
+
+
+async def test_should_stay_stable_through_r3_alone_when_headrooms_nearly_equal(
+    hass, freezer, monkeypatch
+):
+    """Isolation evidence (module docstring): R3's own clamp (`apply_peak_clamp`), isolated from
+    C4 entirely (`clamp_to_ceiling` bypassed to a pass-through), is quiet and stable at its own
+    correct headroom throughout this exact world -- proving the oscillation scenario 2 reproduces
+    is not any flaw in R3's own clamp."""
+    # Arrange
+    monkeypatch.setattr(
+        "custom_components.smart_charging.coordinator.clamp_to_ceiling",
+        lambda desired_current, *args, **kwargs: desired_current,
+    )
+    freezer.move_to("2026-01-15 12:00:00")
+    coordinator = await _contam_setup(hass)
+    options = _contam_entry_options()
+    voltage = options[CONF_NOMINAL_VOLTAGE]
+    plant = Plant(household_w=_CONTAM_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
+    runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
+
+    # Act
+    trace = await runner.run(_CONTAM_WARMUP_CYCLES)
+
+    # Assert
+    expected_a = _r3_headroom_a(options, _CONTAM_HOUSEHOLD_W)
+    for t in trace[1:]:
+        assert t.commanded_current_a == expected_a, (
+            f"step {t.index}: expected R3's own stable headroom-bound current {expected_a} A, "
+            f"got {t.commanded_current_a} A -- R3 alone should never oscillate in this world\n"
+            f"{format_trace(trace)}"
+        )
+
+
+async def test_should_oscillate_through_c4_alone_when_headrooms_nearly_equal(
+    hass, freezer, monkeypatch
+):
+    """Isolation evidence (module docstring): C4's own clamp (`clamp_to_ceiling`), isolated from
+    R3 entirely (`apply_peak_clamp` bypassed to a pass-through), reproduces the SAME
+    self-sustaining bang-bang oscillation on its own -- proving the defect scenario 2 surfaces
+    through R3's stricter target is C4's alone, independent of R3."""
+    # Arrange
+    monkeypatch.setattr(
+        "custom_components.smart_charging.coordinator.apply_peak_clamp",
+        _bypass_peak_clamp,
+    )
+    freezer.move_to("2026-01-15 12:00:00")
+    coordinator = await _contam_setup(hass)
+    options = _contam_entry_options()
+    voltage = options[CONF_NOMINAL_VOLTAGE]
+    plant = Plant(household_w=_CONTAM_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
+    runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
+
+    # Act
+    trace = await runner.run(_CONTAM_WARMUP_CYCLES)
+
+    # Assert
+    # Asserts the OSCILLATION itself, not merely a breach: every consecutive pair of cycles from
+    # index 1 onward differs (bang-bang, never settling), and the only two values it bangs
+    # between are 0 A and Power's own target current -- C4's own headroom collapsing to ~0 one
+    # cycle, then recovering to let the full, uncorrected target through the next.
+    tail = trace[1:]
+    for previous, current in zip(tail, tail[1:], strict=False):
+        assert current.commanded_current_a != previous.commanded_current_a, (
+            "C4 alone should oscillate every cycle from index 1 onward, never settling\n"
+            f"{format_trace(trace)}"
+        )
+    observed = {t.commanded_current_a for t in tail}
+    assert observed == {0.0, _CONTAM_TARGET_CURRENT_A}, (
+        f"expected C4 alone to bang between 0 A and Power's own target "
+        f"({_CONTAM_TARGET_CURRENT_A} A), got {observed}\n{format_trace(trace)}"
     )
