@@ -25,18 +25,18 @@ children part is not `none` and the close of any other `decompose` sub-issue of 
 fresh draft applies each as a change. One posted after both while the label was off is
 reported.
 
-The first arm that holds decides, never the issue's Status:
+The first arm that holds decides, never this issue's Status:
 
 1. An open blocked-by edge → step 1's stop.
-2. No park → **Entry 1**. Else, a **verify-live park** (a passing comment opening
-   `verify live: #<epic>`) newer than the newest park, `needs-approval` on, never removed
-   since it → stop: still parked.
+2. No park → **Entry 1**. A **verify-live park** (a passing comment opening
+   `verify live: #<epic>`) newer than the newest park, `needs-approval` not removed by a
+   passing login since the verify-live park → stop: still parked.
 3. The epic's `needs-approval` is on, and a late artifact → **Entry 1** at step 1, a fresh
    draft.
 4. The epic's `needs-approval` is on: the newest park's children part is `none` → **Entry 1**
    at step 1, a fresh draft. Otherwise an open comment is a change request: steps 1 and 3,
    fixing the body as it asks, then step 5 with a fresh summary, the pass not re-run. None →
-   stop and report: still parked.
+   stop: still parked.
 5. No late artifact, the newest park's children part is not `none`, and the epic's label
    timeline (**Tracker mechanics**, *Reading a change request's label events and its
    review/comment timeline*) shows `needs-approval` on when it was posted and removed after
@@ -47,7 +47,7 @@ The first arm that holds decides, never the issue's Status:
    parked. Else ask it, naming its answers, each with `needs-decision` removed from this issue:
    re-applying `needs-approval` on the epic, kept on until the fresh park; or, where late
    artifacts stand, removing all their blocked-by edges, the go standing. The run takes neither; a
-   reply is reported, not read as settling it.
+   reply is reported, settling nothing.
 
 ## Entry 1 — draft, pass, park
 
