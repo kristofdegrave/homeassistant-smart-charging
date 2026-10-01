@@ -5,7 +5,7 @@
 **Stakeholders & interests:**
 
 - EV driver — wants direct control over the charging rate, from a quick top-up to full speed, by dialing in a current themselves rather than letting solar surplus, tariff, or cost optimisation decide it.
-- Household energy manager — accepts the cost impact of a manually selected `Power` session, but wants the option to keep CapTar peak protection in force during it so it cannot raise the billed [monthly peak demand](../system-overview.md#ubiquitous-language); when they choose to disable that protection, they still expect the grid-supply-ceiling (C4) to be respected so the main fuse is never at risk.
+- Household energy manager — accepts the cost impact of a manually selected `Power` session, but wants the option to keep CapTar peak protection in force during it so it cannot raise the billed [monthly peak demand](../system-overview.md#ubiquitous-language); when they choose to disable that protection, they still expect the grid-supply-ceiling (C4) to be respected so the System's own charging never puts the main fuse at risk.
 
 **Scope / level:** sea-level (single goal: charge the car at the configured [Power target current](../system-overview.md#ubiquitous-language) while `Power` mode is active)
 
@@ -173,9 +173,9 @@ stateDiagram-v2
         skipped entirely — and with it the sustained-
         breach path to Cooldown. Either way, the C4
         grid-ceiling clamp then fits whatever remains
-        (raw) so net import stays below the grid
-        supply ceiling − grid safety offset, every
-        cycle — the same continuous relationship
+        (raw) so the current it sets keeps net
+        import below the grid supply ceiling − grid
+        safety offset, every cycle — the same continuous relationship
         Captar's request has to peak headroom, not a
         reactive exception. Floor = minimum current,
         cap = maximum current (C1); clamps only reduce
