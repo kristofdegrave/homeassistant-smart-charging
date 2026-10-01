@@ -184,14 +184,19 @@
 # -- quotes and backslashes removed (unq), and case ignored where gh or the rule ignores it --
 # where the loop file's text rules read what was typed (see loop_git_rule and
 # gh_loop_label_rule); a git or gh word carrying `$`, which the shell builds (an ANSI-C quote,
-# a variable), is refused rather than read. Refused: git's global `-c`, `--config-env`,
-# `--exec-path`, `--git-dir` and `--work-tree`, a `GIT_*=` assignment before git (their
-# environment forms, and `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
+# a variable), is refused rather than read, and so is a git or gh command bash would expand
+# -- a brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
+# expanded. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
+# `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
+# `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
 # a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
 # -- its main checkout or a linked worktree, compared by git common directory, so a directory
 # laid out as a repository reads no config or hook of its own; the subcommands the loop file
 # denies (`rebase`, `submodule`, `mv`, `restore`, `update-ref`, `cherry-pick`, `switch`, ...),
-# plus `symbolic-ref` and `replace`, a `config` write and a `checkout` naming paths;
+# plus `symbolic-ref` and `replace`, a `config` write and a `checkout` naming paths (an
+# operand that names a tracked path or is no commit, here or as a branch of `origin`; a
+# second operand or `--`; `--pathspec-from-file` or `--patch` by any prefix; or `p` in a
+# short cluster, unless a `-b`/`-B` before it makes the rest a branch name);
 # `--upload-pack`, `--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O` and
 # `archive -o`; a fetch or pull with an option
 # outside a short list of ones that change neither source nor destination, from anything but
@@ -200,24 +205,31 @@
 # (a refspec naming only `HEAD` or `@`, in any case, or none) while `main` is checked out;
 # and, from gh, read from gh's own words after the walk, `gh issue edit` removing
 # `needs-approval`, a `gh api` label DELETE or PUT or any issue write setting `labels`
-# (PATCH, or the POST gh sends by default), and a GraphQL label removal, label delete or
-# rename, `labelIds` update, or merge, ref, commit, repository or branch-protection mutation.
-# The push rule diffs against the fully named `refs/remotes/origin/main`, so a tag or branch
-# called `origin/main` does not shadow it; a fetch of origin moves it, and so can a push into
-# it, whose own diff against the ref as it stands still guards that push. `gh pr edit --remove-label` passes: it is the
-# admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
+# (PATCH, or the POST gh sends by default; only an `issues/<digits>/labels` path is the
+# add-labels exemption), and a GraphQL label removal, label delete or rename, `labelIds`
+# update, or merge, ref, commit, repository or branch-protection mutation. The push rule
+# diffs against the fully named `refs/remotes/origin/main`, so a tag or branch called
+# `origin/main` does not shadow it; a fetch of origin moves it, and so can a push into it,
+# whose own diff against the ref as it stands still guards that push. `gh pr edit
+# --remove-label` passes: it is the admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
 # single quotes is dropped, so a Windows path spelled with backslashes refuses; a fetch
 # option given its value as a separate word (`--depth 1`) refuses as unread, `--depth=1` is
 # the workaround; a request body read from a file (`-F query=@file`, `--input`) is not read
 # by the label and GraphQL rules -- the settings file's `ask` rules hold those forms; a
 # `GIT_*` variable exported in an earlier segment (`export`, `set -a`) is not seen, since
-# `git_env` reads only an assignment directly before git; the option scan reads every word, so a commit message on the command line
-# naming `--output` or `--exec` refuses -- `commit -F <file>` is the workaround; PowerShell's
-# backtick escape is not read, and the loop admits no PowerShell; the repository is the
-# hook's own as checked out, or a `GUARD_REPO` in the
+# `git_env` reads only an assignment directly before git; the option scan reads every word,
+# so a commit message on the command line naming `--output` or `--exec` refuses -- `commit
+# -F <file>` is the workaround; an unquoted `?`, `*` or `[`, `@(`, `+(` or `!(`, or a `{`
+# with a later `,` or `..` and `}`, refuses where bash would leave it as typed (a `gh api`
+# path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
+# workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
+# redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
+# it is the workaround; a
+# checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
+# no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
 # older git refuses every loop git; and a word the scan does not see (the indirection class
-# above).
+# above), a brace or glob in the command word itself (`{gh,}`, `g?t`) included.
 #
 # Its own test suite lives next to it: sh .claude/hooks/test-block-destructive-git.sh
 
@@ -442,17 +454,46 @@ seg_changes_dir() {
 # `norm` is the same reading lower-cased, for names gh matches without regard to case.
 unq() { printf '%s' "$1" | tr -d "\"'\\\\\$"; }
 norm() { unq "$1" | tr 'A-Z' 'a-z'; }
+# In the loop, whether bash would expand a segment before git or gh reads it: in the text it
+# leaves unquoted -- quotes tracked across the guard's space split, an escaped character
+# dropped -- a `{` with a later `,` or `..` and `}` (`{-c,}`, `{1..2}`), or a glob
+# character. A reflog `@{1}` has neither, and a quoted `'*.md'` or `-m "why?"` is no
+# unquoted text.
+# The quote tracking reads `'` and `"` only; a `$'...'` quote reads otherwise, which is why
+# the walk refuses a segment carrying `$` before it asks.
+# Nesting is not counted: bash splits `{a,b{}}` on the outer comma, so any `{` with a later
+# `,` or `..` and a later `}` refuses; so does an extended glob (`@(`, `+(`, `!(`), should
+# the shell have extglob on. A bash comment is read like any text: telling a `#` that opens
+# a word from one inside it (`''#`) is not this text's to judge. The match is the awk's own
+# exit status, 1 for no expansion; any other -- an awk that fails -- counts as expanding.
+expands() {
+  printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+    q = ""; o = ""
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (q == sq) { if (c == sq) q = ""; continue }
+      if (c == bs) { i++; continue }
+      if (q == dq) { if (c == dq) q = ""; continue }
+      if (c == sq || c == dq) { q = c; continue }
+      o = o c
+    }
+    exit (o ~ /[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]/) ? 0 : 1 }'
+  [ $? != 1 ]
+}
 
 # In the loop, a gh gesture that removes a label the human's go rests on (ADR-0054, "Label
 # gestures"), and the GraphQL mutations the settings file's `ask` rules name, read in the
 # normalized form so no spelling or spacing the shell collapses gets past: `gh issue edit`
 # removing `needs-approval`; a `gh api` label DELETE or PUT, or any non-GET issue write
 # setting `labels`; and a GraphQL label removal, label delete or rename, `labelIds` update,
-# merge, ref, commit, repository or branch-protection mutation. `gh pr edit --remove-label` is the admitted gesture.
+# merge, ref, commit, repository or branch-protection mutation. A gh segment bash would
+# expand is refused before this runs (`expands`). `gh pr edit --remove-label` is the
+# admitted gesture.
 gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
   _ls=$1
   shift
   for _w in "$@"; do
+    # A backstop: the walk's segment-wide `$` refusal runs first and catches these too.
     case "$_w" in *'$'*)
       deny "$_ls" "in the autopilot loop a gh word carrying \$ is refused: the shell builds it (an ANSI-C quote, a variable) where the guard cannot read it" "$LABEL_TAIL" ;;
     esac
@@ -520,8 +561,15 @@ gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
   # Any write to an issue that sets its labels -- PATCH, or POST, which gh sends by default
   # once a field is given, with the field spelled apart or attached (`-flabels[]=`) --
   # replaces the set, needs-approval included. A POST to the issue's `/labels` only adds.
-  _add=0
-  case "$_c2:$_m" in */labels: | */labels:post) _add=1 ;; esac
+  # The exemption is the endpoint's own shape -- `.../issues/<n>/labels`, no query string or
+  # fragment, which would send the request to `issues/<n>` itself.
+  _add=0 _in=${_c2%/labels}
+  _in=${_in##*/}
+  case "$_c2" in
+    *'?'* | *'#'*) ;;
+    */issues/[0-9]*/labels)
+      case "$_in" in *[!0-9]*) ;; *) case "$_m" in '' | post) _add=1 ;; esac ;; esac ;;
+  esac
   if [ "$_m" != get ] && [ "$_add" = 0 ]; then
     case "$_n" in *issues/*)
       case " $_n" in *" labels"* | *"=labels"* | *" -flabels"*)
@@ -538,9 +586,9 @@ GUARD_REPO=${GUARD_REPO:-$(dirname "$0")}
 
 # In the loop, the git forms the loop file's text rules cannot hold, read from the words as
 # the shell passes them on (the walk has already run them through `unq`): a global override
-# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`), its `GIT_*=`
-# environment form (`$git_env`), or more than one `-C` (`$nC`); any git after a directory
-# change; a target outside this repository's checkout and worktrees; the subcommands the loop
+# (`$gexec`: `-c`, `--config-env`, `--exec-path`, `--git-dir`, `--work-tree`, `--bare`),
+# its `GIT_*=` environment form (`$git_env`), or more than one `-C` (`$nC`); any git after a
+# directory change; a target outside this repository's checkout and worktrees; the subcommands the loop
 # file denies, spelled any way the shell collapses, a config write and a checkout naming
 # paths; any prefix of `--upload-pack`, `--receive-pack`, `--exec`, `--output`,
 # `--output-directory`, `--extcmd` or `--open-files-in-pager`, and `grep -O`, `archive -o` and
@@ -551,7 +599,7 @@ loop_git_rule() { # <segment> <subcommand> <args...>
   _seg=$1 _sub=$2
   shift 2
   [ "$gexec" = 0 ] ||
-    deny "$_seg" "in the autopilot loop git's global -c, --config-env, --exec-path, --git-dir and --work-tree are refused: each can make git run a program or read another repository" "$HARNESS_TAIL"
+    deny "$_seg" "in the autopilot loop git's global -c, --config-env, --exec-path, --git-dir, --work-tree and --bare are refused: each can make git run a program or read another repository" "$HARNESS_TAIL"
   [ "$git_env" = 0 ] ||
     deny "$_seg" "in the autopilot loop a GIT_* assignment before git is refused: it is the environment form of -c, --git-dir, --exec-path or GIT_SSH_COMMAND" "$HARNESS_TAIL"
   [ "$nC" -le 1 ] ||
@@ -574,22 +622,48 @@ loop_git_rule() { # <segment> <subcommand> <args...>
       done
       deny "$_seg" "in the autopilot loop git's config is only read, never written: a config value can make git run a program" "$HARNESS_TAIL" ;;
     checkout)
-      # One operand is a branch to switch to; a second, or `--`, names paths it writes.
-      _ops=0 _skip=0
+      # One operand that is a commit is a branch to switch to; a second, `--`, a pathspec file
+      # (any prefix of the option git takes), or a single operand that is no commit -- git
+      # then reads it as a pathspec -- names paths it writes.
+      _ops=0 _skip=0 _op=''
       for _a in "$@"; do
         [ "$_skip" = 1 ] && { _skip=0; continue; }
         case "$_a" in
           --)
             deny "$_seg" "in the autopilot loop 'git checkout ... -- <path>' is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
           -b | -B | --orphan) _skip=1 ;;
-          --pathspec-from-file*)
-            deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
-          -* | *'>'* | *'<'*) ;;
-          *) _ops=$((_ops + 1)) ;;
+          --?*)
+            case "--pathspec-from-file" in "${_a%%=*}"*)
+              deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
+            esac
+            case "--patch" in "${_a%%=*}"*)
+              deny "$_seg" "in the autopilot loop 'git checkout --patch' is refused: it writes hunks into paths around the Edit deny" "$HARNESS_TAIL" ;;
+            esac ;;
+          # `-p` in a cluster, unless a `-b`/`-B` before it makes the rest a branch name.
+          -*p*)
+            case "${_a%%p*}" in *[bB]*) ;; *)
+              deny "$_seg" "in the autopilot loop 'git checkout --patch' is refused: it writes hunks into paths around the Edit deny" "$HARNESS_TAIL" ;;
+            esac ;;
+          # A redirection: a word opening with one, read after unq, so a quoted leading `>`
+          # passes too -- as a pathspec it names only paths opening with `>`.
+          -* | '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'*) ;;
+          *) _ops=$((_ops + 1)); _op=$_a ;;
         esac
       done
       [ "$_ops" -le 1 ] ||
-        deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL" ;;
+        deny "$_seg" "in the autopilot loop a 'git checkout' naming paths is refused: it writes files around the Edit deny" "$HARNESS_TAIL"
+      # Any single operand that also names a tracked path refuses, a local branch's
+      # included, since `--no-guess` makes git restore the path; otherwise a branch only
+      # `origin` has is git's tracking checkout, a commit too.
+      if [ "$_ops" = 1 ]; then
+        if [ -n "$(git -C "$cwd" -C "$repo" ls-files -- ":(literal)$_op" 2>/dev/null)" ]; then
+          deny "$_seg" "in the autopilot loop 'git checkout $_op' is refused: '$_op' names a tracked path, which git can read it as and write" "$HARNESS_TAIL"
+        fi
+        if ! git -C "$cwd" -C "$repo" rev-parse -q --verify "$_op^{commit}" >/dev/null 2>&1 &&
+          ! git -C "$cwd" -C "$repo" rev-parse -q --verify "refs/remotes/origin/$_op^{commit}" >/dev/null 2>&1; then
+          deny "$_seg" "in the autopilot loop 'git checkout $_op' is refused: '$_op' is no commit, so git reads it as a path to write" "$HARNESS_TAIL"
+        fi
+      fi ;;
   esac
   _i=0
   for _a in "$@"; do
@@ -1450,6 +1524,18 @@ for seg in $segments; do
       n=$((n - 1))
     done
   fi
+  # Nor a segment bash rebuilds by expansion -- a brace list or range (`{-c,}`), or an
+  # unquoted glob, which can match a file named like an option -- and, so `expands` reads
+  # every quote it is told of, not one carrying `$` anywhere, a prefix assignment included.
+  if in_loop; then
+    _tail=$HARNESS_TAIL
+    [ "$found" = gh ] && _tail=$LABEL_TAIL
+    case "$seg" in *'$'*)
+      deny "$seg" "in the autopilot loop a $found segment carrying \$ is refused, a prefix assignment included: the shell builds it (an ANSI-C quote, a variable) where the guard cannot read it" "$_tail" ;;
+    esac
+    expands "$seg" &&
+      deny "$seg" "in the autopilot loop a $found command bash would expand (a brace list or range, or a glob, outside quotes) is refused: the guard reads it as typed, $found gets what it expands to" "$_tail"
+  fi
   if [ "$found" = gh ]; then
     [ "$wrapper" = 0 ] || gh_wrapped=1
     in_loop && gh_loop_label_rule "$seg" "$@"
@@ -1469,6 +1555,7 @@ for seg in $segments; do
   if in_loop; then
     n=$#
     while [ "$n" -gt 0 ]; do
+      # A backstop: the segment-wide `$` refusal above runs first and catches these too.
       case "$1" in *'$'*)
         deny "$seg" "in the autopilot loop a git word carrying \$ is refused: the shell builds it (an ANSI-C quote, a variable) where the guard cannot read it" "$HARNESS_TAIL" ;;
       esac
@@ -1490,7 +1577,7 @@ for seg in $segments; do
         shift
         [ $# -gt 0 ] && shift
         ;;
-      --config-env* | -c?* | --exec-path=* | --git-dir=* | --work-tree=*) gexec=1; shift ;;
+      --config-env* | -c?* | --exec-path=* | --git-dir=* | --work-tree=* | --bare) gexec=1; shift ;;
       -*) shift ;;
       *) sub=$1; shift; break ;;
     esac
