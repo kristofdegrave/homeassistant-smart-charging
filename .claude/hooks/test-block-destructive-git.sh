@@ -930,7 +930,30 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
+# A quoted or escaped separator does not cut a git or gh segment short: the loop reads the
+# command again, split only where bash splits it.
+runr "global -c" "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git --namespace '|' -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git --namespace '&&' -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git --namespace \";\" -c core.fsmonitor=x status" "$LR/wt" # ... in double quotes
+runr "global -c" "git --namespace \\; -c core.fsmonitor=x status" "$LR/wt"   # ... escaped
+runr "bash would expand" "git {-ccore.fsmonitor=a\\;b,} status" "$LR/wt"  # ... escaped, in a brace list
+runr "removing needs-approval" "gh issue edit 5 --title ';' --remove-label needs-approval"
+runr "global -c" "git commit -m 'a;b'; git -c core.fsmonitor=x status" "$LR/wt" # a real one after a quoted one
+runr "global -c" "echo \"\$(echo \")\"; git -c core.fsmonitor=x status; echo \"(\")\"" "$LR/wt" # bash requotes in a substitution: the plain split reads it
+run ALLOW "git commit -m \"a; b\"" "$LR/wt"                            # a quoted separator in a message
+run ALLOW "git commit -m 'a | b && c'" "$LR/wt"
+run ALLOW "git commit -m 'a;b' && cd .." "$LR/wt"                      # each reading starts with no directory change
+run ALLOW "git status # it's clean" "$LR/wt"                           # a comment's quote opens nothing
+mkdir -p "$STUB/splitfail"
+printf '#!/bin/sh\ncase " $* " in *" q1="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/splitfail/awk"
+chmod +x "$STUB/splitfail/awk"
+OLD_PATH=$PATH
+PATH="$STUB/splitfail:$PATH"
+runr "could not be split" "git status" "$LR/wt"                         # an awk that fails: closed
+PATH=$OLD_PATH
 unset "$MARKER" GUARD_REPO
+run ALLOW "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"   # the second reading: interactive, unaffected
 run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
 run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
 run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"

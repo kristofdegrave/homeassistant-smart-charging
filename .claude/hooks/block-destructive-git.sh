@@ -12,7 +12,8 @@
 # POSIX sh only, and no jq -- neither is guaranteed on the machines this runs on.
 #
 # Scope and known limits. This is an accident guard, not a sandbox. It word-splits
-# each command without understanding shell quoting, so a destructive command wrapped
+# each command without understanding shell quoting (the autopilot loop adds a second,
+# quote-aware reading; see the loop's rules below), so a destructive command wrapped
 # in another shell (`bash -c "git push --force"`) is not seen. The one construct it
 # does parse is the heredoc: the body of a quoted-delimiter heredoc (`<<'EOF'`,
 # `<<"EOF"`, `<<\EOF`, and their `<<-` forms) is inert to the shell that reads it --
@@ -186,7 +187,12 @@
 # gh_loop_label_rule); a git or gh word carrying `$`, which the shell builds (an ANSI-C quote,
 # a variable), is refused rather than read, and so is a git or gh command bash would expand
 # -- a brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
-# expanded. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
+# expanded. Every rule also reads a second split of the command, on the separators bash
+# splits on: outside quotes, not escaped, a comment dropped (`split_unquoted`). So a quoted or
+# escaped separator (`git --namespace ';' -c ...`) does not leave the rest of a git or gh
+# command in a segment no git rule reads. The plain split still runs, since it is the one
+# that splits inside a command substitution, where bash quotes afresh. The second reading
+# only adds refusals, and an awk that cannot make it refuses. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
 # `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
 # `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
 # a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
@@ -1370,6 +1376,51 @@ segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
 /g' -e 's/|/\
 |/g')
 
+# In the loop, the same command split a second way: only where bash splits it -- on a ;, &&,
+# ||, | or newline outside quotes and not escaped -- so a quoted or escaped separator
+# (`git --namespace ';' -c ...`, `\;`) does not cut a git segment short. The quotes read are
+# `'`, `"` and `$'...'`, a backslash outside single quotes takes the character after it, a `#`
+# that starts a word outside quotes drops the rest of its line, and a newline inside a quote
+# is read as a space so the segment stays one line. A quote inside a command substitution
+# within double quotes is not read as bash reads it (bash starts its quoting afresh there):
+# this split can then keep a real separator, which is why the plain split above is still
+# scanned too.
+split_unquoted() {
+  printf '%s\n' "$1" | awk -v q1="'" -v q2='"' -v esc='\\' '
+    { s = s (NR > 1 ? "\n" : "") $0 }
+    END {
+      n = length(s); q = ""; out = ""; prev = "\n"
+      for (i = 1; i <= n; i++) {
+        c = substr(s, i, 1)
+        nx = substr(s, i + 1, 1)
+        if (q == q1) { if (c == q1) q = ""; out = out (c == "\n" ? " " : c); continue }
+        if (q != "") {
+          # Inside double quotes or an ANSI-C quote, a backslash takes the next character.
+          if (c == esc) { out = out c (nx == "\n" ? " " : nx); i++; continue }
+          if ((q == "a" && c == q1) || (q == q2 && c == q2)) q = ""
+          out = out (c == "\n" ? " " : c); continue
+        }
+        if (c == esc) { out = out c (nx == "\n" ? " " : nx); i++; prev = "x"; continue }
+        if (c == "$" && nx == q1) { q = "a"; out = out c nx; i++; prev = q1; continue }
+        if (c == "#" && prev ~ /[ \t\n;&|(]/) {
+          while (i < n && substr(s, i + 1, 1) != "\n") i++
+          continue
+        }
+        if (c == q1) q = q1
+        else if (c == q2) q = q2
+        else if (c == ";" || c == "\n") { out = out "\n"; prev = "\n"; continue }
+        else if ((c == "&" || c == "|") && nx == c) { out = out "\n"; i++; prev = "\n"; continue }
+        else if (c == "|") { out = out "\n|"; prev = "|"; continue }
+        out = out c; prev = c
+      }
+      print out
+    }'
+}
+
+# The scan, one pass over a list of segments, one per line: every rule below applies to each.
+# A pass starts from no piped words and no directory change, so the loop's second reading is
+# judged on its own segments, not on state the first left behind.
+scan() { # scan <segments>
 # Globbing stays off for the whole scan: segments are untrusted text, never paths.
 set -f
 IFS='
@@ -1378,7 +1429,7 @@ piped_words=0
 # Set once a segment changes directory: the loop rule below reads the payload's cwd (or an
 # explicit -C), not a directory a `cd` earlier in the command moved to, so it refuses then.
 dir_moved=0
-for seg in $segments; do
+for seg in $1; do
   # Unset rather than saved-and-restored: an IFS arriving unset from the environment
   # would restore as the empty string, which disables word splitting altogether and
   # would fail the guard open on every command.
@@ -1768,5 +1819,15 @@ EOF
       ;;
   esac
 done
+}
+
+scan "$segments"
+# The loop's second reading. An awk that fails leaves it unread, so the loop refuses: the
+# first reading alone is the one a quoted separator cuts short.
+if in_loop; then
+  qsegments=$(split_unquoted "$cmd") && [ -n "$qsegments" ] ||
+    deny "$cmd" "in the autopilot loop the command could not be split where bash splits it, so a quoted or escaped separator could hide the rest of a git or gh command" "$HARNESS_TAIL"
+  [ "$qsegments" = "$segments" ] || scan "$qsegments"
+fi
 
 exit 0
