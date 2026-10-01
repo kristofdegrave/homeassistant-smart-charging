@@ -135,10 +135,13 @@
 # is relative after a change of directory, or shares its command with another segment, which
 # could write it before gh reads it. The text is matched whole rather than parsed, so no flag
 # placement or endpoint spelling escapes it; its comment at gh_approve_rule below says how.
-# Conceded, as for the merge rule: a split or quoted letter (`rev''iews`, `APP''ROVE`), an
-# approval behind a word the guard does not read as gh (an interpreter, a variable, a
-# PowerShell assignment) or from another tool; a JSON unicode escape of a letter of the event
-# in a payload. Refused though harmless: a review or GraphQL read whose text names APPROVE, such
+# Behind a first word the guard does not read as gh -- a wrapper, an interpreter, a PowerShell
+# assignment, a quoted full-path gh.exe -- the words alone decide, as for the merge rule: they
+# refuse when they hold `gh pr review` with an approve flag, or `gh api` with a review target
+# and APPROVE, `=@` or `--input`. Under PowerShell a `/`-rooted payload refuses, since gh.exe
+# reads it as another file. Conceded: a split or quoted letter (`rev''iews`, `APP''ROVE`), prose
+# naming an approval piped into another command, a `gh alias`, a variable, another tool; a JSON
+# unicode escape of a letter of the event in a payload. Refused though harmless: a review or GraphQL read whose text names APPROVE, such
 # as a filter on approved reviews; a call naming a file whose path holds `/reviews` or
 # `graphql`; and a `gh pr review` body word starting `-a`, read as the flag.
 #
@@ -693,6 +696,49 @@ gh_words() {
     END { printf "%d %d\n", merge, api }'
 }
 
+# The approval rule's half of gh_words, for a segment gh is not the first word of. Prints
+# `<review> <api>`, each word normalized as gh_words normalizes it: review is 1 when the words
+# hold gh, pr and review in that order followed by an approve flag (`--approve`, an
+# `--approve=` value but a false one, or a short-flag cluster carrying `a` before `b` or `F`);
+# api is 1 when gh's subcommand is api, the text names a review target (`/reviews`,
+# `pullrequestreview`, `graphql`) and it names APPROVE, reads a value from a file (`=@`) or
+# takes `--input`. Case is ignored throughout.
+gh_approve_words() {
+  printf '%s\n' "$1" | awk -v q="'" '
+    BEGIN { tailq = "[\"" q ")};`]+$"; head = "^.*[\"" q "(=$&{/\\\\`]" }
+    {
+      line = line " " tolower($0)
+      n = split($0, w, /[ \t]+/)
+      for (i = 1; i <= n; i++) {
+        t = tolower(w[i]); raw = t
+        sub(tailq, "", t); sub(head, "", t); sub(/\.exe$/, "", t)
+        if (ga) {
+          if (eat) eat = 0
+          else if (t ~ /^-/) { if (t !~ /=/ && (t ~ /^--./ || length(t) == 2) && t != "--help" && t != "--version" && t != "-h") eat = 1 }
+          else { if (t == "api") api = 1; ga = 0 }
+        }
+        if (t == "gh") { ga = 1; eat = 0 }
+        if (st == 0 && t == "gh") st = 1
+        else if (st == 1 && t == "pr") st = 2
+        else if (st == 2 && t == "review") st = 3
+        else if (st == 3) {
+          f = raw; sub(tailq, "", f); sub(/^"/, "", f); sub("^" q, "", f)
+          if (f == "--approve") rev = 1
+          else if (f ~ /^--approve=/ && f !~ /^--approve=(false|f|0)$/) rev = 1
+          else if (f ~ /^-[^-]/) {
+            c = substr(f, 2)
+            for (j = 1; j <= length(c); j++) { ch = substr(c, j, 1); if (ch == "a") { rev = 1; break } if (ch == "b" || ch == "f") break }
+          }
+        }
+      }
+    }
+    END {
+      tgt = (line ~ /\/reviews/ || line ~ /pullrequestreview/ || line ~ /graphql/)
+      bad = (line ~ /approve/ || line ~ /=@/ || line ~ /--input/)
+      printf "%d %d\n", rev, (api && tgt && bad) ? 1 : 0
+    }'
+}
+
 # Set by the scan loop for the segment being inspected: a transparent wrapper (`xargs`,
 # `sudo`, ...) sat before gh, or a `GH_*=` assignment did.
 gh_wrapped=0
@@ -997,6 +1043,14 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
   done
   if [ "$path" = ' pr review' ]; then
     for a in "$@"; do
+      # A substitution's closer or a trailing quote rides on the last word
+      # (`r=$(gh pr review 12 --approve)`); it is not part of the flag.
+      while :; do
+        case "$a" in
+          *[\)\`\"\']) a=${a%?} ;;
+          *) break ;;
+        esac
+      done
       case "$a" in
         --approve) deny_approve "$seg" "'gh pr review --approve' posts an approval" ;;
         --approve=false | --approve=False | --approve=FALSE | --approve=f | --approve=F | --approve=0) ;;
@@ -1046,6 +1100,10 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
     deny_approve "$seg" "'gh api graphql' reads its document from --input, which the guard does not open, so it cannot show it is not an approval"
   input=${input#[\"\']}
   input=${input%[\"\']}
+  case "$tool:$input" in
+    PowerShell:/*)
+      deny_approve "$seg" "under PowerShell a '/'-rooted payload '$input' names a different file to gh.exe than to the guard's sh, so the guard cannot show its event is not APPROVE; give a drive-letter or relative path" ;;
+  esac
   case "$input" in
     -) deny_approve "$seg" "'gh api' on a pull request's reviews reads its payload from stdin, so the guard cannot show its event is not APPROVE" ;;
     /* | [A-Za-z]:[/\\]*) ;;
@@ -1345,6 +1403,14 @@ for seg in $segments; do
         [ "$gh_merge" = 0 ] ||
           deny_merge "$seg" "'gh pr merge' behind a command the guard does not read ('$interp': a wrapper, an interpreter, an assignment or an unknown word), so the auto-merge conditions cannot be shown to hold"
         [ "$gh_api" = 0 ] || gh_merge_rule "$seg" api
+        # The approval rule fails closed here the same way: behind such a word the guard
+        # cannot tell what reaches gh, so the words alone decide.
+        # shellcheck disable=SC2046  # the two flags gh_approve_words prints
+        set -- $(gh_approve_words "$seg")
+        [ "$1" = 0 ] ||
+          deny_approve "$seg" "'gh pr review' with an approve flag behind a command the guard does not read ('$interp': a wrapper, an interpreter, an assignment or an unknown word), so it may post an approval"
+        [ "$2" = 0 ] ||
+          deny_approve "$seg" "a 'gh api' review or GraphQL call naming APPROVE, a file value or --input behind a command the guard does not read ('$interp'), so it may post an approval"
         ;;
     esac
     continue

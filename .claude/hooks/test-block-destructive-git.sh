@@ -956,6 +956,20 @@ run ALLOW "gh api repos/o/r/pulls/12/reviews --paginate --jq '.[].state'"
 run ALLOW "gh api repos/o/r/pulls/12/comments --paginate"
 run ALLOW "echo 'gh pr review 12 --approve'"                             # prose
 run ALLOW "gh pr view 12 --json reviews"
+# ... behind a first word the guard does not read as gh, the words alone decide
+runr "behind a command the guard does not read" '$r = gh pr review 12 --approve'   # a PowerShell assignment
+run BLOCK '$x = gh api repos/o/r/pulls/12/reviews -f event=APPROVE'
+run BLOCK 'sh -c "gh pr review 12 --approve"'                          # an interpreter
+run BLOCK 'pwsh -c "gh pr review 12 -a"'
+run BLOCK '& "C:\Program Files\GitHub CLI\gh.exe" pr review 12 -a'     # a quoted full-path gh.exe
+run BLOCK 'sh -c "gh api repos/o/r/pulls/12/reviews --input p.json"'   # a review payload the guard cannot locate
+run BLOCK 'r=$(gh pr review 12 --approve)'                             # an assignment's substitution
+run ALLOW 'sh -c "gh pr review 12 -b approve"'                         # -b takes the value
+run ALLOW 'sh -c "gh pr review 12 --approve=false -c -b x"'
+run ALLOW 'sh -c "gh api repos/o/r/pulls/12/comments --paginate"'      # no review target
+TOOL=PowerShell
+runr "under PowerShell" "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a /-rooted payload names another file to gh.exe
+TOOL=Bash
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
