@@ -23,8 +23,9 @@ while C4 binds on a lagging reading, charging at a reduced rate.
   rise by a cycle.
 - **Which reading a step consumes is ADR-0006's.** [ADR-0006](0006-coordinator-and-data-flow.md)'s
   step 8 applies C4 "on raw readings", and its Consequences make a change to a step's reading "a
-  new ADR superseding this one"; this record narrows it, as ADR-0036, ADR-0049 and ADR-0051 do. [ADR-0039](0039-baseline-reading-during-own-actuation.md) settled R3's version of
-  the lag and left C4's open.
+  new ADR superseding this one"; this record narrows it, as ADR-0036, ADR-0049 and ADR-0051 do.
+  [ADR-0039](0039-baseline-reading-during-own-actuation.md) settled R3's version of the lag and
+  left C4's open.
 - **The rule chosen before failed in closed loop.**
   [ADR-0056](0056-c4-solves-around-the-higher-of-own-and-accepted-baseline.md) is abandoned:
   solving around the higher of the raw and R3's accepted baseline still breached the ceiling,
