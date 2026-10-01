@@ -159,8 +159,8 @@ naming `main`; and `pytest`, which runs any `conftest.py` a writer has written.
 permissions documentation says it is not a security boundary around the program — so each
 list above holds the forms named, and a form it does not name passes. Behind it, the
 destructive-git guard's loop mode reads each word as sh passes it on (quotes and
-backslashes removed; case ignored where gh ignores it), refuses a word carrying `$`, or a
-git or gh command bash would expand (a brace list, a glob outside quotes), rather than guess
+backslashes removed; case ignored where gh ignores it), refuses a git or gh command carrying
+`$` anywhere, a prefix assignment included, or one bash would expand (a brace list, a glob outside quotes), rather than guess
 what the shell builds from it, and its header states the rules: the label gesture and the
 named GraphQL mutations in any such spelling or spacing, a push of HEAD while `main` is
 checked out, git's global overrides and their `GIT_*` environment forms, the

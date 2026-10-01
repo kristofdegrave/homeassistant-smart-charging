@@ -832,6 +832,16 @@ runr "--patch" "git checkout --patc main" "$LR/wt"                       # ... b
 runr "--patch" "git checkout -fp main" "$LR/wt"                          # ... in a cluster
 run ALLOW "git checkout -bpatch main" "$LR/wt"                          # a -b cluster names a branch
 runr "bash would expand" "git status # why?" "$LR/wt"                   # a comment is read as text: conceded
+# An awk that fails while `expands` reads counts as expanding: a stub awk fails that call
+# alone (the one passing `sq=`) and hands every other to the real one.
+mkdir -p "$STUB/awkfail"
+printf '#!/bin/sh\ncase " $* " in *" sq="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/awkfail/awk"
+chmod +x "$STUB/awkfail/awk"
+OLD_PATH=$PATH
+PATH="$STUB/awkfail:$PATH"
+runr "bash would expand" "git status" "$LR/wt"                          # fails closed
+PATH=$OLD_PATH
+run ALLOW "bash .github/gh-as-bot.sh pr-create workflow/1 \"t?\" /tmp/b.md" # the author-side wrapper: bash, not gh
 runr "bash would expand" "gh issue edit 5 --title ''# {--remove-label,needs-approval}" # a # inside a word is no comment
 runr "bash would expand" "git --namespace ''# {-c,core.fsmonitor=x} status" "$LR/wt"   # ... before git's -c
 runr "bash would expand" "gh issue edit 5 --title \\ # {--remove-label,needs-approval}" # ... after an escaped blank

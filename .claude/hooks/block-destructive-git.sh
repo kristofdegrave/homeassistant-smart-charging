@@ -223,6 +223,8 @@
 # with a later `,` or `..` and `}`, refuses where bash would leave it as typed (a `gh api`
 # path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
 # workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
+# redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
+# it is the workaround; a
 # checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
 # no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
@@ -491,6 +493,7 @@ gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
   _ls=$1
   shift
   for _w in "$@"; do
+    # A backstop: the walk's segment-wide `$` refusal runs first and catches these too.
     case "$_w" in *'$'*)
       deny "$_ls" "in the autopilot loop a gh word carrying \$ is refused: the shell builds it (an ANSI-C quote, a variable) where the guard cannot read it" "$LABEL_TAIL" ;;
     esac
@@ -1552,6 +1555,7 @@ for seg in $segments; do
   if in_loop; then
     n=$#
     while [ "$n" -gt 0 ]; do
+      # A backstop: the segment-wide `$` refusal above runs first and catches these too.
       case "$1" in *'$'*)
         deny "$seg" "in the autopilot loop a git word carrying \$ is refused: the shell builds it (an ANSI-C quote, a variable) where the guard cannot read it" "$HARNESS_TAIL" ;;
       esac
