@@ -830,7 +830,10 @@ runr "--patch" "git checkout -p main" "$LR/wt"                           # hunks
 runr "--patch" "git checkout --patc main" "$LR/wt"                       # ... by a prefix
 runr "--patch" "git checkout -fp main" "$LR/wt"                          # ... in a cluster
 run ALLOW "git checkout -bpatch main" "$LR/wt"                          # a -b cluster names a branch
-run ALLOW "git status # why?" "$LR/wt"                                  # bash's comment is not read
+runr "bash would expand" "git status # why?" "$LR/wt"                   # a comment is read as text: conceded
+runr "bash would expand" "gh issue edit 5 --title ''# {--remove-label,needs-approval}" # a # inside a word is no comment
+runr "bash would expand" "git --namespace ''# {-c,core.fsmonitor=x} status" "$LR/wt"   # ... before git's -c
+runr "bash would expand" "gh issue edit 5 --title \\ # {--remove-label,needs-approval}" # ... after an escaped blank
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix
 runr "abbreviates" "git archive --remote=. --e=x HEAD" "$LR/wt"

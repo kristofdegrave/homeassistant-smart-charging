@@ -166,8 +166,9 @@
 # laid out as a repository reads no config or hook of its own; the subcommands the loop file
 # denies (`rebase`, `submodule`, `mv`, `restore`, `update-ref`, `cherry-pick`, `switch`, ...),
 # plus `symbolic-ref` and `replace`, a `config` write and a `checkout` naming paths (an
-# operand that names a tracked path or is no commit, here or as a branch of `origin`,
-# `--pathspec-from-file` by any prefix, or `-p`/`--patch`);
+# operand that names a tracked path or is no commit, here or as a branch of `origin`; a
+# second operand or `--`; `--pathspec-from-file` or `--patch` by any prefix; or `p` in a
+# short cluster, unless a `-b`/`-B` before it makes the rest a branch name);
 # `--upload-pack`, `--receive-pack`, `--exec`, `--output`, `--extcmd`, `grep -O` and
 # `archive -o`; a fetch or pull with an option
 # outside a short list of ones that change neither source nor destination, from anything but
@@ -192,7 +193,7 @@
 # so a commit message on the command line naming `--output` or `--exec` refuses -- `commit
 # -F <file>` is the workaround; an unquoted `?`, `*` or `[`, or a `{` with a later `,` or
 # `..` and `}`, refuses where bash would leave it as typed (a `gh api` path with a query
-# string, `@{1}..x@{1}`) -- quoting it is the workaround; a checkout of a branch that is
+# string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the workaround; a checkout of a branch that is
 # also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
 # no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
@@ -430,14 +431,14 @@ expands() {
       if (c == bs) { i++; continue }
       if (q == dq) { if (c == dq) q = ""; continue }
       if (c == sq || c == dq) { q = c; continue }
-      if (c == "#" && (o == "" || substr(o, length(o), 1) ~ /[ \t]/)) break
       o = o c
     }
     printf "%s", o }') || return 0
   # Nesting is not counted: bash splits `{a,b{}}` on the outer comma, so any `{` with a
   # later `,` or `..` and a later `}` refuses; so does an extended glob (`@(`, `+(`, `!(`),
-  # should the shell have extglob on. A `#` opening a word starts bash's comment, which is
-  # not read. An awk that fails counts as expanding.
+  # should the shell have extglob on. A bash comment is read like any text: telling a `#`
+  # that opens a word from one inside it (`''#`) is not this text's to judge. An awk that
+  # fails counts as expanding.
   printf '%s' "$_u" | grep -Eq '[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]'
 }
 
