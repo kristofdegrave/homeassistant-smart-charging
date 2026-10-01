@@ -210,7 +210,7 @@ review:
 # YAML parser (it adds a missing trailing slash). `lanes` is the lane cap ADR-0052 decides: how
 # many issues' chains may be in flight at once, on disjoint trees. `tracking_issue` is the
 # number of the issue the `autopilot` skill logs its ticks and digests on and reads `paused`
-# from; `null` until that issue is filed, and the skill does not start without it.
+# from; the skill does not start while it is unset.
 # `loop_settings` is the loop-only settings file's path from the repository root, and
 # `loop_marker` the `env` variable it sets to `1`; what the file holds and how the loop is
 # started with it is docs/reference/profile.md's **Autopilot loop**.
@@ -220,7 +220,7 @@ autopilot:
     - tests/
     - docs/design/
   lanes: 2
-  tracking_issue: null
+  tracking_issue: 1589
   loop_settings: .claude/autopilot.settings.json
   loop_marker: SMART_CHARGING_AUTOPILOT
 
