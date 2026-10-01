@@ -8,7 +8,8 @@ takes. What an overlay may and may not say is this tree's `README.md`'s **Stack 
 
 **The authorities.** Tests are written per
 [ADR-0009](../../../../adl/0009-testing-strategy.md) — the authoritative plain-pytest vs
-HA-harness split — and the extension of its mandated coverage in
+HA-harness split — as [ADR-0037](../../../../adl/0037-scenario-timeline-test-tier.md) narrows it
+with a third, scenario/timeline tier, and the extension of its mandated coverage in
 [ADR-0040](../../../../adl/0040-fifth-mandated-adapter-case-unit-set.md). Where the tests live,
 mirroring the product code, is the `development` overlay's *Where the code lives*.
 
@@ -33,8 +34,8 @@ pytest belongs in an adapter/coordinator/entity — moving the test is not the f
 
 ## Done
 
-**Item 1, *Harness split* (ADR-0009).** The directory-to-harness mapping is stated here, once, and
-both sides read it from here:
+**Item 1, *Harness split* (ADR-0009, ADR-0037).** The directory-to-harness mapping is stated
+here, once, and both sides read it from here:
 - **Plain pytest** — `tests/modes/`, `tests/engines/`: pure logic, importing no
   `homeassistant.*`. Fast, no runtime; this is where mode/engine behaviour, clamp math and the
   resolution rules are verified. A test in these directories that pulls in the HA harness is
@@ -45,6 +46,12 @@ both sides read it from here:
   config-entry lifecycle, registration, services). One of these tested with plain pytest where it
   needs a real (mocked) HA runtime is **Major** — the test either bypasses the wiring it claims
   to cover or re-implements it.
+- **Scenario/timeline tier** — `tests/scenarios/`, in the same HA harness: every engine live and
+  binding over many cycles, readings derived by the plant simulator, judged by invariants. Which
+  tests belong here rather than beside the `test_*_end_to_end.py` suites is ADR-0037's placement
+  rule (its answers 2 and 3). The harness is the same, so a test on the wrong side of that line
+  is **Minor** — it is misplaced, not wrongly wired, but it costs the end-to-end suites their
+  single-engine diagnosis or the tier its whole-stack oracle.
 
 **Item 2, *Mandated coverage*.** The cases the item judges:
 - **Every adapter role:** present, absent, unavailable, and — for the status/enum role — an
@@ -71,7 +78,8 @@ boundary* rule say *the boundary*, it is the HA boundary the unit talks to.
 
 - The test files under review in `tests/` and the code under
   `custom_components/smart_charging/` they exercise.
-- `docs/adl/0009-testing-strategy.md` — the authoritative plain-pytest vs HA-harness split.
+- `docs/adl/0009-testing-strategy.md` — the authoritative plain-pytest vs HA-harness split —
+  and `docs/adl/0037-scenario-timeline-test-tier.md`, which adds the scenario/timeline tier.
 - ADR-0040, which extends ADR-0009's mandated coverage with the fifth, unit case — where the
   change touches or wires an adapter that reads a numeric role. Locate it by number per
   `CLAUDE.md`'s **Architecture Decision Records (ADRs)** section.
