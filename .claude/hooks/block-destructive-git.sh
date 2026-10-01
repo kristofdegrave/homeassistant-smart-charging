@@ -138,12 +138,18 @@
 # Behind a first word the guard does not read as gh -- a wrapper, an interpreter, a PowerShell
 # assignment, a quoted full-path gh.exe -- the words alone decide, as for the merge rule: they
 # refuse when they hold `gh pr review` with an approve flag, or `gh api` with a review target
-# and APPROVE, `=@` or `--input`. Under PowerShell a `/`-rooted payload refuses, since gh.exe
-# reads it as another file. Conceded: a split or quoted letter (`rev''iews`, `APP''ROVE`), prose
-# naming an approval piped into another command, a `gh alias`, a variable, another tool; a JSON
-# unicode escape of a letter of the event in a payload. Refused though harmless: a review or GraphQL read whose text names APPROVE, such
-# as a filter on approved reviews; a call naming a file whose path holds `/reviews` or
-# `graphql`; and a `gh pr review` body word starting `-a`, read as the flag.
+# and APPROVE, `=@` or `--input`. Whatever heads a segment, those words beside a command
+# substitution or a background `&` refuse, as the merge words do, and so does a gh review
+# command behind `xargs`, which appends words the guard never reads. Under PowerShell a
+# `/`-rooted payload refuses, since gh.exe reads it as another file. Conceded, as the merge
+# paragraph concedes the indirection class: a split or quoted letter (`rev''iews`,
+# `APP''ROVE`); a value the shell builds inside gh's own arguments (`-f event="$(cat ev)"`, a
+# variable); words split other than by whitespace (`Start-Process gh -ArgumentList ...`); prose
+# naming an approval piped into another command; a `gh alias`; another tool; a JSON unicode
+# escape of a letter of the event in a payload. Refused though harmless: a review or GraphQL
+# read whose text names APPROVE, such as a filter on approved reviews; a call naming a file
+# whose path holds `/reviews` or `graphql`; and a `gh pr review` body word starting `-a`, read
+# as the flag.
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
 # `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
@@ -1324,6 +1330,23 @@ for seg in $segments; do
         deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
     esac
   fi
+  # The approval rule's words, read the same way before the walk: whatever heads the segment
+  # -- a prose word, git, gh itself -- words naming an approval beside a command substitution
+  # or a background & are refused, since another command may run them. A review command
+  # behind xargs is refused too: xargs appends words the guard never reads.
+  # shellcheck disable=SC2046  # the two flags gh_approve_words prints
+  set -- $(gh_approve_words "$seg")
+  if [ "$1" = 1 ] || [ "$2" = 1 ]; then
+    bg=$(printf '%s' "${seg#"${seg%%[! ]*}"}" | sed -e 's/^&//' -e 's/>&//g' -e 's/&>//g')
+    case "$bg" in
+      *'$('* | *'`'* | *'&'*)
+        deny_approve "$seg" "the words name an approval in a segment that also carries a command substitution or a background &, so another command may run it: what reaches gh is not what the guard read" ;;
+    esac
+  fi
+  case "$(norm "$seg")" in
+    *xargs*gh*review*)
+      deny_approve "$seg" "a gh review command behind xargs: xargs appends words the guard never reads, so it cannot show the command is not an approval" ;;
+  esac
   # shellcheck disable=SC2086  # deliberate word splitting of the segment
   set -- $seg
 

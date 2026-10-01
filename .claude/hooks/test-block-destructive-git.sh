@@ -967,6 +967,20 @@ run BLOCK 'r=$(gh pr review 12 --approve)'                             # an assi
 run ALLOW 'sh -c "gh pr review 12 -b approve"'                         # -b takes the value
 run ALLOW 'sh -c "gh pr review 12 --approve=false -c -b x"'
 run ALLOW 'sh -c "gh api repos/o/r/pulls/12/comments --paginate"'      # no review target
+# ... whatever heads the segment, approval words beside a substitution or a background & refuse
+runr "another command may run it" 'echo "$(gh pr review 12 --approve)"'   # a prose word first
+run BLOCK 'echo `gh pr review 12 --approve`'
+run BLOCK 'git status & gh pr review 12 --approve'                     # git first
+run BLOCK 'cat x & gh api repos/o/r/pulls/12/reviews -f event=APPROVE'
+run BLOCK 'gh pr view 12 & gh pr review 12 --approve'                  # a second gh behind &
+runr "behind xargs" 'echo --approve | xargs gh pr review 12'           # xargs appends the flag
+run BLOCK 'printf 12 | xargs -I{} gh pr review {} -a'
+run ALLOW 'echo "$(gh pr view 12 --json reviews)"'                     # a substitution naming no approval
+run ALLOW 'git status & gh pr view 12'
+run ALLOW 'bash .github/gh-as-bot.sh reply 12 5 /tmp/b.md'              # the wrapper's own calls pass
+run ALLOW 'bash .github/gh-as-bot.sh comment 12 /tmp/b.md'
+run ALLOW 'bash .github/gh-as-bot.sh resolve 12 PRRT_x'
+run ALLOW 'bash .github/gh-as-bot.sh pr-create workflow/1 "t" /tmp/b.md'
 TOOL=PowerShell
 runr "under PowerShell" "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a /-rooted payload names another file to gh.exe
 TOOL=Bash

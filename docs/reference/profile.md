@@ -29,7 +29,8 @@ A pull request has two sides, and each runs as its own account, interactive or u
   moves, labels and every comment on an issue, whichever step posts them.
 
 "The session's login" and "the login the session posts under", where a method file reads
-one, are the owner's: the abstraction stays in the method, and this is its mapping.
+one, are the owner's: every such site reads an issue or a reviewer-side post. The abstraction
+stays in the method, and this is its mapping.
 
 **How each side reaches its account.** `gh`'s active account stays the owner's, so a plain
 `gh` call is the reviewer side. The author side's calls go through `.github/gh-as-bot.sh`,
