@@ -22,8 +22,8 @@ while C4 binds on a lagging reading, charging at a reduced rate.
   reading taken on a command-changed cycle, the shape ADR-0039 left for C4, delays a genuine
   rise by a cycle.
 - **Which reading a step consumes is ADR-0006's.** [ADR-0006](0006-coordinator-and-data-flow.md)'s
-  step 8 applies C4 "on raw readings", and its Consequences make a change to a step's reading a
-  new record. [ADR-0039](0039-baseline-reading-during-own-actuation.md) settled R3's version of
+  step 8 applies C4 "on raw readings", and its Consequences make a change to a step's reading "a
+  new ADR superseding this one"; this record narrows it, as ADR-0036, ADR-0049 and ADR-0051 do. [ADR-0039](0039-baseline-reading-during-own-actuation.md) settled R3's version of
   the lag and left C4's open.
 - **The rule chosen before failed in closed loop.**
   [ADR-0056](0056-c4-solves-around-the-higher-of-own-and-accepted-baseline.md) is abandoned:
@@ -96,10 +96,11 @@ deferral stays R3's alone.
   solves around the operands it is handed. The last set current is the one the coordinator
   already holds for ADR-0039. A fault path's write of 0 A that succeeds counts as a set current, which keeps
   the operand conservative on the recovery cycle.
-- **The scenario tier's strict expected failures turn into failures** the day this lands, as
+- **The scenario tier's strict expected failures turn into failures** the day the change lands, as
   they were written to. The task that lands it removes the strict xfails in
   `test_grid_ceiling_under_lag.py` and `test_peak_and_ceiling_under_lag.py`, and replaces the
-  latter's C4-alone oscillation test with one that expects C4 to hold the ceiling.
+  latter's C4-alone oscillation test with one that expects C4 to hold the ceiling. The latter's
+  known-breach pin and its `_FIRST_BREACH_STEP` constant go with its marker.
 - **The alternation is accepted.** R10's steady-input criterion already exempts C4 while it
   binds. An oscillation invariant the tier adds later has to allow it on the cycles C4 binds.
 - **The uncovered case needs the tier first.** The plant must model a car drawing below its set
