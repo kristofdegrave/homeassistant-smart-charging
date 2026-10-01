@@ -11,13 +11,13 @@ household load, so neither clamp is held non-binding by the other, and Power's t
 
 **What the run shows.** C4's known defect (`docs/analysis/requirements.md#constraints`, C4's row)
 -- `clamp_to_ceiling` re-deriving the household from the lagged `charger_w` every cycle -- makes
-the commanded current bang between 0 A and the target current. That oscillation corrupts R3's
-baseline through its debounce (`debounce_baseline_w`, ADR-0039): the high lagged readings, which
-would reset the decrease-debounce's count, fall on command-changed cycles and are discarded
-(`pending_cycles` carries through a discarded cycle); the corrupted low readings between them
-reach `BASELINE_DEBOUNCE_CYCLES` and are committed, and R3 grants the full target current on a
-fresh but wrong baseline. On the next cycle true import breaches both limits; the set judges C4
-first, so the run goes red through C4.
+the commanded current bang between 0 A and the binding headroom (13 A here). That oscillation
+corrupts R3's baseline through its debounce (`debounce_baseline_w`, ADR-0039): the high lagged
+readings, which would reset the decrease-debounce's count, fall on command-changed cycles and
+are discarded (`pending_cycles` carries through a discarded cycle); the corrupted low readings
+between them reach `BASELINE_DEBOUNCE_CYCLES` and are committed, and R3 grants the full target
+current on a fresh but wrong baseline. On the next cycle true import breaches both limits; the
+set judges C4 first, so the run goes red through C4.
 
 **R3's own exposure.** That the debounce commits a corrupted reading under a sustained command
 oscillation is R3's criteria at work, not only C4's: any oscillating command, Solar's moving
@@ -33,7 +33,8 @@ and so the breach, are C4's.
 **Parameters** (ADR-0037's invariant-oracle rule: honest, not tuned to dodge a member). One
 steady household load, no step: the oscillation is self-sustaining from the startup transient
 alone. `max_peak_kw == peak_floor_kw`, so `resolve_effective_peak_limit` returns exactly
-`effective_peak_limit_w` whatever the tracked monthly peak (T2's own `_PEAK_KW` comment).
+`max_peak_kw`, from which `effective_peak_limit_w` derives, whatever the tracked monthly peak
+(T2's own `_PEAK_KW` comment).
 """
 
 import math
@@ -76,8 +77,8 @@ _PEAK_FLOOR_KW = 5.6  # pinned equal to _MAX_PEAK_KW (module docstring).
 _PEAK_GRACE_MIN = 2.0  # default
 _CONTROL_INTERVAL_S = 10.0  # default
 
-_CYCLES = 12  # T1's own CYCLES: long enough that a C4 fix which only delays the first breach
-# past the known step still shows up as a breach rather than as "fixed".
+_CYCLES = 12  # T1's value; a fix that moves the first breach within these cycles fails the
+# step pin rather than XPASSing.
 _FIRST_BREACH_STEP = 5  # the known first violation on main (the xfail test's pin).
 
 
