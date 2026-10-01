@@ -23,6 +23,12 @@ repo:
   owner: kristofdegrave
   name: homeassistant-smart-charging
 
+identity:
+  # The account a pull request's author side runs as; the reviewer side runs as repo.owner.
+  # docs/reference/profile.md's **Repository and git identity** says why and how the local
+  # git config carries it.
+  bot_login: kristofdegrave-bot
+
 board:
   # GitHub Projects (v2) board "EMS": its number under the owner, and its node id.
   number: 1

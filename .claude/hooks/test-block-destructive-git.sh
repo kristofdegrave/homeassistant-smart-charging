@@ -6,8 +6,9 @@
 #
 # The two tables are the block list and the never-block list from the hook's own
 # contract in docs/reference/method/contribution-workflow.md -- add a case here before
-# changing a matching rule. The merge-rule cases at the end never reach GitHub: a stub
-# `gh` on PATH answers `pr view` and `pr checks` from the canned facts each case sets.
+# changing a matching rule. The merge-rule cases never reach GitHub: a stub `gh` on PATH
+# answers `pr view` and `pr checks` from the canned facts each case sets. The approval-rule
+# cases close the file.
 
 HOOK=$(dirname "$0")/block-destructive-git.sh
 [ -f "$HOOK" ] || { echo "cannot find $HOOK" >&2; exit 1; }
@@ -805,9 +806,10 @@ runr "sets labels" "gh api repos/o/r/issues/5 -flabels[]=workflow"     # the fie
 runr "label delete" "gh api -X=DELETE repos/o/r/issues/5/labels/needs-approval" # -X=
 run ALLOW "gh api -X POST repos/o/r/issues/5/labels -f 'labels[]=needs-approval'" # the add-labels endpoint only adds
 run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@/tmp/b.md" # the loop's gh steps: a comment
-run ALLOW "gh api repos/o/r/pulls/5/reviews --input /tmp/p.json"       # ... a review
+printf '{"commit_id":"a","event":"COMMENT","body":"x"}\n' > "$STUB/p.json"
+run ALLOW "gh api repos/o/r/pulls/5/reviews --input $STUB/p.json"       # ... a review
 run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { pageInfo { hasNextPage endCursor } nodes { id isResolved isOutdated comments(first:1){ nodes { databaseId path line body } } } } } } }'" # ... the thread listing
-run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve
+run ALLOW "gh api graphql -f query='mutation{ resolveReviewThread(input:{threadId:\"x\"}){ thread { id isResolved } } }'" # ... a resolve mutation the guard does not refuse; the loop resolves through the wrapper
 run ALLOW "gh pr edit 5 --add-label needs-approval"                    # ... a label on a pull request
 run BLOCK "cd $LR/wt && git commit -m x" "$LR/wt"                      # after a cd the guard cannot follow (the tree is clean of harness)
 g commit -qm code
@@ -883,6 +885,105 @@ run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_*
 run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
 run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
 run BLOCK "GH_X=\$(git push --force) x"
+
+# --- the approval rule: the session never approves a pull request ---
+printf '{"commit_id":"a","event":"APPROVE","body":"x"}\n' > "$STUB/ev-event.json"
+printf '{"commit_id":"a", "event" : "approve"}\n' > "$STUB/ev-spaced.json"
+printf '{"commit_id":"a","event":"COMMENT","body":"do not APPROVE yet"}\n' > "$STUB/comment.json"
+runr "posts an approval" "gh pr review 12 --approve"
+run BLOCK "gh pr review 12 --approve=true"
+run BLOCK "gh pr review 12 --approve=1"                                  # gh's bools take what ParseBool takes
+run BLOCK "gh pr review 12 --approve=T"
+run BLOCK "gh pr review 12 --approve=TRUE"
+run ALLOW "gh pr review 12 --approve=false -c -b x"                      # a false value approves nothing
+run ALLOW "gh pr review 12 --approve=0 -c -b x"
+run ALLOW "gh pr review 12 --approve=False -c -b x"
+run ALLOW "gh pr review 12 --approve=FALSE -c -b x"
+run ALLOW "gh pr review 12 --approve=f -c -b x"
+run ALLOW "gh pr review 12 --approve=F -c -b x"
+printf 'APPROVE\n' > "$STUB/ev.txt"
+runr "reads a value from a file" "gh api repos/o/r/pulls/12/reviews -F event=@$STUB/ev.txt"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --field event=@$STUB/ev.txt"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --field=event=@$STUB/ev.txt"
+run BLOCK "gh api repos/o/r/pulls/12/reviews -f event=COMMENT -F body=@$STUB/comment.json"   # any value from a file on a review call
+run BLOCK "gh api repos/o/r/pulls/12/reviews -Fevent=@$STUB/ev.txt"     # attached to the flag
+run BLOCK "gh api repos/o/r/pulls/12/reviews --field=event=@$STUB/ev.txt"
+runr "reads a value from a file" "gh api graphql -F query=@$STUB/m.graphql"
+run BLOCK "gh api graphql -Fquery=@$STUB/m.graphql"
+run BLOCK "gh api graphql --field=query=@$STUB/m.graphql"
+run BLOCK "gh api graphql -f query='mutation(\$e: PullRequestReviewEvent!){ addPullRequestReview(input:{pullRequestId:\"x\",event:\$e}){ clientMutationId } }' -F e=@$STUB/ev.txt"   # a variable from a file
+runr "from --input" "gh api graphql --input $STUB/q.json"
+run BLOCK "gh api graphql --input=$STUB/q.json"
+run ALLOW "gh api graphql -f query='query{ repository(owner:\"o\", name:\"r\") { pullRequest(number:5) { reviewThreads(first:100) { nodes { id } } } } }'"   # an inline document is read
+runr "changed directory" "cd $STUB && gh api repos/o/r/pulls/12/reviews --input comment.json"
+runr "posts an approval" "gh pr review 12 -a"
+run BLOCK "gh pr review 12 -ca"                                          # a cluster carrying a
+run BLOCK "gh -R o/r pr review 12 --approve"                             # flags before the path are walked past
+run BLOCK "timeout 60 gh pr review 12 -a"                                # behind a transparent wrapper
+run ALLOW "gh pr review 12 --comment -b approve"                         # -b takes the value: a body, not a flag
+run ALLOW "gh pr review 12 -bapprove"                                    # ... in a cluster too
+run ALLOW "gh pr review 12 -c -F body.md"
+run ALLOW "gh pr review --help"
+runr "names APPROVE" "gh api repos/o/r/pulls/12/reviews -f event=APPROVE"
+run BLOCK "gh api repos/o/r/pulls/12/reviews -F event=approve -f body=x"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/ev-event.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input=$STUB/ev-event.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input \"$STUB/ev-spaced.json\""
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input ev-event.json" "$STUB"   # resolved against the command's cwd
+runr "not a readable regular file" "gh api repos/o/r/pulls/12/reviews --input $STUB/missing.json"
+runr "device or process file" "gh api repos/o/r/pulls/12/reviews --input /dev/stdin"   # stdin by another name
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input /dev/fd/0"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input /proc/self/fd/0"
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input $STUB"            # a directory, not a regular file
+runr "command of its own" "printf x > $STUB/comment.json && gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # another segment could write the payload first
+run BLOCK "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json; echo done"
+runr "stdin" "gh api repos/o/r/pulls/12/reviews --input -"
+runr "names APPROVE" "gh api graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"
+run BLOCK "gh api --silent graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"   # a boolean flag before the endpoint
+run BLOCK "gh api -i --paginate graphql -f query='mutation{ submitPullRequestReview(input:{pullRequestReviewId:\"x\",event:APPROVE}){ clientMutationId } }'"
+run BLOCK "gh api /graphql -f query='mutation{ addPullRequestReview(input:{pullRequestId:\"x\",event:APPROVE}){ clientMutationId } }'"   # the endpoint spelled as a path
+run BLOCK "gh api repos/o/r/pulls/12/reviews/9/events -f event=APPROVE"   # submitting a pending review
+run ALLOW "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a COMMENT review, APPROVE only in its prose
+printf '{
+  "commit_id": "a",
+  "event":
+    "APPROVE"
+}
+' > "$STUB/ev-split.json"
+runr "carries an APPROVE event" "gh api repos/o/r/pulls/12/reviews --input $STUB/ev-split.json"   # split across lines
+run ALLOW "gh api -X POST repos/o/r/issues/5/comments -F body=@$STUB/review.md"   # an issue comment from a file named review: no review target
+run ALLOW "gh api repos/o/r/pulls/12/reviews --paginate --jq '.[].state'"
+run ALLOW "gh api repos/o/r/pulls/12/comments --paginate"
+run ALLOW "echo 'gh pr review 12 --approve'"                             # prose
+run ALLOW "gh pr view 12 --json reviews"
+# ... behind a first word the guard does not read as gh, the words alone decide
+runr "behind a command the guard does not read" '$r = gh pr review 12 --approve'   # a PowerShell assignment
+run BLOCK '$x = gh api repos/o/r/pulls/12/reviews -f event=APPROVE'
+run BLOCK 'sh -c "gh pr review 12 --approve"'                          # an interpreter
+run BLOCK 'pwsh -c "gh pr review 12 -a"'
+run BLOCK '& "C:\Program Files\GitHub CLI\gh.exe" pr review 12 -a'     # a quoted full-path gh.exe
+run BLOCK 'sh -c "gh api repos/o/r/pulls/12/reviews --input p.json"'   # a review payload the guard cannot locate
+run BLOCK 'r=$(gh pr review 12 --approve)'                             # an assignment's substitution
+run ALLOW 'sh -c "gh pr review 12 -b approve"'                         # -b takes the value
+run ALLOW 'sh -c "gh pr review 12 --approve=false -c -b x"'
+run ALLOW 'sh -c "gh api repos/o/r/pulls/12/comments --paginate"'      # no review target
+# ... whatever heads the segment, approval words beside a substitution or a background & refuse
+runr "another command may run it" 'echo "$(gh pr review 12 --approve)"'   # a prose word first
+run BLOCK 'echo `gh pr review 12 --approve`'
+run BLOCK 'git status & gh pr review 12 --approve'                     # git first
+run BLOCK 'cat x & gh api repos/o/r/pulls/12/reviews -f event=APPROVE'
+run BLOCK 'gh pr view 12 & gh pr review 12 --approve'                  # a second gh behind &
+runr "behind xargs" 'echo --approve | xargs gh pr review 12'           # xargs appends the flag
+run BLOCK 'printf 12 | xargs -I{} gh pr review {} -a'
+run ALLOW 'echo "$(gh pr view 12 --json reviews)"'                     # a substitution naming no approval
+run ALLOW 'git status & gh pr view 12'
+run ALLOW 'bash .github/gh-as-bot.sh reply 12 5 /tmp/b.md'              # the wrapper's own calls pass
+run ALLOW 'bash .github/gh-as-bot.sh comment 12 /tmp/b.md'
+run ALLOW 'bash .github/gh-as-bot.sh resolve 12 PRRT_x'
+run ALLOW 'bash .github/gh-as-bot.sh pr-create workflow/1 "t" /tmp/b.md'
+TOOL=PowerShell
+runr "under PowerShell" "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a /-rooted payload names another file to gh.exe
+TOOL=Bash
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

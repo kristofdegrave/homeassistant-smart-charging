@@ -1,8 +1,9 @@
 #!/bin/sh
 # PreToolUse guard on the shell tools (Bash, PowerShell): refuse the destructive git commands that
 # docs/reference/method/contribution-workflow.md's "Commit & push authorization" section
-# excludes from the project's standing commit/push authorization, and refuse a
-# `gh pr merge` outside the auto-merge rule the same section states.
+# excludes from the project's standing commit/push authorization, refuse a `gh pr merge`
+# outside the auto-merge rule the same section states, and refuse the session an approval,
+# the approval rule the same document states beside it.
 #
 # Contract: reads the PreToolUse payload on stdin; exit 0 with no output allows the
 # call. A denial writes the PreToolUse "deny" decision to stdout *and* the same
@@ -23,7 +24,7 @@
 # the scan, an opener that is itself inside quotes opens nothing, and that quote scan
 # is single-line and comment-blind.
 # Conversely, only a segment whose *first* word is git is inspected by the git rules (gh
-# goes to the merge rule), so prose that merely mentions a blocked command (`gh pr comment
+# goes to the approval and merge rules), so prose that merely mentions a blocked command (`gh pr comment
 # --body "... git reset --hard ..."`) runs untouched -- as long as that prose carries no
 # shell separator, since the split on ; && || | happens first and a mention after one starts
 # a segment of its own.
@@ -122,6 +123,33 @@
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
 # not read.
+#
+# The approval rule. The session's pull requests are opened as the bot account
+# (docs/adl/0055-*.md), so the owner's account the session runs as could approve them; an
+# approval is the human's review, so the session is refused one. Refused: `gh pr review` with
+# `--approve` (any value but a false one), `-a` or a short-flag cluster carrying it; and any
+# `gh api` segment whose text names a review target -- a reviews endpoint, a review mutation,
+# GraphQL -- when that text names APPROVE, when an argument reads a value from a file (`=@`),
+# when a GraphQL document comes from `--input`, or when a REST payload from `--input` carries
+# an APPROVE event, is not a readable regular file (stdin, a device or process file included),
+# is relative after a change of directory, or shares its command with another segment, which
+# could write it before gh reads it. The text is matched whole rather than parsed, so no flag
+# placement or endpoint spelling escapes it; its comment at gh_approve_rule below says how.
+# Behind a first word the guard does not read as gh -- a wrapper, an interpreter, a PowerShell
+# assignment, a quoted full-path gh.exe -- the words alone decide, as for the merge rule: they
+# refuse when they hold `gh pr review` with an approve flag, or `gh api` with a review target
+# and APPROVE, `=@` or `--input`. Whatever heads a segment, those words beside a command
+# substitution or a background `&` refuse, as the merge words do, and so does a gh review
+# command behind `xargs`, which appends words the guard never reads. Under PowerShell a
+# `/`-rooted payload refuses, since gh.exe reads it as another file. Conceded, as the merge
+# paragraph concedes the indirection class: a split or quoted letter (`rev''iews`,
+# `APP''ROVE`); a value the shell builds inside gh's own arguments (`-f event="$(cat ev)"`, a
+# variable); words split other than by whitespace (`Start-Process gh -ArgumentList ...`); prose
+# naming an approval piped into another command; a `gh alias`; another tool; a JSON unicode
+# escape of a letter of the event in a payload. Refused though harmless: a review or GraphQL
+# read whose text names APPROVE, such as a filter on approved reviews; a call naming a file
+# whose path holds `/reviews` or `graphql`; and a `gh pr review` body word starting `-a`, read
+# as the flag.
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
 # `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
@@ -307,6 +335,12 @@ is in $DOC, and this script's header is the authority on its exact conditions.
 Fix the failing condition, or leave the merge to them."
 
 deny_merge() { deny "$1" "$2" "$MERGE_TAIL"; }
+
+APPROVE_TAIL="An approval is the human partner's review, never the session's: the session's pull
+requests are opened as the bot account, so the owner's account can approve them, and only the
+human does (docs/adl/0055-*.md, Consequences). Leave the approval to them."
+
+deny_approve() { deny "$1" "$2" "$APPROVE_TAIL"; }
 
 LABEL_TAIL="Removing needs-approval from an issue is the human partner's go (docs/adl/0054-*.md,
 Consequences, \"Label gestures\"); in the autopilot loop the guard refuses it in every spelling it reads. A pull request's
@@ -668,6 +702,49 @@ gh_words() {
     END { printf "%d %d\n", merge, api }'
 }
 
+# The approval rule's half of gh_words, for a segment gh is not the first word of. Prints
+# `<review> <api>`, each word normalized as gh_words normalizes it: review is 1 when the words
+# hold gh, pr and review in that order followed by an approve flag (`--approve`, an
+# `--approve=` value but a false one, or a short-flag cluster carrying `a` before `b` or `F`);
+# api is 1 when gh's subcommand is api, the text names a review target (`/reviews`,
+# `pullrequestreview`, `graphql`) and it names APPROVE, reads a value from a file (`=@`) or
+# takes `--input`. Case is ignored throughout.
+gh_approve_words() {
+  printf '%s\n' "$1" | awk -v q="'" '
+    BEGIN { tailq = "[\"" q ")};`]+$"; head = "^.*[\"" q "(=$&{/\\\\`]" }
+    {
+      line = line " " tolower($0)
+      n = split($0, w, /[ \t]+/)
+      for (i = 1; i <= n; i++) {
+        t = tolower(w[i]); raw = t
+        sub(tailq, "", t); sub(head, "", t); sub(/\.exe$/, "", t)
+        if (ga) {
+          if (eat) eat = 0
+          else if (t ~ /^-/) { if (t !~ /=/ && (t ~ /^--./ || length(t) == 2) && t != "--help" && t != "--version" && t != "-h") eat = 1 }
+          else { if (t == "api") api = 1; ga = 0 }
+        }
+        if (t == "gh") { ga = 1; eat = 0 }
+        if (st == 0 && t == "gh") st = 1
+        else if (st == 1 && t == "pr") st = 2
+        else if (st == 2 && t == "review") st = 3
+        else if (st == 3) {
+          f = raw; sub(tailq, "", f); sub(/^"/, "", f); sub("^" q, "", f)
+          if (f == "--approve") rev = 1
+          else if (f ~ /^--approve=/ && f !~ /^--approve=(false|f|0)$/) rev = 1
+          else if (f ~ /^-[^-]/) {
+            c = substr(f, 2)
+            for (j = 1; j <= length(c); j++) { ch = substr(c, j, 1); if (ch == "a") { rev = 1; break } if (ch == "b" || ch == "f") break }
+          }
+        }
+      }
+    }
+    END {
+      tgt = (line ~ /\/reviews/ || line ~ /pullrequestreview/ || line ~ /graphql/)
+      bad = (line ~ /approve/ || line ~ /=@/ || line ~ /--input/)
+      printf "%d %d\n", rev, (api && tgt && bad) ? 1 : 0
+    }'
+}
+
 # Set by the scan loop for the segment being inspected: a transparent wrapper (`xargs`,
 # `sudo`, ...) sat before gh, or a `GH_*=` assignment did.
 gh_wrapped=0
@@ -936,6 +1013,127 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   return 0
 }
 
+# The approval rule: the session never approves a pull request. Two parts.
+#
+# `gh pr review`, its command path read as gh_merge_rule reads it, is refused with `--approve`,
+# any `--approve=` value but a false one (gh's bool flags take what Go's ParseBool takes), `-a`,
+# or a short-flag cluster carrying `a` before a value-taking letter (`b`, `F`).
+#
+# A gh segment carrying the word `api` is judged on its text, not on a parsed path, so no flag
+# placement or endpoint spelling changes the reading. It is a review call when its text names a
+# reviews endpoint (`/reviews`), a review mutation or type (`PullRequestReview`), or GraphQL
+# (`graphql`, `/graphql`), case ignored. A review call is refused when its text names APPROVE,
+# case ignored -- a harmless read filtering on APPROVE is refused with it, the price of not
+# listing spellings; when any argument reads a value from a file (`=@`, attached to a flag or
+# not), which the guard does not open; and, on a GraphQL call, when its document comes from
+# `--input`. A REST review call's `--input` payload is read instead, its line breaks removed,
+# and refused when it carries an APPROVE event, is stdin (`-`), is not a readable regular file
+# (a device or process file included), is a relative path after the command changed directory,
+# or shares its command with another segment, since the guard reads it before any of the
+# command runs. A JSON unicode escape of a letter of the event passes the payload match, a
+# concession the header states.
+gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
+  seg=$1
+  shift
+  path=''
+  eat=0
+  for a in "$@"; do
+    if [ "$eat" = 1 ]; then eat=0; continue; fi
+    case "$a" in
+      --) break ;;
+      --help | --version | -h | --*=*) ;;
+      --* | -?) eat=1 ;;
+      -*) ;;
+      *) path="$path $a"; case "$path" in ' '*' '*) break ;; esac ;;
+    esac
+  done
+  if [ "$path" = ' pr review' ]; then
+    for a in "$@"; do
+      # A substitution's closer or a trailing quote rides on the last word
+      # (`r=$(gh pr review 12 --approve)`); it is not part of the flag.
+      while :; do
+        case "$a" in
+          *[\)\`\"\']) a=${a%?} ;;
+          *) break ;;
+        esac
+      done
+      case "$a" in
+        --approve) deny_approve "$seg" "'gh pr review --approve' posts an approval" ;;
+        --approve=false | --approve=False | --approve=FALSE | --approve=f | --approve=F | --approve=0) ;;
+        --approve=*) deny_approve "$seg" "'gh pr review $a' posts an approval" ;;
+        --*) ;;
+        -?*)
+          cl=${a#-}
+          while [ -n "$cl" ]; do
+            ch=${cl%"${cl#?}"}
+            cl=${cl#?}
+            case "$ch" in
+              a) deny_approve "$seg" "'gh pr review -a' posts an approval" ;;
+              b | F) cl='' ;;
+            esac
+          done
+          ;;
+      esac
+    done
+    return 0
+  fi
+  is_api=0
+  for a in "$@"; do
+    [ "$a" = api ] && { is_api=1; break; }
+  done
+  [ "$is_api" = 1 ] || return 0
+  graphql=0
+  case "$seg" in *[Gg][Rr][Aa][Pp][Hh][Qq][Ll]*) graphql=1 ;; esac
+  case "$seg" in
+    */[Rr][Ee][Vv][Ii][Ee][Ww][Ss]* | *[Pp]ull[Rr]equest[Rr]eview*) ;;
+    *) [ "$graphql" = 1 ] || return 0 ;;
+  esac
+  case "$seg" in
+    *[Aa][Pp][Pp][Rr][Oo][Vv][Ee]*)
+      deny_approve "$seg" "a 'gh api' review or GraphQL call whose text names APPROVE may post an approval" ;;
+  esac
+  input=''
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      *=@*) deny_approve "$seg" "a 'gh api' review or GraphQL call reads a value from a file ('$1'), which the guard does not open, so it cannot show the call is not an approval" ;;
+      --input=*) input=${1#--input=} ;;
+      --input) shift; input=${1:-} ;;
+    esac
+    [ $# -gt 0 ] && shift
+  done
+  [ -n "$input" ] || return 0
+  [ "$graphql" = 0 ] ||
+    deny_approve "$seg" "'gh api graphql' reads its document from --input, which the guard does not open, so it cannot show it is not an approval"
+  input=${input#[\"\']}
+  input=${input%[\"\']}
+  case "$tool:$input" in
+    PowerShell:/*)
+      deny_approve "$seg" "under PowerShell a '/'-rooted payload '$input' names a different file to gh.exe than to the guard's sh, so the guard cannot show its event is not APPROVE; give a drive-letter or relative path" ;;
+  esac
+  case "$input" in
+    -) deny_approve "$seg" "'gh api' on a pull request's reviews reads its payload from stdin, so the guard cannot show its event is not APPROVE" ;;
+    /* | [A-Za-z]:[/\\]*) ;;
+    *)
+      [ "$dir_moved" = 0 ] ||
+        deny_approve "$seg" "a relative review payload '$input' after the command changed directory: the guard cannot tell which file gh reads, so it cannot show its event is not APPROVE"
+      input="$cwd/$input"
+      ;;
+  esac
+  case "$input" in
+    /dev/* | /proc/*)
+      deny_approve "$seg" "the review payload '$input' is a device or process file, not a file the guard can read ahead of gh, so it cannot show its event is not APPROVE" ;;
+  esac
+  [ -f "$input" ] && [ -r "$input" ] ||
+    deny_approve "$seg" "the review payload '$input' is not a readable regular file, so the guard cannot show its event is not APPROVE"
+  # The guard reads the payload before any of the command runs, so another segment could write
+  # it first: a review post is one command, and one sharing its line with another refuses.
+  [ "$(printf '%s\n' "$segments" | grep -c '[^[:space:]]')" -le 1 ] ||
+    deny_approve "$seg" "the review payload is read before the rest of the command runs, which could write it first; post the review as a command of its own"
+  tr -d '\r\n' < "$input" | grep -Eiq '"event"[[:space:]]*:[[:space:]]*"APPROVE"' &&
+    deny_approve "$seg" "the review payload '$input' carries an APPROVE event, which posts an approval"
+  return 0
+}
+
 # Blank out the body of every quoted-delimiter heredoc (`<<'EOF'`, `<<"EOF"`, `<<\EOF`,
 # and their `<<-` forms). Bodies are blanked rather than deleted, so every line that
 # remains is still the command position it was. Deliberately narrow, so that it fails
@@ -1132,6 +1330,23 @@ for seg in $segments; do
         deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
     esac
   fi
+  # The approval rule's words, read the same way before the walk: whatever heads the segment
+  # -- a prose word, git, gh itself -- words naming an approval beside a command substitution
+  # or a background & are refused, since another command may run them. A review command
+  # behind xargs is refused too: xargs appends words the guard never reads.
+  # shellcheck disable=SC2046  # the two flags gh_approve_words prints
+  set -- $(gh_approve_words "$seg")
+  if [ "$1" = 1 ] || [ "$2" = 1 ]; then
+    bg=$(printf '%s' "${seg#"${seg%%[! ]*}"}" | sed -e 's/^&//' -e 's/>&//g' -e 's/&>//g')
+    case "$bg" in
+      *'$('* | *'`'* | *'&'*)
+        deny_approve "$seg" "the words name an approval in a segment that also carries a command substitution or a background &, so another command may run it: what reaches gh is not what the guard read" ;;
+    esac
+  fi
+  case "$(norm "$seg")" in
+    *xargs*gh*review*)
+      deny_approve "$seg" "a gh review command behind xargs: xargs appends words the guard never reads, so it cannot show the command is not an approval" ;;
+  esac
   # shellcheck disable=SC2086  # deliberate word splitting of the segment
   set -- $seg
 
@@ -1211,6 +1426,14 @@ for seg in $segments; do
         [ "$gh_merge" = 0 ] ||
           deny_merge "$seg" "'gh pr merge' behind a command the guard does not read ('$interp': a wrapper, an interpreter, an assignment or an unknown word), so the auto-merge conditions cannot be shown to hold"
         [ "$gh_api" = 0 ] || gh_merge_rule "$seg" api
+        # The approval rule fails closed here the same way: behind such a word the guard
+        # cannot tell what reaches gh, so the words alone decide.
+        # shellcheck disable=SC2046  # the two flags gh_approve_words prints
+        set -- $(gh_approve_words "$seg")
+        [ "$1" = 0 ] ||
+          deny_approve "$seg" "'gh pr review' with an approve flag behind a command the guard does not read ('$interp': a wrapper, an interpreter, an assignment or an unknown word), so it may post an approval"
+        [ "$2" = 0 ] ||
+          deny_approve "$seg" "a 'gh api' review or GraphQL call naming APPROVE, a file value or --input behind a command the guard does not read ('$interp'), so it may post an approval"
         ;;
     esac
     continue
@@ -1230,6 +1453,7 @@ for seg in $segments; do
   if [ "$found" = gh ]; then
     [ "$wrapper" = 0 ] || gh_wrapped=1
     in_loop && gh_loop_label_rule "$seg" "$@"
+    gh_approve_rule "$seg" "$@"
     gh_merge_rule "$seg" "$@"
     continue
   fi

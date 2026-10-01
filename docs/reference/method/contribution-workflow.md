@@ -247,7 +247,8 @@ branch of this repository, not a fork's; `needs-approval` on and `needs-decision
 changed file under a tree in `.claude/profile.yml`'s `autopilot.auto_merge_trees`; every
 check green, required or not. A push landing on `main` is a merge by another name, and
 refused. The same hook mechanizes it and fails closed — its header is the authority on the
-exact conditions — and any other PR is the human's.
+exact conditions — and any other PR is the human's. A session never approves a PR either;
+the same hook refuses one.
 
 ## Project board
 
@@ -277,9 +278,8 @@ producer's logic.
 
 ## Git identity
 
-Whose account the interactive session acts under is [profile.md](../profile.md)'s **Repository
-and git identity**. **Rounds and the cap** above relies only on its being **one account,
-shared with the human partner**.
+Which account each side of a PR acts under is `CLAUDE.md`'s **Project profile**; **Rounds and
+the cap** tells posts by marker, not login.
 
 ## Issue conventions
 
