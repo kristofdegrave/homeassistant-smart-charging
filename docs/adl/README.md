@@ -65,5 +65,6 @@ taken, kept so the log has every number.
 | [0055](0055-session-pushes-and-opens-prs-as-a-bot-account.md) | The session commits, pushes and opens pull requests as a bot account; the owner's account keeps approval and merge (narrows [ADR-0052](0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md)) — its Option C's scope, the wrapper's single call and its comment Con narrowed by [ADR-0057](0057-pr-author-side-runs-as-the-bot.md) | Accepted |
 | [0056](0056-c4-solves-around-the-higher-of-own-and-accepted-baseline.md) | C4 solves around the higher of this cycle's own and the accepted household baseline (narrows [ADR-0006](0006-coordinator-and-data-flow.md)) | Abandoned |
 | [0057](0057-pr-author-side-runs-as-the-bot.md) | A pull request's author side runs as the bot account, its reviewer side as the owner (narrows [ADR-0055](0055-session-pushes-and-opens-prs-as-a-bot-account.md)) | Accepted |
+| [0058](0058-c4-charger-draw-is-the-lower-of-reading-and-last-set-current.md) | C4's charger draw is the lower of the charger power reading and the last set charger current (narrows [ADR-0006](0006-coordinator-and-data-flow.md)) | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
