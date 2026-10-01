@@ -20,16 +20,36 @@ out of the core work-type files.
 
 ## Repository and git identity
 
-Claude commits, comments and opens PRs as the developer's own GitHub account — one account,
-shared with the human partner, whether the session is interactive or unattended. The local
-`user.name` and `user.email` of this repository, which every worktree of it shares, are the
-human's public commit identity; no global git config is relied on. **Why one account:**
-[ADR-0052](../adl/0052-autopilot-gates-auto-merge-by-tree-milestones-as-priority.md)'s Option
-C2 decides it; older squash merges still carry the retired `kristofdegrave-bot` author line. Whether
-a session merges is **Merge strategy** below. **Why it matters:** a
-human item and the session's own footprint are posted under the same login, so
-[contribution-workflow.md](method/contribution-workflow.md)'s **Rounds and the cap** tells them apart
-by the session's markers, never by author.
+A pull request has two sides, and each runs as its own account, interactive or unattended:
+- **The author side runs as the bot**, `profile.yml`'s `identity.bot_login`, a collaborator
+  with the `write` role: every commit and push, opening the pull request, and the fix step's
+  thread replies, summary and note comments and thread resolves.
+- **The reviewer side runs as the owner**, `profile.yml`'s `repo.owner`: the review passes, the
+  exit labels, the escalation and self-grant comments, the merge, and the human's approval — and board
+  moves, labels and every comment on an issue, whichever step posts them.
+
+"The session's login" and "the login the session posts under", where a method file reads
+one, are the owner's: every such site reads an issue or a reviewer-side post. The abstraction
+stays in the method, and this is its mapping.
+
+**How each side reaches its account.** `gh`'s active account stays the owner's, so a plain
+`gh` call is the reviewer side. The author side's calls go through `.github/gh-as-bot.sh`,
+which runs a closed list of them with the bot's stored token. Git reaches the bot through this
+repository's local config, which every worktree shares, and no global config is relied on:
+- `user.name` and `user.email` are the bot's login and noreply address;
+- `credential.https://github.com.helper` is set twice — first to the empty string, which
+  clears the helper list, since the global `gh auth git-credential` answers first and serves
+  only `gh`'s active account; then to a helper returning `gh auth token --user <bot>`.
+
+The bot's `gh` login carries the `repo` and `workflow` scopes, not `project`, which is why the
+board stays the owner's.
+
+**Why:** an author cannot approve their own pull request, so only one the bot opened is one the
+owner can give the code-owner review; and with the sides on separate logins, a pull request's
+author and reviewer are told apart by login. Older squash merges carry either account's author
+line. **Why it matters:** both logins pass the author test, so `CLAUDE.md`'s **Contribution
+workflow** topic's **Rounds and the cap** tells the session's posts from a human item by the
+session's markers, never by author. Whether a session merges is **Merge strategy** below.
 
 The repository is `profile.yml`'s `repo`; the tracker is GitHub issues, pull requests, review
 threads and labels on it, driven with the recipes in
@@ -48,7 +68,7 @@ read and at verify live; the analysis, the records and the rules a run works und
 and stay at the human's gate. **The known limit:** the rule is enforced locally, by the
 `PreToolUse` guard in a Claude session of this repository — not by the platform, which has no
 rule keyed on labels and files; the guard is an accident guard and not a sandbox. That is the
-trade for running merges as one account instead of a bot's. **Why the
+trade for merging as the owner rather than having a second account approve. **Why the
 squash matters:** it rewrites the merged branch into one commit, which orphans any branch
 stacked on it. That is the reason [contribution-workflow.md](method/contribution-workflow.md)'s **Base `main` and stacking** has every
 PR base `main` directly, however the work was branched locally.
@@ -104,9 +124,11 @@ the harness itself decides, observed in a `dontAsk` session:
   is refused.
 
 **`gh api` is admitted by recipe shape**, not whole: reads on this repository's issues and
-pulls, `POST`/`PATCH` on its issues, `POST` on its pulls and milestones, any `-X GET`,
-`rate_limit`, and the three GraphQL recipes' opening words (`query{ repository`,
-`mutation{ resolveReviewThread`, `{viewer{login}}`), each a prefix. `ask` rules close
+pulls, an un-verbed `POST` under `pulls/<n>/` (the review post, `--input` to its reviews), `POST`/`PATCH` on its issues, `POST` on its milestones, any `-X GET`, `rate_limit`,
+and the two GraphQL recipes' opening words (`query{ repository`, `{viewer{login}}`), each a
+prefix. The author side's calls are admitted as `bash .github/gh-as-bot.sh`, whose closed
+list is the script's own; an owner's reply in a thread, and a call on the bare `pulls`
+collection, are `ask` rules, and the resolve mutation is not admitted as the owner. `ask` rules close
 what a prefix leaves open: a method after the path or a second method flag, `--method`, `..`
 in a path, a second `query=`, a GraphQL field or `--input` read from a file, a GraphQL
 `mutation` after `-F`, an `operationName`, a second `input:` in one document, and a body
@@ -151,6 +173,8 @@ branch on `origin` — one anyone with write access pushed, reviewed or not — 
 `.github/hooks` a `git -C <wt> merge` or `checkout <ref>` brings in, and git runs on that
 checkout or merge or the next commit: the guard refuses a commit only while a hook's change
 is uncommitted and not staged by a merge in progress, not once a merge has committed it.
+One layer sits outside both: a push runs as the bot, whose `write` role branch protection
+binds, so the platform itself refuses a push to `main` the session makes.
 
 **Not in the list.** Tests: `pytest` is denied in the loop, and the WSL test runner is this
 machine's, not the repository's; a step that needs a local test run is refused in the loop

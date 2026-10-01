@@ -10,9 +10,9 @@ inline comments — never as a plain issue comment. Findings then render in the 
 tab and land on the exact diff lines.
 
 **Never** use `event: APPROVE` or `event: REQUEST_CHANGES`. A review approves nothing: who may
-merge is the merge rule under `CLAUDE.md`'s **Contribution workflow** topic, and the
-account that opened the PR cannot approve or request changes on it anyway (GitHub 422).
-Always `COMMENT`.
+merge is the merge rule under `CLAUDE.md`'s **Contribution workflow** topic, and an approval
+is refused to the session by the approval rule beside it. A request for changes is never
+posted either: it changes nothing a merge reads. Always `COMMENT`.
 
 ## 1. Build the review payload
 
@@ -62,6 +62,9 @@ reference.
 ```
 gh api "repos/<owner>/<repo>/pulls/<pr>/reviews" --input <payload-file>
 ```
+
+Run it as a command of its own, the repository spelled out and the payload path absolute: the
+guard refuses a review post that shares its command or names a relative path after a `cd`.
 
 If it fails with HTTP 422 on an inline anchor, resubmit with that one comment removed from
 `comments` and its text appended to the summary body. Do **not** fall back to a plain issue

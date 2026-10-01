@@ -15,9 +15,10 @@ table plus the few rules that must be known before any skill or document is chos
   documents, and in what order: the **Document structure** and **Writing order** topics.
 - **Every unit of work has an issue before work starts** — no exception for small or
   typo-level changes. From that issue to the merge: the **Contribution workflow** topic.
-- **Destructive git, and a merge outside the auto-merge rule, are refused mechanically.**
-  Committing and pushing on a task branch is standing-authorized; what that excludes, and a
-  `gh pr merge` whose PR fails any auto-merge condition, are refused by a `PreToolUse` guard
+- **Destructive git, a merge outside the auto-merge rule, and an approval are refused
+  mechanically.** Committing and pushing on a task branch is standing-authorized; what that
+  excludes, a `gh pr merge` whose PR fails any auto-merge condition, and the session approving
+  a PR are refused by a `PreToolUse` guard
   (`.claude/hooks/block-destructive-git.sh`, wired in `.claude/settings.json`). The
   commit-and-push rule under **Contribution workflow** defines the authorization, what it
   excludes and the merge rule, and the script is the authority on what it refuses — read it
@@ -59,6 +60,7 @@ stated under the table.
 `tests/**` → `docs/reference/work-types/testing/review.md`;
 `.github/workflows/**`, `.github/ISSUE_TEMPLATE/**`,
 `.github/setup-labels.sh`, `.github/profile-env.sh`, `.github/check-*`, `.github/test-check-*`,
+`.github/gh-as-bot.sh`, `.github/test-gh-as-bot.sh`,
 `.github/hooks/**`, `.claude/hooks/**`, `.claude/settings.json`, `.claude/skills/**`,
 `.claude/vendor/**`, `.claude/agents/**`, `.claude/profile.yml`, `docs/reference/**` and
 `CLAUDE.md` →
