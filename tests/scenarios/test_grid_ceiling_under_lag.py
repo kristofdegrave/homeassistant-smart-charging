@@ -11,7 +11,8 @@ clamp's call site. This validates the plant's lag model against that already-dia
 before anything speculative is written (ADR-0037, Consequences).
 
 Red on `main` through C4's known defect (`docs/analysis/requirements.md#constraints`, C4's row);
-lands as `xfail(strict=True, raises=AssertionError)`. Its control, lag 0, lands green: the same
+lands as `xfail(strict=True, raises=InvariantViolation)` (T2, `invariants.py`'s `check_c4` --
+`InvariantViolation` subclasses `AssertionError`). Its control, lag 0, lands green: the same
 world, but the charger's power reading lags nothing, and the whole-home meter is always ground
 truth -- so the re-derived baseline is exactly right and C4's clamp holds the ceiling on every
 step.
@@ -34,6 +35,7 @@ from custom_components.smart_charging.const import (
     MODE_POWER,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
+from tests.scenarios.invariants import InvariantViolation, check_c4
 from tests.scenarios.plant import Plant
 from tests.scenarios.runner import ScenarioRunner, format_trace
 
@@ -98,31 +100,29 @@ def _expected_ceiling_bound_current_a(options: dict, household_w: float, voltage
     return float(math.floor(_ceiling_current_a(options) - household_w / voltage))
 
 
-def _assert_ceiling_held(trace, *, ceiling_w):
-    """The scenario-intent assertion: true net import at or below the grid supply ceiling on
-    every step. C4's own reaction allowance (a swing the previous command could not have
-    foreseen -- a household-load step, or household load alone above the ceiling at 0 A charger
-    current) is NOT implemented by this helper: the household load is steady throughout this
-    scenario, so no step needs it here. T2's load-step scenario is what adds it.
-
-    Also guards the precondition both tests share: the mode select, set once in `_setup`, must
+def _assert_mode_select_held(trace):
+    """Guards the precondition both tests share: the mode select, set once in `_setup`, must
     still read `Power` on every step -- a real regression in the polled mode select entity
     (#1363) would otherwise pass a breach off as C4's own defect, or a control-test green off as
-    proof C4 held, when neither ran under Power at all."""
+    proof C4 held, when neither ran under Power at all. Not an invariant of the shared set
+    (`invariants.py`) -- it is a precondition of THIS harness wiring, not a property of the
+    plant's true draw -- so it stays a plain assertion here rather than joining that module."""
     for t in trace:
         assert t.active_mode == MODE_POWER, (
             f"step {t.index}: expected active_mode {MODE_POWER!r}, got {t.active_mode!r} -- "
             f"the mode select reverted mid-timeline\n{format_trace(trace)}"
         )
-        assert t.reading.true_import_w <= ceiling_w, (
-            f"C4 breach at step {t.index}: true import {t.reading.true_import_w} W > "
-            f"ceiling {ceiling_w} W\n{format_trace(trace)}"
-        )
+
+
+def _judge_c4(ceiling_w):
+    """T2 (epic #996): routes C4 through the shared invariant set (`invariants.py`) rather than
+    restating the check locally -- `ScenarioRunner.run`'s own `judge` callback."""
+    return lambda trace: check_c4(trace, ceiling_w=ceiling_w)
 
 
 @pytest.mark.xfail(
     strict=True,
-    raises=AssertionError,
+    raises=InvariantViolation,
     reason=(
         "C4's known defect under charger-power lag (docs/analysis/requirements.md#constraints, "
         "C4's row): clamp_to_ceiling re-derives net_w - charger_w from the lagged reading every "
@@ -140,14 +140,15 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
+    ceiling_w = _ceiling_current_a(options) * voltage
 
     # Act
-    trace = await runner.run(_CYCLES)
+    # C4 (docs/analysis/requirements.md#constraints): true import never exceeds the grid
+    # supply ceiling, judged by the shared invariant set every cycle (T2, `invariants.py`).
+    trace = await runner.run(_CYCLES, judge=_judge_c4(ceiling_w))
 
     # Assert
-    # C4 (docs/analysis/requirements.md#constraints): true import never exceeds the grid
-    # supply ceiling.
-    _assert_ceiling_held(trace, ceiling_w=_ceiling_current_a(options) * voltage)
+    _assert_mode_select_held(trace)
 
 
 async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_charger_reading_does_not_lag(  # noqa: E501
@@ -160,12 +161,15 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=_HOUSEHOLD_W, voltage=voltage, lag_cycles=0)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
+    ceiling_w = _ceiling_current_a(options) * voltage
 
     # Act
-    trace = await runner.run(_CYCLES)
+    # C4, judged by the shared invariant set every cycle (T2, `invariants.py`) -- this control
+    # runs green under the whole set, as #996's T2 requires.
+    trace = await runner.run(_CYCLES, judge=_judge_c4(ceiling_w))
 
     # Assert
-    _assert_ceiling_held(trace, ceiling_w=_ceiling_current_a(options) * voltage)
+    _assert_mode_select_held(trace)
     # Without lag, the plant's own ground truth can prove more than "never breached": no cycle
     # faulted (a faulted cycle's safe write is 0 A, which would hold the ceiling vacuously), and
     # the control actually reaches and holds C4's ceiling-bound current -- so a regression that

@@ -7,8 +7,15 @@ grace period and R11's holds/cooldowns see real elapsed time, then call
 `coordinator.async_refresh()` -- through the same `tests/helpers.py` seeding path
 (`seed_charger_states`/`capture_charger_current_writes`) every other HA-harness suite uses, not
 a replacement for it.
+
+T2 wires the shared invariant set (`invariants.py`) in here, as `run`'s own `judge` callback,
+rather than leaving a scenario to loop back over the whole trace afterwards: every cycle of
+every scenario is judged the moment it is recorded, and a breach is reported -- as
+`InvariantViolation`, naming the first violating cycle with its context -- from the cycle it
+first appears in rather than from some later, unrelated assertion.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.util import dt as dt_util
@@ -61,9 +68,18 @@ class ScenarioRunner:
         # previous command in force, explicitly, rather than reaching into the whole history.
         self.trace: list[CycleTrace] = []
 
-    async def run(self, cycles: int) -> list[CycleTrace]:
+    async def run(
+        self, cycles: int, *, judge: Callable[[list[CycleTrace]], None] | None = None
+    ) -> list[CycleTrace]:
         """Run `cycles` further control cycles, appending each one's trace to `self.trace`
-        (so a scenario driving `run` more than once keeps the whole timeline)."""
+        (so a scenario driving `run` more than once keeps the whole timeline). `judge`, when
+        given, is called with `self.trace` right after each cycle is appended -- so a violation
+        raises (`InvariantViolation`, `invariants.py`) from the cycle it first appears in,
+        naming the first violating cycle rather than some later one a full-trace scan would
+        also find. A scenario composes which invariants apply to it (R3 only where it applies
+        at all -- CapTar present, and in `Power` its own option enabled) via
+        `invariants.judge_all` and passes the result here; `run` itself knows nothing about
+        which invariants exist."""
         for _ in range(cycles):
             reading = self._plant.step()
             seed_charger_states(
@@ -107,6 +123,8 @@ class ScenarioRunner:
                     active_mode=self._coordinator.active_mode,
                 )
             )
+            if judge is not None:
+                judge(self.trace)
         return self.trace
 
 
