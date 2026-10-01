@@ -291,7 +291,8 @@ limit for step 5.
   the minimum per the mode's own rule (C1); the coordinator never emits an in-between value.
 - **Grid supply ceiling reached.** The charger is clamped down — to 0 A if necessary — so net
   grid import stays below the grid supply ceiling minus the grid safety offset and the main fuse
-  cannot trip (C4). C4 states the one case in which this is not met, a known defect against it.
+  cannot trip (C4). A household load rise can take net import above the ceiling until the
+  next control cycle reacts, which is at most one control interval (C4).
   This applies even in `Power` mode with peak protection disabled, and on an installation
   without the CapTar capability (R18) — in both of which it is the only active clamp.
 
