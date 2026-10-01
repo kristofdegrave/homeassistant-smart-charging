@@ -17,8 +17,9 @@ world, but the charger's power reading lags nothing, and the whole-home meter is
 truth -- so the re-derived baseline is exactly right and C4's clamp holds the ceiling on every
 step.
 
-`HOUSEHOLD_W` and `CYCLES` are public -- `test_invariants.py`'s C4 member replays this exact
-world (its own module docstring says so), rather than keeping a second copy of these numbers.
+`HOUSEHOLD_W`, `CYCLES`, `entry_data`, `entry_options` and `ceiling_a` are public --
+`test_invariants.py`'s C4 member replays this exact world (its own module docstring says so),
+rather than keeping a second copy of these numbers and this setup.
 """
 
 import math
@@ -47,15 +48,17 @@ CYCLES = 12  # several lag-driven oscillation pairs (module docstring, "every ot
 # enough for the xfail to reliably trip and for the control's steady state to show throughout.
 
 
-def _entry_data():
-    """No CapTar, no solar -- C4 is the only clamp in force (C3, R18)."""
+def entry_data():
+    """No CapTar, no solar -- C4 is the only clamp in force (C3, R18). Public --
+    `test_invariants.py`'s C4 member replays this exact world (module docstring)."""
     return entry_data_base(**{CONF_SOLAR_AVAILABLE: False, CONF_CAPTAR_AVAILABLE: False})
 
 
-def _entry_options():
+def entry_options():
     """Default grid ceiling (25 A) and safety offset (2 A) -- 23 A effective -- with the
     steady 3000 W household load above, the correct steady-state headroom is 9 A: below
-    `_TARGET_CURRENT_A`, so the ceiling binds below Power's requested current."""
+    `_TARGET_CURRENT_A`, so the ceiling binds below Power's requested current. Public --
+    `test_invariants.py`'s C4 member replays this exact world (module docstring)."""
     return entry_options_base(
         **{
             CONF_MAX_CURRENT: 32.0,  # above _TARGET_CURRENT_A -- E8 never caps it independently
@@ -67,22 +70,23 @@ def _entry_options():
 async def _setup(hass):
     seed_charger_states(hass, status="Charging", net_w=0.0, charger_w=0.0)
     return await setup_coordinator(
-        hass, entry_data=_entry_data(), entry_options=_entry_options(), mode=MODE_POWER
+        hass, entry_data=entry_data(), entry_options=entry_options(), mode=MODE_POWER
     )
 
 
-def _ceiling_a(options: dict) -> float:
+def ceiling_a(options: dict) -> float:
     """C4's hard limit (A): the configured grid supply ceiling itself -- the fuse rating, never
     reduced by the safety offset. C4's row (`docs/analysis/requirements.md#constraints`) states
     the ceiling as the limit and the offset as what the charger *targets* below it, not a second,
-    lower ceiling."""
+    lower ceiling. Public -- `test_invariants.py`'s C4 member replays this exact world (module
+    docstring)."""
     return options[CONF_GRID_CEILING_A]
 
 
 def _target_current_a(options: dict) -> float:
     """What the clamp itself aims for: the ceiling minus its configured safety offset -- the
     number `clamp_to_ceiling` (E6) actually solves around, never the hard limit C4 is judged
-    against (`_ceiling_a` above)."""
+    against (`ceiling_a` above)."""
     return options[CONF_GRID_CEILING_A] - options[CONF_GRID_SAFETY_OFFSET_A]
 
 
@@ -146,11 +150,11 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     coordinator = await _setup(hass)
-    options = _entry_options()
+    options = entry_options()
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=HOUSEHOLD_W, voltage=voltage, lag_cycles=1)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    ceiling_w = _ceiling_a(options) * voltage
+    ceiling_w = ceiling_a(options) * voltage
 
     # Act
     # C4 (docs/analysis/requirements.md#constraints): true import never exceeds the grid
@@ -165,11 +169,11 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     coordinator = await _setup(hass)
-    options = _entry_options()
+    options = entry_options()
     voltage = options[CONF_NOMINAL_VOLTAGE]
     plant = Plant(household_w=HOUSEHOLD_W, voltage=voltage, lag_cycles=0)
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
-    ceiling_w = _ceiling_a(options) * voltage
+    ceiling_w = ceiling_a(options) * voltage
 
     # Act
     # C4, judged by the shared invariant set every cycle (T2, `invariants.py`) -- this control

@@ -84,12 +84,25 @@ def _case_a_deferred(trace: list[CycleTrace], index: int) -> bool:
     return commanded_changed and not _case_a_deferred(trace, index - 1)
 
 
-def _deferred_reaction_allowed(trace: list[CycleTrace], index: int) -> bool:
+def _deferred_reaction_allowed(trace: list[CycleTrace], index: int, target_w: float) -> bool:
     """R3's own allowance beyond the shared same-cycle one above: a household increase at
     `index - 1` whose own reading was itself deferred by case (a) (`_case_a_deferred`) reaches
     the clamp one control cycle later than usual, so the breach it causes lands at `index`
-    rather than at `index - 1` -- still "deferred by at most one control cycle" overall (R3's own
-    criteria), just the one cycle the deferral itself already cost rather than a second one.
+    rather than at `index - 1` -- R3's own criterion that "a [household increase large enough to
+    breach the effective peak limit minus the safety margin] is deferred by at most one control
+    cycle" (case (b) never defers a headroom-decreasing reading, and case (a) never defers two
+    cycles in a row), just the one cycle the deferral itself already cost rather than a second
+    one.
+
+    Exempted only where the deferral is itself the breach's sole cause -- the same cause check
+    the shared same-cycle allowance applies (`_household_reaction_allowed`): the reading the
+    deferral stood in for was taken at `index - 2` (two cycles before the breach, one before the
+    deferred cycle), so `index`'s true charger draw against THAT cycle's household reading must
+    still clear the target. A household increase and a case-(a) deferral landing on the right
+    cycles is not by itself proof the deferral is what caused the breach -- a command written
+    from an over-granted current (a debounce bypass, a clamp defect) can land on those same
+    cycles without the deferral contributing anything, and must not be hidden behind it.
+
     Case (b)'s deferral is deliberately not modelled here: it only ever defers a headroom-
     *increasing* reading (more conservative, never less) -- it can delay the clamp granting
     extra current, never cause it to under-react to an increase, so it cannot itself produce a
@@ -100,13 +113,21 @@ def _deferred_reaction_allowed(trace: list[CycleTrace], index: int) -> bool:
     household_increased_at_previous = (
         trace[previous].reading.household_w > trace[previous - 1].reading.household_w
     )
-    return household_increased_at_previous and _case_a_deferred(trace, previous)
+    caused_by_the_deferral = (
+        trace[index].reading.true_charger_w + trace[index - 2].reading.household_w <= target_w
+    )
+    return (
+        household_increased_at_previous
+        and _case_a_deferred(trace, previous)
+        and caused_by_the_deferral
+    )
 
 
 def _grace_period_allowed(
     trace: list[CycleTrace],
     index: int,
     *,
+    target_w: float,
     min_current_a: float,
     grace_period_s: float,
     control_interval_s: float,
@@ -114,20 +135,62 @@ def _grace_period_allowed(
     """R3's own grace period (`docs/analysis/requirements.md#r3--captar-peak-protection`): once
     the clamp already holds at the minimum charging current, a continuous breach is sanctioned
     for the configured grace period before the clamp force-stops to 0 A -- "a momentary breach
-    does not stop charging". Counted on `true_draw_a` (ground truth), never the command, so a
-    scenario cannot engineer the allowance by writing `min_current_a` without actually drawing
-    it. The plant's true draw lags the command it is read from by one cycle (`plant.py`), so the
-    breach the grace-period hold itself produced is still on the trace for one cycle after the
-    grace period elapses and the clamp's 0 A write fires -- that write has not yet reached true
-    draw -- hence the `+ 1` below."""
-    if trace[index].reading.true_draw_a != min_current_a:
+    does not stop charging".
+
+    Counted only on a cycle that BOTH draws the minimum current AND genuinely breaches
+    (`true_import_w > target_w`) -- matching the product's own timer, which starts on the first
+    REQUEST-side breaching cycle (`apply_peak_clamp`'s `is_breaching`,
+    `engines/billing_protection.py` ~:176-181), never merely on the charger sitting at the
+    minimum for some unrelated reason (Power's own target current, or a prior, already-ended
+    breach) before a genuine breach even begins -- such cycles must not consume a grace budget
+    they were never charged against.
+
+    The cap: `apply_peak_clamp` is evaluated once per control cycle and holds the command at
+    `min_current_a` for every cycle its timer has not yet reached `grace_period_s`; the smallest
+    number of commanded-minimum cycles before the force-stop command (0 A) is written is the
+    smallest integer `j` with `j * control_interval_s >= grace_period_s`, i.e.
+    `ceil(grace_period_s / control_interval_s)`. The plant's one-cycle write lag (`plant.py`)
+    shifts WHEN those commands are seen as true draw on the trace -- including the force-stop
+    command's own 0 A, which lands on the trace one cycle after it is written -- but it shifts
+    the whole window, it does not add a cycle to it: the true-draw run counted here is capped at
+    that same number, `ceil(grace_period_s / control_interval_s)`, not one more.
+
+    A 0 A cycle (the force-stop itself, or any other cycle the charger is not drawing the
+    minimum) ends the backward scan below immediately, resetting the count for whatever breach
+    follows -- matching `apply_peak_clamp` itself, which resets `tracker.breached_since` to
+    `None` on any non-breaching cycle, including its own force-stop write. That is a faithful
+    reading of R3's "continuously", not a gap: the force-stop cycle's own 0 A draw is a genuine,
+    if momentary, end to the breach, so a breach that resumes immediately afterward is a fresh
+    occurrence re-arming a fresh, fully-budgeted grace period -- exactly as a later, unrelated
+    occurrence would -- rather than the same breach continuing through it.
+
+    The backward scan also stops at -- and excludes -- a cycle whose household reading itself
+    changed from the one before it, even though that cycle may independently read as both
+    breaching and at the minimum. Such a cycle is the shared same-cycle allowance's own concern
+    (`_household_reaction_allowed`), never this one's: when the charger already sat at
+    `min_current_a` on its own account (Power's own target current, not yet any clamp reaction)
+    and a household jump lands on that same cycle, true draw happens to already equal
+    `min_current_a` by coincidence, one cycle before the clamp's own reaction to the jump could
+    possibly reach true draw (the plant's one-cycle write lag). Counting that coincidence into
+    this run would charge the grace budget for a cycle the clamp's own timer had not yet even
+    started on, overrunning the cap by exactly the one cycle the coincidence costs -- a false
+    violation on correct, unmutated product code that is already, correctly, exempted by the
+    other allowance."""
+
+    def _breaching_at_minimum(i: int) -> bool:
+        t = trace[i]
+        return t.reading.true_draw_a == min_current_a and t.reading.true_import_w > target_w
+
+    if not _breaching_at_minimum(index):
         return False
     run_length = 1
     i = index - 1
-    while i >= 0 and trace[i].reading.true_draw_a == min_current_a:
+    while i >= 0 and _breaching_at_minimum(i):
+        if i > 0 and trace[i].reading.household_w != trace[i - 1].reading.household_w:
+            break  # a fresh household jump at `i` -- not this run's to count (see above).
         run_length += 1
         i -= 1
-    max_cycles = math.floor(grace_period_s / control_interval_s) + 1
+    max_cycles = math.ceil(grace_period_s / control_interval_s)
     return run_length <= max_cycles
 
 
@@ -188,22 +251,28 @@ def check_r3(
       R3's own criteria state the identical one-cycle bound C4's "cannot trip the main fuse
       before the next control cycle reacts" row does, not merely a borrowed one;
     - one cycle further, when that same-cycle reading was itself deferred by R3's case (a)
-      (`_deferred_reaction_allowed`) -- still "deferred by at most one control cycle" overall,
-      since the deferral itself already spent the first cycle. Case (b) needs no allowance here,
+      (`_deferred_reaction_allowed`) -- R3's own criterion that a breaching increase "is deferred
+      by at most one control cycle" (case (b) never defers a headroom-decreasing reading, and
+      case (a) never defers two cycles in a row), since the deferral itself already spent the
+      first cycle. Gated by the same cause check as the allowance above, against the reading the
+      deferral stood in for, so an over-grant from something other than the deferral itself (a
+      debounce bypass, a clamp defect) cannot hide behind it. Case (b) needs no allowance here,
       per that function's own docstring;
     - the grace period at the minimum charging current (`_grace_period_allowed`) -- R3's own
       stop condition rides out a continuous breach for the configured grace period once already
-      at the minimum current, plus the one further cycle the plant's lag costs the 0 A write
-      that ends it.
+      at the minimum current, capped at `ceil(grace_period_s / control_interval_s)` consecutive
+      cycles that are both at the minimum and genuinely breaching (that function's own docstring
+      derives the cap from `apply_peak_clamp`'s timer).
     """
 
     def _r3_reaction_allowed(t: list[CycleTrace], index: int) -> bool:
         return (
             _household_reaction_allowed(t, index, effective_peak_limit_w)
-            or _deferred_reaction_allowed(t, index)
+            or _deferred_reaction_allowed(t, index, effective_peak_limit_w)
             or _grace_period_allowed(
                 t,
                 index,
+                target_w=effective_peak_limit_w,
                 min_current_a=min_current_a,
                 grace_period_s=grace_period_s,
                 control_interval_s=control_interval_s,
