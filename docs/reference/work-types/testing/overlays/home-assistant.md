@@ -9,9 +9,10 @@ takes. What an overlay may and may not say is this tree's `README.md`'s **Stack 
 **The authorities.** Tests are written per
 [ADR-0009](../../../../adl/0009-testing-strategy.md) — the authoritative plain-pytest vs
 HA-harness split — as [ADR-0037](../../../../adl/0037-scenario-timeline-test-tier.md) narrows it
-with a third, scenario/timeline tier, and the extension of its mandated coverage in
-[ADR-0040](../../../../adl/0040-fifth-mandated-adapter-case-unit-set.md). Where the tests live,
-mirroring the product code, is the `development` overlay's *Where the code lives*.
+with a third, scenario/timeline tier, and ADR-0009's mandated coverage as
+[ADR-0040](../../../../adl/0040-fifth-mandated-adapter-case-unit-set.md) extends it. Where the
+tests live, mirroring the product code, is the `development` overlay's *Where the code lives* —
+except the scenario tier, which mirrors no package (Item 1).
 
 **The layers** — the work file's implement step identifies the unit's: pure logic vs HA-coupled.
 
@@ -47,7 +48,8 @@ here, once, and both sides read it from here:
   needs a real (mocked) HA runtime is **Major** — the test either bypasses the wiring it claims
   to cover or re-implements it.
 - **Scenario/timeline tier** — `tests/scenarios/`, in the same HA harness: every engine live and
-  binding over many cycles, readings derived by the plant simulator, judged by invariants. Which
+  binding over many cycles, readings derived by the plant simulator, judged by the shared
+  invariant set plus a few scenario-intent assertions. Which
   tests belong here rather than beside the `test_*_end_to_end.py` suites is ADR-0037's placement
   rule (its answers 2 and 3). The harness is the same, so a test on the wrong side of that line
   is **Minor** — it is misplaced, not wrongly wired, but it costs the end-to-end suites their
