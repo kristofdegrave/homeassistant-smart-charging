@@ -149,10 +149,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     if interval_s != saved_interval_s:
         _LOGGER.warning(
             "Saved control interval of %s s exceeds the %s s maximum; running at %s s. "
-            "Save the options flow to store a value within range.",
+            "Configure the integration and save to store a value within range.",
             saved_interval_s,
             MAX_CONTROL_INTERVAL_S,
-            MAX_CONTROL_INTERVAL_S,
+            interval_s,
         )
     # E5's 15-minute averaging window (R21) expressed in cycle counts -- derived
     # here, once, from the same control interval the coordinator ticks on (issue #570: the only

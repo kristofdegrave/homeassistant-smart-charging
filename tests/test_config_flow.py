@@ -129,6 +129,7 @@ from custom_components.smart_charging.const import (
     ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     MAX_CONTROL_INTERVAL_S,
+    MIN_CONTROL_INTERVAL_S,
     ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -2764,20 +2765,79 @@ def test_uc12_1b_options_gates_read_stored_flags_defensively():
     assert gates[STEP_NOTIFICATIONS](inverted) is True
 
 
-def test_nf11_control_interval_field_refuses_more_than_30_s_and_accepts_30_s():
+@pytest.mark.parametrize("interval_s", [MIN_CONTROL_INTERVAL_S - 1, MAX_CONTROL_INTERVAL_S + 1])
+def test_should_refuse_a_control_interval_when_it_is_outside_5_to_30_s(interval_s):
+    # Arrange
     schema = _core_threshold_schema(include_interval=True)
-    base = {CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW}
+    submission = {
+        CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW,
+        CONF_CONTROL_INTERVAL_S: interval_s,
+    }
+
+    # Act / Assert
     with pytest.raises(vol.Invalid):
-        schema({**base, CONF_CONTROL_INTERVAL_S: MAX_CONTROL_INTERVAL_S + 1})
-    accepted = schema({**base, CONF_CONTROL_INTERVAL_S: MAX_CONTROL_INTERVAL_S})
-    assert accepted[CONF_CONTROL_INTERVAL_S] == MAX_CONTROL_INTERVAL_S
+        schema(submission)
 
 
-def test_nf11_control_interval_field_presents_a_saved_value_above_30_s_as_30_s():
-    saved = {CONF_CONTROL_INTERVAL_S: 45}
-    schema = _core_threshold_schema(saved, include_interval=True)
-    # An empty submit takes the presented default: 30, while the saved dict is untouched.
-    assert schema({CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW})[CONF_CONTROL_INTERVAL_S] == (
-        MAX_CONTROL_INTERVAL_S
-    )
-    assert saved[CONF_CONTROL_INTERVAL_S] == 45
+@pytest.mark.parametrize("interval_s", [MIN_CONTROL_INTERVAL_S, MAX_CONTROL_INTERVAL_S])
+def test_should_accept_a_control_interval_when_it_is_at_a_bound_of_5_to_30_s(interval_s):
+    # Arrange
+    schema = _core_threshold_schema(include_interval=True)
+    submission = {
+        CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW,
+        CONF_CONTROL_INTERVAL_S: interval_s,
+    }
+
+    # Act
+    accepted = schema(submission)
+
+    # Assert
+    assert accepted[CONF_CONTROL_INTERVAL_S] == interval_s
+
+
+def test_should_present_30_s_as_the_control_interval_default_when_the_saved_value_exceeds_30_s():
+    # Arrange
+    schema = _core_threshold_schema({CONF_CONTROL_INTERVAL_S: 45}, include_interval=True)
+
+    # Act
+    submitted = schema({CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW})
+
+    # Assert
+    assert submitted[CONF_CONTROL_INTERVAL_S] == MAX_CONTROL_INTERVAL_S
+
+
+async def _add_started_entry_saved_at_45_s(hass):
+    seed_charger_states(hass, status="Charging")
+    options = entry_options_base()
+    options[CONF_CONTROL_INTERVAL_S] = 45
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_should_present_30_s_in_the_options_flow_when_the_entry_is_saved_at_45_s(hass):
+    # Arrange
+    entry = await _add_started_entry_saved_at_45_s(hass)
+
+    # Act
+    opened = await hass.config_entries.options.async_init(entry.entry_id)
+
+    # Assert
+    (interval_key,) = [k for k in opened["data_schema"].schema if k == CONF_CONTROL_INTERVAL_S]
+    assert opened["step_id"] == STEP_CORE
+    assert interval_key.default() == MAX_CONTROL_INTERVAL_S
+
+
+async def test_should_store_30_s_when_the_options_flow_is_saved_unchanged_over_a_saved_45_s(hass):
+    # Arrange
+    entry = await _add_started_entry_saved_at_45_s(hass)
+
+    # Act
+    result = await _run_options_flow(hass, entry)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_CONTROL_INTERVAL_S] == MAX_CONTROL_INTERVAL_S

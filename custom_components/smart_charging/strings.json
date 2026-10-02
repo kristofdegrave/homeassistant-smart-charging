@@ -206,7 +206,7 @@
         },
         "data_description": {
           "smoothing_window": "Number of recent power samples averaged before adjusting charging current, to avoid reacting to short spikes. Default 4.",
-          "control_interval_s": "How often (seconds) the control loop re-evaluates charging current. Default 10."
+          "control_interval_s": "How often (seconds) the control loop re-evaluates charging current. Default 10, range 5-30."
         }
       },
       "grid": {

@@ -116,6 +116,7 @@ from .const import (
     ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
     MAX_CONTROL_INTERVAL_S,
+    MIN_CONTROL_INTERVAL_S,
     ROUND_DOWN,
     ROUND_NEAREST,
     ROUND_UP,
@@ -545,7 +546,9 @@ def _core_threshold_schema(
                     MAX_CONTROL_INTERVAL_S,
                 ),
             )
-        ] = vol.All(vol.Coerce(int), vol.Range(min=5, max=MAX_CONTROL_INTERVAL_S))
+        ] = vol.All(
+            vol.Coerce(int), vol.Range(min=MIN_CONTROL_INTERVAL_S, max=MAX_CONTROL_INTERVAL_S)
+        )
     return vol.Schema(schema)
 
 
