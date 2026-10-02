@@ -88,7 +88,7 @@
       "Bash(gh api graphql *mergeBranch*)",
       "Bash(gh api graphql -F *mutation*)",
       "Bash(gh api graphql *operationName*)",
-      "Bash(gh api graphql *input:*input:*)",
+      "Bash(gh api graphql *input:*input*)",
       "Bash(gh api repos/* -X*)",
       "Bash(gh api *..*)",
       "Bash(gh api *pulls/*/replies*)",
