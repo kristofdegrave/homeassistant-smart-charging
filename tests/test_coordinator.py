@@ -4661,8 +4661,9 @@ def _escalated_rate(coord, *, smoothed_baseline_w, voltage=230.0):
 
     Issue #1189/T10: both of the helper's baseline-dependent bounds now fit to
     `ctx.smoothed_baseline_w` alone -- `net_w`/`charger_w`/`baseline_w` (the raw operands the
-    real R3/C4 clamps and the peak-headroom readout still use) are irrelevant to this call and
-    left at 0.0.
+    peak-headroom readout and the real R3 clamp still use; C4's charger operand is now
+    ADR-0058's lower of the reading and the last set current, not `charger_w`) are irrelevant to
+    this call and left at 0.0.
     """
     ctx = CycleContext(
         status=STATE_CHARGING,
@@ -4895,12 +4896,40 @@ async def test_should_fit_both_escalated_bounds_to_the_smoothed_baseline_when_it
     assert escalated_ceiling_call["charger_w"] == 0.0
 
 
+async def test_should_keep_the_escalated_c4_bound_off_the_charger_operand_when_a_current_is_set(
+    hass, monkeypatch
+):
+    """Under `Power` a non-zero current has been set, so C4's own operand is non-zero (ADR-0058:
+    the lower of the 500 W reading and the set current); the escalated bound's own charger term
+    stays its literal 0.0 and is not routed through that operand. In `Off` both are 0.0, so the
+    test above cannot tell them apart."""
+    # Arrange
+    coord, calls = await _prime_household_spike_setup(
+        hass, monkeypatch, captar_available=True, active_mode=MODE_POWER
+    )
+    coord.target_current = _C4_SET_CURRENT_A
+    await coord._async_update_data()
+    # Arrange (precondition guard)
+    assert coord._last_commanded_a > 0
+
+    # Act
+    coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
+    await coord._async_update_data()
+
+    # Assert
+    assert calls["ceiling_headroom_a"][-1]["charger_w"] == 0.0
+    # Discrimination guard: the real clamp saw a non-zero charger operand, so the 0.0 above
+    # is the spy-fed ceiling headroom and not an operand that was zero everywhere.
+    assert calls["clamp_to_ceiling"][-1]["charger_w"] > 0.0
+
+
 async def test_should_keep_the_real_clamps_on_raw_when_the_smoothed_baseline_differs(
     hass, monkeypatch
 ):
     """The real R3 clamp (`apply_peak_clamp`) and the real C4 clamp (`clamp_to_ceiling`) must
-    stay on the raw, debounced operand even on a cycle where the smoothed household baseline
-    genuinely differs from it -- only the escalated rate's own bounds move (companion test
+    stay on their unsmoothed operands -- R3's raw, debounced baseline, and C4's raw `net_w` with
+    ADR-0058's lower charger operand -- even on a cycle where the smoothed household baseline
+    genuinely differs from them -- only the escalated rate's own bounds move (companion test
     above); the readout's own raw operand is a separate, display-only call site (its own
     companion test below)."""
     # Arrange
@@ -4916,7 +4945,6 @@ async def test_should_keep_the_real_clamps_on_raw_when_the_smoothed_baseline_dif
     # (5500 - 500 = 5000 W).
     assert calls["apply_peak_clamp"][-1]["baseline_w"] == 5000.0
     assert calls["clamp_to_ceiling"][-1]["net_w"] == 5500.0
-    assert calls["clamp_to_ceiling"][-1]["charger_w"] == 500.0
 
 
 async def test_should_keep_the_peak_headroom_readout_on_raw_when_the_smoothed_baseline_differs(
@@ -6027,3 +6055,102 @@ async def test_should_never_hold_when_the_car_connects_after_the_deadline_has_al
     assert coord._required_current.required_a == pytest.approx(
         ev_battery_capacity_kwh * (80.0 - 50.0) / 100 * 1000 / 11 / voltage
     )
+
+
+# --- ADR-0058: C4's charger draw is the lower of the charger power reading and the last set
+# charger current, at the supply voltage -- the reading alone until a current has been set.
+# Three cases, one test each (C4's row, docs/analysis/requirements.md#constraints) ----------------
+
+_C4_VOLTAGE_V = 230.0
+_C4_SET_CURRENT_A = 10.0
+
+
+def _spy_c4_clamp(monkeypatch) -> list[dict]:
+    """Records the keyword operands every real `clamp_to_ceiling` call receives."""
+    calls: list[dict] = []
+    real = coordinator_module.clamp_to_ceiling
+
+    def spy(*args, **kwargs):
+        calls.append(kwargs)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(coordinator_module, "clamp_to_ceiling", spy)
+    return calls
+
+
+def _power_coordinator(hass, adapters) -> SmartChargingCoordinator:
+    """`Power` at a 10 A target with ample peak headroom, so the set current is the target."""
+    coord = SmartChargingCoordinator(
+        hass, adapters=adapters, config=_config(), interval_s=30, store=_FakeStore({})
+    )
+    coord.active_mode = MODE_POWER
+    coord.target_current = _C4_SET_CURRENT_A
+    _seed_ample_peak_headroom(coord)
+    return coord
+
+
+async def test_should_clamp_c4_on_the_last_set_current_when_the_charger_reading_still_shows_the_higher_draw(  # noqa: E501
+    hass, monkeypatch
+):
+    """The charger power reading shows a 16 A draw while the last set current is 10 A (staged:
+    the first cycle sets 10 A, then the reading is injected as the earlier 16 A draw a step
+    down would leave behind): C4 must solve around the set current, so the stale reading cannot
+    widen its headroom."""
+    # Arrange
+    calls = _spy_c4_clamp(monkeypatch)
+    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=_C4_VOLTAGE_V)
+    coord = _power_coordinator(hass, adapters)
+    await coord._async_update_data()
+    # Arrange (precondition guard)
+    assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
+    # Arrange
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(16.0 * _C4_VOLTAGE_V)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + 16.0 * _C4_VOLTAGE_V)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert calls[-1]["charger_w"] == _C4_SET_CURRENT_A * _C4_VOLTAGE_V
+
+
+async def test_should_clamp_c4_on_the_reading_when_the_car_draws_less_than_it_was_set_to(
+    hass, monkeypatch
+):
+    """Set to 10 A, the car draws 4 A: the reading is the lower of the two, so C4 takes the car
+    at its reading rather than assuming it follows its set current (ADR-0058, Option C's Con)."""
+    # Arrange
+    calls = _spy_c4_clamp(monkeypatch)
+    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=_C4_VOLTAGE_V)
+    coord = _power_coordinator(hass, adapters)
+    await coord._async_update_data()
+    # Arrange (precondition guard)
+    assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
+    # Arrange
+    reading_w = 4.0 * _C4_VOLTAGE_V
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(reading_w)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + reading_w)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert calls[-1]["charger_w"] == reading_w
+
+
+async def test_should_clamp_c4_on_the_reading_when_no_charger_current_has_been_set_yet(
+    hass, monkeypatch
+):
+    """The first cycle after a start has no set current to compare against: the reading alone
+    stands, even when it shows a draw (a charger left running before the restart)."""
+    # Arrange
+    calls = _spy_c4_clamp(monkeypatch)
+    reading_w = 6.0 * _C4_VOLTAGE_V
+    adapters = _adapters(net_w=2000.0 + reading_w, charger_w=reading_w, voltage=_C4_VOLTAGE_V)
+    coord = _power_coordinator(hass, adapters)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert calls[-1]["charger_w"] == reading_w

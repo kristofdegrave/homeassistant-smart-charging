@@ -78,9 +78,8 @@ class CycleContext:
     # #564's own rationale a few lines below): it's fully resolved before `ctx` exists, same as
     # net_w/charger_w/voltage/now above, and 0.0 happens to be the most PERMISSIVE possible
     # baseline (maximum headroom) -- a future construction site that forgot to pass it would
-    # fail open silently instead of raising. `_apply_grid_ceiling_clamp` (C4) keeps reading the
-    # raw ctx.net_w/ctx.charger_w above -- a separate clamp, with the same staleness exposure
-    # tracked separately (issue #992), out of #990's own scope.
+    # fail open silently instead of raising. `_apply_grid_ceiling_clamp` (C4) reads ctx.net_w
+    # and ctx.charger_w above instead, bounding the latter by the last set current (ADR-0058).
     baseline_w: float
     # Issue #1189/T10, R5's third smoothed-baseline criterion: the admitted mean in household
     # sign (`net_w - charger_w`, `smoothed_household_w` -- `_smooth_household_baseline`'s own
@@ -88,14 +87,15 @@ class CycleContext:
     # escalated maximum permitted rate's baseline-dependent bounds
     # (`_escalated_maximum_permitted_rate_a`'s peak and C4 operands) fit to this, never to
     # `baseline_w`/`net_w`/`charger_w` above, which stay the R3 clamp's and the peak-headroom
-    # readout's own raw, debounced `baseline_w`, or (C4) the raw, undebounced
-    # `net_w`/`charger_w`. A named field rather than `-ctx.surplus_w`: the two are the same
-    # value by design, and the name keeps the forecast's operand visible at the call site
-    # (D-3). ADR-0046: `CycleContext` is now built before the smoothing step that resolves
-    # this field runs (`_build_cycle_context`, right after the required-role read), so it is
-    # `None` until `_smooth_household_baseline` writes the real value -- the same issue #564
-    # fail-loudly shape `effective_peak_limit_kw`/`active_soc_limit` below already use, rather
-    # than a permissive same-typed placeholder that could silently decide a forecast.
+    # readout's own raw, debounced `baseline_w`, or (C4) the undebounced `net_w`/`charger_w`
+    # with ADR-0058's lower charger operand. A named field rather than `-ctx.surplus_w`: the
+    # two are the same value by design, and the name keeps the forecast's operand visible at
+    # the call site (D-3). ADR-0046: `CycleContext` is now built before the smoothing step
+    # that resolves this field runs (`_build_cycle_context`, right after the required-role
+    # read), so it is `None` until `_smooth_household_baseline` writes the real value -- the
+    # same issue #564 fail-loudly shape `effective_peak_limit_kw`/`active_soc_limit` below
+    # already use, rather than a permissive same-typed placeholder that could silently decide
+    # a forecast.
     smoothed_baseline_w: float | None = None
     ev_soc: float | None = None
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by

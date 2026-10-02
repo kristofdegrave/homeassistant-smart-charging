@@ -60,7 +60,7 @@ reference.
 ## 5. Submit — and recover from a 422
 
 ```
-gh api "repos/<owner>/<repo>/pulls/<pr>/reviews" --input <payload-file>
+gh api repos/<owner>/<repo>/pulls/<pr>/reviews --input <payload-file>
 ```
 
 Run it as a command of its own, the repository spelled out and the payload path absolute: the
