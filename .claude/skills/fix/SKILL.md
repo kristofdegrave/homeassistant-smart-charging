@@ -28,11 +28,11 @@ The review's and the human's comments are both found as comments passing the aut
 comment is no finding; §6 lists it.
 
 - **Inline comments** — list the PR's review comments (`gh api
-  "repos/<owner>/<repo>/pulls/<pr>/comments" --paginate`) and keep every one passing it
+  repos/<owner>/<repo>/pulls/<pr>/comments --paginate`) and keep every one passing it
   that does not itself carry an `<!-- ai-fix-` marker (§5) and has no later reply carrying
   `<!-- ai-fix-ack -->` in the same thread (a reply's `in_reply_to_id` is the thread's first
   comment). Such a reply means an earlier run already handled it.
-- **Review bodies** — list the PR's reviews (`gh api "repos/<owner>/<repo>/pulls/<pr>/reviews"
+- **Review bodies** — list the PR's reviews (`gh api repos/<owner>/<repo>/pulls/<pr>/reviews
   --paginate`) and keep every non-empty body passing it posted after the most recent
   `<!-- ai-fix-summary -->` comment (all of them when there is none). A local review's body
   holds the findings that anchor to no changed line; a finding in both a body and an inline

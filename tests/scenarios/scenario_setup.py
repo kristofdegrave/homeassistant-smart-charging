@@ -1,5 +1,5 @@
-"""Shared scenario-setup plumbing every tier builds its own `_setup` from (epic #996), so a
-later tier reuses this rather than reaching into an earlier tier's private names."""
+"""Shared scenario-setup plumbing, judging and guard helpers every tier builds on (epic #996),
+so a later tier reuses this rather than reaching into an earlier tier's private names."""
 
 from collections.abc import Callable
 
@@ -16,7 +16,7 @@ from custom_components.smart_charging.const import (
     DOMAIN,
 )
 from tests.scenarios.invariants import check_c4, check_r3, judge_all
-from tests.scenarios.runner import CycleTrace
+from tests.scenarios.runner import CycleTrace, format_trace
 
 
 async def setup_coordinator(hass, *, entry_data: dict, entry_options: dict, mode: str):
@@ -29,8 +29,8 @@ async def setup_coordinator(hass, *, entry_data: dict, entry_options: dict, mode
     entry.add_to_hass(hass)
     if not await hass.config_entries.async_setup(entry.entry_id):
         # A bare `assert` here would raise AssertionError, which a caller's own
-        # `xfail(strict=True, raises=InvariantViolation)` -- `InvariantViolation` subclasses
-        # `AssertionError` -- would then swallow as though it were an expected invariant breach:
+        # `pytest.raises(InvariantViolation)` -- `InvariantViolation` subclasses
+        # `AssertionError` -- would then accept as though it were the expected invariant breach:
         # a setup failure must surface as something else entirely.
         raise RuntimeError(f"config entry {entry.entry_id} failed to set up")
     await hass.async_block_till_done()
@@ -41,6 +41,20 @@ async def setup_coordinator(hass, *, entry_data: dict, entry_options: dict, mode
         blocking=True,
     )
     return entry.runtime_data.coordinator
+
+
+def assert_charged_without_fault(trace: list[CycleTrace]) -> None:
+    """The non-vacuity guard for a "no limit was breached" scenario: no cycle faulted (a faulted
+    cycle's safe write is 0 A, which holds every limit vacuously) and some cycle commanded more
+    than 0 A (a charger starved to 0 A holds them too)."""
+    assert not any(t.faulted for t in trace), (
+        f"a faulted cycle writes 0 A, which would pass the limit checks vacuously\n"
+        f"{format_trace(trace)}"
+    )
+    assert any(t.commanded_current_a > 0 for t in trace), (
+        f"no cycle commanded more than 0 A, so the limit checks held vacuously\n"
+        f"{format_trace(trace)}"
+    )
 
 
 def effective_peak_limit_w(options: dict) -> float:

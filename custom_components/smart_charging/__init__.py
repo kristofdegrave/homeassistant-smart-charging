@@ -82,6 +82,7 @@ from .const import (
     DEFAULT_SOLAR_STEP_PP,
     DEFAULT_SOLAR_STEP_THRESHOLD_PP,
     LABEL_SC_RUNTIME,
+    MAX_CONTROL_INTERVAL_S,
     PEAK_WINDOW_SECONDS,
     ROLE_NOTIFICATION_TARGET,
 )
@@ -141,7 +142,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: SmartChargingConfigEntry
     max_current = opts[CONF_MAX_CURRENT]
     default_target_current = opts[CONF_DEFAULT_TARGET_CURRENT]
     default_soc_limit = opts.get(CONF_DEFAULT_SOC_LIMIT, DEFAULT_SOC_LIMIT)
-    interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
+    saved_interval_s = opts.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S)
+    # NF11: bound the control interval. The saved option is left as it is (no migration) until
+    # the household next saves the options flow; every reader below takes the capped value.
+    interval_s = min(saved_interval_s, MAX_CONTROL_INTERVAL_S)
+    if interval_s != saved_interval_s:
+        _LOGGER.warning(
+            "Saved control interval of %s s exceeds the %s s maximum; running at %s s. "
+            "Configure the integration and save to store a value within range.",
+            saved_interval_s,
+            MAX_CONTROL_INTERVAL_S,
+            interval_s,
+        )
     # E5's 15-minute averaging window (R21) expressed in cycle counts -- derived
     # here, once, from the same control interval the coordinator ticks on (issue #570: the only
     # other reader of PEAK_WINDOW_SECONDS was coordinator.py's own now-removed duplicate fallback).

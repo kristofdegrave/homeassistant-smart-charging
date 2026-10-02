@@ -204,6 +204,11 @@ ROLES_ADAPTER_READINGS_EXCLUDED = frozenset(
 # Defaults
 DEFAULT_NOMINAL_VOLTAGE = 230.0
 DEFAULT_CONTROL_INTERVAL_S = 10
+# NF11: the control interval is bounded to 5-30 s -- a household excursion lasts at most one
+# interval, so a longer one would break the bound. __init__.py caps a saved value above it and
+# the options flow's interval field refuses one.
+MIN_CONTROL_INTERVAL_S = 5
+MAX_CONTROL_INTERVAL_S = 30
 # E5 15-minute averaging window (requirements.md R21) -- __init__.py's setup-time
 # `peak_window_size` derivation (SmartChargingConfig, issue #570) is this constant's only reader.
 PEAK_WINDOW_SECONDS = 900

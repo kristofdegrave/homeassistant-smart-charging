@@ -128,6 +128,8 @@ from custom_components.smart_charging.const import (
     DOMAIN,
     ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
+    MAX_CONTROL_INTERVAL_S,
+    MIN_CONTROL_INTERVAL_S,
     ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -143,7 +145,12 @@ from custom_components.smart_charging.const import (
     STEP_SOLAR,
     STEP_VEHICLE,
 )
-from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
+from tests.helpers import (
+    add_entry_saved_at,
+    entry_data_base,
+    entry_options_base,
+    seed_charger_states,
+)
 
 # Per-step base fixtures for the guided install flow (UC12's nine topic steps). All four
 # capability decisions default False here, including solar -- even though solar's rendered
@@ -2761,3 +2768,77 @@ def test_uc12_1b_options_gates_read_stored_flags_defensively():
     assert gates[STEP_SOLAR](inverted) is True
     assert gates[STEP_DEADLINE](inverted) is False
     assert gates[STEP_NOTIFICATIONS](inverted) is True
+
+
+@pytest.mark.parametrize("interval_s", [MIN_CONTROL_INTERVAL_S - 1, MAX_CONTROL_INTERVAL_S + 1])
+def test_should_refuse_a_control_interval_when_it_is_outside_5_to_30_s(interval_s):
+    # Arrange
+    schema = _core_threshold_schema(include_interval=True)
+    submission = {
+        CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW,
+        CONF_CONTROL_INTERVAL_S: interval_s,
+    }
+
+    # Act / Assert
+    with pytest.raises(vol.Invalid):
+        schema(submission)
+
+
+@pytest.mark.parametrize("interval_s", [MIN_CONTROL_INTERVAL_S, MAX_CONTROL_INTERVAL_S])
+def test_should_accept_a_control_interval_when_it_is_at_a_bound_of_5_to_30_s(interval_s):
+    # Arrange
+    schema = _core_threshold_schema(include_interval=True)
+    submission = {
+        CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW,
+        CONF_CONTROL_INTERVAL_S: interval_s,
+    }
+
+    # Act
+    accepted = schema(submission)
+
+    # Assert
+    assert accepted[CONF_CONTROL_INTERVAL_S] == interval_s
+
+
+def test_should_present_30_s_as_the_control_interval_default_when_the_saved_value_exceeds_30_s():
+    # Arrange
+    schema = _core_threshold_schema({CONF_CONTROL_INTERVAL_S: 45}, include_interval=True)
+
+    # Act
+    submitted = schema({CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW})
+
+    # Assert
+    assert submitted[CONF_CONTROL_INTERVAL_S] == MAX_CONTROL_INTERVAL_S
+
+
+async def _add_started_entry_saved_at_45_s(hass):
+    entry = add_entry_saved_at(hass, 45)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_should_present_30_s_in_the_options_flow_when_the_entry_is_saved_at_45_s(hass):
+    # Arrange
+    entry = await _add_started_entry_saved_at_45_s(hass)
+
+    # Act
+    opened = await hass.config_entries.options.async_init(entry.entry_id)
+
+    # Assert
+    (interval_key,) = [k for k in opened["data_schema"].schema if k == CONF_CONTROL_INTERVAL_S]
+    assert opened["step_id"] == STEP_CORE
+    assert interval_key.default() == MAX_CONTROL_INTERVAL_S
+
+
+async def test_should_store_30_s_when_the_options_flow_is_saved_unchanged_over_a_saved_45_s(hass):
+    # Arrange
+    entry = await _add_started_entry_saved_at_45_s(hass)
+
+    # Act
+    result = await _run_options_flow(hass, entry)
+    await hass.async_block_till_done()
+
+    # Assert
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_CONTROL_INTERVAL_S] == MAX_CONTROL_INTERVAL_S
