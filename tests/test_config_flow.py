@@ -128,6 +128,7 @@ from custom_components.smart_charging.const import (
     DOMAIN,
     ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
+    MAX_CONTROL_INTERVAL_S,
     ROLE_CAR_HOME,
     ROLE_CHARGER_CURRENT,
     ROLE_VEHICLE_CHARGE_LIMIT,
@@ -2761,3 +2762,22 @@ def test_uc12_1b_options_gates_read_stored_flags_defensively():
     assert gates[STEP_SOLAR](inverted) is True
     assert gates[STEP_DEADLINE](inverted) is False
     assert gates[STEP_NOTIFICATIONS](inverted) is True
+
+
+def test_nf11_control_interval_field_refuses_more_than_30_s_and_accepts_30_s():
+    schema = _core_threshold_schema(include_interval=True)
+    base = {CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW}
+    with pytest.raises(vol.Invalid):
+        schema({**base, CONF_CONTROL_INTERVAL_S: MAX_CONTROL_INTERVAL_S + 1})
+    accepted = schema({**base, CONF_CONTROL_INTERVAL_S: MAX_CONTROL_INTERVAL_S})
+    assert accepted[CONF_CONTROL_INTERVAL_S] == MAX_CONTROL_INTERVAL_S
+
+
+def test_nf11_control_interval_field_presents_a_saved_value_above_30_s_as_30_s():
+    saved = {CONF_CONTROL_INTERVAL_S: 45}
+    schema = _core_threshold_schema(saved, include_interval=True)
+    # An empty submit takes the presented default: 30, while the saved dict is untouched.
+    assert schema({CONF_SMOOTHING_WINDOW: DEFAULT_SMOOTHING_WINDOW})[CONF_CONTROL_INTERVAL_S] == (
+        MAX_CONTROL_INTERVAL_S
+    )
+    assert saved[CONF_CONTROL_INTERVAL_S] == 45

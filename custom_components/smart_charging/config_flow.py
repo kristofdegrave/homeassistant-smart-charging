@@ -115,6 +115,7 @@ from .const import (
     DOMAIN,
     ERROR_REQUIRED_WHEN_DEADLINE_AVAILABLE,
     ERROR_REQUIRED_WHEN_VEHICLE_LIMIT_MAPPED,
+    MAX_CONTROL_INTERVAL_S,
     ROUND_DOWN,
     ROUND_NEAREST,
     ROUND_UP,
@@ -538,9 +539,13 @@ def _core_threshold_schema(
         schema[
             vol.Required(
                 CONF_CONTROL_INTERVAL_S,
-                default=d.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S),
+                # NF11: a saved value above the maximum is presented as the maximum.
+                default=min(
+                    d.get(CONF_CONTROL_INTERVAL_S, DEFAULT_CONTROL_INTERVAL_S),
+                    MAX_CONTROL_INTERVAL_S,
+                ),
             )
-        ] = vol.All(vol.Coerce(int), vol.Range(min=5))
+        ] = vol.All(vol.Coerce(int), vol.Range(min=5, max=MAX_CONTROL_INTERVAL_S))
     return vol.Schema(schema)
 
 
