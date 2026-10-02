@@ -1017,9 +1017,28 @@ EOF" "$LR/wt"
 runr "delimiter carries" "cat <<E\$(echo O)F >/dev/null
 y
 EOF" "$LR/wt"
+runr "delimiter carries" "cat <<E\`echo O\`F >/dev/null
+y
+EOF" "$LR/wt"                                                           # ... a backquoted part
+runr "delimiter carries" "cat <<-\$X >/dev/null
+	y
+	\$X" "$LR/wt"                                                          # ... after <<-
+runr "delimiter carries" "cat <<A <<\$B >/dev/null
+a
+A
+b
+\$B" "$LR/wt"                                                           # ... in a second opener on the line
+runr "delimiter carries" "cat <<\$" "$LR/wt"                            # ... as the input's last character
 run ALLOW "cat <<'\$X' >/dev/null
 y
 \$X" "$LR/wt"                                                           # ... a single-quoted \$ is a letter
+run ALLOW "cat <<\\\$X >/dev/null
+y
+\$X" "$LR/wt"                                                           # ... and so is an escaped one
+run ALLOW "cat <<EOF >/dev/null
+cost: \$5 and \`date\`
+EOF
+git status" "$LR/wt"                                                    # a \$ or backtick in the body, not the delimiter
 run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
 run ALLOW "git status >&2" "$LR/wt"
 run ALLOW "git log --oneline |

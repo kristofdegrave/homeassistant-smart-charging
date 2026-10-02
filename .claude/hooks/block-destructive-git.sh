@@ -195,8 +195,9 @@
 # reads as bash does. The plain split still runs, since it is the one that splits inside a
 # command substitution, where bash quotes afresh, and that reads a body fed to an
 # interpreter. The second reading only adds refusals: an awk that cannot make it refuses,
-# and so does a heredoc whose delimiter carries `$` outside single quotes, which bash builds
-# in ways the reading does not follow. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
+# and so does a heredoc whose delimiter carries a `$` or backtick that is neither inside
+# single quotes nor backslash-escaped, which bash builds in ways the reading does not
+# follow. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
 # `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
 # `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
 # a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
@@ -1399,7 +1400,8 @@ segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
 # interpreter is judged as before, and an opener whose delimiter line never comes drops
 # nothing; a `<<<` here-string opens none. Conceded: an arithmetic shift (`$((1<<2))`) reads
 # as an opener, so a later line that is exactly its right operand ends a "body" dropped from
-# this reading. A quote inside a command substitution within double quotes is not read as
+# this reading, and a right operand starting with `$` or a backtick (`$((1<<$n))`) refuses
+# the whole command in the loop, as a delimiter bash builds would. A quote inside a command substitution within double quotes is not read as
 # bash reads it (bash starts its quoting afresh there): this split can then keep a real
 # separator, which the plain split above, still scanned too, cuts; or cut at a quoted one,
 # which the plain split cuts as well, so neither reading catches what follows it.
@@ -1452,9 +1454,10 @@ split_unquoted() {
         # quoting is read as bash reads it: a single-quoted part to its closing quote; a
         # double-quoted part to the close that no backslash escapes, a backslash taking an
         # escaped quote, backslash or backtick; outside quotes a backslash taking the next
-        # character, a backslash-newline joining. A `$` outside its single-quoted parts --
-        # `$'...'`, `$"..."`, `$(...)`, `${...}` -- makes bash build the delimiter in ways
-        # not read here, so the reading exits 3 and the loop refuses the command.
+        # character, a backslash-newline joining. A `$` or backtick neither single-quoted nor
+        # escaped -- `$'...'`, `$"..."`, `$(...)`, `${...}`, a backquoted part -- makes bash
+        # build the delimiter in ways not read here, so the reading exits 3 and the loop
+        # refuses the command. (Inside double quotes an escaped `$` refuses too: fail closed.)
         if (c == "<" && nx == "<") {
           j = i + 2; dash = 0
           if (substr(s, j, 1) == "-") { dash = 1; j++ }
@@ -1462,7 +1465,7 @@ split_unquoted() {
           d = ""
           for (; j <= n; j++) {
             e = substr(s, j, 1)
-            if (e == "$") dollar = 1
+            if (e == "$" || e == "`") built = 1
             if (e == q1) {
               kk = index(substr(s, j + 1), e)
               if (!kk) { j = n + 1; break }
@@ -1471,7 +1474,7 @@ split_unquoted() {
             if (e == q2) {
               for (j++; j <= n && substr(s, j, 1) != e; j++) {
                 f = substr(s, j, 1); g = substr(s, j + 1, 1)
-                if (f == "$") dollar = 1
+                if (f == "$" || f == "`") built = 1
                 if (f == esc && g ~ /["\\`\n]/) { j++; f = g }
                 if (f != "\n") d = d f
               }
@@ -1508,7 +1511,7 @@ split_unquoted() {
         out = out c; prev = c
       }
       print out
-      if (dollar) exit 3
+      if (built) exit 3
     }'
 }
 
@@ -1924,7 +1927,7 @@ if in_loop; then
   qsegments=$(split_unquoted "$raw_cmd")
   _st=$?
   [ "$_st" != 3 ] ||
-    deny "$cmd" "in the autopilot loop a heredoc whose delimiter carries \$ is refused: bash builds that delimiter in ways the guard does not read, so where the body ends cannot be shown" "$HARNESS_TAIL"
+    deny "$cmd" "in the autopilot loop a heredoc whose delimiter carries \$ or a backtick is refused: bash builds that delimiter in ways the guard does not read, so where the body ends cannot be shown" "$HARNESS_TAIL"
   [ "$_st" = 0 ] ||
     deny "$cmd" "in the autopilot loop the command could not be split where bash splits it, so a quoted or escaped separator could hide the rest of a git or gh command" "$HARNESS_TAIL"
   [ "$qsegments" = "$segments" ] || scan "$qsegments"
