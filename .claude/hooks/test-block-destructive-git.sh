@@ -961,6 +961,33 @@ run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # ... a r
 run ALLOW "git status &>/dev/null" "$LR/wt"
 run ALLOW "git commit -m 'a & b'" "$LR/wt"
 run ALLOW "# a note" "$LR/wt"                                          # all comment: nothing to scan
+runr "global -c" "cat <<'EOF' >/dev/null
+x
+EOF
+git --namespace ';' -c core.fsmonitor=x status
+cat <<EOF >/dev/null
+y
+EOF" "$LR/wt"                                                         # a stripped terminator does not let a later one match
+runr "global -c" "cat <<EOF >/dev/null
+| it's | a |
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... nor a body line ending in | hide one
+runr "global -c" "cat <<-EOF >/dev/null
+	it's done
+	EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # an unquoted <<- body: the tab strip
+runr "global -c" "grep -c x <<< 'a b'
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a here-string opens no heredoc
+runr "global -c" "git \\
+-c core.fsmonitor=x status" "$LR/wt"                                    # a backslash-newline joins, leaving no stray word
+runr "global -c" "git status # see \\
+git -c core.fsmonitor=x status" "$LR/wt"                                # ... but not inside a comment
+run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
+run ALLOW "git status >&2" "$LR/wt"
+run ALLOW "git log --oneline |
+wc -l" "$LR/wt"                                                        # a pipe ending its line feeds the next
+run ALLOW "git status \\
+--short" "$LR/wt"                                                      # a real continuation
 mkdir -p "$STUB/splitfail"
 printf '#!/bin/sh\ncase " $* " in *" q1="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/splitfail/awk"
 chmod +x "$STUB/splitfail/awk"

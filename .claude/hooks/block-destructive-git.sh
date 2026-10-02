@@ -190,11 +190,13 @@
 # expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
 # background `&` and a newline outside quotes and not escaped, a comment and a heredoc's body
 # dropped (`split_unquoted`). So a quoted or escaped separator (`git --namespace ';' -c ...`)
-# does not leave the rest of a git or gh command in a segment no git rule reads. The plain
-# split still runs, since it is the one that splits inside a command substitution, where bash
-# quotes afresh, and that reads a body fed to an interpreter. The second reading only adds
-# refusals, and an awk that cannot make it refuses. Refused: git's global `-c`,
-# `--config-env`, `--exec-path`, `--git-dir`, `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
+# does not leave the rest of a git or gh command in a segment no git rule reads -- except
+# after a quote inside a command substitution within double quotes, which neither reading
+# reads as bash does. The plain split still runs, since it is the one that splits inside a
+# command substitution, where bash quotes afresh, and that reads a body fed to an
+# interpreter. The second reading only adds refusals, and an awk that cannot make it
+# refuses. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
+# `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
 # `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
 # a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
 # -- its main checkout or a linked worktree, compared by git common directory, so a directory
@@ -278,6 +280,9 @@ extract() {
 }
 
 cmd=$(extract command)
+# The command as sent, before the heredoc strip and the continuation join rewrite it: the
+# loop's second reading parses heredocs and continuations itself (split_unquoted).
+raw_cmd=$cmd
 if [ -z "$cmd" ]; then
   # Fail open, but not silently: a payload that carries a shell tool_input and still
   # yields no command means this guard has stopped understanding its own input.
@@ -1378,17 +1383,22 @@ segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
 |/g')
 
 # In the loop, the same command split a second way: only where bash splits it -- on a ;, &&,
-# ||, |, background & or newline outside quotes and not escaped (an & beside a redirection's
-# < or >, or after a |, is no separator) -- so a quoted or escaped separator
-# (`git --namespace ';' -c ...`, `\;`) does not cut a git segment short. The quotes read are
-# `'`, `"` and `$'...'`, a backslash outside single quotes takes the character after it, a `#`
-# that starts a word outside quotes drops the rest of its line, and a newline inside a quote
-# is read as a space so the segment stays one line. A heredoc's body is dropped, since bash
-# reads no quote in it: the plain split above still reads the body, so one fed to an
+# ||, |, background & or newline outside quotes and not escaped (an & after a <, > or |, or
+# before a >, is no separator) -- so a quoted or escaped separator
+# (`git --namespace ';' -c ...`, `\;`) does not cut a git segment short. It reads the command
+# as sent (`raw_cmd`), before the heredoc strip and the continuation join, and does both its
+# own way. The quotes read are `'`, `"` and `$'...'`; a backslash outside single quotes takes
+# the character after it, and a backslash-newline outside them joins the lines; a `#` that
+# starts a word outside quotes drops the rest of its line; a newline inside a quote, or after
+# a `|`, is read as a blank so the segment stays one line. A heredoc's body is dropped, since
+# bash reads no quote in it: the plain split above still reads the body, so one fed to an
 # interpreter is judged as before, and an opener whose delimiter line never comes drops
-# nothing. A quote inside a command substitution within double quotes is not read as bash
-# reads it (bash starts its quoting afresh there): this split can then keep a real
-# separator, which is why the plain split above is still scanned too.
+# nothing; a `<<<` here-string opens none. Conceded: an arithmetic shift (`$((1<<2))`) reads
+# as an opener, so a later line that is exactly its right operand ends a "body" dropped from
+# this reading. A quote inside a command substitution within double quotes is not read as
+# bash reads it (bash starts its quoting afresh there): this split can then keep a real
+# separator, which the plain split above, still scanned too, cuts; or cut at a quoted one,
+# which the plain split cuts as well, so neither reading catches what follows it.
 split_unquoted() {
   printf '%s\n' "$1" | awk -v q1="'" -v q2='"' -v esc='\\' '
     # Where the bodies of the heredocs opened on the line ending at i end, read in order:
@@ -1415,28 +1425,42 @@ split_unquoted() {
         nx = substr(s, i + 1, 1)
         if (q == q1) { if (c == q1) q = ""; out = out (c == "\n" ? " " : c); continue }
         if (q != "") {
-          # Inside double quotes or an ANSI-C quote, a backslash takes the next character.
+          # Inside double quotes or an ANSI-C quote, a backslash takes the next character; a
+          # backslash-newline in double quotes is a continuation, gone from the word.
+          if (c == esc && nx == "\n" && q == q2) { i++; continue }
           if (c == esc) { out = out c (nx == "\n" ? " " : nx); i++; continue }
           if ((q == "a" && c == q1) || (q == q2 && c == q2)) q = ""
           out = out (c == "\n" ? " " : c); continue
         }
-        if (c == esc) { out = out c (nx == "\n" ? " " : nx); i++; prev = "x"; continue }
+        # Outside quotes a backslash-newline is a continuation: both go, joining the lines.
+        if (c == esc && nx == "\n") { i++; continue }
+        if (c == esc) { out = out c nx; i++; prev = "x"; continue }
         if (c == "$" && nx == q1) { q = "a"; out = out c nx; i++; prev = q1; continue }
         if (c == "#" && prev ~ /[ \t\n;&|(]/) {
           while (i < n && substr(s, i + 1, 1) != "\n") i++
           continue
         }
-        # A heredoc opener (`<<`, `<<-`, not the here-string `<<<`): its delimiter, quotes and
-        # backslashes removed, is matched once the line ends.
-        if (c == "<" && nx == "<" && substr(s, i + 2, 1) != "<") {
+        # A here-string (`<<<`) opens nothing: its word is read like any other.
+        if (c == "<" && nx == "<" && substr(s, i + 2, 1) == "<") {
+          out = out "<<<"; i += 2; prev = "<"; continue
+        }
+        # A heredoc opener (`<<`, `<<-`): its delimiter, a quoted part read to its closing
+        # quote and a backslash taking the next character, is matched once the line ends.
+        if (c == "<" && nx == "<") {
           j = i + 2; dash = 0
           if (substr(s, j, 1) == "-") { dash = 1; j++ }
           while (substr(s, j, 1) ~ /[ \t]/) j++
           d = ""
           for (; j <= n; j++) {
             e = substr(s, j, 1)
+            if (e == q1 || e == q2) {
+              kk = index(substr(s, j + 1), e)
+              if (!kk) { j = n + 1; break }
+              d = d substr(s, j + 1, kk - 1); j += kk; continue
+            }
+            if (e == esc) { d = d substr(s, j + 1, 1); j++; continue }
             if (e ~ /[ \t\n;&|<>()]/) break
-            if (e != q1 && e != q2 && e != esc) d = d e
+            d = d e
           }
           if (d != "") { nh++; hd[nh] = d; hdash[nh] = dash }
           out = out substr(s, i, j - i); i = j - 1; prev = "x"; continue
@@ -1449,7 +1473,16 @@ split_unquoted() {
           continue
         }
         else if ((c == "&" || c == "|") && nx == c) { out = out "\n"; i++; prev = "\n"; continue }
-        else if (c == "|") { out = out "\n|"; prev = "|"; continue }
+        else if (c == "|") {
+          # A pipe ending its line feeds the next one: the line break is read as a blank,
+          # though a heredoc opened on the line still has its body dropped.
+          out = out "\n|"; prev = "|"
+          while (i < n && substr(s, i + 1, 1) ~ /[ \t\n]/) {
+            i++
+            if (substr(s, i, 1) == "\n" && nh > 0) { i = bodies_end(i); nh = 0 }
+          }
+          continue
+        }
         else if (c == "&" && prev !~ /[<>|]/ && nx != ">") { out = out "\n"; prev = "\n"; continue }
         out = out c; prev = c
       }
@@ -1866,7 +1899,7 @@ scan "$segments"
 # first reading alone is the one a quoted separator cuts short. An empty reading is a
 # command that is all comment or separators, with nothing to scan.
 if in_loop; then
-  qsegments=$(split_unquoted "$cmd") ||
+  qsegments=$(split_unquoted "$raw_cmd") ||
     deny "$cmd" "in the autopilot loop the command could not be split where bash splits it, so a quoted or escaped separator could hide the rest of a git or gh command" "$HARNESS_TAIL"
   [ "$qsegments" = "$segments" ] || scan "$qsegments"
 fi
