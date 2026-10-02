@@ -92,10 +92,10 @@ class CycleContext:
     # two are the same value by design, and the name keeps the forecast's operand visible at
     # the call site (D-3). ADR-0046: `CycleContext` is now built before the smoothing step
     # that resolves this field runs (`_build_cycle_context`, right after the required-role
-    # read), so it is
-    # `None` until `_smooth_household_baseline` writes the real value -- the same issue #564
-    # fail-loudly shape `effective_peak_limit_kw`/`active_soc_limit` below already use, rather
-    # than a permissive same-typed placeholder that could silently decide a forecast.
+    # read), so it is `None` until `_smooth_household_baseline` writes the real value -- the
+    # same issue #564 fail-loudly shape `effective_peak_limit_kw`/`active_soc_limit` below
+    # already use, rather than a permissive same-typed placeholder that could silently decide
+    # a forecast.
     smoothed_baseline_w: float | None = None
     ev_soc: float | None = None
     surplus_w: float = 0.0  # meaningful zero-surplus starting value, not a placeholder (read by

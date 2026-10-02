@@ -1563,11 +1563,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
 
     def _ceiling_charger_w(self, ctx: CycleContext) -> float:
-        """ADR-0058 (C4's row): the charger draw C4 solves around is the lower of this cycle's
-        charger power reading and the charger current last set, at the supply voltage, so a
-        reading still showing the draw from before a step down cannot widen C4's headroom, and
-        a car drawing less than it was set to is taken at its reading. The reading alone until
-        `_write` has set a current -- a fresh coordinator, as every restart and reload builds."""
+        """ADR-0058; requirements.md's C4 row: the charger draw C4 solves around is the lower of
+        this cycle's charger power reading and the charger current last set, at the supply
+        voltage, so a reading still showing the draw from before a step down cannot widen C4's
+        headroom, and a car drawing less than it was set to is taken at its reading. The reading
+        alone until `_write` has set a current -- a fresh coordinator, as every restart and
+        reload builds."""
         if self._last_commanded_a is None:
             return ctx.charger_w
         return min(ctx.charger_w, self._last_commanded_a * ctx.voltage)

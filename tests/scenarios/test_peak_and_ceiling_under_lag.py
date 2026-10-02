@@ -13,13 +13,16 @@ household load, so neither clamp is held non-binding by the other, and Power's t
 alone, so the commanded current banged between 0 A and the binding headroom; that oscillation
 corrupted R3's baseline through its debounce (`debounce_baseline_w`, ADR-0039), and on step 5
 true import breached both limits. With C4 solving around the lower of the reading and the last
-set charger current (ADR-0058, C4's row in `docs/analysis/requirements.md#constraints`), the
-command holds and the whole invariant set judges every step green.
+set charger current (ADR-0058; requirements.md's C4 row,
+`docs/analysis/requirements.md#constraints`), the command still alternates between 13 A and 0 A
+on every step while C4 binds on the lagging reading (ADR-0058's Option D accepts this), but true
+import stays within both limits every step, so the whole invariant set judges every step green.
 
 **R3's own exposure.** That R3's debounce commits a corrupted reading under a sustained command
 oscillation is R3's criteria at work, not only C4's: any oscillating command, Solar's moving
 request among them (`debounce_baseline_w`'s docstring), can trigger it. #1584 records it; this
-world no longer oscillates, so it no longer exercises that exposure.
+world still oscillates, so it still exercises that exposure, and what it shows is that the
+oscillation now stays within both limits here.
 
 **Attribution.** The R3-alone test (C4 bypassed) shows R3 holding its own headroom on this
 world under a *steady* command; it does not show R3 stable under an oscillating one (#1584). The
@@ -27,10 +30,10 @@ C4-alone test (R3 bypassed) shows C4 alone holding the grid supply ceiling on th
 Power's target alone would exceed it.
 
 **Parameters** (ADR-0037's invariant-oracle rule: honest, not tuned to dodge a member). One
-steady household load, no step: before ADR-0058 the oscillation was self-sustaining from the
-startup transient alone. `max_peak_kw == peak_floor_kw`, so `resolve_effective_peak_limit`
-returns exactly `max_peak_kw`, from which `effective_peak_limit_w` derives, whatever the
-tracked monthly peak (T2's own `_PEAK_KW` comment).
+steady household load, no step: the oscillation is self-sustaining from the startup transient
+alone (before ADR-0058 it also breached the limits). `max_peak_kw == peak_floor_kw`, so
+`resolve_effective_peak_limit` returns exactly `max_peak_kw`, from which `effective_peak_limit_w`
+derives, whatever the tracked monthly peak (T2's own `_PEAK_KW` comment).
 """
 
 import math
@@ -55,6 +58,7 @@ from tests.scenarios.invariants import check_c4
 from tests.scenarios.plant import Plant
 from tests.scenarios.runner import ScenarioRunner, format_trace
 from tests.scenarios.scenario_setup import (
+    assert_charged_without_fault,
     effective_peak_limit_w,
     judge_c4_then_r3,
     setup_coordinator,
@@ -147,9 +151,10 @@ async def test_should_keep_true_import_within_both_limits_when_r3_and_c4_headroo
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
 
     # Act
-    await runner.run(_CYCLES, judge=_judge_with_mode_guard(options))
+    trace = await runner.run(_CYCLES, judge=_judge_with_mode_guard(options))
 
     # Assert
+    assert_charged_without_fault(trace)
     # C4 and R3 (docs/analysis/requirements.md): true import stays within both limits, judged by
     # the whole invariant set every step; a breach raises `InvariantViolation` inside `run`.
 
@@ -202,8 +207,9 @@ async def test_should_hold_the_grid_supply_ceiling_every_cycle_when_r3_is_bypass
     ceiling_w = options[CONF_GRID_CEILING_A] * voltage
 
     # Act
-    await runner.run(_CYCLES, judge=lambda trace: check_c4(trace, ceiling_w=ceiling_w))
+    trace = await runner.run(_CYCLES, judge=lambda trace: check_c4(trace, ceiling_w=ceiling_w))
 
     # Assert
+    assert_charged_without_fault(trace)
     # C4 (docs/analysis/requirements.md#constraints): judged by the shared C4 member every step;
     # a breach raises `InvariantViolation` inside `run`.
