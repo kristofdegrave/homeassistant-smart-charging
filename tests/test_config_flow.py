@@ -145,7 +145,12 @@ from custom_components.smart_charging.const import (
     STEP_SOLAR,
     STEP_VEHICLE,
 )
-from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
+from tests.helpers import (
+    add_entry_saved_at,
+    entry_data_base,
+    entry_options_base,
+    seed_charger_states,
+)
 
 # Per-step base fixtures for the guided install flow (UC12's nine topic steps). All four
 # capability decisions default False here, including solar -- even though solar's rendered
@@ -2807,11 +2812,7 @@ def test_should_present_30_s_as_the_control_interval_default_when_the_saved_valu
 
 
 async def _add_started_entry_saved_at_45_s(hass):
-    seed_charger_states(hass, status="Charging")
-    options = entry_options_base()
-    options[CONF_CONTROL_INTERVAL_S] = 45
-    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
-    entry.add_to_hass(hass)
+    entry = add_entry_saved_at(hass, 45)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
     return entry

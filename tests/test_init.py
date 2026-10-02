@@ -85,6 +85,7 @@ from custom_components.smart_charging.const import (
     STATUS_OK,
 )
 from tests.helpers import (
+    add_entry_saved_at,
     capture_charger_current_writes,
     capture_service_calls,
     entry_data_base,
@@ -1490,23 +1491,11 @@ def _cap_warnings(caplog):
     ]
 
 
-def _add_entry_saved_at(hass, interval_s, *, notifications=False):
-    seed_charger_states(hass, status="Charging")
-    data = entry_data_base()
-    if notifications:
-        data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
-    options = entry_options_base()
-    options[CONF_CONTROL_INTERVAL_S] = interval_s
-    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
-    entry.add_to_hass(hass)
-    return entry
-
-
 async def test_should_tick_the_coordinator_at_30_s_when_the_saved_control_interval_exceeds_30_s(
     hass,
 ):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45)
+    entry = add_entry_saved_at(hass, 45)
 
     # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -1522,7 +1511,7 @@ async def test_should_size_the_peak_window_from_30_s_when_the_saved_control_inte
     hass,
 ):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45)
+    entry = add_entry_saved_at(hass, 45)
 
     # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -1536,7 +1525,7 @@ async def test_should_tick_the_notification_manager_at_30_s_when_the_saved_contr
     hass,
 ):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45, notifications=True)
+    entry = add_entry_saved_at(hass, 45, notifications=True)
     with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
         assert await hass.config_entries.async_setup(entry.entry_id)
         await hass.async_block_till_done()
@@ -1557,7 +1546,7 @@ async def test_should_tick_the_notification_manager_at_30_s_when_the_saved_contr
 
 async def test_should_log_one_warning_when_the_saved_control_interval_exceeds_30_s(hass, caplog):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45)
+    entry = add_entry_saved_at(hass, 45)
 
     # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -1571,7 +1560,7 @@ async def test_should_name_the_saved_and_running_values_when_the_control_interva
     hass, caplog
 ):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45)
+    entry = add_entry_saved_at(hass, 45)
 
     # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -1579,14 +1568,16 @@ async def test_should_name_the_saved_and_running_values_when_the_control_interva
 
     # Assert
     (warning,) = _cap_warnings(caplog)
-    assert warning.args == (45, MAX_CONTROL_INTERVAL_S, MAX_CONTROL_INTERVAL_S)
+    message = warning.getMessage()
+    assert "of 45 s" in message
+    assert "running at 30 s" in message
 
 
 async def test_should_log_a_warning_on_every_load_when_the_saved_control_interval_exceeds_30_s(
     hass, caplog
 ):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45)
+    entry = add_entry_saved_at(hass, 45)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
@@ -1600,7 +1591,7 @@ async def test_should_log_a_warning_on_every_load_when_the_saved_control_interva
 
 async def test_should_leave_the_saved_option_as_saved_when_the_control_interval_is_capped(hass):
     # Arrange
-    entry = _add_entry_saved_at(hass, 45)
+    entry = add_entry_saved_at(hass, 45)
 
     # Act
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -1612,7 +1603,7 @@ async def test_should_leave_the_saved_option_as_saved_when_the_control_interval_
 
 async def test_should_not_warn_when_the_saved_control_interval_is_within_30_s(hass, caplog):
     # Arrange
-    entry = _add_entry_saved_at(hass, MAX_CONTROL_INTERVAL_S)
+    entry = add_entry_saved_at(hass, MAX_CONTROL_INTERVAL_S)
 
     # Act
     assert await hass.config_entries.async_setup(entry.entry_id)

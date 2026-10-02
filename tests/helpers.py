@@ -21,12 +21,14 @@ from datetime import date, timedelta
 
 from homeassistant.const import STATE_OFF, STATE_ON
 from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.smart_charging.const import (
     ATTR_APPLIES_TO,
     CONF_CHARGER_CURRENT_ENTITY,
     CONF_CHARGER_POWER_ENTITY,
     CONF_CHARGER_STATUS_ENTITY,
+    CONF_CONTROL_INTERVAL_S,
     CONF_DEFAULT_SOC_LIMIT,
     CONF_DEFAULT_TARGET_CURRENT,
     CONF_GRID_CEILING_A,
@@ -36,7 +38,9 @@ from custom_components.smart_charging.const import (
     CONF_MIN_CURRENT,
     CONF_NET_POWER_ENTITY,
     CONF_NOMINAL_VOLTAGE,
+    CONF_NOTIFICATION_TARGET_ENTITY,
     CONF_STATUS_TRANSLATION,
+    DOMAIN,
     OWNED_SUFFIX_DEPARTURE_DOW,
     STATE_CHARGING,
     STATE_CONNECTED,
@@ -98,6 +102,24 @@ def seed_charger_states(hass, *, status, net_w=0.0, charger_w=0.0, ev_soc=50.0, 
     hass.states.async_set("sensor.charger_power", str(charger_w))
     hass.states.async_set("sensor.grid_voltage", str(grid_voltage))
     hass.states.async_set("sensor.ev_soc", str(ev_soc))
+
+
+def add_entry_saved_at(hass, interval_s, *, notifications=False):
+    """Seed the charger states and add (without setting up) an entry saved at ``interval_s``.
+
+    ``notifications`` maps a notify entity so the Notification Manager runs on setup.
+    """
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    if notifications:
+        data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data=data,
+        options=entry_options_base(**{CONF_CONTROL_INTERVAL_S: interval_s}),
+    )
+    entry.add_to_hass(hass)
+    return entry
 
 
 def capture_service_calls(hass, domain: str, service: str):
