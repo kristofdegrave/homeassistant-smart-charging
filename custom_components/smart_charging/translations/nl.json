@@ -206,7 +206,7 @@
         },
         "data_description": {
           "smoothing_window": "Aantal recente vermogenmetingen dat wordt gemiddeld voordat de laadstroom wordt aangepast, om te voorkomen dat op korte pieken wordt gereageerd. Standaard 4.",
-          "control_interval_s": "Hoe vaak (seconden) de regellus de laadstroom opnieuw berekent. Standaard 10."
+          "control_interval_s": "Hoe vaak (seconden) de regellus de laadstroom opnieuw berekent. Standaard 10, bereik 5-30."
         }
       },
       "grid": {
