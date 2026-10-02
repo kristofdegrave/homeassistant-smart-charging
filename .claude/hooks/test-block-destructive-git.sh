@@ -70,7 +70,7 @@ run() { # run BLOCK|ALLOW <command> [cwd]
   # Tabs and newlines are escaped, not passed through raw, so the payload is the valid
   # JSON a real PreToolUse call would send.
   esc=$(printf '%s' "$cmd" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' |
-    awk 'NR > 1 { printf "\\n" } { gsub(/\t/, "\\\\t"); printf "%s", $0 }')
+    awk 'NR > 1 { printf "\\n" } { gsub(/\t/, "\\t"); printf "%s", $0 }')
   shown=$(printf '%s' "$cmd" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
   out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s","description":"t"}}' "$dir" "$TOOL" "$esc" | sh "$HOOK" 2>&1)
   rc=$?
@@ -944,7 +944,23 @@ runr "global -c" "echo \"\$(echo \")\"; git -c core.fsmonitor=x status; echo \"(
 run ALLOW "git commit -m \"a; b\"" "$LR/wt"                            # a quoted separator in a message
 run ALLOW "git commit -m 'a | b && c'" "$LR/wt"
 run ALLOW "git commit -m 'a;b' && cd .." "$LR/wt"                      # each reading starts with no directory change
-run ALLOW "git status # it's clean" "$LR/wt"                           # a comment's quote opens nothing
+runr "global -c" "git status # it's clean
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a comment's quote opens nothing
+runr "global -c" "cat <<EOF >/dev/null
+it's done
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... nor a heredoc body's
+runr "global -c" "cat <<-'EOF' >/dev/null
+	it's done
+	EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... a <<- one, its delimiter quoted
+runr "global -c" "echo \$((1<<2))
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a << with no delimiter line drops nothing
+runr "global -c" "git status & git -c core.fsmonitor=x status" "$LR/wt" # a background & splits
+run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # ... a redirection's & does not
+run ALLOW "git status &>/dev/null" "$LR/wt"
+run ALLOW "git commit -m 'a & b'" "$LR/wt"
+run ALLOW "# a note" "$LR/wt"                                          # all comment: nothing to scan
 mkdir -p "$STUB/splitfail"
 printf '#!/bin/sh\ncase " $* " in *" q1="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/splitfail/awk"
 chmod +x "$STUB/splitfail/awk"
