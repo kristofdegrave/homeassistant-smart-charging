@@ -100,7 +100,7 @@ header states the rule and what it concedes.
 (`<parent>/sc-wf-<n>` for `workflow/<n>`); the `Read` and `Edit` rules for worktrees match
 `//**/sc-*/**`, and those for scratch files `//**/scratchpad/**`. The shared allow-list's
 `Read` rules exist because the `reviewer` definition's `permissionMode: dontAsk` reaches
-interactive dispatches too. A worktree placed elsewhere is refused in the loop. Seven shapes
+interactive dispatches too. A worktree placed elsewhere is refused in the loop. The shapes
 the harness itself decides, observed in a `dontAsk` session:
 
 - **No `$` in a command.** `gh api repos/$REPO/…` is refused where the same call with the
@@ -115,6 +115,8 @@ the harness itself decides, observed in a `dontAsk` session:
 - **Scratch paths are written long**: a Windows short name (`KRISTO~1`) is refused where its
   long form passes.
 - **The marker is read with `printenv <marker>`**, the one form the loop file admits.
+- **A `gh api` path is unquoted**: the rules match it as typed, so a review listing whose
+  path is in double quotes is refused where the same call unquoted passes.
 - **A command is one line**: a line break inside a quoted argument makes it match no rule, so
   a multi-line GraphQL document is written on one line.
 - **A rule's text holds no parenthesis**: a `Bash(…)` rule with one inside matches nothing,
