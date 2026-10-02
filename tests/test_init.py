@@ -68,6 +68,7 @@ from custom_components.smart_charging.const import (
     EVENT_VEHICLE_CHARGE_LIMIT_RESET,
     EVENT_VEHICLE_CHARGE_LIMIT_SYNCED,
     LABEL_SC_RUNTIME,
+    MAX_CONTROL_INTERVAL_S,
     MODE_CAPTAR,
     MODE_OFF,
     MODE_POWER,
@@ -437,7 +438,7 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     hass.states.async_set("sensor.ev_soc", "50.0")
 
     options = entry_options_base()
-    options[CONF_CONTROL_INTERVAL_S] = 60
+    options[CONF_CONTROL_INTERVAL_S] = 30
     options[CONF_SAFETY_MARGIN_W] = 500.0
     options[CONF_MAX_PEAK_KW] = 7.5
     options[CONF_PEAK_FLOOR_KW] = 1.5
@@ -458,8 +459,8 @@ async def test_setup_threads_captar_and_peak_protection_options_into_coordinator
     assert config.peak_grace_min == 3.0
     assert config.captar_cooldown_min == 15.0
     assert config.power_respect_peak is False
-    # 900s (15-minute) window / 60s control interval -- R21's monthly peak demand tracking.
-    assert config.peak_window_size == 15
+    # 900s (15-minute) window / 30s control interval -- R21's monthly peak demand tracking.
+    assert config.peak_window_size == 30
 
 
 async def test_power_respect_peak_option_threaded_bypasses_peak_clamp(hass):
@@ -1004,7 +1005,7 @@ async def test_setup_schedules_the_notification_manager_tick_on_the_configured_i
     data = entry_data_base()
     data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
     options = entry_options_base()
-    options[CONF_CONTROL_INTERVAL_S] = 60
+    options[CONF_CONTROL_INTERVAL_S] = 20
     entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
     entry.add_to_hass(hass)
 
@@ -1017,9 +1018,9 @@ async def test_setup_schedules_the_notification_manager_tick_on_the_configured_i
             hass, dt_util.utcnow() + timedelta(seconds=DEFAULT_CONTROL_INTERVAL_S)
         )
         await hass.async_block_till_done()
-        assert mock_evaluate.call_count == 0  # too soon for the configured 60 s interval
+        assert mock_evaluate.call_count == 0  # too soon for the configured 20 s interval
 
-        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=60))
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=20))
         await hass.async_block_till_done()
 
     assert mock_evaluate.call_count == 1
@@ -1471,3 +1472,48 @@ async def test_end_to_end_external_monthly_peak_reflected_in_sensors(hass):
     tracked = hass.states.get("sensor.smart_charging_monthly_peak_kw")
     assert tracked is not None
     assert float(tracked.state) == 0.0  # not contaminated by the higher external reading
+
+
+async def test_should_run_at_30_s_and_warn_when_the_saved_control_interval_exceeds_30_s(
+    hass, caplog
+):
+    """NF11: the control interval is bounded at 30 s. An entry saved with 45 s runs at 30 s --
+    coordinator tick, peak window and Notification Manager tick all read the capped value --
+    with one warning per load, and the saved option is left as it is until the next save."""
+    seed_charger_states(hass, status="Charging")
+    data = entry_data_base()
+    data[CONF_NOTIFICATION_TARGET_ENTITY] = "notify.mobile_app_phone"
+    options = entry_options_base()
+    options[CONF_CONTROL_INTERVAL_S] = 45
+    entry = MockConfigEntry(domain=DOMAIN, data=data, options=options)
+    entry.add_to_hass(hass)
+
+    with patch(_NOTIFICATION_MANAGER_EVALUATE, new_callable=AsyncMock) as mock_evaluate:
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+
+        coordinator = entry.runtime_data.coordinator
+        assert coordinator.update_interval == timedelta(seconds=MAX_CONTROL_INTERVAL_S)
+        assert coordinator._config.peak_window_size == 30  # 900 s / 30 s, not 900 / 45
+        warnings = [r for r in caplog.records if r.levelname == "WARNING" and "45" in r.message]
+        assert len(warnings) == 1
+        assert str(MAX_CONTROL_INTERVAL_S) in warnings[0].message
+        assert entry.options[CONF_CONTROL_INTERVAL_S] == 45  # not migrated
+
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=MAX_CONTROL_INTERVAL_S))
+        await hass.async_block_till_done()
+    assert mock_evaluate.call_count == 1
+
+
+async def test_should_not_warn_when_the_saved_control_interval_is_within_30_s(hass, caplog):
+    seed_charger_states(hass, status="Charging")
+    options = entry_options_base()
+    options[CONF_CONTROL_INTERVAL_S] = MAX_CONTROL_INTERVAL_S
+    entry = MockConfigEntry(domain=DOMAIN, data=entry_data_base(), options=options)
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    coordinator = entry.runtime_data.coordinator
+    assert coordinator.update_interval == timedelta(seconds=MAX_CONTROL_INTERVAL_S)
+    assert not [r for r in caplog.records if "control interval" in r.message.lower()]
