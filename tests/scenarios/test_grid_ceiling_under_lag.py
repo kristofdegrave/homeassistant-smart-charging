@@ -1,21 +1,15 @@
-"""T1 (epic #996): the plant/runner pair reproduces C4's known defect under charger-power lag.
+"""T1 (epic #996): the plant/runner pair shows C4 holding the ceiling under charger-power lag.
 
 `Power` mode on an installation without the CapTar capability -- C4 is by requirement the only
 clamp in force (C3, R18) -- with a steady household load and a grid supply ceiling that binds
-below the charger's maximum current. `clamp_to_ceiling` (E6) re-derives its baseline from
-`net_w - charger_w` every cycle (`custom_components/smart_charging/engines/grid_safety.py`); with
-the charger-power reading lagging true draw by 1 cycle, that re-derived baseline is wrong by
-exactly the change in true draw between two cycles ago and one cycle ago, which a ramping-then-
-oscillating commanded current supplies every other cycle -- the same shape #992 confirmed at this
-clamp's call site. This validates the plant's lag model against that already-diagnosed defect
-before anything speculative is written (ADR-0037, Consequences).
-
-Red on `main` through C4's known defect (`docs/analysis/requirements.md#constraints`, C4's row);
-lands as `xfail(strict=True, raises=InvariantViolation)` (T2, `invariants.py`'s `check_c4` --
-`InvariantViolation` subclasses `AssertionError`). Its control, lag 0, lands green: the same
-world, but the charger's power reading lags nothing, and the whole-home meter is always ground
-truth -- so the re-derived baseline is exactly right and C4's clamp holds the ceiling on every
-step.
+below the charger's maximum current. With the charger-power reading lagging true draw by 1
+cycle, a baseline re-derived from the reading alone is wrong by the change in true draw between
+two cycles ago and one cycle ago -- the shape #992 confirmed at this clamp's call site, which this
+world reproduced before ADR-0058 (ADR-0037, Consequences: the lag model validated against an
+already-diagnosed defect). C4 now solves around the lower of the reading and the last set charger
+current (ADR-0058, C4's row in `docs/analysis/requirements.md#constraints`), and both runs are
+judged green by `invariants.py`'s `check_c4` on every step (T2): lag 1, and its control, lag 0,
+the same world with a power reading that lags nothing.
 
 `HOUSEHOLD_W`, `CYCLES`, `entry_data`, `entry_options` and `ceiling_a` are public --
 `test_invariants.py`'s C4 member replays this exact world (its own module docstring says so),
@@ -23,8 +17,6 @@ rather than keeping a second copy of these numbers and this setup.
 """
 
 import math
-
-import pytest
 
 from custom_components.smart_charging.const import (
     CONF_CAPTAR_AVAILABLE,
@@ -37,15 +29,14 @@ from custom_components.smart_charging.const import (
     MODE_POWER,
 )
 from tests.helpers import entry_data_base, entry_options_base, seed_charger_states
-from tests.scenarios.invariants import InvariantViolation, check_c4
+from tests.scenarios.invariants import check_c4
 from tests.scenarios.plant import Plant
 from tests.scenarios.runner import ScenarioRunner, format_trace
-from tests.scenarios.scenario_setup import setup_coordinator
+from tests.scenarios.scenario_setup import assert_charged_without_fault, setup_coordinator
 
 HOUSEHOLD_W = 3000.0  # steady -- no household-load step in this scenario
 _TARGET_CURRENT_A = 16.0  # Power's target current -- above the ceiling-bound headroom (9 A)
-CYCLES = 12  # several lag-driven oscillation pairs (module docstring, "every other cycle") --
-# enough for the xfail to reliably trip and for the control's steady state to show throughout.
+CYCLES = 12  # enough for several lag-driven step pairs, and for the lag-0 control's steady state.
 
 
 def entry_data():
@@ -102,13 +93,12 @@ def _expected_ceiling_bound_current_a(options: dict, household_w: float, voltage
 def _assert_mode_select_held(trace):
     """Guards the precondition both tests share: the mode select, set once in `_setup`, must
     still read `Power` on every step -- a real regression in the polled mode select entity
-    (#1363) would otherwise pass a breach off as C4's own defect, or a control-test green off as
-    proof C4 held, when neither ran under Power at all. Not an invariant of the shared set
-    (`invariants.py`) -- it is a precondition of THIS harness wiring, not a property of the
-    plant's true draw -- so it stays a plain assertion here rather than joining that module.
-    Raises a plain `AssertionError` (never `InvariantViolation`), and is composed into the
-    lag-1 test's `judge` callback AHEAD of `check_c4` (`_judge_c4_with_mode_guard` below) so a
-    mid-run mode revert is not swallowed by that test's `xfail(raises=InvariantViolation)`."""
+    (#1363) would otherwise pass a green off as proof C4 held when it never ran under Power.
+    Not an invariant of the shared set (`invariants.py`) -- it is a precondition of THIS
+    harness wiring, not a property of the plant's true draw -- so it stays a plain assertion
+    here rather than joining that module.
+    Composed into the lag-1 test's `judge` callback ahead of `check_c4`
+    (`_judge_c4_with_mode_guard` below), so a mid-run revert fails on the step it happens."""
     for t in trace:
         assert t.active_mode == MODE_POWER, (
             f"step {t.index}: expected active_mode {MODE_POWER!r}, got {t.active_mode!r} -- "
@@ -123,9 +113,7 @@ def _judge_c4(ceiling_w):
 
 
 def _judge_c4_with_mode_guard(ceiling_w):
-    """The lag-1 test's own `judge`: `_assert_mode_select_held` runs first, so a mode revert
-    raises a plain `AssertionError` that `xfail(raises=InvariantViolation)` cannot swallow,
-    before `check_c4` gets a chance to raise `InvariantViolation` for the (expected) C4 breach."""
+    """The lag-1 test's own `judge`: `_assert_mode_select_held` first, then `check_c4`."""
 
     def _judge(trace):
         _assert_mode_select_held(trace)
@@ -134,16 +122,6 @@ def _judge_c4_with_mode_guard(ceiling_w):
     return _judge
 
 
-@pytest.mark.xfail(
-    strict=True,
-    raises=InvariantViolation,
-    reason=(
-        "C4's known defect under charger-power lag (docs/analysis/requirements.md#constraints, "
-        "C4's row): clamp_to_ceiling re-derives net_w - charger_w from the lagged reading every "
-        "cycle, so a lag-driven swing breaches the grid supply ceiling. Choosing C4's lag-case "
-        "rule and fixing it are the epic #996 second slice's, after T3."
-    ),
-)
 async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_charger_reading_lags_under_power(  # noqa: E501
     hass, freezer
 ):
@@ -157,14 +135,14 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     ceiling_w = ceiling_a(options) * voltage
 
     # Act
-    await runner.run(CYCLES, judge=_judge_c4_with_mode_guard(ceiling_w))
+    trace = await runner.run(CYCLES, judge=_judge_c4_with_mode_guard(ceiling_w))
 
     # Assert
+    assert_charged_without_fault(trace)
     # C4 (docs/analysis/requirements.md#constraints): true import never exceeds the grid
     # supply ceiling, judged by the shared invariant set every cycle (T2, `invariants.py`) --
-    # the mode-select guard runs first (`_judge_c4_with_mode_guard`'s own docstring). The
-    # assertion is the `xfail` above: the expected breach raises `InvariantViolation` from
-    # inside `run` itself, caught there rather than by a statement down here.
+    # the mode-select guard runs first (`_judge_c4_with_mode_guard`'s own docstring). A breach
+    # raises `InvariantViolation` from inside `run` itself, failing the test there.
 
 
 async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_charger_reading_does_not_lag(  # noqa: E501
@@ -191,10 +169,7 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     # the control actually reaches and holds C4's ceiling-bound current -- so a regression that
     # stopped charging altogether, or broke the seeding/capture wiring, fails loudly here instead
     # of reading as "the ceiling held".
-    assert not any(t.faulted for t in trace), (
-        f"a faulted cycle writes 0 A, which would pass the ceiling check vacuously\n"
-        f"{format_trace(trace)}"
-    )
+    assert_charged_without_fault(trace)
     expected_a = _expected_ceiling_bound_current_a(options, HOUSEHOLD_W, voltage)
     for t in trace:
         assert t.commanded_current_a == expected_a, (

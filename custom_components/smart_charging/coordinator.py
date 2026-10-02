@@ -252,9 +252,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # which is correct: a fault-path drop to 0 A leaves the charger_power adapter just as
         # stale as any other step. Read once per cycle by `_run_cycle`, where `_command_stepped`
         # describes the write at the END of the PREVIOUS cycle -- which is what this cycle's
-        # `charger_w` reading may not have caught up with yet. Never reset for the same reason
-        # `_baseline_debouncer` above isn't: a stale `_last_commanded_a` after a long gap only
-        # ever costs one extra discarded reading.
+        # `charger_w` reading may not have caught up with yet. `_last_commanded_a` is also the
+        # set current C4's charger operand is bounded by (`_ceiling_charger_w`, ADR-0058). Never
+        # reset for the same reason `_baseline_debouncer` above isn't: a stale `_last_commanded_a`
+        # after a long gap costs one extra discarded reading, and for C4 only ever lowers the
+        # charger operand -- the conservative direction.
         self._last_commanded_a: float | None = None
         self._command_stepped = False
         # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
@@ -1554,11 +1556,22 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return clamp_to_ceiling(
             desired,
             net_w=ctx.net_w,
-            charger_w=ctx.charger_w,
+            charger_w=self._ceiling_charger_w(ctx),
             voltage=ctx.voltage,
             ceiling_a=self._config.grid_ceiling_a,
             offset_a=self._config.grid_safety_offset_a,
         )
+
+    def _ceiling_charger_w(self, ctx: CycleContext) -> float:
+        """ADR-0058; requirements.md's C4 row: the charger draw C4 solves around is the lower of
+        this cycle's charger power reading and the charger current last set, at the supply
+        voltage, so a reading still showing the draw from before a step down cannot widen C4's
+        headroom, and a car drawing less than it was set to is taken at its reading. The reading
+        alone until `_write` has set a current -- a fresh coordinator, as every restart and
+        reload builds."""
+        if self._last_commanded_a is None:
+            return ctx.charger_w
+        return min(ctx.charger_w, self._last_commanded_a * ctx.voltage)
 
     def _peak_clamp_would_run(self) -> bool:
         """R3 AC1/R17: whether R3's peak clamp applies to the mode currently active.
@@ -1594,13 +1607,13 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         peak.
 
         Both baseline-dependent bounds (peak, C4) are fitted to `ctx.smoothed_baseline_w` --
-        R5's own forecast, not a clamp -- rather than the raw `ctx.baseline_w`/`ctx.net_w`/
-        `ctx.charger_w` the real R3/C4 clamps and the `peak_headroom_a` readout still use
-        (issue #1189/T10, R5's third smoothed-baseline criterion; ADR-0051, which narrows
-        ADR-0006 step 2's raw-charger clause for this forecast specifically). The forecast is
-        fitted to R10's admitted joint mean, which already folds `net_w - charger_w` for the
-        solar modes' own step 6 (ADR-0049) -- this reuses that same value rather than a second,
-        net-only mean.
+        R5's own forecast, not a clamp -- rather than the unsmoothed operands the real R3/C4
+        clamps and the `peak_headroom_a` readout still use: R3's raw `ctx.baseline_w`, and C4's
+        `ctx.net_w` with ADR-0058's lower charger operand (issue #1189/T10, R5's third
+        smoothed-baseline criterion; ADR-0051, which narrows ADR-0006 step 2's raw-charger
+        clause for this forecast specifically). The forecast is fitted to R10's admitted joint
+        mean, which already folds `net_w - charger_w` for the solar modes' own step 6 (ADR-0049)
+        -- this reuses that same value rather than a second, net-only mean.
 
         Resolved on every cycle whether or not urgency is actually in effect, which is the whole
         point of it: a test written against the rate CURRENTLY in force would move the moment
@@ -1637,10 +1650,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         bounds = [
             self._config.max_current,
             # Issue #1189/T10, R5's third smoothed-baseline criterion: fitted to the admitted
-            # mean (`ctx.smoothed_baseline_w`), not the raw `ctx.net_w`/`ctx.charger_w` C4 itself
-            # clamps against -- `charger_w=0.0` because `ctx.smoothed_baseline_w` is already the
-            # household's own load net of the charger; the helper reads only the two operands'
-            # difference.
+            # mean (`ctx.smoothed_baseline_w`), not the `ctx.net_w` and lower charger operand C4
+            # itself clamps against (ADR-0058) -- `charger_w=0.0` because
+            # `ctx.smoothed_baseline_w` is already the household's own load net of the charger;
+            # the helper reads only the two operands' difference.
             ceiling_headroom_a(
                 net_w=ctx.smoothed_baseline_w,
                 charger_w=0.0,
