@@ -1608,13 +1608,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         Both baseline-dependent bounds (peak, C4) are fitted to `ctx.smoothed_baseline_w` --
         R5's own forecast, not a clamp -- rather than the unsmoothed operands the real R3/C4
-        clamps and the `peak_headroom_a` readout still use (R3's raw `ctx.baseline_w`; C4's
-        `ctx.net_w` with ADR-0058's lower charger operand)
-        (issue #1189/T10, R5's third smoothed-baseline criterion; ADR-0051, which narrows
-        ADR-0006 step 2's raw-charger clause for this forecast specifically). The forecast is
-        fitted to R10's admitted joint mean, which already folds `net_w - charger_w` for the
-        solar modes' own step 6 (ADR-0049) -- this reuses that same value rather than a second,
-        net-only mean.
+        clamps and the `peak_headroom_a` readout still use: R3's raw `ctx.baseline_w`, and C4's
+        `ctx.net_w` with ADR-0058's lower charger operand (issue #1189/T10, R5's third
+        smoothed-baseline criterion; ADR-0051, which narrows ADR-0006 step 2's raw-charger
+        clause for this forecast specifically). The forecast is fitted to R10's admitted joint
+        mean, which already folds `net_w - charger_w` for the solar modes' own step 6 (ADR-0049)
+        -- this reuses that same value rather than a second, net-only mean.
 
         Resolved on every cycle whether or not urgency is actually in effect, which is the whole
         point of it: a test written against the rate CURRENTLY in force would move the moment

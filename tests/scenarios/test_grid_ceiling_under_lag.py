@@ -36,7 +36,7 @@ from tests.scenarios.scenario_setup import assert_charged_without_fault, setup_c
 
 HOUSEHOLD_W = 3000.0  # steady -- no household-load step in this scenario
 _TARGET_CURRENT_A = 16.0  # Power's target current -- above the ceiling-bound headroom (9 A)
-CYCLES = 12  # enough for several lag-driven step pairs and for the steady state to show throughout.
+CYCLES = 12  # enough for several lag-driven step pairs, and for the lag-0 control's steady state.
 
 
 def entry_data():
@@ -169,10 +169,7 @@ async def test_should_keep_true_import_within_the_grid_supply_ceiling_when_the_c
     # the control actually reaches and holds C4's ceiling-bound current -- so a regression that
     # stopped charging altogether, or broke the seeding/capture wiring, fails loudly here instead
     # of reading as "the ceiling held".
-    assert not any(t.faulted for t in trace), (
-        f"a faulted cycle writes 0 A, which would pass the ceiling check vacuously\n"
-        f"{format_trace(trace)}"
-    )
+    assert_charged_without_fault(trace)
     expected_a = _expected_ceiling_bound_current_a(options, HOUSEHOLD_W, voltage)
     for t in trace:
         assert t.commanded_current_a == expected_a, (

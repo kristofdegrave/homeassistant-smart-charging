@@ -1,12 +1,13 @@
 """T3 (epic #996): a whole-stack scenario runs R3 and C4 live and binding under charger-power
 lag -- the tier's ADR-0037 placement rule for a tier-3 scenario (every engine live, R3 and C4
-both binding), on top of T1's single-clamp C4 reproduction and T2's per-member mutation tests.
+both binding at the start), on top of T1's single-clamp C4 reproduction and T2's per-member
+mutation tests. Both bind only until step 4 (see "R3's own exposure").
 
 `Power` with CapTar present and its own peak-protection option left at its default (R17's
 default, `DEFAULT_POWER_RESPECT_PEAK = True`): both clamps run on every cycle (`_apply_peak_clamp`
 then `_apply_grid_ceiling_clamp`, in that order, `coordinator.py`'s `_run_cycle`). CapTar's peak
 target is chosen so R3's nominal headroom equals C4's ceiling headroom (13 A each) at a steady
-household load, so neither clamp is held non-binding by the other, and Power's target alone
+household load, so neither clamp starts held non-binding by the other, and Power's target alone
 (16 A) would take true import past the ceiling, so C4's limit is at stake and not only its clamp.
 
 **What the run shows.** Before ADR-0058, C4 re-derived the household from the lagged `charger_w`
@@ -18,11 +19,13 @@ set charger current (ADR-0058; requirements.md's C4 row,
 on every step while C4 binds on the lagging reading (ADR-0058's Option D accepts this), but true
 import stays within both limits every step, so the whole invariant set judges every step green.
 
-**R3's own exposure.** That R3's debounce commits a corrupted reading under a sustained command
-oscillation is R3's criteria at work, not only C4's: any oscillating command, Solar's moving
-request among them (`debounce_baseline_w`'s docstring), can trigger it. #1584 records it; this
-world still oscillates, so it still exercises that exposure, and what it shows is that the
-oscillation now stays within both limits here.
+**R3's own exposure.** R3's debounce still commits the corrupted baseline (-690 W) at step 4;
+from then on R3's headroom is 26 A, above the 16 A target, so R3 stops binding and C4 alone
+holds both limits, step for step as in the C4-alone run. That R3's debounce commits a corrupted
+reading under a sustained command oscillation is R3's criteria at work, not only C4's: any
+oscillating command, Solar's moving request among them (`debounce_baseline_w`'s docstring), can
+trigger it. #1584 records it; this world still oscillates, so it still exercises that exposure,
+and what it shows is that the oscillation now stays within both limits here.
 
 **Attribution.** The R3-alone test (C4 bypassed) shows R3 holding its own headroom on this
 world under a *steady* command; it does not show R3 stable under an oscillating one (#1584). The

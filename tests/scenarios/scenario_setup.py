@@ -1,5 +1,5 @@
-"""Shared scenario-setup plumbing every tier builds its own `_setup` from (epic #996), so a
-later tier reuses this rather than reaching into an earlier tier's private names."""
+"""Shared scenario-setup plumbing, judging and guard helpers every tier builds on (epic #996),
+so a later tier reuses this rather than reaching into an earlier tier's private names."""
 
 from collections.abc import Callable
 

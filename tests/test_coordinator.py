@@ -4918,6 +4918,8 @@ async def test_should_keep_the_escalated_c4_bound_off_the_charger_operand_when_a
 
     # Assert
     assert calls["ceiling_headroom_a"][-1]["charger_w"] == 0.0
+    # Discrimination guard: the real clamp saw a non-zero charger operand, so the 0.0 above
+    # is the spy-fed ceiling headroom and not an operand that was zero everywhere.
     assert calls["clamp_to_ceiling"][-1]["charger_w"] > 0.0
 
 
@@ -6101,6 +6103,7 @@ async def test_should_clamp_c4_on_the_last_set_current_when_the_charger_reading_
     await coord._async_update_data()
     # Arrange (precondition guard)
     assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
+    # Arrange
     adapters[ROLE_CHARGER_POWER] = _FakeNumeric(16.0 * _C4_VOLTAGE_V)
     adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + 16.0 * _C4_VOLTAGE_V)
 
@@ -6123,6 +6126,7 @@ async def test_should_clamp_c4_on_the_reading_when_the_car_draws_less_than_it_wa
     await coord._async_update_data()
     # Arrange (precondition guard)
     assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
+    # Arrange
     reading_w = 4.0 * _C4_VOLTAGE_V
     adapters[ROLE_CHARGER_POWER] = _FakeNumeric(reading_w)
     adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + reading_w)
