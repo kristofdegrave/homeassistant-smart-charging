@@ -982,6 +982,31 @@ runr "global -c" "git \\
 -c core.fsmonitor=x status" "$LR/wt"                                    # a backslash-newline joins, leaving no stray word
 runr "global -c" "git status # see \\
 git -c core.fsmonitor=x status" "$LR/wt"                                # ... but not inside a comment
+runr "global -c" "cat <<\"a\\\"b\" >/dev/null; git --namespace ';' -c core.fsmonitor=x status
+x
+a\"b" "$LR/wt"                                                          # an escaped quote in a double-quoted delimiter
+runr "global -c" "cat <<'E'\"O\"F >/dev/null
+it's
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a delimiter quoted in parts
+runr "global -c" "cat <<\\EOF >/dev/null
+it's
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... and backslash-quoted
+runr "global -c" "cat <<A <<B >/dev/null
+it's
+A
+it's
+B
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # two openers on one line
+runr "global -c" "cat <<EOF |
+it's
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a pipe ending the opener's line: the body is dropped
+runr "global -c" "git --namespace \"a\\
+b\" -c core.fsmonitor=x status" "$LR/wt"                                # a backslash-newline in double quotes joins
+runr "global -c" "echo \\\\
+git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates
 run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
 run ALLOW "git status >&2" "$LR/wt"
 run ALLOW "git log --oneline |

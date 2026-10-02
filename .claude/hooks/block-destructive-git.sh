@@ -1388,8 +1388,11 @@ segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
 # (`git --namespace ';' -c ...`, `\;`) does not cut a git segment short. It reads the command
 # as sent (`raw_cmd`), before the heredoc strip and the continuation join, and does both its
 # own way. The quotes read are `'`, `"` and `$'...'`; a backslash outside single quotes takes
-# the character after it, and a backslash-newline outside them joins the lines; a `#` that
-# starts a word outside quotes drops the rest of its line; a newline inside a quote, or after
+# the character after it, and a backslash-newline outside quotes or in double quotes joins
+# the lines (in `$'...'` it is read as a blank, and the segment is refused for its `$`); a
+# `#` after a blank, newline, `;`, `&`, `|` or `(` outside quotes drops the rest of its line
+# (bash also starts a comment after `<`, `>` or `)`, read here as text, which only adds
+# refusals); a newline inside a quote, or after
 # a `|`, is read as a blank so the segment stays one line. A heredoc's body is dropped, since
 # bash reads no quote in it: the plain split above still reads the body, so one fed to an
 # interpreter is judged as before, and an opener whose delimiter line never comes drops
@@ -1444,8 +1447,11 @@ split_unquoted() {
         if (c == "<" && nx == "<" && substr(s, i + 2, 1) == "<") {
           out = out "<<<"; i += 2; prev = "<"; continue
         }
-        # A heredoc opener (`<<`, `<<-`): its delimiter, a quoted part read to its closing
-        # quote and a backslash taking the next character, is matched once the line ends.
+        # A heredoc opener (`<<`, `<<-`): its delimiter is matched once the line ends. Its
+        # quoting is read as bash reads it: a single-quoted part to its closing quote; a
+        # double-quoted or $'...' part to the close that no backslash escapes, a backslash
+        # taking an escaped quote (and, in double quotes, a backslash, $ or backtick);
+        # outside quotes a backslash taking the next character, a backslash-newline joining.
         if (c == "<" && nx == "<") {
           j = i + 2; dash = 0
           if (substr(s, j, 1) == "-") { dash = 1; j++ }
@@ -1453,17 +1459,29 @@ split_unquoted() {
           d = ""
           for (; j <= n; j++) {
             e = substr(s, j, 1)
-            if (e == q1 || e == q2) {
+            ansi = (e == "$" && substr(s, j + 1, 1) == q1)
+            if (ansi) { j++; e = q1 }
+            if (e == q1 && !ansi) {
               kk = index(substr(s, j + 1), e)
               if (!kk) { j = n + 1; break }
               d = d substr(s, j + 1, kk - 1); j += kk; continue
             }
-            if (e == esc) { d = d substr(s, j + 1, 1); j++; continue }
+            if (e == q1 || e == q2) {
+              for (j++; j <= n && substr(s, j, 1) != e; j++) {
+                f = substr(s, j, 1); g = substr(s, j + 1, 1)
+                if (f == esc && (g == e || (e == q2 && g ~ /[\\$`\n]/))) { j++; f = g }
+                if (f != "\n" || e != q2) d = d f
+              }
+              continue
+            }
+            if (e == esc) { if (substr(s, j + 1, 1) != "\n") d = d substr(s, j + 1, 1); j++; continue }
             if (e ~ /[ \t\n;&|<>()]/) break
             d = d e
           }
           if (d != "") { nh++; hd[nh] = d; hdash[nh] = dash }
-          out = out substr(s, i, j - i); i = j - 1; prev = "x"; continue
+          # The opener as typed, a newline inside it read as a blank like any quoted one.
+          w = substr(s, i, j - i); gsub(/\n/, " ", w)
+          out = out w; i = j - 1; prev = "x"; continue
         }
         if (c == q1) q = q1
         else if (c == q2) q = q2
