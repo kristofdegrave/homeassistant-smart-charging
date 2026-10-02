@@ -1007,6 +1007,19 @@ runr "global -c" "git --namespace \"a\\
 b\" -c core.fsmonitor=x status" "$LR/wt"                                # a backslash-newline in double quotes joins
 runr "global -c" "echo \\\\
 git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates
+runr "delimiter carries" "cat <<\$'E\\x4fF' >/dev/null
+it's
+EOF
+git status" "$LR/wt"                                                    # a delimiter bash builds: refused, not read
+runr "delimiter carries" "cat <<\"\${x}\" >/dev/null
+y
+EOF" "$LR/wt"
+runr "delimiter carries" "cat <<E\$(echo O)F >/dev/null
+y
+EOF" "$LR/wt"
+run ALLOW "cat <<'\$X' >/dev/null
+y
+\$X" "$LR/wt"                                                           # ... a single-quoted \$ is a letter
 run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
 run ALLOW "git status >&2" "$LR/wt"
 run ALLOW "git log --oneline |

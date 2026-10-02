@@ -194,8 +194,9 @@
 # after a quote inside a command substitution within double quotes, which neither reading
 # reads as bash does. The plain split still runs, since it is the one that splits inside a
 # command substitution, where bash quotes afresh, and that reads a body fed to an
-# interpreter. The second reading only adds refusals, and an awk that cannot make it
-# refuses. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
+# interpreter. The second reading only adds refusals: an awk that cannot make it refuses,
+# and so does a heredoc whose delimiter carries `$` outside single quotes, which bash builds
+# in ways the reading does not follow. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
 # `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
 # `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
 # a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
@@ -1449,9 +1450,11 @@ split_unquoted() {
         }
         # A heredoc opener (`<<`, `<<-`): its delimiter is matched once the line ends. Its
         # quoting is read as bash reads it: a single-quoted part to its closing quote; a
-        # double-quoted or $'...' part to the close that no backslash escapes, a backslash
-        # taking an escaped quote (and, in double quotes, a backslash, $ or backtick);
-        # outside quotes a backslash taking the next character, a backslash-newline joining.
+        # double-quoted part to the close that no backslash escapes, a backslash taking an
+        # escaped quote, backslash or backtick; outside quotes a backslash taking the next
+        # character, a backslash-newline joining. A `$` outside its single-quoted parts --
+        # `$'...'`, `$"..."`, `$(...)`, `${...}` -- makes bash build the delimiter in ways
+        # not read here, so the reading exits 3 and the loop refuses the command.
         if (c == "<" && nx == "<") {
           j = i + 2; dash = 0
           if (substr(s, j, 1) == "-") { dash = 1; j++ }
@@ -1459,18 +1462,18 @@ split_unquoted() {
           d = ""
           for (; j <= n; j++) {
             e = substr(s, j, 1)
-            ansi = (e == "$" && substr(s, j + 1, 1) == q1)
-            if (ansi) { j++; e = q1 }
-            if (e == q1 && !ansi) {
+            if (e == "$") dollar = 1
+            if (e == q1) {
               kk = index(substr(s, j + 1), e)
               if (!kk) { j = n + 1; break }
               d = d substr(s, j + 1, kk - 1); j += kk; continue
             }
-            if (e == q1 || e == q2) {
+            if (e == q2) {
               for (j++; j <= n && substr(s, j, 1) != e; j++) {
                 f = substr(s, j, 1); g = substr(s, j + 1, 1)
-                if (f == esc && (g == e || (e == q2 && g ~ /[\\$`\n]/))) { j++; f = g }
-                if (f != "\n" || e != q2) d = d f
+                if (f == "$") dollar = 1
+                if (f == esc && g ~ /["\\`\n]/) { j++; f = g }
+                if (f != "\n") d = d f
               }
               continue
             }
@@ -1505,6 +1508,7 @@ split_unquoted() {
         out = out c; prev = c
       }
       print out
+      if (dollar) exit 3
     }'
 }
 
@@ -1917,7 +1921,11 @@ scan "$segments"
 # first reading alone is the one a quoted separator cuts short. An empty reading is a
 # command that is all comment or separators, with nothing to scan.
 if in_loop; then
-  qsegments=$(split_unquoted "$raw_cmd") ||
+  qsegments=$(split_unquoted "$raw_cmd")
+  _st=$?
+  [ "$_st" != 3 ] ||
+    deny "$cmd" "in the autopilot loop a heredoc whose delimiter carries \$ is refused: bash builds that delimiter in ways the guard does not read, so where the body ends cannot be shown" "$HARNESS_TAIL"
+  [ "$_st" = 0 ] ||
     deny "$cmd" "in the autopilot loop the command could not be split where bash splits it, so a quoted or escaped separator could hide the rest of a git or gh command" "$HARNESS_TAIL"
   [ "$qsegments" = "$segments" ] || scan "$qsegments"
 fi
