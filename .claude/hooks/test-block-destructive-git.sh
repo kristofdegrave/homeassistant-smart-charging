@@ -70,7 +70,7 @@ run() { # run BLOCK|ALLOW <command> [cwd]
   # Tabs and newlines are escaped, not passed through raw, so the payload is the valid
   # JSON a real PreToolUse call would send.
   esc=$(printf '%s' "$cmd" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' |
-    awk 'NR > 1 { printf "\\n" } { gsub(/\t/, "\\\\t"); printf "%s", $0 }')
+    awk 'NR > 1 { printf "\\n" } { gsub(/\t/, "\\t"); printf "%s", $0 }')
   shown=$(printf '%s' "$cmd" | awk 'NR > 1 { printf "\\n" } { printf "%s", $0 }')
   out=$(printf '{"session_id":"t","cwd":"%s","hook_event_name":"PreToolUse","tool_name":"%s","tool_input":{"command":"%s","description":"t"}}' "$dir" "$TOOL" "$esc" | sh "$HOOK" 2>&1)
   rc=$?
@@ -930,7 +930,130 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
+# A quoted or escaped separator does not cut a git or gh segment short: the loop reads the
+# command again, split only where bash splits it.
+runr "global -c" "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git --namespace '|' -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git --namespace '&&' -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git --namespace \";\" -c core.fsmonitor=x status" "$LR/wt" # ... in double quotes
+runr "global -c" "git --namespace \\; -c core.fsmonitor=x status" "$LR/wt"   # ... escaped
+runr "bash would expand" "git {-ccore.fsmonitor=a\\;b,} status" "$LR/wt"  # ... escaped, in a brace list
+runr "removing needs-approval" "gh issue edit 5 --title ';' --remove-label needs-approval"
+runr "global -c" "git commit -m 'a;b'; git -c core.fsmonitor=x status" "$LR/wt" # a real one after a quoted one
+runr "global -c" "echo \"\$(echo \")\"; git -c core.fsmonitor=x status; echo \"(\")\"" "$LR/wt" # bash requotes in a substitution: the plain split reads it
+run ALLOW "git commit -m \"a; b\"" "$LR/wt"                            # a quoted separator in a message
+run ALLOW "git commit -m 'a | b && c'" "$LR/wt"
+run ALLOW "git commit -m 'a;b' && cd .." "$LR/wt"                      # each reading starts with no directory change
+runr "global -c" "git status # it's clean
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a comment's quote opens nothing
+runr "global -c" "cat <<EOF >/dev/null
+it's done
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... nor a heredoc body's
+runr "global -c" "cat <<-'EOF' >/dev/null
+	it's done
+	EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... a <<- one, its delimiter quoted
+runr "global -c" "echo \$((1<<2))
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a << with no delimiter line drops nothing
+runr "global -c" "git status & git -c core.fsmonitor=x status" "$LR/wt" # a background & splits
+run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # ... a redirection's & does not
+run ALLOW "git status &>/dev/null" "$LR/wt"
+run ALLOW "git commit -m 'a & b'" "$LR/wt"
+run ALLOW "# a note" "$LR/wt"                                          # all comment: nothing to scan
+runr "global -c" "cat <<'EOF' >/dev/null
+x
+EOF
+git --namespace ';' -c core.fsmonitor=x status
+cat <<EOF >/dev/null
+y
+EOF" "$LR/wt"                                                         # a stripped terminator does not let a later one match
+runr "global -c" "cat <<EOF >/dev/null
+| it's | a |
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... nor a body line ending in | hide one
+runr "global -c" "cat <<-EOF >/dev/null
+	it's done
+	EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # an unquoted <<- body: the tab strip
+runr "global -c" "grep -c x <<< 'a b'
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a here-string opens no heredoc
+runr "global -c" "git \\
+-c core.fsmonitor=x status" "$LR/wt"                                    # a backslash-newline joins, leaving no stray word
+runr "global -c" "git status # see \\
+git -c core.fsmonitor=x status" "$LR/wt"                                # ... but not inside a comment
+runr "global -c" "cat <<\"a\\\"b\" >/dev/null; git --namespace ';' -c core.fsmonitor=x status
+x
+a\"b" "$LR/wt"                                                          # an escaped quote in a double-quoted delimiter
+runr "global -c" "cat <<'E'\"O\"F >/dev/null
+it's
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a delimiter quoted in parts
+runr "global -c" "cat <<\\EOF >/dev/null
+it's
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # ... and backslash-quoted
+runr "global -c" "cat <<A <<B >/dev/null
+it's
+A
+it's
+B
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # two openers on one line
+runr "global -c" "cat <<EOF |
+it's
+EOF
+git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a pipe ending the opener's line: the body is dropped
+runr "global -c" "git --namespace \"a\\
+b\" -c core.fsmonitor=x status" "$LR/wt"                                # a backslash-newline in double quotes joins
+runr "global -c" "echo \\\\
+git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates
+runr "delimiter carries" "cat <<\$'E\\x4fF' >/dev/null
+it's
+EOF
+git status" "$LR/wt"                                                    # a delimiter bash builds: refused, not read
+runr "delimiter carries" "cat <<\"\${x}\" >/dev/null
+y
+EOF" "$LR/wt"
+runr "delimiter carries" "cat <<E\$(echo O)F >/dev/null
+y
+EOF" "$LR/wt"
+runr "delimiter carries" "cat <<E\`echo O\`F >/dev/null
+y
+EOF" "$LR/wt"                                                           # ... a backquoted part
+runr "delimiter carries" "cat <<-\$X >/dev/null
+	y
+	\$X" "$LR/wt"                                                          # ... after <<-
+runr "delimiter carries" "cat <<A <<\$B >/dev/null
+a
+A
+b
+\$B" "$LR/wt"                                                           # ... in a second opener on the line
+runr "delimiter carries" "cat <<\$" "$LR/wt"                            # ... as the input's last character
+run ALLOW "cat <<'\$X' >/dev/null
+y
+\$X" "$LR/wt"                                                           # ... a single-quoted \$ is a letter
+run ALLOW "cat <<\\\$X >/dev/null
+y
+\$X" "$LR/wt"                                                           # ... and so is an escaped one
+run ALLOW "cat <<EOF >/dev/null
+cost: \$5 and \`date\`
+EOF
+git status" "$LR/wt"                                                    # a \$ or backtick in the body, not the delimiter
+run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
+run ALLOW "git status >&2" "$LR/wt"
+run ALLOW "git log --oneline |
+wc -l" "$LR/wt"                                                        # a pipe ending its line feeds the next
+run ALLOW "git status \\
+--short" "$LR/wt"                                                      # a real continuation
+mkdir -p "$STUB/splitfail"
+printf '#!/bin/sh\ncase " $* " in *" q1="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/splitfail/awk"
+chmod +x "$STUB/splitfail/awk"
+OLD_PATH=$PATH
+PATH="$STUB/splitfail:$PATH"
+runr "could not be split" "git status" "$LR/wt"                         # an awk that fails: closed
+PATH=$OLD_PATH
 unset "$MARKER" GUARD_REPO
+run ALLOW "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"   # the second reading: interactive, unaffected
 run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
 run ALLOW "git -c core.pager=cat log -1" "$LR/wt"                      # the loop's git rules: interactive, unaffected
 run ALLOW "git fetch https://example.invalid/fork main" "$LR/wt"
