@@ -82,7 +82,7 @@ Shared vocabulary for all analysis documents. Every domain term used in requirem
 
 ### Domain concepts
 
-**`solar surplus`** — Solar power available to the charger after all other household consumption, computed as `charger_w − net_w` where `net_w` is net grid import (positive = importing, negative = exporting); a positive surplus means solar is feeding the charger. Unit: watts (W).
+**`solar surplus`** — Solar power available to the charger after all other household consumption, computed as the charger's draw minus `net_w`, net grid import (positive = importing, negative = exporting); a positive surplus means solar is feeding the charger. R10's smoothed form takes the charger's draw as the charger power reading (`charger_w − net_w`); the surfaced readout takes the charger draw R3 states (`entity-catalog.md`). Unit: watts (W).
 
 **`net import`** — Net power flowing from the grid into the house, equal to `net_w`; positive means importing from the grid, negative means exporting to the grid. Unit: watts (W).
 

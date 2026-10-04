@@ -72,7 +72,7 @@ homed in the rule or use-case that defines its lifecycle.
 
 ```mermaid
 flowchart TD
-    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3;<br/>charger draw: lower of charger_w<br/>and last set current)"]
+    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3;<br/>charger draw: lower of charger_w<br/>and last set current, converted at<br/>the supply voltage step 3 resolves)"]
     Read --> Smooth["Smooth solar surplus<br/>(charger_w − net_w per sample;<br/>rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — R22)"]
@@ -101,7 +101,8 @@ flowchart TD
    The net import and charger power readings, with the charger current the System last set,
    also resolve this cycle's accepted [household
    baseline](system-overview.md#ubiquitous-language), its charger draw the lower of that reading
-   and that current as R3 states, and subject to R3's two deferral cases — here,
+   and that current as R3 states, converted at the supply voltage step 3 resolves for this
+   cycle, and subject to R3's two deferral cases — here,
    every cycle and regardless of which [capabilities](system-overview.md#ubiquitous-language) are
    declared, rather than inside the CapTar-gated step 5, one of its consumers, since it must
    still resolve on an installation with no CapTar for the diagnostic readouts that also read
