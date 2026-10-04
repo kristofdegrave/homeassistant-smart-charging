@@ -94,6 +94,11 @@ run() { # run BLOCK|ALLOW <command> [cwd]
 
 echo "=== blocked: outside the standing authorization ==="
 run BLOCK 'git push --force'
+runr "force-pushing" '2>/dev/null git push --force origin x'    # a redirection before git is no command word
+runr "reset --hard" '>/dev/null git reset --hard'
+runr "reset --hard" 'git >/dev/null reset --hard'               # ... nor one before the subcommand
+runr "reset --hard" 'git 2> /dev/null reset --hard'             # ... its target a word of its own
+runr "reset --hard" 'git 2>&- reset --hard'                     # ... a closed fd takes no target word
 run BLOCK 'git push -f origin main'
 run BLOCK 'git push --force-with-lease origin main'
 run BLOCK 'git push --force-with-lease=main:abc123 origin'
@@ -693,6 +698,7 @@ export "$MARKER=1"
 export GUARD_REPO="$LR/wt"   # the repository the loop works in, which the hook itself is not part of here
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
 run BLOCK "git -C $LR/wt commit -m x" "$LR/wt2"                       # ... reached through -C from a sibling worktree
+runr "may not touch the harness" "git </dev/null commit -m x" "$LR/wt"  # ... behind a redirection before the subcommand
 g reset -q
 run BLOCK "git commit -am x" "$LR/wt"                                  # an unstaged one, which -a would take
 g checkout -q -- .github/ci.yml
@@ -930,6 +936,12 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
+runr "global -c" "git >/dev/null -c core.fsmonitor=x status" "$LR/wt"   # a redirection is not the subcommand
+runr "global -c" "git 2>&1 -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git > /dev/null -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "</dev/null git -c core.fsmonitor=x status" "$LR/wt"
+runr "global -c" "git >| /tmp/o -c core.fsmonitor=x status" "$LR/wt"    # >| is no pipe
+run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # a redirection after the subcommand
 # A quoted or escaped separator does not cut a git or gh segment short: the loop reads the
 # command again, split only where bash splits it.
 runr "global -c" "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"

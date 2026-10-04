@@ -31,10 +31,12 @@
 # a segment of its own.
 # A line continuation is joined before that split: a backslash-newline for sh, a
 # backtick-newline for PowerShell, a newline after a trailing pipe for both.
-# The first word is found by stepping over environment assignments, the transparent
-# wrappers listed at the scan loop, shell reserved words (`if`, `then`, `!`, `{`, ...) and a
-# lone & -- not a separator here but PowerShell's call operator (`& gh pr merge ...`) --
-# with surrounding quotes, a leading backslash and a leading & stripped from it. The guard
+# The first word is found by stepping over environment assignments, redirections with their
+# targets (`2>/dev/null git ...`, read by redir_words, which the walk to git's subcommand
+# steps over too), the transparent wrappers listed at the scan loop, shell reserved words
+# (`if`, `then`, `!`, `{`, ...) and a lone & -- not a separator here but PowerShell's call
+# operator (`& gh pr merge ...`) -- with surrounding quotes, a leading backslash and a
+# leading & stripped from it. The guard
 # runs commands of its own -- a `git rev-parse` in a directory taken from the command text
 # -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to decide the merge
 # rule below. The block list is the one the workflow doc enumerates, so same-family
@@ -436,6 +438,26 @@ first_harness_path() {
     esac
   done
   return 1
+}
+
+# Is a word a redirection, which bash removes before the command runs? Sets _rw to the words
+# it takes: 1 with its target attached (`2>/dev/null`, `2>&1`, `>&-`, `<<EOF`), 2 when the
+# target is the next word (`2> /dev/null`, `<< EOF`), 0 when it is no redirection. Read as
+# typed: a fd number, then `<`, `>`, `&>`, `>>`, `>|`, `<>`, `>&`, `<&`, `<<`, `<<-` or `<<<`.
+# A `{name}>` fd variable is not read (conceded), nor, in the loop, a quoted `'>'`, which
+# the loop's quote removal turns into one -- read as a redirection, which can only skip a
+# word git itself would refuse as its subcommand.
+redir_words() {
+  _r=${1#"${1%%[!0-9]*}"}
+  case "$_r" in
+    '<'* | '>'* | '&>'*) ;;
+    *) _rw=0; return ;;
+  esac
+  case "$_r" in
+    '<<-'*) _t=${_r#'<<-'} ;;
+    *) _t=${_r#"${_r%%[!<>&|]*}"} ;;
+  esac
+  if [ -n "$_t" ]; then _rw=1; else _rw=2; fi
 }
 
 # Does a segment change the shell's directory? Its first word -- after the reserved words and
@@ -1497,7 +1519,8 @@ split_unquoted() {
           continue
         }
         else if ((c == "&" || c == "|") && nx == c) { out = out "\n"; i++; prev = "\n"; continue }
-        else if (c == "|") {
+        else if (c == "|" && prev != ">") {
+          # (`>|` is noclobber output, not a pipe.)
           # A pipe ending its line feeds the next one: the line break is read as a blank,
           # though a heredoc opened on the line still has its body dropped.
           out = out "\n|"; prev = "|"
@@ -1583,6 +1606,14 @@ for seg in $1; do
   git_env=0
   interp=''
   while [ $# -gt 0 ]; do
+    # A redirection (`2>/dev/null git ...`) is no command word: bash removes it, with its
+    # target, before the command runs, so it is stepped over.
+    redir_words "$1"
+    if [ "$_rw" != 0 ]; then
+      shift
+      [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
+      continue
+    fi
     tok=$1
     # Surrounding quotes, a leading & (`"gh"`, `&gh`), and the opener of a substitution or
     # subshell are not part of the command's name; the cut to the last path part below
@@ -1715,6 +1746,14 @@ for seg in $1; do
     done
   fi
   while [ $# -gt 0 ]; do
+    # A redirection between git and its options (`git >/dev/null -c ...`) is neither an
+    # option nor the subcommand: bash removes it before git runs.
+    redir_words "$1"
+    if [ "$_rw" != 0 ]; then
+      shift
+      [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
+      continue
+    fi
     case "$1" in
       -C)
         shift
