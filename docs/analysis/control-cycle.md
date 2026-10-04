@@ -72,7 +72,7 @@ homed in the rule or use-case that defines its lifecycle.
 
 ```mermaid
 flowchart TD
-    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3;<br/>charger draw: lower of charger_w<br/>and last set current, converted at<br/>the supply voltage step 3 resolves)"]
+    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3;<br/>charger draw: lower of charger_w<br/>and last set current, converted at<br/>the voltage from Resolve supply voltage)"]
     Read --> Smooth["Smooth solar surplus<br/>(charger_w − net_w per sample;<br/>rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — R22)"]
