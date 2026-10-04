@@ -36,7 +36,7 @@ hold](system-overview.md#ubiquitous-language) is read from rather than separatel
 threaded in step 4, and the last accepted [household
 baseline](system-overview.md#ubiquitous-language) together with the two previous cycles' set
 charger currents that R3's deferral cases and R10's admission rule key on (the more recent of them
-also bounds C4's charger draw), and whether R10's
+also bounds the charger draw R3's and C4's household baselines take), and whether R10's
 window left the previous cycle's sample out — each
 homed in the rule or use-case that defines its lifecycle.
 
@@ -72,7 +72,7 @@ homed in the rule or use-case that defines its lifecycle.
 
 ```mermaid
 flowchart TD
-    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3)"]
+    Timer(["Control interval timer fires"]) --> Read["Read sensors (raw)<br/>net_w, solar_w, charger_w,<br/>grid voltage, charger status, SOC;<br/>resolve accepted household baseline (R3;<br/>charger draw: lower of charger_w<br/>and last set current, converted at<br/>the voltage from Resolve supply voltage)"]
     Read --> Smooth["Smooth solar surplus<br/>(charger_w − net_w per sample;<br/>rolling mean, N cycles — R10;<br/>solar_w stays raw)"]
     Read --> PeakTrack["Track monthly peak demand<br/>(own 15-min rolling average of net_w,<br/>highest so far this calendar month — R21;<br/>bookkeeping only, clamps nothing)"]
     Smooth --> Volt["Resolve supply voltage<br/>(measured if healthy, else nominal — R22)"]
@@ -98,8 +98,11 @@ flowchart TD
    recent, unsmoothed readings (the measured grid voltage is resolved into the
    [supply voltage](system-overview.md#ubiquitous-language) in step 3). This cycle's raw net
    import also feeds the bookkeeping side-branch in *Monthly peak demand tracking* below.
-   The net import and charger power readings also resolve this cycle's accepted [household
-   baseline](system-overview.md#ubiquitous-language), subject to R3's two deferral cases — here,
+   The net import and charger power readings, with the charger current the System last set,
+   also resolve this cycle's accepted [household
+   baseline](system-overview.md#ubiquitous-language), its charger draw the lower of that reading
+   and that current as R3 states, converted at the supply voltage step 3 resolves for this
+   cycle, and subject to R3's two deferral cases — here,
    every cycle and regardless of which [capabilities](system-overview.md#ubiquitous-language) are
    declared, rather than inside the CapTar-gated step 5, one of its consumers, since it must
    still resolve on an installation with no CapTar for the diagnostic readouts that also read
@@ -171,8 +174,9 @@ flowchart TD
    import above the effective peak limit minus the safety margin. If so, it reduces the current
    to the highest whole ampere that keeps net import at or below that target, within the same
    cycle, and emits `PeakLimitClamped`. The [household
-   baseline](system-overview.md#ubiquitous-language) this check solves around is resolved in step 1
-   and is not unconditionally this cycle's reading: R3 names two cases in which the most recently
+   baseline](system-overview.md#ubiquitous-language) this check solves around is resolved in step 1,
+   its charger draw bounded by the charger current the System last set, and is not
+   unconditionally this cycle's reading: R3 names two cases in which the most recently
    accepted reading stands instead — a reading taken after the System set a charger current
    differing from the previous cycle's (never two cycles running), and a reading that would
    increase headroom and has not yet held for 2 consecutive cycles. A breaching increase is
