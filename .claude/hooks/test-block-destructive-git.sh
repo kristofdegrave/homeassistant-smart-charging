@@ -99,6 +99,17 @@ runr "reset --hard" '>/dev/null git reset --hard'
 runr "reset --hard" 'git >/dev/null reset --hard'               # ... nor one before the subcommand
 runr "reset --hard" 'git 2> /dev/null reset --hard'             # ... its target a word of its own
 runr "reset --hard" 'git 2>&- reset --hard'                     # ... a closed fd takes no target word
+runr "reset --hard" 'git 2>&1> /dev/null reset --hard'          # ... a word ending in an operator takes the next
+runr "reset --hard" 'git>/dev/null reset --hard'                # ... nor one attached to the command word
+runr "force-pushing" 'git push >| /tmp/o --force origin x'      # >| is no pipe to the plain split either
+run BLOCK '> >(sh) echo gh pr merge 1234 --squash'              # a redirection into a process substitution is not stepped over
+run BLOCK '> >(sh) echo gh pr review 1 --approve'
+run BLOCK 'gh 2>/dev/null pr merge 1234'                         # gh's path walk steps over a redirection
+run BLOCK 'gh>/dev/null pr merge 1234'                           # ... and an attached one is no part of gh
+run BLOCK 'gh >/dev/null pr review 1 --approve'                  # ... the approval walk too
+TOOL=PowerShell
+runr "reset --hard" 'git *>$null reset --hard'                  # PowerShell's all-streams redirection
+TOOL=Bash
 run BLOCK 'git push -f origin main'
 run BLOCK 'git push --force-with-lease origin main'
 run BLOCK 'git push --force-with-lease=main:abc123 origin'
@@ -942,6 +953,8 @@ runr "global -c" "git > /dev/null -c core.fsmonitor=x status" "$LR/wt"
 runr "global -c" "</dev/null git -c core.fsmonitor=x status" "$LR/wt"
 runr "global -c" "git >| /tmp/o -c core.fsmonitor=x status" "$LR/wt"    # >| is no pipe
 run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # a redirection after the subcommand
+runr "removing needs-approval" "gh 2>/dev/null issue edit 5 --remove-label needs-approval" # the label walk steps over one
+runr "directory change" "2>/dev/null cd $LR/wt && git commit -m x" "$LR/wt" # ... and so does the directory-change test
 # A quoted or escaped separator does not cut a git or gh segment short: the loop reads the
 # command again, split only where bash splits it.
 runr "global -c" "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"
