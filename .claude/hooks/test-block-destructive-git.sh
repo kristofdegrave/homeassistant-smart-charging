@@ -114,6 +114,16 @@ run BLOCK 'echo x \>|gh pr merge 1234'                           # an escaped > 
 TOOL=PowerShell
 runr "refused rather than read" 'git *>$null reset --hard'      # PowerShell's all-streams redirection
 TOOL=Bash
+runr "could not read past" '{fd}>/tmp/o git push --force origin x' # a redirection the walk cannot step over
+runr "could not read past" '2> >(cat) git reset --hard'          # ... into a process substitution
+runr "refused rather than read" 'git --namespace >/dev/null reset --hard' # an option's value counts
+runr "refused rather than read" 'git -C >/dev/null reset --hard'
+runr "refused rather than read" 'gh -R o/r pr >/dev/null merge 1234' # a flag's value is no gh path word
+runr "refused rather than read" '"git">/dev/null reset --hard'   # a quoted name with one attached
+runr "refused rather than read" '<<EOF git push --force origin x
+EOF'                                                              # a heredoc opener before git
+runr "refused rather than read" 'sudo 2>/dev/null git push --force origin x' # ... after a wrapper
+runr "refused rather than read" 'GIT_X=1 2>/dev/null git push --force origin x' # ... after an assignment
 run ALLOW 'git status >/dev/null 2>&1'                           # a redirection after the subcommand is untouched
 run ALLOW "gh api 'repos/o/r/issues?x>1' --jq length"            # a > in a word quoted whole is no redirection
 run BLOCK 'git push -f origin main'

@@ -40,8 +40,12 @@
 # past one, or carrying one (`2>/dev/null git ...`, `git>/dev/null ...`); a word carrying `<`
 # or `>` from git up to its subcommand (`git >/dev/null -c ...`, `git push>/dev/null`) or in
 # gh's command path; and, read as a directory change so the loop refuses what follows, one
-# where a command word would be. A redirection after the subcommand is untouched. Conceded:
-# a word quoted whole is not read as one, and the plain split still cuts at `>|`. The guard
+# where a command word would be; and, where the walk stops on a word past a redirection it
+# cannot read (`{var}>`, a process substitution, a target holding a quoted blank), any
+# later word naming git or gh -- prose too, the price of failing closed. A git option's
+# value and a gh flag's value before its path count. A redirection after the subcommand is
+# untouched. Conceded: a word quoted whole is not read as one, so a gh field before the path
+# with an unquoted `>` in its value refuses; and the plain split still cuts at `>|`. The guard
 # runs commands of its own -- a `git rev-parse` in a directory taken from the command text
 # -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to decide the merge
 # rule below. The block list is the one the workflow doc enumerates, so same-family
@@ -451,8 +455,9 @@ first_harness_path() {
 # typed: a fd number (PowerShell's `*` too), then `<`, `>`, `&>`, `>>`, `>|`, `<>`, `>&`,
 # `<&`, `<<`, `<<-` or `<<<`. A redirection into a process substitution (`>(…)`, `<(…)`,
 # attached or the next word, given as the second argument) reads as 0: it runs a command, so
-# the walk must not step over it. The walk only steps over what this reads; a git or gh it
-# then reaches is refused anyway (redir_seen), so a misread here never lets one through.
+# the walk must not step over it. The walk only steps over what this reads: a git or gh it
+# then reaches is refused (redir_seen), and a later git or gh word behind one it stops on
+# refuses the segment too.
 redir_words() {
   _r=$1
   [ "${tool:-}" = PowerShell ] && case "$_r" in '*>'*) _r=${_r#'*'} ;; esac
@@ -1657,6 +1662,7 @@ for seg in $1; do
     # git or gh with a redirection attached (`git>/dev/null`, `gh>x`) is read as itself.
     if has_redir "$tok"; then
       _cw=${tok%%[<>]*}
+      _cw=${_cw%[\"\']}
       _cw=${_cw##*[/\\]}
       case "${_cw%.[eE][xX][eE]}" in
         [gG][iI][tT] | [gG][hH]) name=${_cw%.[eE][xX][eE]}; redir_seen=1 ;;
@@ -1697,12 +1703,37 @@ for seg in $1; do
   if [ -n "$found" ] && [ "$redir_seen" = 1 ]; then
     deny "$seg" "a redirection before $found, or attached to it, is refused rather than read: the guard cannot show what it hides; put the redirection after the subcommand"
   fi
+  # A walk that stopped on a word it could not read past a redirection -- one it does not
+  # step over (`{var}>`, a process substitution, a target holding a quoted blank), or after
+  # stepping over one -- may have stopped short of a git or gh: any later word naming one
+  # refuses the segment.
+  if [ -z "$found" ] && { [ "$redir_seen" = 1 ] || has_redir "${interp:-}"; }; then
+    for _a in "$@"; do
+      _n=${_a#[\"\'(]}
+      _n=${_n%%[<>\"\')]*}
+      _n=${_n##*[/\\]}
+      case "${_n%.[eE][xX][eE]}" in
+        [gG][iI][tT] | [gG][hH])
+          deny "$seg" "a git or gh behind a redirection the guard could not read past is refused rather than read: put the redirection after the subcommand" ;;
+      esac
+    done
+  fi
   if [ "$found" = gh ]; then
+    # gh's command path read as gh_merge_rule reads it: a `--long` flag without `=`, or a
+    # two-letter `-x`, takes the next word as its value, so `-R o/r pr` is still one path word.
     _np=0
+    _eat=0
     for _a in "$@"; do
       has_redir "$_a" &&
         deny "$seg" "a redirection inside gh's command path ('$_a') is refused rather than read: the guard cannot show what it hides; put it after the path"
-      case "$_a" in -*) ;; *) _np=$((_np + 1)); [ "$_np" -lt 2 ] || break ;; esac
+      if [ "$_eat" = 1 ]; then _eat=0; continue; fi
+      case "$_a" in
+        --) break ;;
+        --help | --version | -h | --*=*) ;;
+        --* | -?) _eat=1 ;;
+        -*) ;;
+        *) _np=$((_np + 1)); [ "$_np" -lt 2 ] || break ;;
+      esac
     done
   fi
   first=$(printf '%s' "${interp##*[/\\]}" | tr 'A-Z' 'a-z')
@@ -1807,11 +1838,16 @@ for seg in $1; do
       -C)
         shift
         nC=$((nC + 1))
+        # An option's value is checked too: a redirection taken as it hides the real one.
+        [ $# -gt 0 ] && has_redir "$1" &&
+          deny "$seg" "a redirection between git and its subcommand ('$1') is refused rather than read: the guard cannot show what it hides; put it after the subcommand"
         [ $# -gt 0 ] && { repo=${1#[\"\']}; repo=${repo%[\"\']}; shift; }
         ;;
       -c | --git-dir | --work-tree | --namespace | --exec-path)
         case "$1" in -c | --git-dir | --work-tree) gexec=1 ;; esac
         shift
+        [ $# -gt 0 ] && has_redir "$1" &&
+          deny "$seg" "a redirection between git and its subcommand ('$1') is refused rather than read: the guard cannot show what it hides; put it after the subcommand"
         [ $# -gt 0 ] && shift
         ;;
       --config-env* | -c?* | --exec-path=* | --git-dir=* | --work-tree=* | --bare) gexec=1; shift ;;
