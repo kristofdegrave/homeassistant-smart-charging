@@ -94,22 +94,28 @@ run() { # run BLOCK|ALLOW <command> [cwd]
 
 echo "=== blocked: outside the standing authorization ==="
 run BLOCK 'git push --force'
-runr "force-pushing" '2>/dev/null git push --force origin x'    # a redirection before git is no command word
-runr "reset --hard" '>/dev/null git reset --hard'
-runr "reset --hard" 'git >/dev/null reset --hard'               # ... nor one before the subcommand
-runr "reset --hard" 'git 2> /dev/null reset --hard'             # ... its target a word of its own
-runr "reset --hard" 'git 2>&- reset --hard'                     # ... a closed fd takes no target word
-runr "reset --hard" 'git 2>&1> /dev/null reset --hard'          # ... a word ending in an operator takes the next
-runr "reset --hard" 'git>/dev/null reset --hard'                # ... nor one attached to the command word
-runr "force-pushing" 'git push >| /tmp/o --force origin x'      # >| is no pipe to the plain split either
+runr "refused rather than read" '2>/dev/null git push --force origin x' # a redirection before git: refused, not read
+runr "refused rather than read" '>/dev/null git reset --hard'
+runr "refused rather than read" '(2>/dev/null git reset --hard)'  # ... glued to an opener
+runr "refused rather than read" 'git>/dev/null reset --hard'    # ... attached to git
+runr "refused rather than read" 'git >/dev/null reset --hard'   # ... between git and its subcommand
+runr "refused rather than read" 'git 2> /dev/null reset --hard'
+runr "refused rather than read" 'git 2>&1> /dev/null reset --hard'
+runr "refused rather than read" 'git push>/dev/null --force origin x' # ... attached to the subcommand
+runr "refused rather than read" '2>/dev/null gh pr merge 1234'    # the same for gh
+runr "refused rather than read" 'gh>/dev/null pr merge 1234'
+runr "refused rather than read" 'gh 2>/dev/null pr merge 1234'   # ... in its command path
+runr "refused rather than read" 'gh pr merge>/dev/null 1234'
+runr "refused rather than read" 'gh >/dev/null pr review 1 --approve'
 run BLOCK '> >(sh) echo gh pr merge 1234 --squash'              # a redirection into a process substitution is not stepped over
 run BLOCK '> >(sh) echo gh pr review 1 --approve'
-run BLOCK 'gh 2>/dev/null pr merge 1234'                         # gh's path walk steps over a redirection
-run BLOCK 'gh>/dev/null pr merge 1234'                           # ... and an attached one is no part of gh
-run BLOCK 'gh >/dev/null pr review 1 --approve'                  # ... the approval walk too
+run BLOCK 'diff <(gh pr merge 1234) /dev/null'                  # a substitution opening onto gh is still read as gh
+run BLOCK 'echo x \>|gh pr merge 1234'                           # an escaped > before a real pipe
 TOOL=PowerShell
-runr "reset --hard" 'git *>$null reset --hard'                  # PowerShell's all-streams redirection
+runr "refused rather than read" 'git *>$null reset --hard'      # PowerShell's all-streams redirection
 TOOL=Bash
+run ALLOW 'git status >/dev/null 2>&1'                           # a redirection after the subcommand is untouched
+run ALLOW "gh api 'repos/o/r/issues?x>1' --jq length"            # a > in a word quoted whole is no redirection
 run BLOCK 'git push -f origin main'
 run BLOCK 'git push --force-with-lease origin main'
 run BLOCK 'git push --force-with-lease=main:abc123 origin'
@@ -709,7 +715,7 @@ export "$MARKER=1"
 export GUARD_REPO="$LR/wt"   # the repository the loop works in, which the hook itself is not part of here
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
 run BLOCK "git -C $LR/wt commit -m x" "$LR/wt2"                       # ... reached through -C from a sibling worktree
-runr "may not touch the harness" "git </dev/null commit -m x" "$LR/wt"  # ... behind a redirection before the subcommand
+runr "refused rather than read" "git </dev/null commit -m x" "$LR/wt"   # ... behind a redirection before the subcommand
 g reset -q
 run BLOCK "git commit -am x" "$LR/wt"                                  # an unstaged one, which -a would take
 g checkout -q -- .github/ci.yml
@@ -947,14 +953,13 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
-runr "global -c" "git >/dev/null -c core.fsmonitor=x status" "$LR/wt"   # a redirection is not the subcommand
-runr "global -c" "git 2>&1 -c core.fsmonitor=x status" "$LR/wt"
-runr "global -c" "git > /dev/null -c core.fsmonitor=x status" "$LR/wt"
-runr "global -c" "</dev/null git -c core.fsmonitor=x status" "$LR/wt"
-runr "global -c" "git >| /tmp/o -c core.fsmonitor=x status" "$LR/wt"    # >| is no pipe
+runr "refused rather than read" "git >/dev/null -c core.fsmonitor=x status" "$LR/wt" # in the loop too
+runr "refused rather than read" "git 2>&1 -c core.fsmonitor=x status" "$LR/wt"
+runr "refused rather than read" "</dev/null git -c core.fsmonitor=x status" "$LR/wt"
+runr "refused rather than read" "git >| /tmp/o -c core.fsmonitor=x status" "$LR/wt"
+runr "refused rather than read" "gh 2>/dev/null issue edit 5 --remove-label needs-approval"
+runr "directory change" "2>/dev/null cd $LR/wt && git commit -m x" "$LR/wt" # a redirection where cd would be: a directory change
 run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # a redirection after the subcommand
-runr "removing needs-approval" "gh 2>/dev/null issue edit 5 --remove-label needs-approval" # the label walk steps over one
-runr "directory change" "2>/dev/null cd $LR/wt && git commit -m x" "$LR/wt" # ... and so does the directory-change test
 # A quoted or escaped separator does not cut a git or gh segment short: the loop reads the
 # command again, split only where bash splits it.
 runr "global -c" "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"

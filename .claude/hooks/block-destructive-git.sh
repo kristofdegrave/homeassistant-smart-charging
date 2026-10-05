@@ -32,16 +32,19 @@
 # A line continuation is joined before that split: a backslash-newline for sh, a
 # backtick-newline for PowerShell, a newline after a trailing pipe for both.
 # The first word is found by stepping over environment assignments, redirections with their
-# targets (`2>/dev/null git ...`, read by redir_words, which the walk to git's subcommand,
-# gh's path walks and the directory-change test step over too; one into a process
-# substitution is never stepped over; conceded: a `{name}>` fd variable, a target holding a
-# quoted blank, and in the loop a quoted `'>'`), the transparent wrappers listed at the scan
-# loop, shell reserved words (`if`, `then`, `!`, `{`, ...) and a lone & -- not a separator
-# here but PowerShell's call operator (`& gh pr merge ...`) -- with surrounding quotes, a
-# leading backslash, a leading & and an attached redirection (`gh>/dev/null`) stripped from
-# it. The guard runs commands of its own -- a `git rev-parse` in a directory taken from
-# the command text -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to
-# decide the merge rule below. The block list is the one the workflow doc enumerates, so same-family
+# targets (redir_words; one into a process substitution is never stepped over), the
+# transparent wrappers listed at the scan loop, shell reserved words (`if`, `then`, `!`,
+# `{`, ...) and a lone & -- not a separator here but PowerShell's call operator (`& gh pr
+# merge ...`) -- with surrounding quotes, a leading backslash and a leading & stripped from
+# it. Redirections are refused, not read, where they would hide a command: a git or gh met
+# past one, or carrying one (`2>/dev/null git ...`, `git>/dev/null ...`); a word carrying `<`
+# or `>` from git up to its subcommand (`git >/dev/null -c ...`, `git push>/dev/null`) or in
+# gh's command path; and, read as a directory change so the loop refuses what follows, one
+# where a command word would be. A redirection after the subcommand is untouched. Conceded:
+# a word quoted whole is not read as one, and the plain split still cuts at `>|`. The guard
+# runs commands of its own -- a `git rev-parse` in a directory taken from the command text
+# -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to decide the merge
+# rule below. The block list is the one the workflow doc enumerates, so same-family
 # commands it does not name (`git checkout -f`, `git switch --discard-changes`, `git push
 # origin :branch`) are deliberately left alone rather than overlooked. A push whose refspec,
 # after the remote, lands on main is refused as a merge by another name: `main` or
@@ -444,14 +447,12 @@ first_harness_path() {
 
 # Is a word a redirection, which bash removes before the command runs? Sets _rw to the words
 # it takes: 1 with its target attached (`2>/dev/null`, `2>&1`, `>&-`, `<<EOF`), 2 when the
-# target is the next word (`2> /dev/null`, `<< EOF`, and a word ending in an operator, such
-# as `2>&1>`), 0 when it is no redirection. Read as typed: a fd number (PowerShell's `*` too),
-# then `<`, `>`, `&>`, `>>`, `>|`, `<>`, `>&`, `<&`, `<<`, `<<-` or `<<<`. A redirection into
-# a process substitution (`>(…)`, `<(…)`, attached or the next word, given as the second
-# argument) reads as 0: it runs a command, so a walk must not step over it. Conceded: a
-# `{name}>` fd variable is not read; a target holding a quoted blank spans two words; and,
-# in the loop, a quoted `'>'` reads as one after the loop's quote removal -- stepped over,
-# which can only skip a word git itself would refuse as its subcommand.
+# target is the next word (`2> /dev/null`, `<< EOF`), 0 when it is no redirection. Read as
+# typed: a fd number (PowerShell's `*` too), then `<`, `>`, `&>`, `>>`, `>|`, `<>`, `>&`,
+# `<&`, `<<`, `<<-` or `<<<`. A redirection into a process substitution (`>(…)`, `<(…)`,
+# attached or the next word, given as the second argument) reads as 0: it runs a command, so
+# the walk must not step over it. The walk only steps over what this reads; a git or gh it
+# then reaches is refused anyway (redir_seen), so a misread here never lets one through.
 redir_words() {
   _r=$1
   [ "${tool:-}" = PowerShell ] && case "$_r" in '*>'*) _r=${_r#'*'} ;; esac
@@ -465,9 +466,19 @@ redir_words() {
     *) _t=${_r#"${_r%%[!<>&|]*}"} ;;
   esac
   case "$_t" in '('*) _rw=0; return ;; esac
-  case "$_r" in *'<' | *'>' | *'>|' | *'>&' | *'<&' | *'<<-') _t='' ;; esac
   if [ -n "$_t" ]; then _rw=1; return; fi
   case "${2:-}" in '<('* | '>('*) _rw=0 ;; *) _rw=2 ;; esac
+}
+
+# Does a word carry a `<` or `>` outside a surrounding pair of quotes? A redirection attached
+# to it (`git>/dev/null`, `push>/dev/null`) or glued to an opener (`(2>/dev/null`). Read
+# loosely -- only a word quoted whole is spared -- since a hit only refuses.
+has_redir() {
+  case "$1" in
+    \'*\' | \"*\") return 1 ;;
+    *'<'* | *'>'*) return 0 ;;
+    *) return 1 ;;
+  esac
 }
 
 # Does a segment change the shell's directory? Its first word -- after the reserved words and
@@ -477,16 +488,13 @@ seg_changes_dir() {
   # shellcheck disable=SC2046  # deliberate word splitting; globbing is off by then
   set -- $(printf '%s' "$1" | tr '\t' ' ' | tr 'A-Z' 'a-z')
   while [ $# -gt 0 ]; do
-    redir_words "$1" "${2:-}"
-    if [ "$_rw" != 0 ]; then
-      shift
-      [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
-      continue
-    fi
     _w=${1#[|({]}
     case "$_w" in
       '' | if | then | else | elif | do | while | until | '!' | '{') shift ;;
       cd | pushd | popd | chdir | set-location | sl | push-location | pop-location) return 0 ;;
+      # A redirection where the command word would be (`2>/dev/null cd x`, `cd>x`) is not
+      # read: counted as a directory change, so a later commit or push refuses (fail closed).
+      *'<'* | *'>'*) return 0 ;;
       env)
         shift
         case "${1:-}" in -c | -c* | --chdir | --chdir=*) return 0 ;; esac
@@ -557,9 +565,6 @@ gh_loop_label_rule() { # <segment> <gh's words, after gh itself>
   _c1='' _c2='' _skip=0
   for _w in "$@"; do
     [ "$_skip" = 1 ] && { _skip=0; continue; }
-    # A redirection is no path word; one whose target is the next word skips that too.
-    redir_words "$_w"
-    case "$_rw" in 1) continue ;; 2) _skip=1; continue ;; esac
     case "$_w" in
       -r | --repo | -x | --method | -f | --raw-field | --field | -h | --header | --input | \
         -q | --jq | -t | --template | -p | --preview | --cache | --hostname) _skip=1 ;;
@@ -814,8 +819,7 @@ gh_words() {
     {
       n = split($0, w, /[ \t]+/)
       for (i = 1; i <= n; i++) {
-        # A redirection attached to a word (`gh>/dev/null`) is cut off before its path is.
-        t = tolower(w[i]); sub(/[<>].*$/, "", t); sub(tailq, "", t); sub(head, "", t); sub(/\.exe$/, "", t)
+        t = tolower(w[i]); sub(tailq, "", t); sub(head, "", t); sub(/\.exe$/, "", t)
         # The subcommand of gh, stepping over flags as gh_merge_rule reads the path: a `--long`
         # or two-letter flag without `=` takes the next word (`gh -X PUT api`).
         if (ga) {
@@ -891,10 +895,6 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   eat=0
   for a in "$@"; do
     if [ "$eat" = 1 ]; then eat=0; continue; fi
-    # A redirection is no path word (`gh 2>/dev/null pr merge`); one whose target is the next
-    # word skips that too.
-    redir_words "$a"
-    case "$_rw" in 1) continue ;; 2) eat=1; continue ;; esac
     case "$a" in
       --) break ;;
       --help | --version | -h | --*=*) ;;
@@ -1173,10 +1173,6 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
   eat=0
   for a in "$@"; do
     if [ "$eat" = 1 ]; then eat=0; continue; fi
-    # A redirection is no path word (`gh 2>/dev/null pr merge`); one whose target is the next
-    # word skips that too.
-    redir_words "$a"
-    case "$_rw" in 1) continue ;; 2) eat=1; continue ;; esac
     case "$a" in
       --) break ;;
       --help | --version | -h | --*=*) ;;
@@ -1428,12 +1424,11 @@ joined=$(printf '%s\n' "$cmd" | awk -v ps="$([ "$tool" = PowerShell ] && echo 1)
 # Split the command line on shell separators so a guarded command placed after
 # && / || / ; / | / a newline is inspected in its own right. A pipe is kept at the head of
 # the segment it feeds, so the scan knows that segment reads the one before it.
-# A `>|` (noclobber output) is no pipe: it is set aside before the split and put back after.
-segments=$(printf '%s\n' "$cmd" | sed -e 's/>|/>__SC_NOCLOBBER__/g' -e 's/&&/\
+segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
 /g' -e 's/||/\
 /g' -e 's/;/\
 /g' -e 's/|/\
-|/g' -e 's/__SC_NOCLOBBER__/|/g')
+|/g')
 
 # In the loop, the same command split a second way: only where bash splits it -- on a ;, &&,
 # ||, |, background & or newline outside quotes and not escaped (an & after a <, > or |, or
@@ -1634,15 +1629,10 @@ for seg in $1; do
   gh_env=0
   git_env=0
   interp=''
+  # Set once the walk steps over a redirection, or meets git or gh with one attached: a git
+  # or gh it then reaches is refused, not read (see below the walk).
+  redir_seen=0
   while [ $# -gt 0 ]; do
-    # A redirection (`2>/dev/null git ...`) is no command word: bash removes it, with its
-    # target, before the command runs, so it is stepped over.
-    redir_words "$1" "${2:-}"
-    if [ "$_rw" != 0 ]; then
-      shift
-      [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
-      continue
-    fi
     tok=$1
     # Surrounding quotes, a leading & (`"gh"`, `&gh`), and the opener of a substitution or
     # subshell are not part of the command's name; the cut to the last path part below
@@ -1653,10 +1643,25 @@ for seg in $1; do
     tok=${tok#'$('}
     tok=${tok#'`'}
     tok=${tok#'('}
-    # A redirection attached to the command word (`gh>/dev/null pr ...`) is no part of its name.
-    name=${tok%%[<>]*}
-    name=${name##*[/\\]}
+    # A redirection (`2>/dev/null git ...`, `(2>/dev/null git ...`) is no command word: bash
+    # removes it, with its target, before the command runs, so it is stepped over.
+    redir_words "$tok" "${2:-}"
+    if [ "$_rw" != 0 ]; then
+      redir_seen=1
+      shift
+      [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
+      continue
+    fi
+    name=${tok##*[/\\]}
     name=${name%.[eE][xX][eE]}
+    # git or gh with a redirection attached (`git>/dev/null`, `gh>x`) is read as itself.
+    if has_redir "$tok"; then
+      _cw=${tok%%[<>]*}
+      _cw=${_cw##*[/\\]}
+      case "${_cw%.[eE][xX][eE]}" in
+        [gG][iI][tT] | [gG][hH]) name=${_cw%.[eE][xX][eE]}; redir_seen=1 ;;
+      esac
+    fi
     case "$tok" in
       # A lone & (PowerShell's call operator) or a reserved word heads the command behind
       # it, so it is stepped over.
@@ -1683,6 +1688,23 @@ for seg in $1; do
         ;;
     esac
   done
+  # A git or gh behind a redirection, or carrying one, is refused rather than read: the
+  # guard reads shell words without a shell's parser, and each rule that tried to read a
+  # redirection's extent opened a misreading elsewhere. The chain never types one there; a
+  # redirection after the subcommand (`git status >/dev/null 2>&1`) is untouched. So is gh's
+  # until its command path (`pr merge`, `api <endpoint>`) is read: a word carrying `<` or
+  # `>` before that is refused too.
+  if [ -n "$found" ] && [ "$redir_seen" = 1 ]; then
+    deny "$seg" "a redirection before $found, or attached to it, is refused rather than read: the guard cannot show what it hides; put the redirection after the subcommand"
+  fi
+  if [ "$found" = gh ]; then
+    _np=0
+    for _a in "$@"; do
+      has_redir "$_a" &&
+        deny "$seg" "a redirection inside gh's command path ('$_a') is refused rather than read: the guard cannot show what it hides; put it after the path"
+      case "$_a" in -*) ;; *) _np=$((_np + 1)); [ "$_np" -lt 2 ] || break ;; esac
+    done
+  fi
   first=$(printf '%s' "${interp##*[/\\]}" | tr 'A-Z' 'a-z')
   first=${first%.exe}
   prose=0
@@ -1777,14 +1799,10 @@ for seg in $1; do
     done
   fi
   while [ $# -gt 0 ]; do
-    # A redirection between git and its options (`git >/dev/null -c ...`) is neither an
-    # option nor the subcommand: bash removes it before git runs.
-    redir_words "$1" "${2:-}"
-    if [ "$_rw" != 0 ]; then
-      shift
-      [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
-      continue
-    fi
+    # A redirection between git and its subcommand, or attached to it (`git >/dev/null -c
+    # ...`, `git push>/dev/null`), is refused rather than read, as one before git is.
+    has_redir "$1" &&
+      deny "$seg" "a redirection between git and its subcommand ('$1') is refused rather than read: the guard cannot show what it hides; put it after the subcommand"
     case "$1" in
       -C)
         shift
