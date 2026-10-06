@@ -373,6 +373,27 @@ git clean -f
 cat <<'B'
 prose
 B"
+# A backslash ending a line where bash does not continue it -- inside a comment, or the
+# last of an even run -- leaves the next line a command of its own: refused, not joined.
+runr "where bash does not continue it" 'git status # see \
+git push --force'
+runr "where bash does not continue it" 'echo \\
+git push --force'
+run ALLOW 'git status \
+--short'                                                               # a real continuation
+run ALLOW 'echo \\
+ls'                                                                    # ... and no git or gh after an unjoined one
+# A case statement, a case arm, a function body or a coproc is not read through: a git or gh
+# word after one refuses.
+runr "does not read through" 'case x in x) git push --force;; esac'
+runr "does not read through" 'case x in
+  a) echo a ;;
+  b) git push --force ;;
+esac'
+runr "does not read through" 'case x in a) echo a;; b)git push --force;; esac'
+runr "does not read through" 'f() { git push --force; }; f'
+runr "does not read through" 'coproc git push --force'
+run ALLOW 'case x in x) echo hi;; esac'
 
 echo
 echo "=== the merge rule: gh pr merge only under every auto-merge condition ==="
@@ -1054,8 +1075,8 @@ runr "global -c" "grep -c x <<< 'a b'
 git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a here-string opens no heredoc
 runr "global -c" "git \\
 -c core.fsmonitor=x status" "$LR/wt"                                    # a backslash-newline joins, leaving no stray word
-runr "global -c" "git status # see \\
-git -c core.fsmonitor=x status" "$LR/wt"                                # ... but not inside a comment
+runr "where bash does not continue it" "git status # see \\
+git -c core.fsmonitor=x status" "$LR/wt"                                # ... but not inside a comment (#1603 refuses it first)
 runr "global -c" "cat <<\"a\\\"b\" >/dev/null; git --namespace ';' -c core.fsmonitor=x status
 x
 a\"b" "$LR/wt"                                                          # an escaped quote in a double-quoted delimiter
@@ -1079,8 +1100,8 @@ EOF
 git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a pipe ending the opener's line: the body is dropped
 runr "global -c" "git --namespace \"a\\
 b\" -c core.fsmonitor=x status" "$LR/wt"                                # a backslash-newline in double quotes joins
-runr "global -c" "echo \\\\
-git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates
+runr "where bash does not continue it" "echo \\\\
+git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates (#1603 refuses it first)
 runr "delimiter carries" "cat <<\$'E\\x4fF' >/dev/null
 it's
 EOF
@@ -1126,6 +1147,9 @@ OLD_PATH=$PATH
 PATH="$STUB/splitfail:$PATH"
 runr "could not be split" "git status" "$LR/wt"                         # an awk that fails: closed
 PATH=$OLD_PATH
+# A case arm's git is read in the loop too (#1603; the unjoined backslash cases sit with the
+# second reading's above).
+runr "does not read through" 'case x in x) git -c core.fsmonitor=y status;; esac' "$LR/wt"
 unset "$MARKER" GUARD_REPO
 run ALLOW "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"   # the second reading: interactive, unaffected
 run ALLOW "git commit -m x" "$STUB"                                    # ... and with the marker unset, untouched
