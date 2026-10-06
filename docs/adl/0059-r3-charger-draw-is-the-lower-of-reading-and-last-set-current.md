@@ -140,8 +140,8 @@ debounce receives; its deferral cases apply unchanged.
 | `tests/test_coordinator.py:1265` (2) | Asserts `solar_surplus_w` of 1500 W | The same |
 | `tests/test_coordinator.py:1290` (3) | Comment: the baseline swings to -3000 W, 27 A | Re-derive: -2300 W, 24 A, still above the 16 A request |
 | `tests/test_coordinator.py:4930` (5) | Docstring: R3's raw, debounced baseline | Name R3's lower charger term |
-| `tests/test_coordinator.py:4946` (2) | Asserts the R3 clamp's baseline is 5000 W | Assert 5500 W, and `:4944-4945`'s worked baseline: under `Off` the lower term is 0 W |
-| `tests/test_coordinator.py:4968` (2) | Asserts the readout's baseline is 5000 W | The same, with `:4966-4967` |
+| `tests/test_coordinator.py:4946` (2) | Asserts the R3 clamp's baseline is 5000 W | Assert 5500 W, and `:4945`'s worked baseline: under `Off` the lower term is 0 W |
+| `tests/test_coordinator.py:4968` (2) | Asserts the readout's baseline is 5000 W | The same, with `:4967` |
 | `tests/test_coordinator.py:4971` (2) | Asserts a -6 A readout | Re-derive from the lower term |
 | `tests/scenarios/test_invariants.py:10` (1) | Module docstring: the R3 mutation bypasses the debounce alone | Bypass the lower operand too |
 | `tests/scenarios/test_invariants.py:281` (1) | The mutation's comment | The same |
