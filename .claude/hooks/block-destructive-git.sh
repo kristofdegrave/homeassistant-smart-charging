@@ -70,7 +70,8 @@
 # reflex.
 #
 # The merge rule. `gh pr merge` is allowed only when every condition holds (with `--help`,
-# `-h` or `--disable-auto`, which merge nothing, it passes unread): `--squash`
+# `-h` or `--disable-auto`, which merge nothing, it passes unread, once the words are shown
+# to be gh's own -- below): `--squash`
 # (`--squash=true` counts, any other `--squash=` value refuses), and no `--merge`/`--rebase`
 # in any spelling; exactly one selector, a bare pull-request number or a pull-request URL
 # on this repository (`repo` in .claude/profile.yml) -- no selector, a `#`-prefixed one (a
@@ -138,9 +139,15 @@
 # not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
 # pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
 # split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
-# <file>` is the workaround. A multi-word quoted flag value (`--body "Merged by autopilot"`)
-# is split at its spaces, so its later words count as selectors and the merge refuses as
-# naming several pull requests; `--body-file` is the workaround. The facts come from `gh`
+# <file>` is the workaround. The guard splits gh's words at blanks and trusts single words --
+# an early exit, the `--match-head-commit` pin, a selector -- so a merge whose words may not
+# be the ones gh gets is refused rather than read: a quote spanning a blank (a multi-word
+# value such as `--body "Merged by autopilot"`, whose words could supply a `--help` or a pin
+# gh never sees), any backslash or backtick (an escaped blank, a Windows path), and any word
+# after a redirection, which the shell may take as the target (`<> 1234`, `> out\ --help`) --
+# `--help` after a redirection included. `--body-file`, forward slashes and redirections last
+# are the workarounds; the `git restore --staged` whole-tree exemption is dropped the same
+# way, for any such quote or escape, or any `<` or `>`, in its segment. The facts come from `gh`
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
 # not read.
@@ -900,6 +907,29 @@ gh_approve_words() {
 gh_wrapped=0
 gh_env=0
 
+# Did the shell split the segment's words where the guard splits them, at blanks? Not when a
+# quote opens in one word and closes in a later one (a quoted value with a blank), nor when a
+# backslash or backtick may escape a blank and join two words into one. Read bluntly, since a
+# miss only refuses: a word carrying a quote passes only when quoted whole (`"x"`, `'x'`, no
+# further quote of its kind inside), and any backslash or backtick fails. A subshell, so the
+# default IFS it splits by stays its own.
+split_trusted() (
+  unset IFS
+  for _w in $1; do
+    case "$_w" in
+      *\\* | *\`*) return 1 ;;
+      *[\"\']*)
+        case "$_w" in
+          \'?*\') _i=${_w#\'}; _i=${_i%\'}; case "$_i" in *\'*) return 1 ;; esac ;;
+          \"?*\") _i=${_w#\"}; _i=${_i%\"}; case "$_i" in *\"*) return 1 ;; esac ;;
+          *) return 1 ;;
+        esac
+        ;;
+    esac
+  done
+  return 0
+)
+
 gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   seg=$1
   shift
@@ -945,14 +975,29 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
     deny_merge "$seg" "'gh pr merge' behind a wrapper (xargs, sudo, env, ...) or an interpreter: the guard cannot see what reaches gh, so the auto-merge conditions cannot be shown to hold"
   [ "$gh_env" = 0 ] ||
     deny_merge "$seg" "a GH_* assignment on the merge redirects gh in a way the guard's own gh calls do not follow; drop it and name the pull request by number"
+  # Every word below is trusted alone -- an early exit, the pin, a selector -- so the words
+  # must be the ones gh gets. Refused, not parsed: a quote spanning a blank or an escaped
+  # blank (split_trusted), and any word after a redirection, since what the shell takes as
+  # its target (`<> 1234`, `> out\ --help`) is not gh's. Redirections go last.
+  split_trusted "$seg" ||
+    deny_merge "$seg" "'gh pr merge' with a quoted value spanning a blank, a backslash or a backtick: the guard cannot show gh gets the words it splits, so the auto-merge conditions cannot be shown to hold; use --body-file and forward slashes"
   selector=''
   selectors=0
   squash=0
   match_head=''
+  mr_redir=0
   while [ $# -gt 0 ]; do
+    if [ "$mr_redir" = 1 ]; then
+      case "$1" in
+        '<'* | '>'* | [0-9]'<'* | [0-9]'>'* | '&>'* | '&') ;;
+        *) deny_merge "$seg" "'gh pr merge' with '$1' after a redirection: the shell may take it as the redirection's target, so the guard cannot show gh gets it; put redirections last" ;;
+      esac
+    fi
+    case "$1" in *'<'* | *'>'*) mr_redir=1 ;; esac
     case "$1" in
       # No merge runs: help prints and exits, and gh's `--disable-auto` only cancels a pending
-      # auto-merge, returning before any merge, so neither needs the conditions below.
+      # auto-merge, returning before any merge, so neither needs the conditions below. Read
+      # only where the words were shown to be gh's own, above.
       --help | -h | --disable-auto) return 0 ;;
       --squash | --squash=true) squash=1 ;;
       --squash=* | --merge | --rebase | --merge=* | --rebase=*) deny_merge "$seg" "'gh pr merge $1': every merge in this project is a squash" ;;
@@ -960,8 +1005,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
       -R | --repo) shift; gh_repo=${1:-} ;;
       --match-head-commit=*) match_head=${1#--match-head-commit=} ;;
       --match-head-commit) shift; match_head=${1:-} ;;
-      # Flags that take a value: skip it so a value is never read as a selector or flag. Only
-      # its first word is skipped: a quoted value with a space is already split (conceded above).
+      # Flags that take a value: skip it so a value is never read as a selector or flag. One
+      # word is skipped: a quoted value with a blank was refused above.
       -b | --body | -t | --subject | -F | --body-file | -A | --author-email) shift ;;
       --*) ;;
       # gh (cobra) clusters short flags: `-sd` is `--squash --delete-branch`. A letter that
@@ -2065,13 +2110,19 @@ EOF
       ;;
     checkout | restore)
       # Whole-tree discards only. 'git restore --staged .' merely unstages, so it is
-      # left alone unless the working tree is in scope too.
+      # left alone unless the working tree is in scope too. The exemption trusts one word, so
+      # it holds only where the words are the shell's own: not across a quote spanning a blank
+      # or an escaped blank (split_trusted), and not beside any `<` or `>`, whose target the
+      # `--staged` may be (`git restore . <> --staged`).
       if has_exact . "$@" || has_exact ./ "$@" || has_exact :/ "$@"; then
-        if [ "$sub" = restore ] && has_long '--sta*' "$@" && ! has_long '--w*' "$@"; then
-          : # unstaging the whole tree changes no file content
-        else
-          deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
+        unstage=0
+        if [ "$sub" = restore ] && has_long '--sta*' "$@" && ! has_long '--w*' "$@" &&
+          split_trusted "$seg"; then
+          case "$seg" in *'<'* | *'>'*) ;; *) unstage=1 ;; esac
         fi
+        # unstaging the whole tree changes no file content
+        [ "$unstage" = 1 ] ||
+          deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
       fi
       ;;
     stash)

@@ -191,6 +191,11 @@ run BLOCK 'git branch -df some-branch'
 run BLOCK 'git branch -d --force some-branch'
 run BLOCK 'git branch --delete -f some-branch'
 run BLOCK 'git restore --staged --work .'
+# The unstage exemption trusts the word --staged only where it is the shell's own word.
+runr "whole working tree" 'git restore "a --staged" .'          # a piece of a quoted pathspec
+runr "whole working tree" 'git restore . > out\ --staged'       # a target continued through an escaped blank
+runr "whole working tree" 'git restore . <> --staged'           # a redirection's target
+runr "whole working tree" 'git restore --staged . 2>/dev/null'  # any redirection drops it (conceded)
 run BLOCK 'sudo -u someone git push --force'
 run BLOCK 'nice -n 10 git clean -fd'
 run BLOCK 'echo hi; git reset --hard HEAD~1'
@@ -735,6 +740,25 @@ run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # a CR
 unset PROFILE
 STUB_REPO=kristofdegrave/homeassistant-smart-charging
 run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # and the real profile still passes
+# A word the guard trusts alone -- an early exit, the pin, a selector -- counts only where the
+# words are gh's own: a quoted value spanning a blank, an escaped blank, or a word after a
+# redirection refuses the merge rather than being read.
+runr "spanning a blank" 'gh pr merge 1234 --squash --admin --body "done --help"'     # a split value supplies --help
+runr "spanning a blank" 'gh pr merge 1234 --squash --admin -t "fix -h"'               # ... -h
+runr "spanning a blank" "gh pr merge 1234 --squash --admin --body 'a --disable-auto'" # ... --disable-auto
+runr "spanning a blank" "gh pr merge 1234 --squash --admin --body \"'\"' --help '\"'\"" # each part quoted evenly, one value still
+runr "spanning a blank" 'gh pr merge 1234 --squash --admin > out\ --help'            # a target continued through an escaped blank
+runr "spanning a blank" 'gh pr merge 1234 --squash --admin >out\ --disable-auto'
+runr "spanning a blank" 'gh pr merge 1234 --squash --admin --body "x --match-head-commit=abc123"'  # a swallowed pin
+runr "after a redirection" 'gh pr merge --squash --admin --match-head-commit abc123 <> 1234'      # the selector is the target
+runr "after a redirection" 'gh pr merge 1234 --squash --admin &>> --match-head-commit=abc123'      # ... the pin
+runr "after a redirection" 'gh pr merge 1234 --squash --admin <> --help'                          # ... an early exit
+runr "after a redirection" 'gh pr merge 1234 --squash --admin 2>/dev/null --match-head-commit abc123'  # a word after any redirection
+run ALLOW 'gh pr merge --help 2>&1'                                                    # a real early exit, redirection last
+run ALLOW 'gh pr merge 1234 -h'
+run ALLOW 'gh pr merge 1234 --disable-auto > /tmp/out.txt'
+run ALLOW 'gh pr merge 1234 --squash --admin --body "done" --match-head-commit abc123'  # a value quoted whole is one word
+run ALLOW "gh pr merge 1234 --squash --admin --subject 'fix' --match-head-commit abc123 2>&1"
 
 # The loop rule: with the marker the real profile names set to 1, a commit or push touching
 # the harness is refused. A throwaway repository stands in for a task worktree: `main` is
