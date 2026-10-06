@@ -257,8 +257,9 @@
 # path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
 # workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
 # redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
-# it is the workaround; a
-# checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
+# it is the workaround; a heredoc under an unquoted delimiter whose body has a line ending
+# in a single backslash (a commit message or PR body fed by `<<EOF`) refuses -- quoting the
+# delimiter (`<<'EOF'`) is the workaround; a checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
 # no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
 # older git refuses every loop git; and a word the scan does not see (the indirection class
@@ -1467,8 +1468,10 @@ segments=$(printf '%s\n' "$cmd" | sed -e 's/^>|/>/' -e 's/\([^\\]\)>|/\1>/g' -e 
 # interpreter is judged as before, and an opener whose delimiter line never comes drops
 # nothing; a `<<<` here-string opens none. Conceded: an arithmetic shift (`$((1<<2))`) reads
 # as an opener, so a later line that is exactly its right operand ends a "body" dropped from
-# this reading, and a right operand carrying `$` or a backtick (`$((1<<$n))`) refuses
-# the whole command in the loop, as a delimiter bash builds would. A quote inside a command substitution within double quotes is not read as
+# this reading, a right operand carrying `$` or a backtick (`$((1<<$n))`) refuses the
+# whole command in the loop, as a delimiter bash builds would, and so does any later line
+# ending in an odd run of backslashes (a plain continuation), read as a joined "body" line.
+# A quote inside a command substitution within double quotes is not read as
 # bash reads it (bash starts its quoting afresh there): this split can then keep a real
 # separator, which the plain split above, still scanned too, cuts; or cut at a quoted one,
 # which the plain split cuts as well, so neither reading catches what follows it.
@@ -2127,7 +2130,7 @@ if in_loop; then
   [ "$_st" != 3 ] ||
     deny "$cmd" "in the autopilot loop a heredoc whose delimiter carries \$ or a backtick is refused: bash builds that delimiter in ways the guard does not read, so where the body ends cannot be shown" "$HARNESS_TAIL"
   [ "$_st" != 4 ] ||
-    deny "$cmd" "in the autopilot loop a heredoc body line ending in a backslash under an unquoted delimiter is refused: bash joins it to the next line before it looks for the delimiter, so where the body ends cannot be shown" "$HARNESS_TAIL"
+    deny "$cmd" "in the autopilot loop a heredoc body line ending in a backslash under an unquoted delimiter is refused: bash joins it to the next line before it looks for the delimiter, so where the body ends cannot be shown; quote the delimiter (<<'EOF')" "$HARNESS_TAIL"
   [ "$_st" = 0 ] ||
     deny "$cmd" "in the autopilot loop the command could not be split where bash splits it, so a quoted or escaped separator could hide the rest of a git or gh command" "$HARNESS_TAIL"
   [ "$qsegments" = "$segments" ] || scan "$qsegments"

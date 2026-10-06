@@ -1105,7 +1105,7 @@ b
 runr "delimiter carries" "cat <<\$" "$LR/wt"                            # ... as the input's last character
 run ALLOW "cat <<'\$X' >/dev/null
 y
-\$X" "$LR/wt"                                                           # ... a single-quoted \$ is a letter
+\$X" "$LR/wt"                                                           # ... a single-quoted dollar is a letter
 run ALLOW "cat <<\\\$X >/dev/null
 y
 \$X" "$LR/wt"                                                           # ... and so is an escaped one
@@ -1132,6 +1132,23 @@ run ALLOW "cat <<EOF >/dev/null
 a\\\\
 EOF
 git status" "$LR/wt"                                                    # ... nor an even run of backslashes
+run ALLOW "cat <<\"EOF\" >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... nor under a double-quoted delimiter
+run ALLOW "cat <<\\EOF >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... a backslash-quoted one
+run ALLOW "cat <<E'O'F >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... a partly quoted one
+runr "ending in a backslash" "cat <<-EOF >/dev/null
+	E\\
+	OF
+git --namespace ';' -c core.fsmonitor=x status
+	EOF" "$LR/wt"                                                          # a <<- body joins the same way
 run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
 run ALLOW "git status >&2" "$LR/wt"
 run ALLOW "git log --oneline |
