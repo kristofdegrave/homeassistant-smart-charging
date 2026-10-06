@@ -164,8 +164,8 @@
 # refuse when they hold `gh pr review` with an approve flag, or `gh api` with a review target
 # and APPROVE, `=@` or `--input`. Whatever heads a segment, those words beside a command or
 # process substitution (under PowerShell any `(`) or a background `&` refuse, as the merge
-# words do, and so does a gh review command behind `xargs` (each matched as a substring),
-# which appends words the guard never reads. Under PowerShell a
+# words do, and so does a gh review command behind `xargs` (`xargs`, `gh` and `review` each
+# matched as a substring), which appends words the guard never reads. Under PowerShell a
 # `/`-rooted payload refuses, since gh.exe reads it as another file. Conceded, as the merge
 # paragraph concedes the indirection class: a split or quoted letter (`rev''iews`,
 # `APP''ROVE`); a value the shell builds inside gh's own arguments (`-f event="$(cat ev)"`, a
@@ -176,8 +176,9 @@
 # agent -- writes between the guard's read and gh's. Refused though harmless: a review or
 # GraphQL read whose text names APPROVE, such as a filter on approved reviews; a call naming a
 # file whose path holds `/reviews` or `graphql`; a `gh pr review` body word starting `-a`, read
-# as the flag; text holding `xargs`, `gh` and `review` in that order inside other words
-# (`xargs echo walkthrough review`); and under PowerShell any segment naming the approval
+# as the flag; text holding `xargs`, `gh` and `review` in that order, as words or inside
+# other words (`xargs echo walkthrough review`, `xargs grep -l "gh pr review"`); and under
+# PowerShell any segment naming the approval
 # words with a `(` (`-F <file>` is the workaround).
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
