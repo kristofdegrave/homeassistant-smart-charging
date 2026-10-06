@@ -1748,7 +1748,8 @@ for seg in $1; do
     _gr=''
     _skipt=0
     for _a in "$@"; do
-      # A redirection's target word, when it is a word of its own, is no path word either.
+      # A redirection's target, when a word of its own, is skipped -- its first piece only, if
+      # bash continues it through a blank; the refusal below catches the rest.
       if [ "$_skipt" = 1 ]; then _skipt=0; continue; fi
       if has_redir "$_a"; then
         [ -n "$_gr" ] || _gr=$_a
@@ -1756,6 +1757,11 @@ for seg in $1; do
         [ "$_rw" != 2 ] || _skipt=1
         continue
       fi
+      # Past a redirection only further redirections and their targets may follow: any other
+      # word may be a piece of a target continued through a quoted or escaped blank, a flag
+      # or `--` that would shift gh's path, or the path itself, so it refuses.
+      [ -z "$_gr" ] ||
+        deny "$seg" "a redirection inside gh's command path ('$_gr') is refused rather than read: the guard cannot show what it hides; put it after the path"
       if [ "$_eat" = 1 ]; then _eat=0; continue; fi
       _c=${_a#[\"\']}
       _c=${_c%[\"\']}
@@ -1879,10 +1885,16 @@ for seg in $1; do
         deny "$seg" "a redirection between git and its subcommand ('$1') is refused rather than read: the guard cannot show what it hides; put it after the subcommand"
       [ -n "$_gr" ] || _gr=$1
       shift
-      # Its target, when a word of its own, goes with it: it is no option or subcommand.
+      # Its target, when a word of its own, goes with it -- its first piece only, if bash
+      # continues it through a blank; the refusal below catches the rest.
       [ "$_rw" != 2 ] || [ $# -eq 0 ] || shift
       continue
     fi
+    # Past a redirection only further redirections and their targets may follow: any other
+    # word may be a piece of a target bash continued through a quoted or escaped blank, or
+    # the subcommand, and the guard cannot tell which, so it refuses.
+    [ -z "$_gr" ] ||
+      deny "$seg" "a redirection between git and its subcommand ('$_gr') is refused rather than read: the guard cannot show what it hides; put it after the subcommand"
     case "$1" in
       -C)
         shift

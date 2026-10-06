@@ -139,6 +139,12 @@ runr "refused rather than read" 'git > -C reset --hard'            # a spaced ta
 runr "refused rather than read" 'git 2> --namespace reset --hard'
 runr "refused rather than read" 'gh > -- pr merge 1234'            # ... nor gh's end of options
 runr "refused rather than read" 'gh > -- pr review 1 --approve'
+runr "refused rather than read" 'git > a\ -C reset --hard'          # a target continued through an escaped blank
+runr "refused rather than read" 'git >a\ --namespace reset --hard'  # ... attached
+runr "refused rather than read" "git > 'a -C' reset --hard"          # ... through a quoted blank
+runr "refused rather than read" 'gh > a\ -- pr merge 1234'           # ... and for gh
+runr "refused rather than read" "gh >'a --repo' pr merge 1234"
+runr "refused rather than read" 'gh > a\ -- pr review 1 --approve'
 run ALLOW 'command -v git > /dev/null 2>&1'                        # the spaced spellings run too
 run ALLOW 'git --version > /dev/null'
 run ALLOW 'command -v gh > /dev/null'
