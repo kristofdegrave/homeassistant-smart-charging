@@ -33,15 +33,18 @@
 # backtick-newline for PowerShell, a newline after a trailing pipe for both. The join does not
 # read where bash leaves a line unjoined -- a backslash run of even length, the last one
 # escaped, or a backslash inside a comment -- so there, under sh, a command naming git or gh
-# on any later line is refused rather than read, in and out of the loop (the loop's second
-# reading splits such a line correctly, but the plain reading alone guards an interactive
-# session). Quotes are not read for it, so a `#` inside them counts as a comment: a quoted
-# multi-line message whose line ends in `\` after a `#`, or in `\\`, refuses when a later line
-# names git or gh (`commit -F <file>` is the workaround). Likewise refused rather than parsed:
-# a segment whose walk stops on `case`, `in`, `function`, `coproc` or a word carrying `)` (a
-# case arm's pattern, `f()`) -- a command the walk does not read through -- when any later
-# word names git or gh, so `case "$(git branch --show-current)" in` refuses too (set a
-# variable first).
+# as a command word on any later line is refused rather than read, in and out of the loop
+# (the loop's second reading splits such a line correctly, but the plain reading alone guards
+# an interactive session). Quotes are read on that line only, so a line inside a multi-line
+# quote whose text ends in `\\`, or in `\` after an unquoted-looking `#`, refuses when a later
+# line names git or gh (`commit -F <file>` is the workaround). PowerShell's form of the hole
+# (a backtick inside a comment, or an escaped one) is left open. Likewise refused rather than
+# parsed: a segment whose walk stops on `case`, `in`, `function`, `coproc` or a word carrying
+# `)` (a case arm's pattern, `f()`), or on a word followed by one that starts with `(` or is
+# `)` (`f () {`, `x ) git ...`) -- a command the walk does not read through -- when any later
+# word names git or gh. So `case "$(git branch --show-current)" in` refuses (set a variable
+# first), and so does a body line kept in the scan that starts with a `)`-word (`1) the git
+# rule ...`; `-F <file>` is the workaround).
 # The first word is found by stepping over environment assignments, redirections with their
 # targets (redir_words; one into a process substitution is never stepped over), the
 # transparent wrappers listed at the scan loop, shell reserved words (`if`, `then`, `!`,
@@ -1441,25 +1444,55 @@ tool=$(extract tool_name)
 # after it is a command of its own, which the join below would read as more words of the one
 # before (`git status # see \`, then `git push --force`). Refused rather than read, in and
 # out of the loop: a backslash ending a line where its run is even, or where a `#` starts a
-# word earlier on that line (quotes not read, so a `#` inside them counts too), refuses the
-# command when any later line names git or gh. Bash only; an awk that fails refuses.
+# word earlier on that line outside a quote opened on that line, refuses the command when a
+# later line carries git or gh as a command word (the last path part of a word, so a
+# `D:/GIT/...` directory is no hit). Bash only; an awk that fails refuses.
 if [ "$tool" != PowerShell ]; then
-  _dj=$(printf '%s\n' "$cmd" | awk '
+  _dj=$(printf '%s\n' "$cmd" | awk -v dj=1 -v q="'" '
+    # Does a `#` start a comment on line _s, quotes read on that line only?
+    function comment(_s,   _x, _c, _st, _pv) {
+      _st = 0; _pv = " "
+      for (_x = 1; _x <= length(_s); _x++) {
+        _c = substr(_s, _x, 1)
+        if (_st == 0) {
+          if (_c == "\\") { _x++; _pv = "x"; continue }
+          if (_c == q) _st = 1
+          else if (_c == "\"") _st = 2
+          else if (_c == "#" && _pv ~ /[ \t;&|()<>]/) return 1
+        } else if (_st == 1) {
+          if (_c == q) _st = 0
+        } else {
+          if (_c == "\\") _x++
+          else if (_c == "\"") _st = 0
+        }
+        _pv = _c
+      }
+      return 0
+    }
     { line[NR] = $0 }
     END {
       for (i = 1; i < NR; i++) {
         l = line[i]
         if (l !~ /\\$/) continue
         t = l; sub(/\\+$/, "", t)
-        if ((length(l) - length(t)) % 2 == 1 && t !~ /(^|[ \t;&|()<>])#/) continue
-        rest = ""
-        for (k = i + 1; k <= NR; k++) rest = rest " " tolower(line[k])
-        if (rest ~ /(^|[^a-z0-9_.-])(git|gh)(\.exe)?([^a-z0-9_.-]|$)/) { print 1; exit }
+        if ((length(l) - length(t)) % 2 == 1 && !comment(t)) continue
+        for (k = i + 1; k <= NR; k++) {
+          nw = split(tolower(line[k]), w, /[ \t;&|()<>`]+/)
+          for (m = 1; m <= nw; m++) {
+            x = w[m]
+            sub(/^["'"'"'$({]+/, "", x); sub(/["'"'"')}]+$/, "", x)
+            sub(/.*[\/\\]/, "", x); sub(/\.exe$/, "", x)
+            if (x == "git" || x == "gh") { print 1; exit }
+          }
+        }
       }
       print 0
     }')
-  [ "$_dj" = 0 ] ||
-    deny "$cmd" "a backslash ends a line where bash does not continue it -- an even run of backslashes, or one inside a comment -- and git or gh is named after it: the guard joins that line into the one before, so it is refused rather than read; end the line without the backslash"
+  case "$_dj" in
+    0) ;;
+    1) deny "$cmd" "a backslash ends a line where bash does not continue it -- an even run of backslashes, or one inside a comment -- and git or gh is named after it: the guard joins that line into the one before, so it is refused rather than read; end the line without the backslash" ;;
+    *) deny "$cmd" "the guard could not read where a backslash at a line's end continues the line, so a git or gh on the next line could go unread" ;;
+  esac
 fi
 joined=$(printf '%s\n' "$cmd" | awk -v ps="$([ "$tool" = PowerShell ] && echo 1)" '
   { buf = (NR > 1) ? buf "\n" $0 : $0 }
@@ -1821,27 +1854,29 @@ for seg in $1; do
   # A walk that stopped on a word heading a command it does not read through -- `case` or `in`
   # (a case statement's head), a word carrying `)` (a case arm's pattern, a function's `f()`,
   # a subshell's close), `function` or `coproc` -- may have stopped short of a git or gh that
-  # bash runs. Refused rather than parsed: any later word naming one, or the part of the stop
-  # word after its last `)`, refuses the segment, prose too.
+  # bash runs. So may one followed by a word that starts with `(` or is `)` (`f () {`, a case
+  # arm `x ) git ...`). Refused rather than parsed: any later word naming one, or the part of
+  # the stop word after its last `)`, refuses the segment, prose too.
+  _stop=0
   if [ -z "$found" ] && [ -n "$interp" ]; then
-    case "$interp" in
-      case | in | function | coproc | *')'*)
-        _rest=''
-        case "$interp" in *')'*) _rest=${interp##*')'} ;; esac
-        for _a in "$_rest" "$@"; do
-          _n=$_a
-          while :; do
-            case "$_n" in [\"\'\(\`\$]*) _n=${_n#?} ;; *) break ;; esac
-          done
-          _n=${_n%%[\<\>\"\'\)\;\`]*}
-          _n=${_n##*[/\\]}
-          case "${_n%.[eE][xX][eE]}" in
-            [gG][iI][tT] | [gG][hH])
-              deny "$seg" "a git or gh after '$interp' -- a case statement, a case arm's pattern, a function body or a coproc, which the guard does not read through -- is refused rather than read: run the git or gh as a command of its own" ;;
-          esac
-        done
-        ;;
-    esac
+    case "$interp" in case | in | function | coproc | *')'*) _stop=1 ;; esac
+    case "${2:-}" in '('* | ')') _stop=1 ;; esac
+  fi
+  if [ "$_stop" = 1 ]; then
+    _rest=''
+    case "$interp" in *')'*) _rest=${interp##*')'} ;; esac
+    for _a in "$_rest" "$@"; do
+      _n=$_a
+      while :; do
+        case "$_n" in [\"\'\(\`\$]*) _n=${_n#?} ;; *) break ;; esac
+      done
+      _n=${_n%%[\<\>\"\'\)\;\`]*}
+      _n=${_n##*[/\\]}
+      case "${_n%.[eE][xX][eE]}" in
+        [gG][iI][tT] | [gG][hH])
+          deny "$seg" "a git or gh after '$interp' -- a case statement, a case arm's pattern, a function body or a coproc, which the guard does not read through -- is refused rather than read: run the git or gh as a command of its own" ;;
+      esac
+    done
   fi
   first=$(printf '%s' "${interp##*[/\\]}" | tr 'A-Z' 'a-z')
   first=${first%.exe}
