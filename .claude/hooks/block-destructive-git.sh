@@ -207,7 +207,9 @@
 # gh_loop_label_rule); a git or gh word carrying `$`, which the shell builds (an ANSI-C quote,
 # a variable), is refused rather than read, and so is a git or gh segment carrying a backtick
 # outside single quotes or a process substitution (`<(`, `>(`) outside quotes, whose command
-# the shell runs to build a word (`substitutes`), and so is a git or gh command bash would expand
+# the shell runs to build a word (`substitutes`) -- and a git or gh behind a prefix
+# assignment's command substitution (`A=$(x) git ...`), where the walk stops on that command
+# -- and so is a git or gh command bash would expand
 # -- a brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
 # expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
 # background `&` and a newline outside quotes and not escaped, a comment and a heredoc's body
@@ -258,7 +260,8 @@
 # workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too, and so
 # does a backtick that is not inside single quotes, an escaped one or one in a comment
 # included -- so a `-m` message holding a backtick inside double quotes refuses, `commit -F
-# <file>` is the workaround -- and a `<(` or `>(`
+# <file>` is the workaround, and so does a gh `--body` or `--title` holding Markdown
+# backticks in double quotes, `--body-file` or single quotes the workaround -- and a `<(` or `>(`
 # outside quotes, though `git diff --no-index <(...) <(...)` only reads; a
 # redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
 # it is the workaround; a
@@ -1676,6 +1679,8 @@ for seg in $1; do
   # Set once the walk steps over a redirection, or meets git or gh with one attached: a git
   # or gh it then reaches is refused, not read (see below the walk).
   redir_seen=0
+  # Set once the walk re-reads a prefix assignment's command substitution as the next word.
+  asub=0
   while [ $# -gt 0 ]; do
     tok=$1
     # Surrounding quotes, a leading & (`"gh"`, `&gh`), and the opener of a substitution or
@@ -1720,7 +1725,7 @@ for seg in $1; do
     case "$tok" in
       # An assignment whose value is a command substitution (`r=$(gh pr merge ...)`) runs
       # that command: read it as the next word, and a merge there as a wrapped one.
-      *='$('?* | *='`'?* | *='"$('?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; continue ;;
+      *='$('?* | *='`'?* | *='"$('?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; asub=1; continue ;;
       *=*) shift; continue ;;
     esac
     case "$name" in
@@ -1760,6 +1765,23 @@ for seg in $1; do
       case "${_n%.[eE][xX][eE]}" in
         [gG][iI][tT] | [gG][hH])
           deny "$seg" "a git or gh behind a redirection the guard could not read past is refused rather than read: put the redirection after the subcommand" ;;
+      esac
+    done
+  fi
+  # In the loop, a walk that re-read a prefix assignment's substitution (a backtick one, or
+  # `A=$(x) gh ...`) stops on that command, so the git or gh behind it would meet no loop rule:
+  # any later word naming one -- its last path part, quotes and a substitution's opener or
+  # closer stripped -- refuses the segment.
+  if [ -z "$found" ] && [ "$asub" = 1 ] && in_loop; then
+    for _a in "$@"; do
+      _n=${_a#[\"\']}
+      _n=${_n#'$('}
+      _n=${_n#[\`(]}
+      _n=${_n%%[\`)\"\']*}
+      _n=${_n##*[/\\]}
+      case "${_n%.[eE][xX][eE]}" in
+        [gG][iI][tT] | [gG][hH])
+          deny "$seg" "in the autopilot loop a git or gh behind a prefix assignment's command substitution is refused rather than read: the walk stops on the substitution's command, so no loop rule reaches it" "$HARNESS_TAIL" ;;
       esac
     done
   fi

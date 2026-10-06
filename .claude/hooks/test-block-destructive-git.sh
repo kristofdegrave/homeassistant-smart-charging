@@ -899,14 +899,23 @@ runr "--patch" "git checkout --patc main" "$LR/wt"                       # ... b
 runr "--patch" "git checkout -fp main" "$LR/wt"                          # ... in a cluster
 run ALLOW "git checkout -bpatch main" "$LR/wt"                          # a -b cluster names a branch
 runr "bash would expand" "git status # why?" "$LR/wt"                   # a comment is read as text: conceded
-# An awk that fails while `expands` reads counts as expanding: a stub awk fails that call
-# alone (the one passing `sq=`) and hands every other to the real one.
+# An awk that fails while `expands` reads counts as expanding: a stub awk fails the calls
+# passing `sq=` -- `expands`, the first of them, and `substitutes` -- and hands every other to
+# the real one.
 mkdir -p "$STUB/awkfail"
 printf '#!/bin/sh\ncase " $* " in *" sq="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/awkfail/awk"
 chmod +x "$STUB/awkfail/awk"
 OLD_PATH=$PATH
 PATH="$STUB/awkfail:$PATH"
 runr "bash would expand" "git status" "$LR/wt"                          # fails closed
+PATH=$OLD_PATH
+# ... and so does one failing while `substitutes` reads: a stub keyed on `bt=`, which only
+# that call passes.
+mkdir -p "$STUB/awkfailbt"
+printf '#!/bin/sh\ncase " $* " in *" bt="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/awkfailbt/awk"
+chmod +x "$STUB/awkfailbt/awk"
+PATH="$STUB/awkfailbt:$PATH"
+runr "carrying a backtick" "git status" "$LR/wt"                        # fails closed
 PATH=$OLD_PATH
 run ALLOW "bash .github/gh-as-bot.sh pr-create workflow/1 \"t?\" /tmp/b.md" # the author-side wrapper: bash, not gh
 runr "bash would expand" "gh issue edit 5 --title ''# {--remove-label,needs-approval}" # a # inside a word is no comment
@@ -918,8 +927,17 @@ runr "carrying a backtick" "git -C $LR/wt \`echo -c\` core.fsmonitor=./x status"
 runr "carrying a backtick" "gh issue edit 5 \`echo --remove-label\` needs-approval" # ... a gh flag
 runr "carrying a backtick" "git log --grep=\"\`echo x\`\"" "$LR/wt"     # ... inside double quotes it still runs
 runr "carrying a backtick" "git log --grep=\\\`x\\\`" "$LR/wt"         # ... escaped: refused, not weighed (conceded)
-runr "carrying a backtick" "git -C $LR/wt diff --no-index <(echo -c) <(echo x)" "$LR/wt" # a process substitution runs a command
-runr "carrying a backtick" "gh issue comment 5 --body-file <(echo x)"  # ... a gh body read from one
+runr "process substitution" "git -C $LR/wt diff --no-index <(echo -c) <(echo x)" "$LR/wt" # a process substitution runs a command
+runr "process substitution" "gh issue comment 5 --body-file <(echo x)"  # ... a gh body read from one
+runr "process substitution" "git -C $LR/wt diff --no-index a<(echo -c) b" "$LR/wt" # ... attached to a word
+runr "process substitution" "git -C $LR/wt log > >(cat)" "$LR/wt"       # ... as a redirection's target
+runr "carrying a backtick" "git -C $LR/wt hash-object --stdin <<< \`echo x\`" "$LR/wt" # a here-string word
+runr "prefix assignment's command substitution" "A=\`true\` git -c core.fsmonitor=x status" "$LR/wt" # the walk stops on the substitution
+runr "prefix assignment's command substitution" "A=\`true\` gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "prefix assignment's command substitution" "A=\$(true) git -c core.fsmonitor=x status" "$LR/wt" # ... a \$( one
+runr "prefix assignment's command substitution" "A=\$(true) gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "prefix assignment's command substitution" "GIT_DIR=\`echo x\` git status" "$LR/wt" # ... a GIT_*= one
+run ALLOW "A=\$(true) echo D:/GIT/x" "$LR/wt"                           # a path part named GIT is no git
 run ALLOW "git log --grep='\`x\` <(y)'" "$LR/wt"                        # inside single quotes, a backtick is text
 run ALLOW "git log --grep=\"<(y)\"" "$LR/wt"                            # ... and in double quotes, <( is
 run ALLOW "git checkout -Bpx main" "$LR/wt"                             # a -B cluster names a branch
