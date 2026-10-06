@@ -196,6 +196,11 @@ runr "whole working tree" 'git restore "a --staged" .'          # a piece of a q
 runr "whole working tree" 'git restore . > out\ --staged'       # a target continued through an escaped blank
 runr "whole working tree" 'git restore . <> --staged'           # a redirection's target
 runr "whole working tree" 'git restore --staged . 2>/dev/null'  # any redirection drops it (conceded)
+runr "whole working tree" 'git restore . # --staged'            # a comment
+runr "whole working tree" 'git restore --source $empty --staged .'  # an expansion: --source may take --staged
+TOOL=PowerShell
+runr "whole working tree" 'git restore “a --staged ” .'         # typographic quotes
+TOOL=Bash
 run BLOCK 'sudo -u someone git push --force'
 run BLOCK 'nice -n 10 git clean -fd'
 run BLOCK 'echo hi; git reset --hard HEAD~1'
@@ -741,8 +746,8 @@ unset PROFILE
 STUB_REPO=kristofdegrave/homeassistant-smart-charging
 run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123'  # and the real profile still passes
 # A word the guard trusts alone -- an early exit, the pin, a selector -- counts only where the
-# words are gh's own: a quoted value spanning a blank, an escaped blank, or a word after a
-# redirection refuses the merge rather than being read.
+# words are gh's own: a quoted value spanning a blank, an escaped blank, a comment, an
+# expansion, or a word after a redirection refuses the merge rather than being read.
 runr "spanning a blank" 'gh pr merge 1234 --squash --admin --body "done --help"'     # a split value supplies --help
 runr "spanning a blank" 'gh pr merge 1234 --squash --admin -t "fix -h"'               # ... -h
 runr "spanning a blank" "gh pr merge 1234 --squash --admin --body 'a --disable-auto'" # ... --disable-auto
@@ -750,10 +755,25 @@ runr "spanning a blank" "gh pr merge 1234 --squash --admin --body \"'\"' --help 
 runr "spanning a blank" 'gh pr merge 1234 --squash --admin > out\ --help'            # a target continued through an escaped blank
 runr "spanning a blank" 'gh pr merge 1234 --squash --admin >out\ --disable-auto'
 runr "spanning a blank" 'gh pr merge 1234 --squash --admin --body "x --match-head-commit=abc123"'  # a swallowed pin
-runr "after a redirection" 'gh pr merge --squash --admin --match-head-commit abc123 <> 1234'      # the selector is the target
-runr "after a redirection" 'gh pr merge 1234 --squash --admin &>> --match-head-commit=abc123'      # ... the pin
-runr "after a redirection" 'gh pr merge 1234 --squash --admin <> --help'                          # ... an early exit
-runr "after a redirection" 'gh pr merge 1234 --squash --admin 2>/dev/null --match-head-commit abc123'  # a word after any redirection
+runr "names 0 pull requests" 'gh pr merge --squash --admin --match-head-commit abc123 <> 1234'   # the selector is the target
+runr "not pinned" 'gh pr merge 1234 --squash --admin &>> --match-head-commit=abc123'              # ... the pin
+runr "not pinned" 'gh pr merge 1234 --squash --admin <> --help'                                  # ... an early exit
+runr "after the redirection" 'gh pr merge 1234 --squash --admin 2>/dev/null --match-head-commit abc123'  # a word after any redirection
+runr "after the redirection" 'gh pr merge 1234 --squash --admin --body 2>x --help'               # ... a value slot included: gh gets --body --help
+runr "after the redirection" 'gh pr merge 1234 --squash --admin -t >x --match-head-commit=abc123'
+runr "words it splits" 'gh pr merge 1234 --squash --admin # --help'                             # a comment drops the rest
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body $empty --help'                 # an expansion can vanish
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body {,} --help'                    # ... or multiply
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body * --help'                      # ... or glob
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body "$empty" --help'               # ... in double quotes too
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body "" --help'                     # an empty value older PowerShell drops
+TOOL=PowerShell
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body “x --help ”'                   # typographic quotes are quotes
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body ‘x --disable-auto ’'
+runr "words it splits" 'gh pr merge 1234 --squash --admin --body @a --help'                      # a splat
+TOOL=Bash
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123 <> --help'    # a target is the shell's: the merge gh gets is read
+run ALLOW "gh pr merge 1234 --squash --admin --body '\$5' --match-head-commit abc123"  # single quotes expand nothing
 run ALLOW 'gh pr merge --help 2>&1'                                                    # a real early exit, redirection last
 run ALLOW 'gh pr merge 1234 -h'
 run ALLOW 'gh pr merge 1234 --disable-auto > /tmp/out.txt'
