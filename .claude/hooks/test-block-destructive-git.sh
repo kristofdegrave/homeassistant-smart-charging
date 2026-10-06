@@ -135,6 +135,13 @@ runr "refused rather than read" "gh \"-R\" o/r pr >/dev/null merge 1234" # a quo
 runr "refused rather than read" 'gh pr merge>/dev/null'           # one attached to the last path word
 runr "refused rather than read" 'git push>/dev/null'              # ... and to git's subcommand
 runr "could not read past" '2>/dev/null cat <(git push --force origin x)' # git glued inside a process substitution
+runr "refused rather than read" 'git > -C reset --hard'            # a spaced target is no option value
+runr "refused rather than read" 'git 2> --namespace reset --hard'
+runr "refused rather than read" 'gh > -- pr merge 1234'            # ... nor gh's end of options
+runr "refused rather than read" 'gh > -- pr review 1 --approve'
+run ALLOW 'command -v git > /dev/null 2>&1'                        # the spaced spellings run too
+run ALLOW 'git --version > /dev/null'
+run ALLOW 'command -v gh > /dev/null'
 run ALLOW 'command -v git >/dev/null 2>&1'                         # no subcommand: nothing to guard
 run ALLOW 'command -v gh >/dev/null'
 run ALLOW 'git --version 2>&1'

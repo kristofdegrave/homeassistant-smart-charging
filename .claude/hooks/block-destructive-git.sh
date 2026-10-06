@@ -1715,7 +1715,7 @@ for seg in $1; do
   # redirection's extent opened a misreading elsewhere. The chain never types one there; a
   # redirection after the subcommand (`git status >/dev/null 2>&1`) is untouched. So is gh's
   # until its command path (`pr merge`, `api <endpoint>`) is read: a word carrying `<` or
-  # `>` before that is refused too.
+  # `>` before that refuses once a path word is read.
   if [ -n "$found" ] && [ "$redir_seen" = 1 ]; then
     deny "$seg" "a redirection before $found, or attached to it, is refused rather than read: the guard cannot show what it hides; put the redirection after the subcommand"
   fi
@@ -1746,8 +1746,16 @@ for seg in $1; do
     _np=0
     _eat=0
     _gr=''
+    _skipt=0
     for _a in "$@"; do
-      [ -n "$_gr" ] || ! has_redir "$_a" || { _gr=$_a; continue; }
+      # A redirection's target word, when it is a word of its own, is no path word either.
+      if [ "$_skipt" = 1 ]; then _skipt=0; continue; fi
+      if has_redir "$_a"; then
+        [ -n "$_gr" ] || _gr=$_a
+        redir_words "$_a"
+        [ "$_rw" != 2 ] || _skipt=1
+        continue
+      fi
       if [ "$_eat" = 1 ]; then _eat=0; continue; fi
       _c=${_a#[\"\']}
       _c=${_c%[\"\']}
@@ -1871,6 +1879,8 @@ for seg in $1; do
         deny "$seg" "a redirection between git and its subcommand ('$1') is refused rather than read: the guard cannot show what it hides; put it after the subcommand"
       [ -n "$_gr" ] || _gr=$1
       shift
+      # Its target, when a word of its own, goes with it: it is no option or subcommand.
+      [ "$_rw" != 2 ] || [ $# -eq 0 ] || shift
       continue
     fi
     case "$1" in
