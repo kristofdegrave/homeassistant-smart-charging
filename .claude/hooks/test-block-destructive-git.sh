@@ -914,6 +914,14 @@ runr "bash would expand" "git --namespace ''# {-c,core.fsmonitor=x} status" "$LR
 runr "bash would expand" "gh issue edit 5 --title \\ # {--remove-label,needs-approval}" # ... after an escaped blank
 runr "segment carrying" "A=\$'\\'' gh issue edit 5 {--remove-label,needs-approval}" # an ANSI-C quote unreads the rest
 runr "segment carrying" "A=\$'\\'' git {-c,core.fsmonitor=x} status" "$LR/wt"     # ... before git
+runr "carrying a backtick" "git -C $LR/wt \`echo -c\` core.fsmonitor=./x status" "$LR/wt" # a backtick builds -c
+runr "carrying a backtick" "gh issue edit 5 \`echo --remove-label\` needs-approval" # ... a gh flag
+runr "carrying a backtick" "git log --grep=\"\`echo x\`\"" "$LR/wt"     # ... inside double quotes it still runs
+runr "carrying a backtick" "git log --grep=\\\`x\\\`" "$LR/wt"         # ... escaped: refused, not weighed (conceded)
+runr "carrying a backtick" "git -C $LR/wt diff --no-index <(echo -c) <(echo x)" "$LR/wt" # a process substitution runs a command
+runr "carrying a backtick" "gh issue comment 5 --body-file <(echo x)"  # ... a gh body read from one
+run ALLOW "git log --grep='\`x\` <(y)'" "$LR/wt"                        # inside single quotes, a backtick is text
+run ALLOW "git log --grep=\"<(y)\"" "$LR/wt"                            # ... and in double quotes, <( is
 run ALLOW "git checkout -Bpx main" "$LR/wt"                             # a -B cluster names a branch
 runr "abbreviates" "git ls-remote --up=x ." "$LR/wt"                   # --upload-pack by a prefix
 runr "abbreviates" "git push --ex=x origin task" "$LR/wt"              # --exec by a prefix

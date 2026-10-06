@@ -205,7 +205,9 @@
 # -- quotes and backslashes removed (unq), and case ignored where gh or the rule ignores it --
 # where the loop file's text rules read what was typed (see loop_git_rule and
 # gh_loop_label_rule); a git or gh word carrying `$`, which the shell builds (an ANSI-C quote,
-# a variable), is refused rather than read, and so is a git or gh command bash would expand
+# a variable), is refused rather than read, and so is a git or gh segment carrying a backtick
+# outside single quotes or a process substitution (`<(`, `>(`) outside quotes, whose command
+# the shell runs to build a word (`substitutes`), and so is a git or gh command bash would expand
 # -- a brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
 # expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
 # background `&` and a newline outside quotes and not escaped, a comment and a heredoc's body
@@ -253,7 +255,11 @@
 # -F <file>` is the workaround; an unquoted `?`, `*` or `[`, `@(`, `+(` or `!(`, or a `{`
 # with a later `,` or `..` and `}`, refuses where bash would leave it as typed (a `gh api`
 # path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
-# workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
+# workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too, and so
+# does a backtick that is not inside single quotes, an escaped one or one in a comment
+# included -- so a `-m` message holding a backtick inside double quotes refuses, `commit -F
+# <file>` is the workaround -- and a `<(` or `>(`
+# outside quotes, though `git diff --no-index <(...) <(...)` only reads; a
 # redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
 # it is the workaround; a
 # checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
@@ -554,6 +560,25 @@ expands() {
       o = o c
     }
     exit (o ~ /[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]/) ? 0 : 1 }'
+  [ $? != 1 ]
+}
+# In the loop, whether a segment runs a command the guard does not read: a backtick anywhere
+# but inside single quotes -- escaped or not, so no escape is weighed -- or a `<(` or `>(`
+# outside quotes. Quotes are tracked as `expands` tracks them; any exit but 1 -- an awk that
+# fails -- counts as substituting.
+substitutes() {
+  printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' -v bt='`' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+    q = ""
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (q == sq) { if (c == sq) q = ""; continue }
+      if (c == bt || c == bs && substr(s, i + 1, 1) == bt) exit 0
+      if (c == bs) { i++; continue }
+      if (q == dq) { if (c == dq) q = ""; continue }
+      if (c == sq || c == dq) { q = c; continue }
+      if ((c == "<" || c == ">") && substr(s, i + 1, 1) == "(") exit 0
+    }
+    exit 1 }'
   [ $? != 1 ]
 }
 
@@ -1845,6 +1870,10 @@ for seg in $1; do
     esac
     expands "$seg" &&
       deny "$seg" "in the autopilot loop a $found command bash would expand (a brace list or range, or a glob, outside quotes) is refused: the guard reads it as typed, $found gets what it expands to" "$_tail"
+    # A backtick or a process substitution runs a command whose output -- or a file naming
+    # it -- becomes a word, so it is refused the way `$` is, not parsed.
+    substitutes "$seg" &&
+      deny "$seg" "in the autopilot loop a $found segment carrying a backtick (outside single quotes) or a process substitution is refused: the shell runs a command there and builds words from it where the guard cannot read them" "$_tail"
   fi
   if [ "$found" = gh ]; then
     [ "$wrapper" = 0 ] || gh_wrapped=1
