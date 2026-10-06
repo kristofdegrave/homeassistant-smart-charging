@@ -43,7 +43,8 @@ The first arm that holds decides, never this issue's Status:
    it by a login the author test passes, no verify-live park between → **Entry 2**.
 6. Otherwise → file nothing. **This arm's question** is a `clarify` question on this issue
    whose first line is `**decompose: a fresh go is needed**`. With the newest such question by
-   the session's login (`CLAUDE.md`'s **Project profile** maps it) newer than the newest park and any late artifact's close, stop: still
+   the session's login (`CLAUDE.md`'s **Project profile** maps it) newer than the newest park
+   and any late artifact's close, stop: still
    parked. Else ask it, naming its answers, each with `needs-decision` removed from this issue:
    re-applying `needs-approval` on the epic, kept on until the fresh park; or, where late
    artifacts stand, removing all their blocked-by edges, the go standing. The run takes neither; a
@@ -69,8 +70,8 @@ The first arm that holds decides, never this issue's Status:
    analysis documents and accepted ADRs the source touches. Derive the slice boundary and
    deferrals from them.
 3. **Draft the body** — the closing step's step 1. Keep *Decisions so far*, and what a closed
-   `decompose` sub-issue's closing comment applied: its newest comment by the session's login (`CLAUDE.md`'s **Project profile** maps it)
-   carrying `fix`'s note marker. **Task ids**: a **filed task**
+   `decompose` sub-issue's closing comment applied: its newest comment by the session's login
+   (`CLAUDE.md`'s **Project profile** maps it) carrying `fix`'s note marker. **Task ids**: a **filed task**
    — a `T<n>:` sub-issue of the epic opened by a login the author test passes — keeps its id; a
    new one takes the next id after all of them; a filed task the draft revises or drops is
    marked so in its body entry, its issue untouched; a dropped one keeps only its mark. Write

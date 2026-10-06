@@ -18,10 +18,11 @@ in the artifact under review, a different question.
 
 A change to this project's process and to the files that drive its runs — a skill
 (`.claude/skills/`), an agent definition (`.claude/agents/`), a CI workflow
-(`.github/workflows/`), the project profile and the two scripts that read it
+(`.github/workflows/`), the project profile and the scripts that read it
 (`.claude/profile.yml`; `.github/setup-labels.sh`, which writes its `labels` to the
 repository; `.github/profile-env.sh`, which prints its tracker values for the reference's
-recipes), an issue form
+recipes; `.github/gh-as-bot.sh`, which runs the author side's calls as its bot login), an
+issue form
 (`.github/ISSUE_TEMPLATE/`), the harness configuration that decides what a run may do
 (`.claude/settings.json` and the hooks it wires, `.claude/hooks/`) — which is why the committed
 settings file is the restricted one and `settings.local.json` is the ignored one, as
