@@ -1112,7 +1112,26 @@ y
 run ALLOW "cat <<EOF >/dev/null
 cost: \$5 and \`date\`
 EOF
-git status" "$LR/wt"                                                    # a \$ or backtick in the body, not the delimiter
+git status" "$LR/wt"                                                    # a plain dollar or backtick in the body, not the delimiter
+runr "delimiter carries" "cat <<\"E\\\$F\" >/dev/null
+y
+E\$F" "$LR/wt"                                                          # an escaped dollar in double quotes refuses too (fail closed)
+run ALLOW "cat <<E\\\`F >/dev/null
+y
+E\`F" "$LR/wt"                                                          # an escaped backtick outside quotes is a letter
+runr "ending in a backslash" "cat <<EOF >/dev/null
+E\\
+OF
+git --namespace ';' -c core.fsmonitor=x status
+EOF" "$LR/wt"                                                           # a body line bash joins before the delimiter compare
+run ALLOW "cat <<'EOF' >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... under a quoted delimiter bash does not join
+run ALLOW "cat <<EOF >/dev/null
+a\\\\
+EOF
+git status" "$LR/wt"                                                    # ... nor an even run of backslashes
 run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
 run ALLOW "git status >&2" "$LR/wt"
 run ALLOW "git log --oneline |
