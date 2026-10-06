@@ -1248,7 +1248,10 @@ runr "( grouping" 'echo (gh pr review 12 --approve)'
 run BLOCK 'echo (gh pr merge 1234 --squash --match-head-commit abc123)'
 run ALLOW 'echo (gh pr view 12 --json reviews)'
 TOOL=Bash
-run ALLOW 'printf x | xargs echo walkthrough review'                    # xargs, gh and review as whole words only
+runr "behind xargs" 'echo -f event=APPROVE | xargs gh api repos/o/r/pulls/12/reviews'   # fields on stdin
+run BLOCK 'echo --approve | xargs "C:\Program Files\GitHub CLI\gh.exe" pr review 12'   # a quoted backslash path
+run BLOCK 'echo --approve | xargs -n1 gh pr review 12'
+runr "behind xargs" 'printf x | xargs echo walkthrough review'          # conceded: matched as substrings
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

@@ -71,8 +71,9 @@ The first arm that holds decides, never this issue's Status:
    deferrals from them.
 3. **Draft the body** — the closing step's step 1. Keep *Decisions so far*, and what a closed
    `decompose` sub-issue's closing comment applied: its newest comment by the session's login
-   (`CLAUDE.md`'s **Project profile** maps it) carrying `fix`'s note marker. **Task ids**: a **filed task**
-   — a `T<n>:` sub-issue of the epic opened by a login the author test passes — keeps its id; a
+   (`CLAUDE.md`'s **Project profile** maps it) carrying `fix`'s note marker. **Task ids**: a
+   **filed task** — a `T<n>:` sub-issue of the epic opened by a login the author test passes —
+   keeps its id; a
    new one takes the next id after all of them; a filed task the draft revises or drops is
    marked so in its body entry, its issue untouched; a dropped one keeps only its mark. Write
    the body to the epic (**Tracker mechanics**, *Rewriting a work item's body*) and read it

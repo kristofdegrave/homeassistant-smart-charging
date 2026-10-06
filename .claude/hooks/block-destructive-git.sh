@@ -133,9 +133,11 @@
 # checked out, uncommitted edits included, and a `PROFILE` in the environment is honoured,
 # so the session's own checkout can widen what auto-merges. Conceded the other way, false
 # positives: a `gh pr ...` segment whose text also carries the word `merge` and, anywhere, a
-# backtick, `$(`, `<(`, `>(` or `&` (under PowerShell any `(`) is refused as a wrapped merge
-# (a body file is the workaround); a commit message built as `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan
-# (the opener sits inside quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
+# backtick, `$(`, `<(`, `>(` or `&` is refused as a wrapped merge (a body file is the
+# workaround); under PowerShell, so is any segment naming the merge words with a `(`, a
+# `git commit -m "... (#n)"` included (`-F <file>` is the workaround); a commit message built
+# as `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan (the opener sits inside
+# quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
 # not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
 # pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
 # split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
@@ -162,8 +164,8 @@
 # refuse when they hold `gh pr review` with an approve flag, or `gh api` with a review target
 # and APPROVE, `=@` or `--input`. Whatever heads a segment, those words beside a command or
 # process substitution (under PowerShell any `(`) or a background `&` refuse, as the merge
-# words do, and so does a gh review
-# command behind `xargs`, which appends words the guard never reads. Under PowerShell a
+# words do, and so does a gh review command behind `xargs` (each matched as a substring),
+# which appends words the guard never reads. Under PowerShell a
 # `/`-rooted payload refuses, since gh.exe reads it as another file. Conceded, as the merge
 # paragraph concedes the indirection class: a split or quoted letter (`rev''iews`,
 # `APP''ROVE`); a value the shell builds inside gh's own arguments (`-f event="$(cat ev)"`, a
@@ -171,10 +173,12 @@
 # naming an approval piped into another command; a `gh alias`; another tool; a JSON unicode
 # escape of a letter of the event in a payload; a percent-encoded letter in the endpoint or a
 # query, should GitHub decode it; a payload another process -- a background job, another
-# agent -- writes between the guard's read and gh's. Refused though harmless: a review or GraphQL
-# read whose text names APPROVE, such as a filter on approved reviews; a call naming a file
-# whose path holds `/reviews` or `graphql`; and a `gh pr review` body word starting `-a`, read
-# as the flag.
+# agent -- writes between the guard's read and gh's. Refused though harmless: a review or
+# GraphQL read whose text names APPROVE, such as a filter on approved reviews; a call naming a
+# file whose path holds `/reviews` or `graphql`; a `gh pr review` body word starting `-a`, read
+# as the flag; text holding `xargs`, `gh` and `review` in that order inside other words
+# (`xargs echo walkthrough review`); and under PowerShell any segment naming the approval
+# words with a `(` (`-F <file>` is the workaround).
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
 # `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
@@ -1632,8 +1636,8 @@ for seg in $1; do
   # The approval rule's words, read the same way before the walk: whatever heads the segment
   # -- a prose word, git, gh itself -- words naming an approval beside a command or process
   # substitution, under PowerShell a `(` grouping, or a background & are refused, since
-  # another command may run them. A review command behind xargs (each a whole word) is
-  # refused too: xargs appends words the guard never reads.
+  # another command may run them. A review command behind xargs is refused too, the three
+  # matched as substrings: xargs appends words the guard never reads.
   # shellcheck disable=SC2046  # the two flags gh_approve_words prints
   set -- $(gh_approve_words "$seg")
   if [ "$1" = 1 ] || [ "$2" = 1 ]; then
@@ -1647,8 +1651,10 @@ for seg in $1; do
         deny_approve "$seg" "the words name an approval in a PowerShell segment that also carries a ( grouping, which runs its own command: what reaches gh is not what the guard read" ;;
     esac
   fi
-  norm "$seg" | grep -Eq '(^|[^a-z0-9_])xargs([^a-z0-9_].*)?[^a-z0-9_]gh([^a-z0-9_].*)?[^a-z0-9_]review([^a-z0-9_]|$)' &&
-    deny_approve "$seg" "a gh review command behind xargs: xargs appends words the guard never reads, so it cannot show the command is not an approval"
+  case "$(norm "$seg")" in
+    *xargs*gh*review*)
+      deny_approve "$seg" "a gh review command behind xargs: xargs appends words the guard never reads, so it cannot show the command is not an approval" ;;
+  esac
   # shellcheck disable=SC2086  # deliberate word splitting of the segment
   set -- $seg
 
