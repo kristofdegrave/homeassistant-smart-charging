@@ -1,0 +1,188 @@
+# ADR-0059: R3's charger draw is the lower of the charger power reading and the last set charger current (narrows ADR-0006 and ADR-0039)
+
+Date: 2026-10-04
+Status: Accepted
+
+## Summary
+
+In the context of R3's household baseline taking the charger's draw from a power reading that
+lags it, facing a deferral that commits a corrupted low baseline under a sustained command
+oscillation, we decided on the lower of the reading and the last set current so that a stale
+reading cannot widen R3's headroom, accepting that while R3 binds on a reading above the set
+current, the set current may change from one control cycle to the next.
+
+## Context
+
+- **R3's criteria constrain every option.** R3 in
+  [requirements.md](../analysis/requirements.md) holds the peak limit on every control cycle,
+  and names its baseline's charger draw: the lower of the charger power reading and the last
+  set charger current. R10's steady-input criterion exempts both clamps while either binds. This
+  record decides ADR-0006 step 7's operand and what ADR-0039's debounce receives.
+- **The deferral cases admit a corrupted baseline.** Under a command alternating every cycle,
+  case (a) discards each high reading and case (b) commits the low ones that follow. The
+  scenario tier ([ADR-0037](0037-scenario-timeline-test-tier.md)) reproduced this on unmutated
+  code: a -690 W baseline, and a peak breach of up to 5980 W against 5350 W wherever C4 was not
+  the backstop. C4's lag drove that oscillation; Solar's moving request can too.
+- **Which reading the R3 step consumes is ADR-0006's.**
+  [ADR-0006](0006-coordinator-and-data-flow.md)'s step 7 applies R3 "on raw readings", and its
+  Consequences make a change to a step's reading "a new ADR superseding this one"; this record
+  narrows it, as ADR-0036, ADR-0049, ADR-0051 and
+  [ADR-0058](0058-c4-charger-draw-is-the-lower-of-reading-and-last-set-current.md) do.
+- **[ADR-0039](0039-baseline-reading-during-own-actuation.md) gives R3's clamp,
+  `peak_headroom_a` and `solar_surplus_w` one debounced baseline**, formed from this cycle's
+  charger power reading.
+
+## Considered options
+
+Options A and C were run in a throwaway scenario-tier probe: oscillations with and without C4
+as a backstop, a household rise and drop, and the whole-stack world; B and D were argued, not
+run.
+
+### Option A — Keep this cycle's charger power reading
+
+- Pro: nothing new to hold; R3 solves from what the two sensors report.
+- Con: under a sustained command oscillation the deferral cases commit a corrupted low baseline,
+  and without C4 as a backstop the peak limit is breached.
+
+### Option B — A case-(a) discard also resets case (b)'s count
+
+- Pro: no new operand: amending one deferral rule (a case-(a) deferral neither advances nor
+  resets case (b)'s count) stops an alternating command accumulating low readings.
+- Con: it filters the symptom, not the corrupted readings, and holds back a genuine household
+  drop for as long as the oscillation lasts.
+
+### Option C — The lower of the reading and the last set current
+
+- Pro: a reading still showing the draw from before a step down can no longer widen the
+  headroom, so the corrupted readings are removed at their source. It breached in no probed
+  world, kept today's timing on household rises and drops, and matches C4's operand
+  (ADR-0058).
+- Con: where the reading exceeds the set current at the resolved supply voltage, the baseline
+  depends on the current the System set, so while R3 binds, the set current may change from one
+  control cycle to the next.
+- Con: a lasting excess, as with the nominal-voltage fallback (R22) on a higher grid voltage,
+  overstates the household, so charging is slower than the limit allows.
+
+### Option D — Accept and document
+
+- Pro: no code change. With ADR-0058, C4 holds both limits in the tier's whole-stack world
+  even once R3's baseline is corrupted.
+- Con: it reverts R3's charger-draw criterion to the reading alone, and the exposure stays
+  reachable from any oscillating command C4 is not binding to catch, against R3's every-cycle
+  criterion.
+
+## Decision
+
+**Option C.** Options A and D leave a breach the tier reproduced, and Option B trades it for a
+held-back drop and keeps the readings; Option C's Pro removes them. Its costs are its two
+Cons, both on the conservative side of R3's limit.
+
+This narrows ADR-0006's step 7, whose R3 still reads unsmoothed values, and what ADR-0039's
+debounce receives; its deferral cases apply unchanged.
+
+## Consequences
+
+- **The R3 baseline input takes C4's lower charger term.** The Billing-Protection Engine is
+  unchanged. A successful fault-path write of 0 A counts as a set current, as for C4.
+- **`peak_headroom_a` and `solar_surplus_w` move with it.** Solar's decisions and R5's
+  forecast read R10's smoothed surplus, unchanged
+  ([ADR-0049](0049-solar-surplus-smooths-net-and-charger-power-together.md),
+  [ADR-0051](0051-r5-forecast-reads-the-admitted-joint-mean.md)).
+- **R10's exemption while R3 binds is accepted:** a tier oscillation invariant must allow the
+  change on those cycles.
+- **The residual case is unchanged.** A car drawing below its set current for two or more cycles
+  at a reading lag of two or more commits an understated baseline under Options A and C alike;
+  a rule for it waits on the tier modelling such a car.
+- **The scenario tier gains a scenario** where an oscillating command without C4 keeps true
+  import within the peak limit.
+- **`system-design.md` §8.3 needs a row for this record.**
+
+**Blast radius.** Six searches; a row's bracket names its search:
+
+1. `rg -n 'debounce_baseline|net_w\s*-\s*charger_w' custom_components/ tests/`: 73 hits. R3's
+   baseline passes through the first name, and its formula is written as the second.
+2. `rg -n '\.(peak_headroom_a|solar_surplus_w) ==|\["baseline_w"\] ==' tests/`: 19 hits. Every
+   assertion on the two readouts or a spied baseline.
+3. `rg -n -i "corrupt|oscillat|charger_w still|stale charger|R3's own exposure" tests/`: 29
+   hits. Prose on the lagging reading's effect, naming no function.
+4. `rg -n -i 'baseline.*raw|raw.*baseline|clamp on raw|R3.*raw|raw.*R3' docs/design/`: 15
+   hits. Design statements name R3's reading as raw.
+5. `rg -n -i 'R3[^0-9].*raw|raw.*R3[^0-9]|raw, debounced|raw .?ctx\.baseline_w|_ceiling_charger_w'
+   custom_components/ tests/`: 15 hits. The same statement in code and tests, and C4's operand.
+6. `rg -n -i 'step.down' custom_components/`: 4 hits. Code stating the stale reading's cause.
+
+| Site | Today | Follow-up |
+|---|---|---|
+| `custom_components/smart_charging/const.py:216` (1) | Comment: the debounce exists for a step down's stale reading | As `test_billing_protection.py:380` |
+| `custom_components/smart_charging/const.py:218` (6) | The same comment | The same |
+| `custom_components/smart_charging/coordinator.py:240` (6) | The same, for the debouncer | The same |
+| `custom_components/smart_charging/coordinator.py:241` (1) | The same comment | The same |
+| `custom_components/smart_charging/coordinator.py:256` (5) | Comment: `_last_commanded_a` bounds C4's operand alone | Name R3's too |
+| `custom_components/smart_charging/coordinator.py:629` (1) | Passes this cycle's `charger_w` to the baseline step | Pass the lower operand |
+| `custom_components/smart_charging/coordinator.py:689` (1) | `_debounce_baseline` takes the reading alone | Take the lower operand |
+| `custom_components/smart_charging/coordinator.py:690` (1) | Docstring: debounces the raw `net_w - charger_w` baseline | Name the lower charger term |
+| `custom_components/smart_charging/coordinator.py:698` (1) | Hands the engine `net_w - charger_w` | Subtract the lower charger term |
+| `custom_components/smart_charging/coordinator.py:1565` (5) | `_ceiling_charger_w` and its docstring serve C4 alone | Share it with R3, taking the reading and voltage: R3's step precedes `CycleContext` |
+| `custom_components/smart_charging/coordinator.py:1611` (5) | Docstring: R3 reads the raw `ctx.baseline_w` | Name R3's lower charger term |
+| `custom_components/smart_charging/coordinator.py:1906` (1) | Docstring: a fault-recovery cycle's stale reading contaminates the baseline | The 0 A set current now bounds it; keep the clear for case (a) |
+| `custom_components/smart_charging/coordinator_cycle.py:75` (1) | `baseline_w`'s comment: `net_w - charger_w`, debounced | Name the lower charger term |
+| `custom_components/smart_charging/coordinator_cycle.py:90` (5) | Comment: R3's raw, debounced `baseline_w` | The same |
+| `custom_components/smart_charging/engines/billing_protection.py:61` (1) | `BaselineDebouncer`'s docstring: `net_w - charger_w` | The same |
+| `custom_components/smart_charging/engines/billing_protection.py:101` (6) | Docstring: a step down's stale reading swings the baseline low | As `test_billing_protection.py:380` |
+| `custom_components/smart_charging/engines/billing_protection.py:149` (1) | `apply_peak_clamp`'s docstring: solves from `net_w - charger_w` | The same |
+| `tests/engines/test_billing_protection.py:380` (1) | A step down's stale reading plunges the baseline | Name a headroom increase the lower term leaves to case (b) |
+| `tests/engines/test_billing_protection.py:569` (1) | The closed-loop model subtracts the lagging reading alone | Take the lower operand |
+| `tests/test_coordinator.py:1174` (1) | Docstring: cycle 2's baseline is 2000 - 3000 W | Re-derive with the lower term |
+| `tests/test_coordinator.py:1197` (2) | Asserts `solar_surplus_w` from the 3000 W reading | Assert it from the set current; `:1192-1193`'s raw surplus becomes 300 W |
+| `tests/test_coordinator.py:1209` (1) | Docstring: a stale reading swings the baseline negative | Restate the swing the lower term leaves, and `:1230`'s -1500 W |
+| `tests/test_coordinator.py:1227` (3) | Comment: the reading still reports the prior draw | The same |
+| `tests/test_coordinator.py:1264` (2) | Asserts the 440 A readout from the -1500 W baseline | Assert it from the lower term |
+| `tests/test_coordinator.py:1265` (2) | Asserts `solar_surplus_w` of 1500 W | The same |
+| `tests/test_coordinator.py:1290` (3) | Comment: the baseline swings to -3000 W, 27 A | Re-derive: -2300 W, 24 A, still above the 16 A request |
+| `tests/test_coordinator.py:4930` (5) | Docstring: R3's raw, debounced baseline | Name R3's lower charger term |
+| `tests/test_coordinator.py:4946` (2) | Asserts the R3 clamp's baseline is 5000 W | Assert 5500 W, and `:4945`'s worked baseline: under `Off` the lower term is 0 W |
+| `tests/test_coordinator.py:4968` (2) | Asserts the readout's baseline is 5000 W | The same, with `:4967` |
+| `tests/test_coordinator.py:4971` (2) | Asserts a -6 A readout | Re-derive from the lower term |
+| `tests/scenarios/test_invariants.py:10` (1) | Module docstring: the R3 mutation bypasses the debounce alone | Bypass the lower operand too |
+| `tests/scenarios/test_invariants.py:281` (1) | The mutation's comment | The same |
+| `tests/scenarios/test_invariants.py:287` (1) | Patches the debounce alone; no breach once the lower term lands | The same |
+| `tests/scenarios/test_invariants.py:304` (3) | Comment: the bypass lets the command oscillate | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:4` (3) | Module docstring: both clamps bind only until step 4 | R3 keeps binding |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:22` (3) | "R3's own exposure": the corrupted baseline is committed at step 4 | Describe R3 binding throughout |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:24` (3) | The same paragraph | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:25` (3) | The same paragraph | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:26` (1, 3) | The same paragraph | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:27` (3) | The same paragraph | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:28` (3) | The same paragraph | The same |
+| `tests/scenarios/test_peak_and_ceiling_under_lag.py:31` (3) | Attribution: nothing shows R3 stable under oscillation | The whole-stack test now does |
+| `docs/design/system-design.md:472` (4) | §5.1's sequence: "peak clamp on raw" | Name the lower charger operand |
+| `docs/design/system-design.md:474` (4) | §5.1's readout step: fitted to the RAW baseline | The same |
+
+The remaining hits conform:
+- **43 of search 1:** the Engine and its tests, taking the baseline as a parameter;
+  `coordinator.py`'s import, call, debouncer comment `:247`, R10 docstring `:818` and fault-path
+  comments and their tests, `const.py:219` and `invariants.py`, on unchanged deferral rules;
+  `test_captar_end_to_end.py:121`'s 0 W reading; the mutation's control test; and
+  `test_peak_and_ceiling_under_lag.py:15`'s history.
+- **12 of search 2:** zero readouts on a fault, and readouts on a first cycle, at a reading at
+  or below the set current, or while the debounce holds.
+- **7 of search 3:** case (a)'s step-up transient, the closed-loop block, a stale-reading
+  premise, and the scenario module's history and C4-driven alternation.
+- **5 of search 4:** §3's Signal-Conditioning row, §5.1's forecast note, the C4 step, and the
+  ADR-0049 and ADR-0051 table rows, which contrast the clamps with the smoothed baseline.
+- **10 of search 5:** C4's call site, and statements contrasting raw with smoothed or naming a
+  raw request.
+- **1 of search 6:** C4's operand, `coordinator.py:1568`.
+
+Out of scope:
+- **R10's smoothed baseline and C4's Engine** keep their own `net_w - charger_w`: 12 hits of
+  search 1 (`signal_conditioning.py:55`, `:58`, `:72`, `:78`; `grid_safety.py:22`, `:62`;
+  `coordinator.py:815`, `:1615`; `coordinator_cycle.py:85`; `test_signal_conditioning.py:68`;
+  `test_coordinator.py:1188`, `:5038`) and R5's escalated-rate assertion
+  `test_coordinator.py:4894` of search 2.
+- **A corrupted store, option or step** keeps being rejected: search 3's 7 `corrupt` hits
+  outside `tests/scenarios/`.
+- **Solar's own set-point oscillation** keeps being judged by R10: 4 hits of search 3
+  (`test_amp_step.py:29`, `test_solar.py:35`, `test_solar_end_to_end.py:102`, `:128`).
+- **`docs/design/project-plan.md`'s 8 hits of search 4** keep recording what earlier slices
+  shipped.
