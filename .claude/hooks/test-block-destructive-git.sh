@@ -131,6 +131,15 @@ runr "could not read past" 'A=v> /dev/null git reset --hard'     # an assignment
 runr "could not read past" '2> "a b" git reset --hard'            # a target holding a quoted blank
 runr "could not read past" '2>/dev/null echo use git'             # prose after a redirection: the stated cost
 runr "refused rather than read" '>|/tmp/o git push --force origin x' # >| before git, read as > by the plain split
+runr "refused rather than read" "gh \"-R\" o/r pr >/dev/null merge 1234" # a quoted flag is no path word
+runr "refused rather than read" 'gh pr merge>/dev/null'           # one attached to the last path word
+runr "refused rather than read" 'git push>/dev/null'              # ... and to git's subcommand
+runr "could not read past" '2>/dev/null cat <(git push --force origin x)' # git glued inside a process substitution
+run ALLOW 'command -v git >/dev/null 2>&1'                         # no subcommand: nothing to guard
+run ALLOW 'command -v gh >/dev/null'
+run ALLOW 'git --version 2>&1'
+run ALLOW 'gh --version >/dev/null'
+run ALLOW 'git status >| /tmp/o'                                   # >| after the subcommand
 run ALLOW 'git log --format=%h >/tmp/o'                           # no false refusal on common shapes
 run ALLOW 'diff <(git show a:f) <(git show b:f)'
 run ALLOW "gh api repos/o/r/pulls --jq 'map(select(.n > 5))'"
