@@ -124,6 +124,18 @@ runr "refused rather than read" '<<EOF git push --force origin x
 EOF'                                                              # a heredoc opener before git
 runr "refused rather than read" 'sudo 2>/dev/null git push --force origin x' # ... after a wrapper
 runr "refused rather than read" 'GIT_X=1 2>/dev/null git push --force origin x' # ... after an assignment
+runr "refused rather than read" "gh \"pr\">\"x\" merge 1234"     # two quoted parts with a redirection between
+runr "refused rather than read" "gh pr 'merge'>'x' 1234"
+runr "refused rather than read" "gh \"pr\">\"x\" review 1 --approve"
+runr "could not read past" 'A=v> /dev/null git reset --hard'     # an assignment carrying one, its target a word
+runr "could not read past" '2> "a b" git reset --hard'            # a target holding a quoted blank
+runr "could not read past" '2>/dev/null echo use git'             # prose after a redirection: the stated cost
+runr "refused rather than read" '>|/tmp/o git push --force origin x' # >| before git, read as > by the plain split
+run ALLOW 'git log --format=%h >/tmp/o'                           # no false refusal on common shapes
+run ALLOW 'diff <(git show a:f) <(git show b:f)'
+run ALLOW "gh api repos/o/r/pulls --jq 'map(select(.n > 5))'"
+run ALLOW 'git commit -m "a>b"'
+run ALLOW "gh api 'repos/o/r/pulls'"                              # a word that is one quoted part
 run ALLOW 'git status >/dev/null 2>&1'                           # a redirection after the subcommand is untouched
 run ALLOW "gh api 'repos/o/r/issues?x>1' --jq length"            # a > in a word quoted whole is no redirection
 run BLOCK 'git push -f origin main'

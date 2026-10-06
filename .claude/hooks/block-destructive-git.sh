@@ -40,12 +40,17 @@
 # past one, or carrying one (`2>/dev/null git ...`, `git>/dev/null ...`); a word carrying `<`
 # or `>` from git up to its subcommand (`git >/dev/null -c ...`, `git push>/dev/null`) or in
 # gh's command path; and, read as a directory change so the loop refuses what follows, one
-# where a command word would be; and, where the walk stops on a word past a redirection it
-# cannot read (`{var}>`, a process substitution, a target holding a quoted blank), any
-# later word naming git or gh -- prose too, the price of failing closed. A git option's
-# value and a gh flag's value before its path count. A redirection after the subcommand is
-# untouched. Conceded: a word quoted whole is not read as one, so a gh field before the path
-# with an unquoted `>` in its value refuses; and the plain split still cuts at `>|`. The guard
+# where a command word would be; and, once the walk has met any redirection -- stepped over,
+# or one it cannot read (`{var}>`, a process substitution, a target holding a quoted blank,
+# one attached to an assignment) -- any later word naming git or gh, prose too. A git
+# option's value and a gh flag's value before its path count. A redirection after the
+# subcommand is untouched. Failing closed has these costs, conceded: only a word that is one
+# quoted part is not read as a redirection, so a gh field before the path with an unquoted
+# `>` in its value refuses, and so does a `--jq` holding `>` after a boolean long flag
+# (`--paginate`) placed before the path; and a body line kept in the scan that opens with
+# `> ` -- a markdown blockquote in a multi-line `--body`, or in a `-m "$(cat <<'EOF' ...)"`
+# body -- refuses when a later word names git or gh, and counts as a directory change in
+# the loop (`--body-file` / `-F <file>` is the workaround). The guard
 # runs commands of its own -- a `git rev-parse` in a directory taken from the command text
 # -- to decide the rebase rule, and `gh pr view` plus `gh pr checks` to decide the merge
 # rule below. The block list is the one the workflow doc enumerates, so same-family
@@ -479,11 +484,13 @@ redir_words() {
 # to it (`git>/dev/null`, `push>/dev/null`) or glued to an opener (`(2>/dev/null`). Read
 # loosely -- only a word quoted whole is spared -- since a hit only refuses.
 has_redir() {
+  case "$1" in *'<'* | *'>'*) ;; *) return 1 ;; esac
+  # Quoted whole is one quoted part: `"a">"b"` is two, a redirection between them.
   case "$1" in
-    \'*\' | \"*\") return 1 ;;
-    *'<'* | *'>'*) return 0 ;;
-    *) return 1 ;;
+    \'*\') _i=${1#\'}; _i=${_i%\'}; case "$_i" in *\'*) return 0 ;; esac; return 1 ;;
+    \"*\") _i=${1#\"}; _i=${_i%\"}; case "$_i" in *\"*) return 0 ;; esac; return 1 ;;
   esac
+  return 0
 }
 
 # Does a segment change the shell's directory? Its first word -- after the reserved words and
@@ -1429,7 +1436,10 @@ joined=$(printf '%s\n' "$cmd" | awk -v ps="$([ "$tool" = PowerShell ] && echo 1)
 # Split the command line on shell separators so a guarded command placed after
 # && / || / ; / | / a newline is inspected in its own right. A pipe is kept at the head of
 # the segment it feeds, so the scan knows that segment reads the one before it.
-segments=$(printf '%s\n' "$cmd" | sed -e 's/&&/\
+# An unescaped `>|` (noclobber output) is read as the `>` it is, not cut as a pipe: else a
+# redirection written that way would leave its target heading a segment of its own. An
+# escaped `\>|` is a literal `>` and a real pipe, so it is left to the split.
+segments=$(printf '%s\n' "$cmd" | sed -e 's/^>|/>/' -e 's/\([^\\]\)>|/\1>/g' -e 's/&&/\
 /g' -e 's/||/\
 /g' -e 's/;/\
 /g' -e 's/|/\
@@ -1657,6 +1667,9 @@ for seg in $1; do
       [ "$_rw" = 1 ] || [ $# -eq 0 ] || shift
       continue
     fi
+    # Any word the walk passes carrying one -- an assignment (`A=v>`), a wrapper, the command
+    # word -- counts as a redirection met, though it is not stepped over as one.
+    has_redir "$1" && redir_seen=1
     name=${tok##*[/\\]}
     name=${name%.[eE][xX][eE]}
     # git or gh with a redirection attached (`git>/dev/null`, `gh>x`) is read as itself.
