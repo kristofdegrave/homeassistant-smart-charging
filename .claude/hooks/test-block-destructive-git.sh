@@ -94,6 +94,72 @@ run() { # run BLOCK|ALLOW <command> [cwd]
 
 echo "=== blocked: outside the standing authorization ==="
 run BLOCK 'git push --force'
+runr "refused rather than read" '2>/dev/null git push --force origin x' # a redirection before git: refused, not read
+runr "refused rather than read" '>/dev/null git reset --hard'
+runr "refused rather than read" '(2>/dev/null git reset --hard)'  # ... glued to an opener
+runr "refused rather than read" 'git>/dev/null reset --hard'    # ... attached to git
+runr "refused rather than read" 'git >/dev/null reset --hard'   # ... between git and its subcommand
+runr "refused rather than read" 'git 2> /dev/null reset --hard'
+runr "refused rather than read" 'git 2>&1> /dev/null reset --hard'
+runr "refused rather than read" 'git push>/dev/null --force origin x' # ... attached to the subcommand
+runr "refused rather than read" '2>/dev/null gh pr merge 1234'    # the same for gh
+runr "refused rather than read" 'gh>/dev/null pr merge 1234'
+runr "refused rather than read" 'gh 2>/dev/null pr merge 1234'   # ... in its command path
+runr "refused rather than read" 'gh pr merge>/dev/null 1234'
+runr "refused rather than read" 'gh >/dev/null pr review 1 --approve'
+run BLOCK '> >(sh) echo gh pr merge 1234 --squash'              # a redirection into a process substitution is not stepped over
+run BLOCK '> >(sh) echo gh pr review 1 --approve'
+run BLOCK 'diff <(gh pr merge 1234) /dev/null'                  # a substitution opening onto gh is still read as gh
+run BLOCK 'echo x \>|gh pr merge 1234'                           # an escaped > before a real pipe
+TOOL=PowerShell
+runr "refused rather than read" 'git *>$null reset --hard'      # PowerShell's all-streams redirection
+TOOL=Bash
+runr "could not read past" '{fd}>/tmp/o git push --force origin x' # a redirection the walk cannot step over
+runr "could not read past" '2> >(cat) git reset --hard'          # ... into a process substitution
+runr "refused rather than read" 'git --namespace >/dev/null reset --hard' # an option's value counts
+runr "refused rather than read" 'git -C >/dev/null reset --hard'
+runr "refused rather than read" 'gh -R o/r pr >/dev/null merge 1234' # a flag's value is no gh path word
+runr "refused rather than read" '"git">/dev/null reset --hard'   # a quoted name with one attached
+runr "refused rather than read" '<<EOF git push --force origin x
+EOF'                                                              # a heredoc opener before git
+runr "refused rather than read" 'sudo 2>/dev/null git push --force origin x' # ... after a wrapper
+runr "refused rather than read" 'GIT_X=1 2>/dev/null git push --force origin x' # ... after an assignment
+runr "refused rather than read" "gh \"pr\">\"x\" merge 1234"     # two quoted parts with a redirection between
+runr "refused rather than read" "gh pr 'merge'>'x' 1234"
+runr "refused rather than read" "gh \"pr\">\"x\" review 1 --approve"
+runr "could not read past" 'A=v> /dev/null git reset --hard'     # an assignment carrying one, its target a word
+runr "could not read past" '2> "a b" git reset --hard'            # a target holding a quoted blank
+runr "could not read past" '2>/dev/null echo use git'             # prose after a redirection: the stated cost
+runr "refused rather than read" '>|/tmp/o git push --force origin x' # >| before git, read as > by the plain split
+runr "refused rather than read" "gh \"-R\" o/r pr >/dev/null merge 1234" # a quoted flag is no path word
+runr "refused rather than read" 'gh pr merge>/dev/null'           # one attached to the last path word
+runr "refused rather than read" 'git push>/dev/null'              # ... and to git's subcommand
+runr "could not read past" '2>/dev/null cat <(git push --force origin x)' # git glued inside a process substitution
+runr "refused rather than read" 'git > -C reset --hard'            # a spaced target is no option value
+runr "refused rather than read" 'git 2> --namespace reset --hard'
+runr "refused rather than read" 'gh > -- pr merge 1234'            # ... nor gh's end of options
+runr "refused rather than read" 'gh > -- pr review 1 --approve'
+runr "refused rather than read" 'git > a\ -C reset --hard'          # a target continued through an escaped blank
+runr "refused rather than read" 'git >a\ --namespace reset --hard'  # ... attached
+runr "refused rather than read" "git > 'a -C' reset --hard"          # ... through a quoted blank
+runr "refused rather than read" 'gh > a\ -- pr merge 1234'           # ... and for gh
+runr "refused rather than read" "gh >'a --repo' pr merge 1234"
+runr "refused rather than read" 'gh > a\ -- pr review 1 --approve'
+run ALLOW 'command -v git > /dev/null 2>&1'                        # the spaced spellings run too
+run ALLOW 'git --version > /dev/null'
+run ALLOW 'command -v gh > /dev/null'
+run ALLOW 'command -v git >/dev/null 2>&1'                         # no subcommand: nothing to guard
+run ALLOW 'command -v gh >/dev/null'
+run ALLOW 'git --version 2>&1'
+run ALLOW 'gh --version >/dev/null'
+run ALLOW 'git status >| /tmp/o'                                   # >| after the subcommand
+run ALLOW 'git log --format=%h >/tmp/o'                           # no false refusal on common shapes
+run ALLOW 'diff <(git show a:f) <(git show b:f)'
+run ALLOW "gh api repos/o/r/pulls --jq 'map(select(.n > 5))'"
+run ALLOW 'git commit -m "a>b"'
+run ALLOW "gh api 'repos/o/r/pulls'"                              # a word that is one quoted part
+run ALLOW 'git status >/dev/null 2>&1'                           # a redirection after the subcommand is untouched
+run ALLOW "gh api 'repos/o/r/issues?x>1' --jq length"            # a > in a word quoted whole is no redirection
 run BLOCK 'git push -f origin main'
 run BLOCK 'git push --force-with-lease origin main'
 run BLOCK 'git push --force-with-lease=main:abc123 origin'
@@ -693,6 +759,7 @@ export "$MARKER=1"
 export GUARD_REPO="$LR/wt"   # the repository the loop works in, which the hook itself is not part of here
 run BLOCK "git commit -m x" "$LR/wt"                                   # a staged .github/ change
 run BLOCK "git -C $LR/wt commit -m x" "$LR/wt2"                       # ... reached through -C from a sibling worktree
+runr "refused rather than read" "git </dev/null commit -m x" "$LR/wt"   # ... behind a redirection before the subcommand
 g reset -q
 run BLOCK "git commit -am x" "$LR/wt"                                  # an unstaged one, which -a would take
 g checkout -q -- .github/ci.yml
@@ -930,6 +997,13 @@ run BLOCK "git commit -m x" "$LR/wt"                                   # a merge
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
 run BLOCK "git commit -m x" "$STUB"                                    # not a repository: closed
+runr "refused rather than read" "git >/dev/null -c core.fsmonitor=x status" "$LR/wt" # in the loop too
+runr "refused rather than read" "git 2>&1 -c core.fsmonitor=x status" "$LR/wt"
+runr "refused rather than read" "</dev/null git -c core.fsmonitor=x status" "$LR/wt"
+runr "refused rather than read" "git >| /tmp/o -c core.fsmonitor=x status" "$LR/wt"
+runr "refused rather than read" "gh 2>/dev/null issue edit 5 --remove-label needs-approval"
+runr "directory change" "2>/dev/null cd $LR/wt && git commit -m x" "$LR/wt" # a redirection where cd would be: a directory change
+run ALLOW "git status >/dev/null 2>&1" "$LR/wt"                        # a redirection after the subcommand
 # A quoted or escaped separator does not cut a git or gh segment short: the loop reads the
 # command again, split only where bash splits it.
 runr "global -c" "git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"
