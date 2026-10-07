@@ -932,21 +932,40 @@ runr "process substitution" "gh issue comment 5 --body-file <(echo x)"  # ... a 
 runr "process substitution" "git -C $LR/wt diff --no-index a<(echo -c) b" "$LR/wt" # ... attached to a word
 runr "process substitution" "git -C $LR/wt log > >(cat)" "$LR/wt"       # ... as a redirection's target
 runr "carrying a backtick" "git -C $LR/wt hash-object --stdin <<< \`echo x\`" "$LR/wt" # a here-string word
-runr "prefix assignment's command substitution" "A=\`true\` git -c core.fsmonitor=x status" "$LR/wt" # the walk stops on the substitution
-runr "prefix assignment's command substitution" "A=\`true\` gh issue edit 5 --remove-label needs-approval" # ... before gh
-runr "prefix assignment's command substitution" "A=\$(true) git -c core.fsmonitor=x status" "$LR/wt" # ... a \$( one
-runr "prefix assignment's command substitution" "A=\$(true) gh issue edit 5 --remove-label needs-approval" # ... before gh
-runr "prefix assignment's command substitution" "GIT_DIR=\`echo x\` git status" "$LR/wt" # ... a GIT_*= one
+runr "behind a word carrying" "A=\`true\` git -c core.fsmonitor=x status" "$LR/wt" # the walk stops on the substitution
+runr "behind a word carrying" "A=\`true\` gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "behind a word carrying" "A=\$(true) git -c core.fsmonitor=x status" "$LR/wt" # ... a \$( one
+runr "behind a word carrying" "A=\$(true) gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "behind a word carrying" "GIT_DIR=\`echo x\` git status" "$LR/wt" # ... a GIT_*= one
 run ALLOW "A=\$(true) echo D:/GIT/x" "$LR/wt"                           # a path part named GIT is no git
-runr "prefix assignment's command substitution" "A=\$( true ) git -c core.fsmonitor=x status" "$LR/wt" # ... a blank after the opener
-runr "prefix assignment's command substitution" "A=\$( true ) gh issue edit 5 --remove-label needs-approval" # ... before gh
-runr "prefix assignment's command substitution" "A=\` true \` git -c core.fsmonitor=x status" "$LR/wt" # ... a backtick one
-runr "prefix assignment's command substitution" "A=\` true \` gh issue edit 5 --remove-label needs-approval" # ... before gh
-runr "prefix assignment's command substitution" "A=\"\$( true )\" git -c core.fsmonitor=x status" "$LR/wt" # ... in double quotes
-runr "prefix assignment's command substitution" "A=\$(
+runr "behind a word carrying" "A=\$( true ) git -c core.fsmonitor=x status" "$LR/wt" # ... a blank after the opener
+runr "behind a word carrying" "A=\$( true ) gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "behind a word carrying" "A=\` true \` git -c core.fsmonitor=x status" "$LR/wt" # ... a backtick one
+runr "behind a word carrying" "A=\` true \` gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "behind a word carrying" "A=\"\$( true )\" git -c core.fsmonitor=x status" "$LR/wt" # ... in double quotes
+runr "behind a word carrying" "A=\$(
 true
 ) git -c core.fsmonitor=x status" "$LR/wt"                               # ... the opener at a line's end: a segment headed by )
-runr "prefix assignment's command substitution" "A=\$(true) echo git" "$LR/wt" # the word match is loose: conceded
+runr "behind a word carrying" "A=\$(true) echo git" "$LR/wt" # the word match is loose: conceded
+runr "behind a word carrying" "A=x\$( true ) git -c core.fsmonitor=x status" "$LR/wt" # ... the opener mid-value
+runr "behind a word carrying" "A=\"x \$(true)\" git -c core.fsmonitor=x status" "$LR/wt" # ... after a quoted blank
+runr "behind a word carrying" "A=\$(true; true) git -c core.fsmonitor=x status" "$LR/wt" # ... a split inside it
+runr "behind a word carrying" "A=\$(true|cat) git -c core.fsmonitor=x status" "$LR/wt" # ... a pipe inside it
+runr "behind a word carrying" "A=\`
+true\` git -c core.fsmonitor=x status" "$LR/wt"                          # ... a backtick opener at a line's end
+runr "behind a word carrying" "\$(true) git -c core.fsmonitor=x status" "$LR/wt" # ... no assignment at all
+runr "behind a word carrying" "A=\${ true; } git -c core.fsmonitor=x status" "$LR/wt" # ... bash 5.3's \${ }
+runr "behind a word carrying" "A=\"x y\" git -c core.fsmonitor=x status" "$LR/wt" # a quoted blank in a prefix value
+runr "behind a word carrying" "A=\"x y\" gh issue edit 5 --remove-label needs-approval" # ... before gh
+# The gh refusal closes with the label paragraph, not the harness one.
+case "$out" in
+  *"never changed unattended"*) printf 'FAIL the gh refusal closes with the harness paragraph\n'; fail=1 ;;
+  *"Removing needs-approval"*) printf 'ok   TAIL   the gh refusal closes with the label paragraph\n' ;;
+  *) printf 'FAIL the gh refusal closes with no label paragraph\n'; fail=1 ;;
+esac
+run ALLOW "A=x git status" "$LR/wt"                                     # a plain prefix assignment
+run ALLOW "A='x' git status" "$LR/wt"                                   # ... a quoted one with no blank: git is found
+run ALLOW "git -C $LR/wt status" "$LR/wt"                               # a plain repository command
 run ALLOW "git log --grep='\`x\` <(y)'" "$LR/wt"                        # inside single quotes, a backtick is text
 run ALLOW "git log --grep=\"<(y)\"" "$LR/wt"                            # ... and in double quotes, <( is
 run ALLOW "git checkout -Bpx main" "$LR/wt"                             # a -B cluster names a branch
