@@ -27,8 +27,9 @@ interactive-only wording precisely because it sits in every run's index.
      that rule lists.
    - Rounds so far = marker-carrying reviews posted after that event (all of them when there
      is none). Count self-grant comments since that event apart — only those by the login
-     the session posts under (`CLAUDE.md`'s **Project profile** maps it), so a marker pasted by anyone else raises nothing: each raises
-     the cap, not the rounds. The cap, what raises it and its ceiling are **read from the doc
+     the session posts under (`CLAUDE.md`'s **Project profile** maps it), so a marker pasted by
+     anyone else raises nothing: each raises the cap, not the rounds. The cap, what raises it
+     and its ceiling are **read from the doc
      routed above**, never from memory. If an exit label is still on and the count was reset
      — by either kind of reset event — take both exit labels off before the pass (**Exit
      labels** names this as the review step's first act after a reset; commands and
