@@ -238,10 +238,11 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # Issue #990: debounces peak_headroom_a/solar_surplus_w/apply_peak_clamp's own
         # baseline_w against a transient headroom-inflating reading (a charger current
         # step-down outrunning the charger_power adapter's slower poll cadence for one
-        # extra cycle) -- see debounce_baseline_w's own docstring. Deliberately never reset
-        # (disconnect, fault, a long adapter outage) -- same lifecycle as `_peak_tracker`
-        # just above, which isn't reset either. Worst case, recovery to a genuinely lower
-        # baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
+        # extra cycle; ADR-0059's lower charger term now bounds that reading by the set current,
+        # leaving case (b) the increases that remain) -- see debounce_baseline_w's own docstring.
+        # Deliberately never reset (disconnect, fault, a long adapter outage) -- same lifecycle as
+        # `_peak_tracker` just above, which isn't reset either. Worst case, recovery to a genuinely
+        # lower baseline after a long gap costs an extra `BASELINE_DEBOUNCE_CYCLES`, the same
         # safety-conservative direction the debounce itself always takes.
         self._baseline_debouncer = BaselineDebouncer()
         # ADR-0039/R3 case (a): the two fields `debounce_baseline_w`'s `command_changed` is
@@ -253,10 +254,10 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         # stale as any other step. Read once per cycle by `_run_cycle`, where `_command_stepped`
         # describes the write at the END of the PREVIOUS cycle -- which is what this cycle's
         # `charger_w` reading may not have caught up with yet. `_last_commanded_a` is also the
-        # set current C4's charger operand is bounded by (`_ceiling_charger_w`, ADR-0058). Never
-        # reset for the same reason `_baseline_debouncer` above isn't: a stale `_last_commanded_a`
-        # after a long gap costs one extra discarded reading, and for C4 only ever lowers the
-        # charger operand -- the conservative direction.
+        # set current both C4's (ADR-0058) and R3's (ADR-0059) charger operand is bounded by
+        # (`_charger_draw_w`). Never reset for the same reason `_baseline_debouncer` above isn't:
+        # a stale `_last_commanded_a` after a long gap costs one extra discarded reading, and for
+        # C4 and R3 only ever lowers the charger operand -- the conservative direction.
         self._last_commanded_a: float | None = None
         self._command_stepped = False
         # ADR-0021: `sensor.smart_charging_adapter_readings`' backing cache -- persisted across
@@ -626,7 +627,7 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         if inputs is None:
             return await self._fault_required_role()
         status, net_w, charger_w, voltage = inputs
-        baseline_w = self._debounce_baseline(net_w, charger_w)
+        baseline_w = self._debounce_baseline(net_w, charger_w, voltage)
         ctx = self._build_cycle_context(status, net_w, charger_w, voltage, now_dt, baseline_w)
         self._resolve_solar_surplus(ctx)
         await self._resolve_monthly_peak(ctx)
@@ -686,16 +687,18 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
             adapter_readings_at=self._role_readings_at,
         )
 
-    def _debounce_baseline(self, net_w: float, charger_w: float) -> float:
-        """Issue #990: debounces the raw `net_w - charger_w` baseline once, before it feeds
-        `solar_surplus_w`/`peak_headroom_a`/`apply_peak_clamp` -- a single source of truth so
-        all three stay in lockstep and none can transiently see the inflated (undebounced)
-        reading the others already reject. ADR-0039: `command_changed` describes the write at
-        the end of the PREVIOUS cycle, read here before this cycle's own `_write` overwrites it.
-        Named as its own step (ADR-0046) since its result feeds `CycleContext`'s construction
-        directly, right after this call."""
+    def _debounce_baseline(self, net_w: float, charger_w: float, voltage: float) -> float:
+        """Issue #990: debounces R3's raw baseline once -- `net_w` minus the lower charger term
+        (`_charger_draw_w`, ADR-0059) -- before it feeds `solar_surplus_w`/`peak_headroom_a`/
+        `apply_peak_clamp` -- a single source of truth so all three stay in lockstep and none
+        can transiently see the inflated (undebounced) reading the others already reject.
+        ADR-0039: `command_changed` describes the write at the end of the PREVIOUS cycle, read
+        here before this cycle's own `_write` overwrites it. Named as its own step (ADR-0046)
+        since its result feeds `CycleContext`'s construction directly, right after this call;
+        it takes the reading and voltage as parameters because this step precedes
+        `CycleContext`."""
         baseline_w, self._baseline_debouncer = debounce_baseline_w(
-            net_w - charger_w,
+            net_w - self._charger_draw_w(charger_w, voltage),
             self._baseline_debouncer,
             debounce_cycles=BASELINE_DEBOUNCE_CYCLES,
             command_changed=self._command_stepped,
@@ -1556,22 +1559,23 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         return clamp_to_ceiling(
             desired,
             net_w=ctx.net_w,
-            charger_w=self._ceiling_charger_w(ctx),
+            charger_w=self._charger_draw_w(ctx.charger_w, ctx.voltage),
             voltage=ctx.voltage,
             ceiling_a=self._config.grid_ceiling_a,
             offset_a=self._config.grid_safety_offset_a,
         )
 
-    def _ceiling_charger_w(self, ctx: CycleContext) -> float:
-        """ADR-0058; requirements.md's C4 row: the charger draw C4 solves around is the lower of
-        this cycle's charger power reading and the charger current last set, at the supply
-        voltage, so a reading still showing the draw from before a step down cannot widen C4's
-        headroom, and a car drawing less than it was set to is taken at its reading. The reading
-        alone until `_write` has set a current -- a fresh coordinator, as every restart and
-        reload builds."""
+    def _charger_draw_w(self, charger_w: float, voltage: float) -> float:
+        """ADR-0058 (C4) and ADR-0059 (R3), requirements.md's C4 and R3 rows: the charger draw
+        both clamps solve around is the lower of the charger power reading and the charger
+        current last set, at the supply voltage, so a reading still showing the draw from before
+        a step down cannot widen either headroom, and a car drawing less than it was set to is
+        taken at its reading. The reading alone until `_write` has set a current -- a fresh
+        coordinator, as every restart and reload builds. Takes the reading and voltage rather
+        than `ctx`: R3's baseline step precedes `CycleContext`."""
         if self._last_commanded_a is None:
-            return ctx.charger_w
-        return min(ctx.charger_w, self._last_commanded_a * ctx.voltage)
+            return charger_w
+        return min(charger_w, self._last_commanded_a * voltage)
 
     def _peak_clamp_would_run(self) -> bool:
         """R3 AC1/R17: whether R3's peak clamp applies to the mode currently active.
@@ -1608,12 +1612,12 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
 
         Both baseline-dependent bounds (peak, C4) are fitted to `ctx.smoothed_baseline_w` --
         R5's own forecast, not a clamp -- rather than the unsmoothed operands the real R3/C4
-        clamps and the `peak_headroom_a` readout still use: R3's raw `ctx.baseline_w`, and C4's
-        `ctx.net_w` with ADR-0058's lower charger operand (issue #1189/T10, R5's third
-        smoothed-baseline criterion; ADR-0051, which narrows ADR-0006 step 2's raw-charger
-        clause for this forecast specifically). The forecast is fitted to R10's admitted joint
-        mean, which already folds `net_w - charger_w` for the solar modes' own step 6 (ADR-0049)
-        -- this reuses that same value rather than a second, net-only mean.
+        clamps and the `peak_headroom_a` readout still use: R3's raw `ctx.baseline_w` (ADR-0059's
+        lower charger term), and C4's `ctx.net_w` with ADR-0058's lower charger operand (issue
+        #1189/T10, R5's third smoothed-baseline criterion; ADR-0051, which narrows ADR-0006 step
+        2's raw-charger clause for this forecast specifically). The forecast is fitted to R10's
+        admitted joint mean, which already folds `net_w - charger_w` for the solar modes' own step
+        6 (ADR-0049) -- this reuses that same value rather than a second, net-only mean.
 
         Resolved on every cycle whether or not urgency is actually in effect, which is the whole
         point of it: a test written against the rate CURRENTLY in force would move the moment
@@ -1910,13 +1914,14 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         more) -- deferred nothing, yet still writes 0 A, which is a real step. Leaving the flag
         set would
         block case (a) on the RECOVERY cycle, which is precisely the cycle whose `charger_w` is
-        stale from that forced drop to 0 A: the reading then looks far below the accepted
-        baseline, case (a) cannot reject it, and the debounce window commits a contaminated,
-        headroom-inflating value. Cleared here rather than in the engine, since only the
-        coordinator knows a cycle ended without consulting it; called from `_enter_fault` at
-        those two sites rather than from each directly (ADR-0046's one-statement-per-fault-site
-        body rule) -- the third (ev_soc) is NOT one of them, since it DOES reach the debounce
-        call this cycle, and `_enter_fault` skips this clear there (`clear_baseline_deferral`)."""
+        stale from that forced drop to 0 A. ADR-0059's lower charger term now bounds that stale
+        reading by the 0 A set current, so it no longer reaches the baseline; the clear stays
+        for case (a), which still has to see the recovery cycle as one that may defer. Cleared here
+        rather than in the engine, since only the coordinator knows a cycle ended without
+        consulting it; called from `_enter_fault` at those two sites rather than from each directly
+        (ADR-0046's one-statement-per-fault-site body rule) -- the third (ev_soc) is NOT one of
+        them, since it DOES reach the debounce call this cycle, and `_enter_fault` skips this clear
+        there (`clear_baseline_deferral`)."""
         self._baseline_debouncer = replace(self._baseline_debouncer, deferred_previous=False)
 
     def _clear_household_window_deferral(self) -> None:

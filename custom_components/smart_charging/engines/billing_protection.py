@@ -58,8 +58,8 @@ class PeakBreachTracker:
 @dataclass(frozen=True)
 class BaselineDebouncer:
     """Issue #990's headroom-increase debounce state: the last accepted `baseline_w`
-    (`net_w - charger_w`) and how many consecutive cycles a lower (more headroom) raw
-    reading has now held without yet being accepted."""
+    (`net_w` minus R3's lower charger term, ADR-0059) and how many consecutive cycles a lower
+    (more headroom) raw reading has now held without yet being accepted."""
 
     accepted_w: float | None = None
     pending_cycles: int = 0
@@ -99,8 +99,10 @@ def debounce_baseline_w(
 
     Issue #990: the charger's own power sensor (slow Modbus poll) can still report the
     prior, higher value for one extra coordinator cycle after a current step-down, while the
-    net meter (fast) already reflects the drop -- transiently swinging `baseline_w` (and, via
-    it, `peak_headroom_a`/`solar_surplus_w`) artificially low. A lower `raw_baseline_w` than
+    net meter (fast) already reflects the drop. ADR-0059's lower charger term (the caller's)
+    bounds that reading by the set current, so a step down no longer swings `baseline_w` (and,
+    via it, `peak_headroom_a`/`solar_surplus_w`) low; the increases left to this debounce are
+    the ones a reading alone can still show. A lower `raw_baseline_w` than
     the last accepted reading INCREASES headroom (more permissive) and is only accepted once a
     below-accepted reading has been seen on `debounce_cycles` consecutive calls -- not
     necessarily the same value each time; the newest raw reading at that point is what gets
@@ -146,7 +148,8 @@ def apply_peak_clamp(
 ) -> tuple[float, PeakBreachTracker, bool]:
     """Return (clamped_current, new_tracker, force_stop) -- the R3 peak clamp.
 
-    Solves from the baseline actually flowing (`net_w - charger_w`, resolved by the caller --
+    Solves from the baseline actually flowing (`net_w` minus R3's lower charger term, ADR-0059,
+    resolved by the caller --
     issue #990: after `debounce_baseline_w`, so a transient stale-sensor reading cannot inflate
     headroom for even one cycle), the same raw-reading approach E6's grid-safety clamp uses, so
     a breach cannot hide behind the request. The breach timer is gated on the REQUEST, not the

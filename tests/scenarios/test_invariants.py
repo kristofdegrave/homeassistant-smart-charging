@@ -7,9 +7,10 @@ ways: the invariant must be quiet on a correct world, and must fire on a genuine
 
 - the C4 member bypasses `clamp_to_ceiling` entirely (T1's own world, lag 0) -- `check_c4` must
   catch what a disabled clamp lets through.
-- the R3 member bypasses `debounce_baseline_w` (the #990 shape, reproduced at R3's call site
-  through the plant's lag model rather than hand-seeded feedback) -- `check_r3` must catch the
-  one-cycle-removed breach the bypass produces.
+- the R3 member bypasses `debounce_baseline_w` and the lower charger term (`_charger_draw_w`,
+  ADR-0059) -- the #990 shape, reproduced at R3's call site through the plant's lag model
+  rather than hand-seeded feedback -- `check_r3` must catch the one-cycle-removed breach the
+  bypass produces.
 
 The R3 allowance-engaging tests further down run the SAME product code unmutated -- they exist
 to prove `check_r3`'s own deferral and grace-period allowances stay quiet on a world that
@@ -282,7 +283,13 @@ async def test_should_report_a_peak_breach_when_the_baseline_debounce_is_bypasse
     # own actuation (`command_changed`) and debounces a headroom-increasing swing. Bypassing it
     # -- returning the raw, undistinguished reading every cycle -- is #990's shape: a reading
     # taken one cycle after the System's own current step is partly a measurement of that step,
-    # not of the household, and here it is accepted anyway.
+    # not of the household, and here it is accepted anyway. ADR-0059's lower charger term is
+    # bypassed too (the reading alone, as before it): it keeps that stale reading out of the
+    # baseline at its source, so a mutation of the debounce alone leaves no breach to report.
+    monkeypatch.setattr(
+        "custom_components.smart_charging.coordinator.SmartChargingCoordinator._charger_draw_w",
+        lambda _self, charger_w, _voltage: charger_w,
+    )
     monkeypatch.setattr(
         "custom_components.smart_charging.coordinator.debounce_baseline_w",
         lambda raw_baseline_w, tracker, *, debounce_cycles, command_changed: (
@@ -300,8 +307,8 @@ async def test_should_report_a_peak_breach_when_the_baseline_debounce_is_bypasse
     # Act
     # The warm-up settles the startup transient at a steady 8 A (Power's own target current,
     # below the pre-step 9 A headroom); the household step to 1100 W total (500 + 600) then
-    # makes R3 step the current down (#990's shape): the bypassed debounce lets the command
-    # oscillate (6, 8, 7 A) for a few cycles after the step before settling, re-granting
+    # makes R3 step the current down (#990's shape): the bypassed debounce and lower term let the
+    # command oscillate (6, 8, 7 A) for a few cycles after the step before settling, re-granting
     # headroom the household no longer has -- the breach lands once the over-granted current
     # has actually been drawn, one cycle after the household itself last changed, with no
     # command change of its own to defer it a further cycle.
