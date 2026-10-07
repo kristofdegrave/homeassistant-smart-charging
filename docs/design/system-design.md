@@ -469,9 +469,9 @@ sequenceDiagram
     P-->>C: active mode
     C->>M: desired current (conditioned readings, SOC limit, config)
     M-->>C: desired current
-    C->>B: peak clamp on raw — skipped in exactly two cases: the CapTar capability is<br/>absent (R18), or `Power`'s peak-protection option is disabled (R17) ·<br/>effective peak limit (raised iff urgency)
+    C->>B: peak clamp on raw — skipped in exactly two cases: the CapTar capability is<br/>absent (R18), or `Power`'s peak-protection option is disabled (R17) ·<br/>effective peak limit (raised iff urgency) · baseline charger draw: the lower of the charger<br/>power reading and the last set charger current, at the resolved supply voltage (ADR-0059)
     B-->>C: peak-clamped current
-    C->>B: peak headroom under that IN-FORCE limit, fitted to the RAW baseline,<br/>for the readout (headroom, not clamp)
+    C->>B: peak headroom under that IN-FORCE limit, fitted to the RAW baseline, whose charger draw<br/>is the same lower operand (ADR-0059), for the readout (headroom, not clamp)
     B-->>C: peak headroom — surfaced as sensor.smart_charging_peak_headroom_a
     C->>G: grid-supply-ceiling clamp on raw (C4, always) · charger draw: the lower of<br/>the charger power reading and the last set charger current, at the resolved supply voltage (ADR-0058)
     G-->>C: ceiling-clamped current
@@ -828,16 +828,16 @@ described (ADR-0011, ADR-0018) are reflected in the text above rather than left 
 
 ### 8.3 ADRs written after 0019
 
-This section accounts for the ADRs in `docs/adl/` numbered after 0019 — 33 records, ADR-0020
-through ADR-0051 at the time of writing, and ADR-0058, which narrows a control-cycle step this
-design draws; ADR-0052 to ADR-0057 are not yet reconciled here. Each is in exactly one of two tables. The first holds the 22 that decide something
+This section accounts for the ADRs in `docs/adl/` numbered after 0019 — 34 records, ADR-0020
+through ADR-0051 at the time of writing, and ADR-0058 and ADR-0059, each narrowing a control-cycle
+step this design draws; ADR-0052 to ADR-0057 are not yet reconciled here. Each is in exactly one of two tables. The first holds the 23 that decide something
 about the product, reconciled the way
 [§8.2](#82-adrs-written-after-this-design-0010-0019) reconciles its ten: does the decision hold
 this design's boundary, narrow it, or extend it? The second holds the 11 that decide how the
 project works or how it verifies behaviour, which this design has no service for, each with its
 reason.
 
-As in §8.2, no ADR in this range contradicts the decomposition. Six required a change to the
+As in §8.2, no ADR in this range contradicts the decomposition. Seven required a change to the
 text above, and each is reflected there rather than left as a divergence: ADR-0024's clear event
 ([§4](#4-static-architecture) rule 5,
 [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing),
@@ -846,8 +846,9 @@ text above, and each is reflected there rather than left as a divergence: ADR-00
 Signal-Conditioning row and
 [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step),
 ADR-0049's jointly smoothed solar surplus, in the same two places, ADR-0051's forecast
-baseline, in §3's Signal-Conditioning row, and ADR-0058's C4 charger operand, in
-[§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s C4 step. The same
+baseline, in §3's Signal-Conditioning row, ADR-0058's C4 charger operand, in
+[§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s C4 step, and ADR-0059's R3
+charger operand, in §5.1's two R3 steps. The same
 Resource Access bullet defers to [C5](../analysis/requirements.md#constraints)'s role table for
 which roles fault when unavailable, which several rows below cite.
 
@@ -877,6 +878,7 @@ which roles fault when unavailable, which several rows below cite.
 | 0049 | Step 6's solar surplus is smoothed from net import and charger power together | **Narrows ADR-0006 step 2 and ADR-0036; reflected above** | [§3](#3-service-catalog)'s Signal-Conditioning row and [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s smoothing step smooth one sample per cycle, raw `net_w` paired with raw `charger_w`, and every charging-rate decision that reads the solar surplus reads that mean — the `Solar` and `SolarOnly` dispatch, `Auto`'s surplus test and the baseline query. A sample from a cycle the charger current just changed is not admitted: the Coordinator passes the command-changed signal it already holds for ADR-0039, and the Engine keeps the decision and the flag, threaded as state. It gains a parameter, not a dependency, so it stays a stateful Engine under [§3](#3-service-catalog)'s signature test. The R3 and C4 clamps and the displayed `solar_surplus_w` still read raw, and R5's escalated rate reads the same admitted mean, negated, as its smoothed household baseline, without R3's deferrals, as ADR-0051 decides. |
 | 0051 | R5's escalated-rate forecast reads R10's admitted joint mean | **Narrows ADR-0006 step 2 and ADR-0036; reflected above** | Both of R5's household-dependent bounds, the C4 ceiling headroom and the peak headroom under the raised limit, are fitted to the Signal-Conditioning Engine's admitted mean, negated, which [§3](#3-service-catalog)'s Signal-Conditioning row names as the forecast's baseline. The Engine gains no second output, parameter or state: the forecast reads the value the solar modes already dispatch on, and the Coordinator hands it to the Billing-Protection and Grid-Safety Engines as a parameter, as the [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing) sequence draws. The R3 and C4 clamps and the peak-headroom readout still read raw. |
 | 0058 | C4's charger draw is the lower of the charger power reading and the last set charger current | **Narrows ADR-0006 step 8; reflected above** | [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s C4 step solves around the lower of this cycle's raw charger power reading and the charger current last set, at the resolved supply voltage. The Coordinator already holds that current for ADR-0039 and passes the lower operand to the Grid-Safety Engine, which takes its operands as parameters and is unchanged, so V7 stays a pure Engine, split from billing. R5's escalated rate still fits its C4 bound to the smoothed mean (ADR-0051). |
+| 0059 | R3's charger draw is the lower of the charger power reading and the last set charger current | **Narrows ADR-0006 step 7 and ADR-0039; reflected above** | [§5.1](#51-control-cycle-realizes-uc01uc04-and-uc05uc07-in-passing)'s R3 clamp and peak-headroom readout fit R3's baseline around the lower of this cycle's raw charger power reading and the charger current last set, at the resolved supply voltage — C4's operand (ADR-0058). The Coordinator already holds that current for ADR-0039 and hands the lower operand to the baseline debounce, whose deferral cases apply unchanged. The Billing-Protection Engine takes its operands as parameters and is unchanged, so it stays a stateful Engine under [§3](#3-service-catalog)'s signature test. `solar_surplus_w` moves with that baseline; R10's smoothed mean, which the solar modes and R5's escalated rate read, is unchanged (ADR-0049, ADR-0051). |
 
 **Out of scope: process and test method.** These decide how the project works or how behaviour is
 verified. None adds, moves or relies on a service boundary, so there is nothing for this design to
