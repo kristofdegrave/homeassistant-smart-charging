@@ -18,15 +18,14 @@ in the artifact under review, a different question.
 
 A change to this project's process and to the files that drive its runs — a skill
 (`.claude/skills/`), an agent definition (`.claude/agents/`), a CI workflow
-(`.github/workflows/`), the project profile and the two scripts that read it
-(`.claude/profile.yml`; `.github/setup-labels.sh`, which writes its `labels` to the
-repository; `.github/profile-env.sh`, which prints its tracker values for the reference's
-recipes), an issue form
-(`.github/ISSUE_TEMPLATE/`), the harness configuration that decides what a run may do
-(`.claude/settings.json` and the hooks it wires, `.claude/hooks/`) — which is why the committed
-settings file is the restricted one and `settings.local.json` is the ignored one, as
-`.gitignore` says at the line — or the canonical process reference (`docs/reference/`,
-`CLAUDE.md`). A workflow runs with repository secrets
+(`.github/workflows/`), the project profile and the scripts that read it
+(`.claude/profile.yml`; among them `.github/setup-labels.sh`, which writes its `labels` to
+the repository, `.github/profile-env.sh`, `.github/gh-as-bot.sh` and most `.github/check-*`
+scripts), an issue form (`.github/ISSUE_TEMPLATE/`), the harness
+configuration that decides what a run may do (`.claude/settings.json` and the hooks it
+wires, `.claude/hooks/`) — which is why the committed settings file is the restricted one and
+`settings.local.json` is the ignored one, as `.gitignore` says at the line — or the canonical
+process reference (`docs/reference/`, `CLAUDE.md`). A workflow runs with repository secrets
 and a write-scoped `GITHUB_TOKEN`, and a skill or agent steers a run that reads untrusted issue
 and PR content with write access to the repository, so this checklist weighs security at least
 as heavily as quality. An issue form carries no
