@@ -938,6 +938,15 @@ runr "prefix assignment's command substitution" "A=\$(true) git -c core.fsmonito
 runr "prefix assignment's command substitution" "A=\$(true) gh issue edit 5 --remove-label needs-approval" # ... before gh
 runr "prefix assignment's command substitution" "GIT_DIR=\`echo x\` git status" "$LR/wt" # ... a GIT_*= one
 run ALLOW "A=\$(true) echo D:/GIT/x" "$LR/wt"                           # a path part named GIT is no git
+runr "prefix assignment's command substitution" "A=\$( true ) git -c core.fsmonitor=x status" "$LR/wt" # ... a blank after the opener
+runr "prefix assignment's command substitution" "A=\$( true ) gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "prefix assignment's command substitution" "A=\` true \` git -c core.fsmonitor=x status" "$LR/wt" # ... a backtick one
+runr "prefix assignment's command substitution" "A=\` true \` gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "prefix assignment's command substitution" "A=\"\$( true )\" git -c core.fsmonitor=x status" "$LR/wt" # ... in double quotes
+runr "prefix assignment's command substitution" "A=\$(
+true
+) git -c core.fsmonitor=x status" "$LR/wt"                               # ... the opener at a line's end: a segment headed by )
+runr "prefix assignment's command substitution" "A=\$(true) echo git" "$LR/wt" # the word match is loose: conceded
 run ALLOW "git log --grep='\`x\` <(y)'" "$LR/wt"                        # inside single quotes, a backtick is text
 run ALLOW "git log --grep=\"<(y)\"" "$LR/wt"                            # ... and in double quotes, <( is
 run ALLOW "git checkout -Bpx main" "$LR/wt"                             # a -B cluster names a branch

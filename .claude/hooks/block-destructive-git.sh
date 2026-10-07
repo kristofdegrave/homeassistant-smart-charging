@@ -208,8 +208,8 @@
 # a variable), is refused rather than read, and so is a git or gh segment carrying a backtick
 # outside single quotes or a process substitution (`<(`, `>(`) outside quotes, whose command
 # the shell runs to build a word (`substitutes`) -- and a git or gh behind a prefix
-# assignment's command substitution (`A=$(x) git ...`), where the walk stops on that command
-# -- and so is a git or gh command bash would expand
+# assignment's command substitution (`A=$(x) git ...`, `A=$( x ) git ...`), where the walk
+# stops on that command, or in a segment headed by `)` -- and so is a git or gh command bash would expand
 # -- a brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
 # expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
 # background `&` and a newline outside quotes and not escaped, a comment and a heredoc's body
@@ -264,7 +264,9 @@
 # included -- so a `-m` message holding a backtick inside double quotes refuses, `commit -F
 # <file>` is the workaround, and so does a gh `--body` or `--title` holding Markdown
 # backticks in double quotes, `--body-file` or single quotes the workaround -- and a `<(` or `>(`
-# outside quotes, though `git diff --no-index <(...) <(...)` only reads; a
+# outside quotes, though `git diff --no-index <(...) <(...)` only reads; behind a prefix
+# assignment's command substitution, or in a segment headed by `)`, any later word whose
+# last path part is `git` or `gh` refuses, a mention too (`echo git`, a bare `D:/GIT`); a
 # redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
 # it is the workaround; a heredoc under an unquoted delimiter whose body has a line ending
 # in a single backslash (a commit message or PR body fed by `<<EOF`) refuses -- quoting the
@@ -1732,11 +1734,15 @@ for seg in $1; do
       '' | if | then | else | elif | do | while | until | '!' | '{') shift; continue ;;
       GH_*=*) gh_env=1 ;;
       [Gg][Ii][Tt]_*=*) git_env=1 ;;
+      # A segment headed by `)` may be the close of a substitution a newline split from its
+      # opener (`A=$(` ... `) git ...`): read like one re-read below.
+      ')'*) asub=1 ;;
     esac
     case "$tok" in
       # An assignment whose value is a command substitution (`r=$(gh pr merge ...)`) runs
-      # that command: read it as the next word, and a merge there as a wrapped one.
-      *='$('?* | *='`'?* | *='"$('?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; asub=1; continue ;;
+      # that command: read it as the next word, and a merge there as a wrapped one. A bare
+      # opener (`A=$( cmd )`) reads as an empty word, stepped over like `&`.
+      *='$('* | *='`'* | *='"$('*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; asub=1; continue ;;
       *=*) shift; continue ;;
     esac
     case "$name" in
@@ -1782,7 +1788,8 @@ for seg in $1; do
   # In the loop, a walk that re-read a prefix assignment's substitution (a backtick one, or
   # `A=$(x) gh ...`) stops on that command, so the git or gh behind it would meet no loop rule:
   # any later word naming one -- its last path part, quotes and a substitution's opener or
-  # closer stripped -- refuses the segment.
+  # closer stripped -- refuses the segment. So does one headed by `)`. The match is loose on
+  # purpose (`echo git`, a bare `D:/GIT` refuse too); the header concedes it.
   if [ -z "$found" ] && [ "$asub" = 1 ] && in_loop; then
     for _a in "$@"; do
       _n=${_a#[\"\']}
@@ -1791,8 +1798,10 @@ for seg in $1; do
       _n=${_n%%[\`)\"\']*}
       _n=${_n##*[/\\]}
       case "${_n%.[eE][xX][eE]}" in
-        [gG][iI][tT] | [gG][hH])
+        [gG][iI][tT])
           deny "$seg" "in the autopilot loop a git or gh behind a prefix assignment's command substitution is refused rather than read: the walk stops on the substitution's command, so no loop rule reaches it" "$HARNESS_TAIL" ;;
+        [gG][hH])
+          deny "$seg" "in the autopilot loop a git or gh behind a prefix assignment's command substitution is refused rather than read: the walk stops on the substitution's command, so no loop rule reaches it" "$LABEL_TAIL" ;;
       esac
     done
   fi
