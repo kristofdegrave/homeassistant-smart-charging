@@ -1326,6 +1326,22 @@ run ALLOW 'bash .github/gh-as-bot.sh pr-create workflow/1 "t" /tmp/b.md'
 TOOL=PowerShell
 runr "under PowerShell" "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a /-rooted payload names another file to gh.exe
 TOOL=Bash
+# ... a process substitution runs gh as a substitution does, and so does a PowerShell grouping
+runr "process substitution" 'cat <(gh pr review 12 --approve)'          # a prose word first
+run BLOCK 'git diff --no-index <(gh api repos/o/r/pulls/12/reviews -f event=APPROVE) /dev/null'
+run BLOCK 'cat x >(gh pr review 12 -a)'
+runr "process substitution" 'cat <(gh pr merge 1234 --squash --match-head-commit abc123)'   # the merge words too
+run BLOCK 'git diff --no-index >(gh pr merge 1234 --squash --match-head-commit abc123) x'
+run ALLOW 'cat <(gh pr view 12 --json reviews)'                         # naming no approval
+TOOL=PowerShell
+runr "( grouping" 'echo (gh pr review 12 --approve)'
+run BLOCK 'echo (gh pr merge 1234 --squash --match-head-commit abc123)'
+run ALLOW 'echo (gh pr view 12 --json reviews)'
+TOOL=Bash
+runr "behind xargs" 'echo -f event=APPROVE | xargs gh api repos/o/r/pulls/12/reviews'   # fields on stdin
+run BLOCK 'echo --approve | xargs "C:\Program Files\GitHub CLI\gh.exe" pr review 12'   # a quoted backslash path
+run BLOCK 'echo --approve | xargs -n1 gh pr review 12'
+runr "behind xargs" 'printf x | xargs echo walkthrough review'          # conceded: matched as substrings
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"
