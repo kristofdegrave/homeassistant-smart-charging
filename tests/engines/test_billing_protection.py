@@ -377,8 +377,9 @@ def test_debounce_an_equal_baseline_reading_applies_immediately():
 def test_debounce_holds_a_lower_baseline_reading_until_it_persists():
     # Issue #990's debounce case (b): a headroom increase must hold for `debounce_cycles`
     # before it is accepted. A step-down's stale charger_power reading no longer produces one
-    # (ADR-0059's lower charger term bounds it by the set current), so the increase named here
-    # is the one that remains -- the clamp must not grant it on the very first low reading.
+    # (ADR-0059's lower charger term bounds it by the set current), so the increase that
+    # remains -- a genuine household drop (real solar surplus, a load switching off) -- is the
+    # one the clamp must not grant on the very first low reading.
     tracker = BaselineDebouncer(accepted_w=500.0)
     baseline_w, tracker = debounce_baseline_w(
         -1500.0, tracker, debounce_cycles=2, command_changed=False

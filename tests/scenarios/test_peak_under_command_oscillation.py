@@ -52,7 +52,7 @@ from tests.scenarios.scenario_setup import (
 _TARGET_ENTITY_ID = "number.smart_charging_target_current"
 _HOUSEHOLD_W = 2300.0  # steady throughout, as in `test_peak_and_ceiling_under_lag.py`.
 _HIGH_TARGET_A = 16.0  # above R3's 13 A headroom.
-_LOW_TARGET_A = 6.0  # below it (and the charger's own minimum, so E8 never lifts it).
+_LOW_TARGET_A = 6.0  # at the charger's own minimum, so E8 never lifts it.
 _MAX_CURRENT_A = 32.0
 _GRID_CEILING_A = 40.0  # far above any draw here, so C4 never binds.
 _GRID_SAFETY_OFFSET_A = 2.0
@@ -100,6 +100,8 @@ async def test_should_keep_true_import_within_the_peak_limit_when_the_command_os
     runner = ScenarioRunner(hass, coordinator, plant, freezer=freezer, grid_voltage=voltage)
     judge = judge_c4_then_r3(options)
     r3_headroom_a = math.floor((effective_peak_limit_w(options) - _HOUSEHOLD_W) / voltage)
+    # Arrange (precondition guard): R3 binds on the high target.
+    assert r3_headroom_a < _HIGH_TARGET_A
 
     # Act
     # One step at a time, the target flipped through the real number entity before each.
@@ -112,13 +114,14 @@ async def test_should_keep_true_import_within_the_peak_limit_when_the_command_os
             blocking=True,
         )
         trace = await runner.run(1, judge=judge)
+        assert trace[-1].active_mode == MODE_POWER, (
+            f"step {step}: the mode select reverted mid-timeline\n{format_trace(trace)}"
+        )
 
     # Assert
     # The whole invariant set judged every step inside `run` (a breach raises
     # `InvariantViolation`); the world must also be the one it claims to be.
     assert_charged_without_fault(trace)
-    # Arrange (precondition guard): R3 binds on the high target, so the oscillation is R3's.
-    assert r3_headroom_a < _HIGH_TARGET_A
     commanded = [t.commanded_current_a for t in trace]
     assert all(a != b for a, b in zip(commanded, commanded[1:], strict=False)), (
         f"the command did not change on every step: {commanded}\n{format_trace(trace)}"

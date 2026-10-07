@@ -1284,7 +1284,7 @@ async def test_r3_clamp_does_not_grant_extra_current_from_a_transient_stale_read
     )
     coord.active_mode = MODE_POWER
     # target(16 A) sits above the true headroom (10 A) but below the transient's inflated one
-    # (27 A) -- discriminates a still-clamped cycle from an unclamped one.
+    # (24 A) -- discriminates a still-clamped cycle from an unclamped one.
     coord.target_current = 16.0
     _seed_ample_peak_headroom(coord, kw=3.56)
 
@@ -4829,9 +4829,10 @@ async def _prime_household_spike_setup(hass, monkeypatch, *, captar_available, a
     the C4 bound's own literal `charger_w=0.0` stays distinguishable from a mutation that
     passed `ctx.charger_w` instead). Returns `(coord, calls)`; each caller's own `# Act`
     spikes the 4th cycle's household to 5000 W (charger draw held at the same 500 W) --
-    sized so the raw (debounced immediately, since a HIGHER baseline is the
-    safety-conservative direction) and smoothed (2000 W, three parts of the old mean to one
-    of the new) readings genuinely differ.
+    sized so R3's raw baseline (debounced immediately, since a HIGHER baseline is the
+    safety-conservative direction; 5500 W under `Off`, where ADR-0059's lower charger term is
+    0 W) and R10's smoothed household (2000 W, three parts of the old mean to one of the new;
+    its raw is the 5000 W) genuinely differ.
 
     Split into a shared helper, rather than one bundled test, because the behaviours it feeds
     (the escalated rate's own bounds move to smoothed; the real clamps stay raw; the readout
@@ -6181,28 +6182,30 @@ def _spy_baseline_debounce(monkeypatch) -> list[float]:
     return raw_baselines
 
 
+@pytest.mark.parametrize("voltage_v", [_C4_VOLTAGE_V, 240.0])
 async def test_should_debounce_r3s_baseline_on_the_last_set_current_when_the_charger_reading_still_shows_the_higher_draw(  # noqa: E501
-    hass, monkeypatch
+    hass, monkeypatch, voltage_v
 ):
     """The charger power reading shows a 16 A draw while the last set current is 10 A (staged
     as in C4's test above): R3's baseline is the net import minus the set current at the supply
-    voltage, so the stale reading cannot widen the headroom."""
+    voltage, so the stale reading cannot widen the headroom. Run at the nominal voltage and at
+    a measured 240 V, so a caller passing the nominal voltage instead of the resolved one fails."""
     # Arrange
     raw_baselines = _spy_baseline_debounce(monkeypatch)
-    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=_C4_VOLTAGE_V)
+    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=voltage_v)
     coord = _power_coordinator(hass, adapters)
     await coord._async_update_data()
     # Arrange (precondition guard)
     assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
     # Arrange
-    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(16.0 * _C4_VOLTAGE_V)
-    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + 16.0 * _C4_VOLTAGE_V)
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(16.0 * voltage_v)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + 16.0 * voltage_v)
 
     # Act
     await coord._async_update_data()
 
     # Assert
-    assert raw_baselines[-1] == 2000.0 + (16.0 - _C4_SET_CURRENT_A) * _C4_VOLTAGE_V
+    assert raw_baselines[-1] == 2000.0 + (16.0 - _C4_SET_CURRENT_A) * voltage_v
 
 
 async def test_should_debounce_r3s_baseline_on_the_reading_when_the_car_draws_less_than_it_was_set_to(  # noqa: E501
@@ -6229,7 +6232,7 @@ async def test_should_debounce_r3s_baseline_on_the_reading_when_the_car_draws_le
     assert raw_baselines[-1] == 2000.0
 
 
-async def test_should_debounce_r3s_baseline_on_the_reading_before_any_charger_current_has_been_set(  # noqa: E501
+async def test_should_debounce_r3s_baseline_on_the_reading_when_no_charger_current_has_been_set_yet(  # noqa: E501
     hass, monkeypatch
 ):
     """The first cycle after a start has no set current to compare against: the reading alone
@@ -6247,7 +6250,7 @@ async def test_should_debounce_r3s_baseline_on_the_reading_before_any_charger_cu
     assert raw_baselines[-1] == 2000.0
 
 
-async def test_should_debounce_r3s_baseline_on_0_a_on_the_cycle_after_a_fault_write(
+async def test_should_debounce_r3s_baseline_on_0_a_when_the_previous_cycle_wrote_0_a_on_a_fault(
     hass, monkeypatch
 ):
     """ADR-0059: a successful fault-path write of 0 A counts as a set current. On the recovery

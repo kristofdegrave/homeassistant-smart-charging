@@ -735,8 +735,9 @@ class SmartChargingCoordinator(DataUpdateCoordinator[CycleResult]):
         )
 
     def _resolve_solar_surplus(self, ctx: CycleContext) -> None:
-        """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary -- raw
-        net_w, deliberately distinct from `ctx.surplus_w` (R10's smoothed control-path value).
+        """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary --
+        `-ctx.baseline_w`, R3's debounced baseline with the lower charger term (ADR-0059),
+        deliberately distinct from `ctx.surplus_w` (R10's smoothed control-path value).
         Floored at 0: a negative reading here would mean the household is drawing more than the
         charger, never actual solar surplus (glossary) -- max(), not the debounce ctx.baseline_w
         feeds, is the boundary for that (issue #990's Direction section: the two are separate

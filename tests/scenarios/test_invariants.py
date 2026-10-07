@@ -275,7 +275,7 @@ async def _r3_setup(hass):
 # reaching into this module's private names.
 
 
-async def test_should_report_a_peak_breach_when_the_baseline_debounce_is_bypassed(
+async def test_should_report_a_peak_breach_when_the_baseline_debounce_and_the_lower_charger_term_are_bypassed(  # noqa: E501
     hass, freezer, monkeypatch
 ):
     # Arrange
@@ -286,6 +286,8 @@ async def test_should_report_a_peak_breach_when_the_baseline_debounce_is_bypasse
     # not of the household, and here it is accepted anyway. ADR-0059's lower charger term is
     # bypassed too (the reading alone, as before it): it keeps that stale reading out of the
     # baseline at its source, so a mutation of the debounce alone leaves no breach to report.
+    # The patch also reverts C4's ADR-0058 operand, because `_charger_draw_w` is shared; that is
+    # harmless here, since C4's headroom (about 18 A) is far above the 8 A target.
     monkeypatch.setattr(
         "custom_components.smart_charging.coordinator.SmartChargingCoordinator._charger_draw_w",
         lambda _self, charger_w, _voltage: charger_w,
@@ -331,8 +333,9 @@ async def test_should_keep_the_effective_peak_limit_when_the_baseline_debounce_i
     hass, freezer
 ):
     """The control for the test above: the SAME world (CapTar, tight peak, lag 1, the same
-    household step), with `debounce_baseline_w` left exactly as production has it -- proves the
-    violation above is the bypass's doing, not an artifact of the plant/world itself."""
+    household step), with `debounce_baseline_w` and `_charger_draw_w` left exactly as production
+    has them -- proves the violation above is the bypasses' doing, not an artifact of the
+    plant/world itself."""
     # Arrange
     freezer.move_to("2026-01-15 12:00:00")
     coordinator = await _r3_setup(hass)
