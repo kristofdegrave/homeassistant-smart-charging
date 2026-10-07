@@ -1105,14 +1105,50 @@ b
 runr "delimiter carries" "cat <<\$" "$LR/wt"                            # ... as the input's last character
 run ALLOW "cat <<'\$X' >/dev/null
 y
-\$X" "$LR/wt"                                                           # ... a single-quoted \$ is a letter
+\$X" "$LR/wt"                                                           # ... a single-quoted dollar is a letter
 run ALLOW "cat <<\\\$X >/dev/null
 y
 \$X" "$LR/wt"                                                           # ... and so is an escaped one
 run ALLOW "cat <<EOF >/dev/null
 cost: \$5 and \`date\`
 EOF
-git status" "$LR/wt"                                                    # a \$ or backtick in the body, not the delimiter
+git status" "$LR/wt"                                                    # a plain dollar or backtick in the body, not the delimiter
+runr "delimiter carries" "cat <<\"E\\\$F\" >/dev/null
+y
+E\$F" "$LR/wt"                                                          # an escaped dollar in double quotes refuses too (fail closed)
+run ALLOW "cat <<E\\\`F >/dev/null
+y
+E\`F" "$LR/wt"                                                          # an escaped backtick outside quotes is a letter
+runr "ending in a backslash" "cat <<EOF >/dev/null
+E\\
+OF
+git --namespace ';' -c core.fsmonitor=x status
+EOF" "$LR/wt"                                                           # a body line bash joins before the delimiter compare
+run ALLOW "cat <<'EOF' >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... under a quoted delimiter bash does not join
+run ALLOW "cat <<EOF >/dev/null
+a\\\\
+EOF
+git status" "$LR/wt"                                                    # ... nor an even run of backslashes
+run ALLOW "cat <<\"EOF\" >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... nor under a double-quoted delimiter
+run ALLOW "cat <<\\EOF >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... a backslash-quoted one
+run ALLOW "cat <<E'O'F >/dev/null
+a\\
+EOF
+git status" "$LR/wt"                                                    # ... a partly quoted one
+runr "ending in a backslash" "cat <<-EOF >/dev/null
+	E\\
+	OF
+git --namespace ';' -c core.fsmonitor=x status
+	EOF" "$LR/wt"                                                          # a <<- body joins the same way
 run ALLOW "git status |& cat" "$LR/wt"                                 # |& and >& are no background &
 run ALLOW "git status >&2" "$LR/wt"
 run ALLOW "git log --oneline |
@@ -1236,6 +1272,22 @@ run ALLOW 'bash .github/gh-as-bot.sh pr-create workflow/1 "t" /tmp/b.md'
 TOOL=PowerShell
 runr "under PowerShell" "gh api repos/o/r/pulls/12/reviews --input $STUB/comment.json"   # a /-rooted payload names another file to gh.exe
 TOOL=Bash
+# ... a process substitution runs gh as a substitution does, and so does a PowerShell grouping
+runr "process substitution" 'cat <(gh pr review 12 --approve)'          # a prose word first
+run BLOCK 'git diff --no-index <(gh api repos/o/r/pulls/12/reviews -f event=APPROVE) /dev/null'
+run BLOCK 'cat x >(gh pr review 12 -a)'
+runr "process substitution" 'cat <(gh pr merge 1234 --squash --match-head-commit abc123)'   # the merge words too
+run BLOCK 'git diff --no-index >(gh pr merge 1234 --squash --match-head-commit abc123) x'
+run ALLOW 'cat <(gh pr view 12 --json reviews)'                         # naming no approval
+TOOL=PowerShell
+runr "( grouping" 'echo (gh pr review 12 --approve)'
+run BLOCK 'echo (gh pr merge 1234 --squash --match-head-commit abc123)'
+run ALLOW 'echo (gh pr view 12 --json reviews)'
+TOOL=Bash
+runr "behind xargs" 'echo -f event=APPROVE | xargs gh api repos/o/r/pulls/12/reviews'   # fields on stdin
+run BLOCK 'echo --approve | xargs "C:\Program Files\GitHub CLI\gh.exe" pr review 12'   # a quoted backslash path
+run BLOCK 'echo --approve | xargs -n1 gh pr review 12'
+runr "behind xargs" 'printf x | xargs echo walkthrough review'          # conceded: matched as substrings
 
 echo
 [ "$fail" = 0 ] && echo "ALL CASES PASSED" || echo "SOME CASES FAILED"

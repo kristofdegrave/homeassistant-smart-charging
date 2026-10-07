@@ -109,8 +109,9 @@
 # word is gh itself -- inspected under the rule above, and refused if a wrapper (`sudo`,
 # `env`, `xargs`, `timeout`, ...) sat before it -- or one of the prose commands `echo`,
 # `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. Even then a segment that
-# carries a command substitution (`$(` or a backtick) or a background `&` is refused, since
-# the command it starts runs whatever word heads the segment, and so is prose carrying the
+# carries a command or process substitution (`$(`, a backtick, `<(`, `>(`; under PowerShell
+# any `(`) or a background `&` is refused, since the command it starts runs whatever word
+# heads the segment, and so is prose carrying the
 # words that a pipe feeds, through any prose commands, into any other command but a read-only
 # `wc`, `head`, `tail`, `sort` or `uniq` (`echo "..." | sh`; `| grep merge` and `| wc -l` stay
 # mentions). So `timeout 60 gh`, `r="$(gh ...)"`,
@@ -132,9 +133,11 @@
 # checked out, uncommitted edits included, and a `PROFILE` in the environment is honoured,
 # so the session's own checkout can widen what auto-merges. Conceded the other way, false
 # positives: a `gh pr ...` segment whose text also carries the word `merge` and, anywhere, a
-# backtick, `$(` or `&` is refused as a wrapped merge (a body file is the workaround); a
-# commit message built as `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan
-# (the opener sits inside quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
+# backtick, `$(`, `<(`, `>(` or `&` is refused as a wrapped merge (a body file is the
+# workaround); under PowerShell, so is any segment naming the merge words with a `(`, a
+# `git commit -m "... (#n)"` included (`-F <file>` is the workaround); a commit message built
+# as `git commit -m "$(cat <<'EOF' ...)"` keeps its body in the scan (the opener sits inside
+# quotes, so it opens nothing), and a body line naming `gh pr merge` behind a word that is
 # not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
 # pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
 # split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
@@ -154,23 +157,29 @@
 # when a GraphQL document comes from `--input`, or when a REST payload from `--input` carries
 # an APPROVE event, is not a readable regular file (stdin, a device or process file included),
 # is relative after a change of directory, or shares its command with another segment, which
-# could write it before gh reads it. The text is matched whole rather than parsed, so no flag
-# placement or endpoint spelling escapes it; its comment at gh_approve_rule below says how.
+# could write it before gh reads it. The text is matched whole rather than parsed, so where a
+# flag sits does not matter; its comment at gh_approve_rule below says how.
 # Behind a first word the guard does not read as gh -- a wrapper, an interpreter, a PowerShell
 # assignment, a quoted full-path gh.exe -- the words alone decide, as for the merge rule: they
 # refuse when they hold `gh pr review` with an approve flag, or `gh api` with a review target
-# and APPROVE, `=@` or `--input`. Whatever heads a segment, those words beside a command
-# substitution or a background `&` refuse, as the merge words do, and so does a gh review
-# command behind `xargs`, which appends words the guard never reads. Under PowerShell a
+# and APPROVE, `=@` or `--input`. Whatever heads a segment, those words beside a command or
+# process substitution (under PowerShell any `(`) or a background `&` refuse, as the merge
+# words do, and so does a gh review command behind `xargs` (`xargs`, `gh` and `review` each
+# matched as a substring), which appends words the guard never reads. Under PowerShell a
 # `/`-rooted payload refuses, since gh.exe reads it as another file. Conceded, as the merge
 # paragraph concedes the indirection class: a split or quoted letter (`rev''iews`,
 # `APP''ROVE`); a value the shell builds inside gh's own arguments (`-f event="$(cat ev)"`, a
 # variable); words split other than by whitespace (`Start-Process gh -ArgumentList ...`); prose
 # naming an approval piped into another command; a `gh alias`; another tool; a JSON unicode
-# escape of a letter of the event in a payload. Refused though harmless: a review or GraphQL
-# read whose text names APPROVE, such as a filter on approved reviews; a call naming a file
-# whose path holds `/reviews` or `graphql`; and a `gh pr review` body word starting `-a`, read
-# as the flag.
+# escape of a letter of the event in a payload; a percent-encoded letter in the endpoint or a
+# query, should GitHub decode it; a payload another process -- a background job, another
+# agent -- writes between the guard's read and gh's. Refused though harmless: a review or
+# GraphQL read whose text names APPROVE, such as a filter on approved reviews; a call naming a
+# file whose path holds `/reviews` or `graphql`; a `gh pr review` body word starting `-a`, read
+# as the flag; text holding `xargs`, `gh` and `review` in that order, as words or inside
+# other words (`xargs echo walkthrough review`, `xargs grep -l "gh pr review"`); and under
+# PowerShell any segment naming the approval
+# words with a `(` (`-F <file>` is the workaround).
 #
 # The loop rule. When the environment variable the profile's `autopilot.loop_marker` names is
 # `1` -- the autopilot loop's own settings file sets it -- a `git commit` is refused if any
@@ -217,7 +226,9 @@
 # interpreter. The second reading only adds refusals: an awk that cannot make it refuses,
 # and so does a heredoc whose delimiter carries a `$` or backtick that is neither inside
 # single quotes nor backslash-escaped, which bash builds in ways the reading does not
-# follow. Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
+# follow, and a heredoc under a delimiter with no quoted part whose body has a line ending in
+# an odd run of backslashes, which bash joins to the next before it looks for the delimiter.
+# Refused: git's global `-c`, `--config-env`, `--exec-path`, `--git-dir`,
 # `--work-tree` and `--bare`, a `GIT_*=` assignment before git (their environment forms, and
 # `GIT_SSH_COMMAND`), and more than one `-C`; any git after a segment that changes directory;
 # a git whose target (the cwd, or -C) is not a checkout of the repository this hook belongs to
@@ -255,8 +266,9 @@
 # path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
 # workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
 # redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
-# it is the workaround; a
-# checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
+# it is the workaround; a heredoc under an unquoted delimiter whose body has a line ending
+# in a single backslash (a commit message or PR body fed by `<<EOF`) refuses -- quoting the
+# delimiter (`<<'EOF'`) is the workaround; a checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
 # no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
 # older git refuses every loop git; and a word the scan does not see (the indirection class
@@ -1169,8 +1181,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
 # any `--approve=` value but a false one (gh's bool flags take what Go's ParseBool takes), `-a`,
 # or a short-flag cluster carrying `a` before a value-taking letter (`b`, `F`).
 #
-# A gh segment carrying the word `api` is judged on its text, not on a parsed path, so no flag
-# placement or endpoint spelling changes the reading. It is a review call when its text names a
+# A gh segment carrying the word `api` is judged on its text, not on a parsed path, so where a
+# flag or the endpoint sits does not change the reading. It is a review call when its text names a
 # reviews endpoint (`/reviews`), a review mutation or type (`PullRequestReview`), or GraphQL
 # (`graphql`, `/graphql`), case ignored. A review call is refused when its text names APPROVE,
 # case ignored -- a harmless read filtering on APPROVE is refused with it, the price of not
@@ -1180,8 +1192,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
 # and refused when it carries an APPROVE event, is stdin (`-`), is not a readable regular file
 # (a device or process file included), is a relative path after the command changed directory,
 # or shares its command with another segment, since the guard reads it before any of the
-# command runs. A JSON unicode escape of a letter of the event passes the payload match, a
-# concession the header states.
+# command runs. A JSON unicode escape of a letter of the event passes the payload match, and a
+# percent-encoded letter the text match, concessions the header states.
 gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
   seg=$1
   shift
@@ -1277,6 +1289,7 @@ gh_approve_rule() { # gh_approve_rule <segment> <arguments after gh>
     deny_approve "$seg" "the review payload '$input' is not a readable regular file, so the guard cannot show its event is not APPROVE"
   # The guard reads the payload before any of the command runs, so another segment could write
   # it first: a review post is one command, and one sharing its line with another refuses.
+  # Another process writing it meanwhile is conceded in the header.
   [ "$(printf '%s\n' "$segments" | grep -c '[^[:space:]]')" -le 1 ] ||
     deny_approve "$seg" "the review payload is read before the rest of the command runs, which could write it first; post the review as a command of its own"
   tr -d '\r\n' < "$input" | grep -Eiq '"event"[[:space:]]*:[[:space:]]*"APPROVE"' &&
@@ -1465,8 +1478,10 @@ segments=$(printf '%s\n' "$cmd" | sed -e 's/^>|/>/' -e 's/\([^\\]\)>|/\1>/g' -e 
 # interpreter is judged as before, and an opener whose delimiter line never comes drops
 # nothing; a `<<<` here-string opens none. Conceded: an arithmetic shift (`$((1<<2))`) reads
 # as an opener, so a later line that is exactly its right operand ends a "body" dropped from
-# this reading, and a right operand starting with `$` or a backtick (`$((1<<$n))`) refuses
-# the whole command in the loop, as a delimiter bash builds would. A quote inside a command substitution within double quotes is not read as
+# this reading, a right operand carrying `$` or a backtick (`$((1<<$n))`) refuses the
+# whole command in the loop, as a delimiter bash builds would, and so does any later line
+# ending in an odd run of backslashes (a plain continuation), read as a joined "body" line.
+# A quote inside a command substitution within double quotes is not read as
 # bash reads it (bash starts its quoting afresh there): this split can then keep a real
 # separator, which the plain split above, still scanned too, cuts; or cut at a quoted one,
 # which the plain split cuts as well, so neither reading catches what follows it.
@@ -1482,6 +1497,10 @@ split_unquoted() {
           e = index(substr(s, p), "\n")
           line = e ? substr(s, p, e - 1) : substr(s, p)
           p = e ? p + e : n + 1
+          # Under a delimiter with no quoted part bash joins a body line ending in an odd run of
+          # backslashes to the next before it compares the delimiter, so the end of the body
+          # cannot be shown from the lines as typed: noted, and the loop refuses (exit 4).
+          if (!hquo[k] && match(line, /\\+$/) && RLENGTH % 2) joined = 1
           if (hdash[k]) sub(/^\t+/, "", line)
           if (line == hd[k]) break
         }
@@ -1527,10 +1546,11 @@ split_unquoted() {
           j = i + 2; dash = 0
           if (substr(s, j, 1) == "-") { dash = 1; j++ }
           while (substr(s, j, 1) ~ /[ \t]/) j++
-          d = ""
+          d = ""; dq = 0
           for (; j <= n; j++) {
             e = substr(s, j, 1)
             if (e == "$" || e == "`") built = 1
+            if (e == q1 || e == q2 || e == esc) dq = 1
             if (e == q1) {
               kk = index(substr(s, j + 1), e)
               if (!kk) { j = n + 1; break }
@@ -1549,7 +1569,7 @@ split_unquoted() {
             if (e ~ /[ \t\n;&|<>()]/) break
             d = d e
           }
-          if (d != "") { nh++; hd[nh] = d; hdash[nh] = dash }
+          if (d != "") { nh++; hd[nh] = d; hdash[nh] = dash; hquo[nh] = dq }
           # The opener as typed, a newline inside it read as a blank like any quoted one.
           w = substr(s, i, j - i); gsub(/\n/, " ", w)
           out = out w; i = j - 1; prev = "x"; continue
@@ -1578,6 +1598,7 @@ split_unquoted() {
       }
       print out
       if (built) exit 3
+      if (joined) exit 4
     }'
 }
 
@@ -1609,27 +1630,37 @@ for seg in $1; do
   set -- $(gh_words "$seg")
   gh_merge=$1
   gh_api=$2
-  # Words naming a merge, in a segment where another command can run them -- a command
-  # substitution, or an & that is neither a leading call operator nor a redirection's --
-  # are refused whatever heads the segment: that other command is what runs gh.
+  # Words naming a merge, in a segment where another command can run them -- a command or
+  # process substitution (`<(`, `>(`), under PowerShell any `(` grouping, or an & that is
+  # neither a leading call operator nor a redirection's -- are refused whatever heads the
+  # segment: that other command is what runs gh. Refused, not parsed.
   if [ "$gh_merge" = 1 ]; then
     bg=$(printf '%s' "${seg#"${seg%%[! ]*}"}" | sed -e 's/^&//' -e 's/>&//g' -e 's/&>//g')
     case "$bg" in
-      *'$('* | *'`'* | *'&'*)
-        deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
+      *'$('* | *'`'* | *'&'* | *'<('* | *'>('*)
+        deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command or process substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
+    esac
+    case "$tool:$bg" in
+      PowerShell:*'('*)
+        deny_merge "$seg" "the words name 'gh pr merge' in a PowerShell segment that also carries a ( grouping, which runs its own command: what reaches gh is not what the guard read" ;;
     esac
   fi
   # The approval rule's words, read the same way before the walk: whatever heads the segment
-  # -- a prose word, git, gh itself -- words naming an approval beside a command substitution
-  # or a background & are refused, since another command may run them. A review command
-  # behind xargs is refused too: xargs appends words the guard never reads.
+  # -- a prose word, git, gh itself -- words naming an approval beside a command or process
+  # substitution, under PowerShell a `(` grouping, or a background & are refused, since
+  # another command may run them. A review command behind xargs is refused too, the three
+  # matched as substrings: xargs appends words the guard never reads.
   # shellcheck disable=SC2046  # the two flags gh_approve_words prints
   set -- $(gh_approve_words "$seg")
   if [ "$1" = 1 ] || [ "$2" = 1 ]; then
     bg=$(printf '%s' "${seg#"${seg%%[! ]*}"}" | sed -e 's/^&//' -e 's/>&//g' -e 's/&>//g')
     case "$bg" in
-      *'$('* | *'`'* | *'&'*)
-        deny_approve "$seg" "the words name an approval in a segment that also carries a command substitution or a background &, so another command may run it: what reaches gh is not what the guard read" ;;
+      *'$('* | *'`'* | *'&'* | *'<('* | *'>('*)
+        deny_approve "$seg" "the words name an approval in a segment that also carries a command or process substitution or a background &, so another command may run it: what reaches gh is not what the guard read" ;;
+    esac
+    case "$tool:$bg" in
+      PowerShell:*'('*)
+        deny_approve "$seg" "the words name an approval in a PowerShell segment that also carries a ( grouping, which runs its own command: what reaches gh is not what the guard read" ;;
     esac
   fi
   case "$(norm "$seg")" in
@@ -2118,6 +2149,8 @@ if in_loop; then
   _st=$?
   [ "$_st" != 3 ] ||
     deny "$cmd" "in the autopilot loop a heredoc whose delimiter carries \$ or a backtick is refused: bash builds that delimiter in ways the guard does not read, so where the body ends cannot be shown" "$HARNESS_TAIL"
+  [ "$_st" != 4 ] ||
+    deny "$cmd" "in the autopilot loop a heredoc body line ending in a backslash under an unquoted delimiter is refused: bash joins it to the next line before it looks for the delimiter, so where the body ends cannot be shown; quote the delimiter (<<'EOF')" "$HARNESS_TAIL"
   [ "$_st" = 0 ] ||
     deny "$cmd" "in the autopilot loop the command could not be split where bash splits it, so a quoted or escaped separator could hide the rest of a git or gh command" "$HARNESS_TAIL"
   [ "$qsegments" = "$segments" ] || scan "$qsegments"
