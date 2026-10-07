@@ -375,11 +375,11 @@ def test_debounce_an_equal_baseline_reading_applies_immediately():
 
 
 def test_debounce_holds_a_lower_baseline_reading_until_it_persists():
-    # Issue #990's actual failure scenario: a charger current step-down where the fast net
-    # meter already reflects the drop but the slow-polled charger_power sensor still reports
-    # the prior, higher value for one extra cycle -- baseline_w plunges (net_w - charger_w)
-    # for that one cycle, inflating peak_headroom_a/solar_surplus_w. The clamp must not grant
-    # that headroom increase on the very first low reading.
+    # Issue #990's debounce case (b): a headroom increase must hold for `debounce_cycles`
+    # before it is accepted. A step-down's stale charger_power reading no longer produces one
+    # (ADR-0059's lower charger term bounds it by the set current), so the increase that
+    # remains -- a genuine household drop (real solar surplus, a load switching off) -- is the
+    # one the clamp must not grant on the very first low reading.
     tracker = BaselineDebouncer(accepted_w=500.0)
     baseline_w, tracker = debounce_baseline_w(
         -1500.0, tracker, debounce_cycles=2, command_changed=False
@@ -551,7 +551,8 @@ def _closed_loop(cycles: int, house_w: Callable[[int], float]) -> list[tuple[flo
 
     Models two properties of the real install and nothing else: the net meter reflects a change
     in charger draw on the cycle it happens, while the charger's own power sensor (slow Modbus
-    poll) still reports the previous cycle's value. `house_w` scripts the only exogenous term,
+    poll) still reports the previous cycle's value, which R3's baseline takes the lower of with
+    the set current (ADR-0059). `house_w` scripts the only exogenous term,
     so any movement the script does not explain originates inside the clamp.
 
     `command_changed` is derived here the same way the coordinator derives it -- this cycle's
@@ -564,7 +565,9 @@ def _closed_loop(cycles: int, house_w: Callable[[int], float]) -> list[tuple[flo
     history: list[tuple[float, float]] = []
     for cycle in range(cycles):
         net_w = house_w(cycle) + commanded * _LOOP_VOLTAGE
-        charger_w = previous * _LOOP_VOLTAGE  # one cycle behind the true draw
+        # One cycle behind the true draw; R3's baseline takes the lower of that reading and
+        # the set current (ADR-0059), as the coordinator's `_charger_draw_w` does.
+        charger_w = min(previous, commanded) * _LOOP_VOLTAGE
         baseline_w, debouncer = debounce_baseline_w(
             net_w - charger_w,
             debouncer,

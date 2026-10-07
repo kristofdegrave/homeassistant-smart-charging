@@ -261,8 +261,8 @@ class ActiveSocLimitSensor(_CoordinatorFieldSensor):
 
 
 class SolarSurplusSensor(_CoordinatorFieldSensor):
-    """Diagnostic: charger_power - net_power, raw (entity-catalog.md's
-    `sensor.smart_charging_solar_surplus_w` row). Registry-gated on
+    """Diagnostic: the charger draw R3 takes (ADR-0059) minus net_power, from R3's debounced
+    baseline (entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row). Registry-gated on
     `solar_available` (ADR-0028) -- meaningless without a solar meter."""
 
     _attr_translation_key = "solar_surplus_w"
