@@ -387,6 +387,11 @@ run ALLOW 'git -C D:/GIT/sc-wf-1603 commit -m "workflow: x (#1603)" \
 && git -C D:/GIT/sc-wf-1603 push'                                       # a # inside quotes is no comment
 run ALLOW 'gh pr create --title "workflow: x (#1603)" \
 --body-file D:/GIT/sc-wf-1603/body.md'                                 # ... and a /GIT/ directory is no git word
+runr "where bash does not continue it" 'git commit -m "a
+b" # see \
+git push --force'                                                      # a quote closed on a later line, then a comment
+runr "where bash does not continue it" "echo \$'it\\'s' # see \\
+git push --force"                                                      # an escaped quote inside \$'...' closes nothing
 mkdir -p "$STUB/djfail"
 printf '#!/bin/sh\ncase " $* " in *" dj="*) exit 2 ;; esac\nexec "%s" "$@"\n' "$(command -v awk)" > "$STUB/djfail/awk"
 chmod +x "$STUB/djfail/awk"
@@ -1126,7 +1131,8 @@ git --namespace ';' -c core.fsmonitor=x status" "$LR/wt"               # a pipe 
 runr "global -c" "git --namespace \"a\\
 b\" -c core.fsmonitor=x status" "$LR/wt"                                # a backslash-newline in double quotes joins
 runr "where bash does not continue it" "echo \\\\
-git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates (#1603 refuses it first)runr "delimiter carries" "cat <<\$'E\\x4fF' >/dev/null
+git -c core.fsmonitor=x status" "$LR/wt"                                # an even run of backslashes: the newline separates (#1603 refuses it first)
+runr "delimiter carries" "cat <<\$'E\\x4fF' >/dev/null
 it's
 EOF
 git status" "$LR/wt"                                                    # a delimiter bash builds: refused, not read

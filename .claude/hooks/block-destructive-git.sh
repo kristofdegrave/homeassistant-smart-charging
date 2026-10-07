@@ -33,18 +33,25 @@
 # backtick-newline for PowerShell, a newline after a trailing pipe for both. The join does not
 # read where bash leaves a line unjoined -- a backslash run of even length, the last one
 # escaped, or a backslash inside a comment -- so there, under sh, a command naming git or gh
-# as a command word on any later line is refused rather than read, in and out of the loop
+# as a command word on a line the join pulls in (the next one, and on while each ends in a
+# backslash) is refused rather than read, in and out of the loop
 # (the loop's second reading splits such a line correctly, but the plain reading alone guards
-# an interactive session). Quotes are read on that line only, so a line inside a multi-line
-# quote whose text ends in `\\`, or in `\` after an unquoted-looking `#`, refuses when a later
-# line names git or gh (`commit -F <file>` is the workaround). PowerShell's form of the hole
-# (a backtick inside a comment, or an escaped one) is left open. Likewise refused rather than
-# parsed: a segment whose walk stops on `case`, `in`, `function`, `coproc` or a word carrying
-# `)` (a case arm's pattern, `f()`), or on a word followed by one that starts with `(` or is
-# `)` (`f () {`, `x ) git ...`) -- a command the walk does not read through -- when any later
-# word names git or gh. So `case "$(git branch --show-current)" in` refuses (set a variable
-# first), and so does a body line kept in the scan that starts with a `)`-word (`1) the git
-# rule ...`; `-F <file>` is the workaround).
+# an interactive session). Quotes (`'`, `"`, `$'...'`) are read across lines, so a `#` inside
+# them is no comment; an unquoted heredoc body is read for quotes too, so an apostrophe in
+# one can misread what follows. Conceded: a line inside a multi-line quote whose text ends in
+# `\\` refuses when the next line names git or gh (`commit -F <file>` is the workaround); a
+# bare directory word whose last part is `git` or `gh` (`cd /d/GIT`) on that line counts as
+# naming one; and PowerShell's form of the hole (a backtick inside a comment, or an escaped
+# one) is left open. Likewise refused rather than parsed: a segment whose walk stops on
+# `case`, `in`, `function`, `coproc` or a word carrying `)` (a case arm's pattern, `f()`), or
+# on a word followed by one that starts with `(` or is `)` (`f () {`, `x ) git ...`, and
+# PowerShell's `Write-Output (git ...)`) -- a command the walk does not read through -- when
+# any later word names git or gh. Conceded: `case "$(git branch --show-current)" in` refuses
+# (set a variable first), and so does a body line kept in the scan -- a wrapped line of a
+# multi-line `-m` or `--body` -- that starts with one of those words or a `)`-word, or whose
+# first word is followed by a `(`-word (`in the git rule ...`, `1) the git rule ...`, `see
+# (the gh docs)`), when a later word on it names git or gh; `-F <file>` or `--body-file` is
+# the workaround.
 # The first word is found by stepping over environment assignments, redirections with their
 # targets (redir_words; one into a process substitution is never stepped over), the
 # transparent wrappers listed at the scan loop, shell reserved words (`if`, `then`, `!`,
@@ -1447,39 +1454,49 @@ tool=$(extract tool_name)
 # after it is a command of its own, which the join below would read as more words of the one
 # before (`git status # see \`, then `git push --force`). Refused rather than read, in and
 # out of the loop: a backslash ending a line where its run is even, or where a `#` starts a
-# word earlier on that line outside a quote opened on that line, refuses the command when a
-# later line carries git or gh as a command word (the last path part of a word, so a
-# `D:/GIT/...` directory is no hit). Bash only; an awk that fails refuses.
+# word earlier on that line outside quotes, refuses the command when a line the join pulls
+# into it carries git or gh as a command word (the last path part of a word). Bash only; an awk that fails
+# refuses.
 if [ "$tool" != PowerShell ]; then
   _dj=$(printf '%s\n' "$cmd" | awk -v dj=1 -v q="'" '
-    # Does a `#` start a comment on line _s, quotes read on that line only?
-    function comment(_s,   _x, _c, _st, _pv) {
-      _st = 0; _pv = " "
+    # Read line _s on from the quote state st the lines before it left (0 none, 1 single, 2
+    # double, 3 `$'"'"'...'"'"'`); cm is set when a `#` outside quotes starts a comment, the
+    # rest of the line then unread.
+    function scanline(_s,   _x, _c, _pv) {
+      cm = 0; _pv = " "
       for (_x = 1; _x <= length(_s); _x++) {
         _c = substr(_s, _x, 1)
-        if (_st == 0) {
+        if (st == 0) {
           if (_c == "\\") { _x++; _pv = "x"; continue }
-          if (_c == q) _st = 1
-          else if (_c == "\"") _st = 2
-          else if (_c == "#" && _pv ~ /[ \t;&|()<>]/) return 1
-        } else if (_st == 1) {
-          if (_c == q) _st = 0
+          if (_c == "$" && substr(_s, _x + 1, 1) == q) { st = 3; _x++; _pv = q; continue }
+          if (_c == q) st = 1
+          else if (_c == "\"") st = 2
+          else if (_c == "#" && _pv ~ /[ \t;&|()<>]/) { cm = 1; return }
+        } else if (st == 1) {
+          if (_c == q) st = 0
+        } else if (st == 3) {
+          if (_c == "\\") _x++
+          else if (_c == q) st = 0
         } else {
           if (_c == "\\") _x++
-          else if (_c == "\"") _st = 0
+          else if (_c == "\"") st = 0
         }
         _pv = _c
       }
-      return 0
     }
     { line[NR] = $0 }
     END {
+      st = 0
       for (i = 1; i < NR; i++) {
         l = line[i]
+        scanline(l)
         if (l !~ /\\$/) continue
         t = l; sub(/\\+$/, "", t)
-        if ((length(l) - length(t)) % 2 == 1 && !comment(t)) continue
+        if ((length(l) - length(t)) % 2 == 1 && !cm) continue
+        # Only the lines the join below pulls in hide: the next one, and each after it while
+        # the one before ends in a backslash. Later lines are split off as their own segments.
         for (k = i + 1; k <= NR; k++) {
+          if (k > i + 1 && line[k - 1] !~ /\\$/) break
           nw = split(tolower(line[k]), w, /[ \t;&|()<>`]+/)
           for (m = 1; m <= nw; m++) {
             x = w[m]
@@ -1866,7 +1883,7 @@ for seg in $1; do
   # (a case statement's head), a word carrying `)` (a case arm's pattern, a function's `f()`,
   # a subshell's close), `function` or `coproc` -- may have stopped short of a git or gh that
   # bash runs. So may one followed by a word that starts with `(` or is `)` (`f () {`, a case
-  # arm `x ) git ...`). Refused rather than parsed: any later word naming one, or the part of
+  # arm `x ) git ...`, PowerShell's `Write-Output (git ...)`). Refused rather than parsed: any later word naming one, or the part of
   # the stop word after its last `)`, refuses the segment, prose too.
   _stop=0
   if [ -z "$found" ] && [ -n "$interp" ]; then
