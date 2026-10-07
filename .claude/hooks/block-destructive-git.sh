@@ -44,8 +44,9 @@
 # naming one; and PowerShell's form of the hole (a backtick inside a comment, or an escaped
 # one) is left open. Likewise refused rather than parsed: a segment whose walk stops on
 # `case`, `in`, `function`, `coproc` or a word carrying `)` (a case arm's pattern, `f()`), or
-# on a word followed by one that starts with `(` or is `)` (`f () {`, `x ) git ...`, and
-# PowerShell's `Write-Output (git ...)`) -- a command the walk does not read through -- when
+# on a word followed by one that is `)` or, under sh, starts with `(` (`x ) git ...`, `f ()
+# {`; a PowerShell grouping, `echo (gh ...)`, is left to the merge and approval words' grouping
+# rule, so `Write-Output (git push --force)` is conceded) -- a command the walk does not read through -- when
 # any later word names git or gh. Conceded: `case "$(git branch --show-current)" in` refuses
 # (set a variable first), and so does a body line kept in the scan -- a wrapped line of a
 # multi-line `-m` or `--body` -- that starts with one of those words or a `)`-word, or whose
@@ -1902,13 +1903,15 @@ for seg in $1; do
   # A walk that stopped on a word heading a command it does not read through -- `case` or `in`
   # (a case statement's head), a word carrying `)` (a case arm's pattern, a function's `f()`,
   # a subshell's close), `function` or `coproc` -- may have stopped short of a git or gh that
-  # bash runs. So may one followed by a word that starts with `(` or is `)` (`f () {`, a case
-  # arm `x ) git ...`, PowerShell's `Write-Output (git ...)`). Refused rather than parsed: any later word naming one, or the part of
-  # the stop word after its last `)`, refuses the segment, prose too.
+  # bash runs. So may one followed by a word that is `)` (a case arm `x ) git ...`) or, under
+  # sh, starts with `(` (`f () {`); a PowerShell grouping (`echo (gh ...)`) is left to the
+  # merge and approval words' grouping rule. Refused rather than parsed: any later word naming
+  # one, or the part of the stop word after its last `)`, refuses the segment, prose too.
   _stop=0
   if [ -z "$found" ] && [ -n "$interp" ]; then
     case "$interp" in case | in | function | coproc | *')'*) _stop=1 ;; esac
-    case "${2:-}" in '('* | ')') _stop=1 ;; esac
+    case "${2:-}" in ')') _stop=1 ;; esac
+    [ "$tool" = PowerShell ] || case "${2:-}" in '('*) _stop=1 ;; esac
   fi
   if [ "$_stop" = 1 ]; then
     _rest=''
