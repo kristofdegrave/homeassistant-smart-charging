@@ -771,7 +771,12 @@ TOOL=PowerShell
 runr "words it splits" 'gh pr merge 1234 --squash --admin --body “x --help ”'                   # typographic quotes are quotes
 runr "words it splits" 'gh pr merge 1234 --squash --admin --body ‘x --disable-auto ’'
 runr "words it splits" 'gh pr merge 1234 --squash --admin --body @a --help'                      # a splat
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123 *>$null'                # PowerShell's all-streams redirection
+run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123 *>&1'
 TOOL=Bash
+runr "process substitution" 'gh pr merge 1234 --squash --admin --help >(cat)'                  # a process substitution runs a command
+runr "process substitution" 'gh pr merge 1234 --squash --admin --help <(true)'
+runr "process substitution" 'echo gh pr merge 1234 > >(sh)'                                    # ... prose fed to one
 run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123 <> --help'    # a target is the shell's: the merge gh gets is read
 run ALLOW "gh pr merge 1234 --squash --admin --body '\$5' --match-head-commit abc123"  # single quotes expand nothing
 run ALLOW 'gh pr merge --help 2>&1'                                                    # a real early exit, redirection last

@@ -110,7 +110,8 @@
 # word is gh itself -- inspected under the rule above, and refused if a wrapper (`sudo`,
 # `env`, `xargs`, `timeout`, ...) sat before it -- or one of the prose commands `echo`,
 # `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. Even then a segment that
-# carries a command substitution (`$(` or a backtick) or a background `&` is refused, since
+# carries a command or process substitution (`$(`, a backtick, `<(`, `>(`) or a background
+# `&` is refused, since
 # the command it starts runs whatever word heads the segment, and so is prose carrying the
 # words that a pipe feeds, through any prose commands, into any other command but a read-only
 # `wc`, `head`, `tail`, `sort` or `uniq` (`echo "..." | sh`; `| grep merge` and `| wc -l` stay
@@ -145,9 +146,10 @@
 # multi-word value such as `--body "Merged by autopilot"`, whose words could supply a
 # `--help` or a pin gh never sees), an empty quoted value (`""`, which older PowerShell
 # drops), PowerShell's typographic quotes, any backslash or backtick (an escaped blank; a
-# Windows path too), a word starting with `#` (a comment) or `@` (a splat), a `$` outside
-# single quotes or an unquoted `{`, `*`, `?` or `[` (an expansion; a word that is itself a
-# redirection excepted), and any word after a redirection, value slots included, which the
+# Windows path too), a word starting with `#` (a comment) or `@` (a splat), a process
+# substitution (`<(`, `>(`), a `$` outside single quotes or an unquoted `{`, `*`, `?` or `[`
+# (an expansion; a word the guard reads as a redirection, `2>$null` or PowerShell's
+# `*>$null`, excepted), and any word after a redirection, value slots included, which the
 # shell may take as the target (`<> 1234`, `--body 2>x --help`) -- a real `--help` after one
 # too. These are signs read, not a parse: what a shell makes of a word showing none of them
 # (PowerShell's `--%` or array commas) stays in the indirection class above. `--body-file`,
@@ -923,16 +925,16 @@ gh_env=0
 # vanish, multiply or move a word. Read bluntly, since a miss only refuses: a word carrying
 # a quote passes only when quoted whole (`"x"`, `'x'`, no further quote of its kind inside,
 # no `$` inside double quotes); PowerShell's typographic quotes, any backslash or backtick,
-# a leading `#` or `@`, and an unquoted `$`, `{`, `*`, `?` or `[` fail. A word that starts as
-# a redirection (`2>$null`) is spared the expansion test: bash drops it before the command
-# runs. A subshell, so the default IFS it splits by stays its own.
+# a leading `#` or `@`, a process substitution (`<(`, `>(`, which runs a command), and an
+# unquoted `$`, `{`, `*`, `?` or `[` fail. A word redir_words reads as a redirection
+# (`2>$null`, PowerShell's `*>$null`) is spared the expansion test: the shell drops it before
+# the command runs. A subshell, so the default IFS it splits by stays its own.
 split_trusted() (
   unset IFS
   for _w in $1; do
     case "$_w" in
       *\\* | *\`* | *‘* | *’* | *‚* | *‛* | *“* | *”* | *„*) return 1 ;;
-      '#'* | '@'*) return 1 ;;
-      '<'* | '>'* | [0-9]'<'* | [0-9]'>'* | '&>'*) continue ;;
+      '#'* | '@'* | *'<('* | *'>('*) return 1 ;;
       *[\"\']*)
         case "$_w" in
           \'?*\') _i=${_w#\'}; _i=${_i%\'}; case "$_i" in *\'*) return 1 ;; esac ;;
@@ -940,7 +942,10 @@ split_trusted() (
           *) return 1 ;;
         esac
         ;;
-      *'$'* | *'{'* | *\** | *\?* | *\[*) return 1 ;;
+      *'$'* | *'{'* | *\** | *\?* | *\[*)
+        redir_words "$_w"
+        [ "$_rw" != 0 ] || return 1
+        ;;
     esac
   done
   return 0
@@ -1068,8 +1073,13 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
         done
         ;;
       # A redirection or a trailing & is the shell's, never a selector; a bare operator's
-      # target is the next word, read as merge_redir_last reads it.
-      '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'*)
+      # target is the next word, read as merge_redir_last reads it. Two readings here are
+      # safe only through others: a value slot above can swallow a bare operator, leaving its
+      # target to count as a selector, which holds because merge_redir_last refuses any word
+      # after that target; and a quoted-whole `'>'` reaches this loop unquoted, read as an
+      # operator where gh gets an argument, which holds because `pr merge` takes at most one
+      # argument, so gh refuses a second one rather than merging.
+      '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'* | '*>'*)
         redir_words "$1"
         [ "$_rw" != 2 ] || shift
         ;;
@@ -1702,8 +1712,8 @@ for seg in $1; do
   if [ "$gh_merge" = 1 ]; then
     bg=$(printf '%s' "${seg#"${seg%%[! ]*}"}" | sed -e 's/^&//' -e 's/>&//g' -e 's/&>//g')
     case "$bg" in
-      *'$('* | *'`'* | *'&'*)
-        deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
+      *'$('* | *'`'* | *'&'* | *'<('* | *'>('*)
+        deny_merge "$seg" "the words name 'gh pr merge' in a segment that also carries a command or process substitution or a background &, so another command runs gh: what reaches gh is not what the guard read" ;;
     esac
   fi
   # The approval rule's words, read the same way before the walk: whatever heads the segment
