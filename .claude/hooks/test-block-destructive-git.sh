@@ -1068,6 +1068,9 @@ run ALLOW "A='x' git status" "$LR/wt"                                   # ... a 
 run ALLOW "\"git\" status" "$LR/wt"                                     # ... and a git quoted whole
 runr "behind a word carrying" "A=\"x git\" git -c core.hooksPath=/tmp/h commit -m m" "$LR/wt" # a quoted blank's second piece is no git
 runr "behind a word carrying" "A=\"x git\" gh issue edit 5 --remove-label needs-approval" # ... before gh
+runr "behind a word carrying" "A=x\\ git git -c core.hooksPath=/tmp/h commit -m m" "$LR/wt" # ... nor an escaped blank's
+runr "behind a word carrying" "A=x\\ y git -c core.fsmonitor=x status" "$LR/wt" # ... its second piece any word
+run ALLOW "git log -- a\\ b" "$LR/wt"                                  # an escaped blank after git
 run ALLOW "git -C $LR/wt status" "$LR/wt"                               # a plain repository command
 run ALLOW "git log --grep='\`x\` <(y)'" "$LR/wt"                        # inside single quotes, a backtick is text
 run ALLOW "git log --grep=\"<(y)\"" "$LR/wt"                            # ... and in double quotes, <( is
@@ -1335,9 +1338,17 @@ run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_*
 run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
 run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
 run BLOCK "GH_X=\$(git push --force) x"
-run BLOCK "A=\"x git\" gh pr merge 5 --merge --admin"                  # a quoted blank's second piece is no git
-run BLOCK "A=\"x git\" gh pr review 5 --approve"                       # ... nor for the approval rule
-run BLOCK "A='x gh' gh pr merge 5 --merge --admin"                     # ... nor is a single-quoted gh
+runr "behind a command the guard does not read" "A=\"x git\" gh pr merge 5 --merge --admin" # a quoted blank's second piece is no git
+runr "approve flag behind a command" "A=\"x git\" gh pr review 5 --approve" # ... nor for the approval rule
+runr "behind a command the guard does not read" "A='x gh' gh pr merge 5 --merge --admin" # ... nor is a single-quoted gh
+runr "behind a command the guard does not read" "A=x\\ git gh pr merge 5 --merge --admin" # ... nor an escaped blank's
+runr "approve flag behind a command" "A=x\\ git gh pr review 5 --approve" # ... for the approval rule too
+runr "behind a command the guard does not read" "A=x\\ gh gh pr merge 5 --merge --admin" # ... a gh piece
+runr "behind a command the guard does not read" "A=\"x\"\\ git gh pr merge 5 --merge --admin" # ... after a quote
+runr "behind a command the guard does not read" "env A=x\\ git gh pr merge 5 --merge --admin" # ... behind a wrapper
+runr "force-pushing" "\\git push --force"                              # a leading backslash still names git
+run ALLOW "A=x git status" "$LR/wt"                                    # a plain prefix assignment
+run ALLOW "git log -- a\\ b" "$LR/wt"                                  # an escaped blank after git
 
 # --- the approval rule: the session never approves a pull request ---
 printf '{"commit_id":"a","event":"APPROVE","body":"x"}\n' > "$STUB/ev-event.json"
