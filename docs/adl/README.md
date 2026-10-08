@@ -67,5 +67,6 @@ taken, kept so the log has every number.
 | [0057](0057-pr-author-side-runs-as-the-bot.md) | A pull request's author side runs as the bot account, its reviewer side as the owner (narrows [ADR-0055](0055-session-pushes-and-opens-prs-as-a-bot-account.md)) | Accepted |
 | [0058](0058-c4-charger-draw-is-the-lower-of-reading-and-last-set-current.md) | C4's charger draw is the lower of the charger power reading and the last set charger current (narrows [ADR-0006](0006-coordinator-and-data-flow.md)) | Accepted |
 | [0059](0059-r3-charger-draw-is-the-lower-of-reading-and-last-set-current.md) | R3's charger draw is the lower of the charger power reading and the last set charger current (narrows [ADR-0006](0006-coordinator-and-data-flow.md) and [ADR-0039](0039-baseline-reading-during-own-actuation.md)) | Accepted |
+| [0060](0060-work-tracker-and-change-host-are-roles-realised-by-product-files.md) | Work tracking and change review are two roles, defined by a concept document and realised by per-product files | Accepted |
 
 Add a row here in the same commit as every new or superseded ADR.
