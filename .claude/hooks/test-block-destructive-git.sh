@@ -1014,6 +1014,9 @@ case "$out" in
 esac
 run ALLOW "A=x git status" "$LR/wt"                                     # a plain prefix assignment
 run ALLOW "A='x' git status" "$LR/wt"                                   # ... a quoted one with no blank: git is found
+run ALLOW "\"git\" status" "$LR/wt"                                     # ... and a git quoted whole
+runr "behind a word carrying" "A=\"x git\" git -c core.hooksPath=/tmp/h commit -m m" "$LR/wt" # a quoted blank's second piece is no git
+runr "behind a word carrying" "A=\"x git\" gh issue edit 5 --remove-label needs-approval" # ... before gh
 run ALLOW "git -C $LR/wt status" "$LR/wt"                               # a plain repository command
 run ALLOW "git log --grep='\`x\` <(y)'" "$LR/wt"                        # inside single quotes, a backtick is text
 run ALLOW "git log --grep=\"<(y)\"" "$LR/wt"                            # ... and in double quotes, <( is
@@ -1281,6 +1284,9 @@ run ALLOW "GIT_DIR=/x git status" "$LR/wt"                             # a GIT_*
 run ALLOW "gh issue edit 5 --remove-label \$'x'"                       # ... a \$ word too
 run BLOCK "GIT_X=\$(git push --force) true"                           # an assignment's substitution is still read
 run BLOCK "GH_X=\$(git push --force) x"
+run BLOCK "A=\"x git\" gh pr merge 5 --merge --admin"                  # a quoted blank's second piece is no git
+run BLOCK "A=\"x git\" gh pr review 5 --approve"                       # ... nor for the approval rule
+run BLOCK "A='x gh' gh pr merge 5 --merge --admin"                     # ... nor is a single-quoted gh
 
 # --- the approval rule: the session never approves a pull request ---
 printf '{"commit_id":"a","event":"APPROVE","body":"x"}\n' > "$STUB/ev-event.json"

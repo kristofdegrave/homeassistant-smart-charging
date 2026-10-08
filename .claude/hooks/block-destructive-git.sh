@@ -238,13 +238,14 @@
 # gh_loop_label_rule); a git or gh word carrying `$`, which the shell builds (an ANSI-C quote,
 # a variable), is refused rather than read, and so is a git or gh segment carrying a backtick
 # outside single quotes or a process substitution (`<(`, `>(`) outside quotes, whose command
-# the shell runs to build a word (`substitutes`). A walk that finds no command word after
+# the shell runs to build a word (`substitutes`). A walk that finds no git or gh after
 # reaching a word -- stepped over or stopped on -- carrying `$`, a backtick, a quote, `)` or
 # `}` may have stopped inside a substitution (`A=$( x ) git`, `$(x) git`, `A=${ x; } git`, a
 # segment a split cut inside one) or on a quoted blank's second piece (`A="x y" git`), so any
-# later word naming git or gh refuses. And so is a git or gh command bash would expand -- a
-# brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
-# expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
+# later word naming git or gh refuses; a git or gh carrying a quote that does not wrap it
+# whole (`A="x git" gh ...`, whose `git"` is that second piece) is no git or gh found. A git
+# or gh command bash would expand -- a brace list or range, or a glob, outside quotes
+# (`expands`) -- is refused too, since git or gh would get it expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
 # background `&` and a newline outside quotes and not escaped, a comment and a heredoc's body
 # dropped (`split_unquoted`). So a quoted or escaped separator (`git --namespace ';' -c ...`)
 # does not leave the rest of a git or gh command in a segment no git rule reads -- except
@@ -302,7 +303,8 @@
 # (a quoted assignment value, a quoted command path, a substitution's close) and it names no
 # git or gh first, any later word whose last path part is `git` or `gh` refuses, a mention
 # too (`A="x y" echo git`, `"/opt/x" log D:/GIT`), and so does a git behind a quoted blank in
-# a prefix value (`A="x y" git status`); a redirection attached to a checkout
+# a prefix value (`A="x y" git status`, `A="x git" git status`) and a quoted command path
+# split at a blank (`"C:/Program Files/gh.exe" ...`); a redirection attached to a checkout
 # operand (`task>/dev/null`) refuses -- a space before it is the workaround; a heredoc under
 # an unquoted delimiter whose body has a line ending in a single backslash (a commit message
 # or PR body fed by `<<EOF`) refuses -- quoting the delimiter (`<<'EOF'`) is the workaround;
@@ -1856,6 +1858,14 @@ for seg in $1; do
       # opener (`A=$( cmd )`) reads as an empty word, stepped over like `&`.
       *='$('* | *='`'* | *='"$('*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; continue ;;
       *=*) shift; continue ;;
+    esac
+    # A git or gh carrying a quote that does not wrap it whole (`git"`, `'gh`) is a quoted
+    # blank's second piece (`A="x git" ...`), not a command word: the walk stops on it as on
+    # an unknown word, so the word rules below the walk read what follows.
+    _qw=${1%%[<>]*}
+    case "$_qw" in \"*\" | \'*\') _qw=${_qw#?}; _qw=${_qw%?} ;; esac
+    case "$name:$_qw" in
+      [gG][iI][tT]:*[\"\']* | [gG][hH]:*[\"\']*) interp=$tok; break ;;
     esac
     case "$name" in
       [gG][iI][tT]) found=git; shift; break ;;
