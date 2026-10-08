@@ -92,7 +92,8 @@
 # reflex.
 #
 # The merge rule. `gh pr merge` is allowed only when every condition holds (with `--help`,
-# `-h` or `--disable-auto`, which merge nothing, it passes unread): `--squash`
+# `-h` or `--disable-auto`, which merge nothing, it passes unread, unless one of the signs
+# below shows the words may not be gh's own): `--squash`
 # (`--squash=true` counts, any other `--squash=` value refuses), and no `--merge`/`--rebase`
 # in any spelling; exactly one selector, a bare pull-request number or a pull-request URL
 # on this repository (`repo` in .claude/profile.yml) -- no selector, a `#`-prefixed one (a
@@ -163,9 +164,23 @@
 # not prose is refused; `git commit -F <file>` is the workaround. So is a search whose quoted
 # pattern joins the merge words to more with `|` (ADR-0052's own Blast radius search): the
 # split on `|` ignores quotes, so what follows reads as a command fed the words; `rg -f
-# <file>` is the workaround. A multi-word quoted flag value (`--body "Merged by autopilot"`)
-# is split at its spaces, so its later words count as selectors and the merge refuses as
-# naming several pull requests; `--body-file` is the workaround. The facts come from `gh`
+# <file>` is the workaround. The guard splits gh's words at blanks and trusts single words --
+# an early exit, the `--match-head-commit` pin, a selector -- so a merge carrying a sign that
+# its words may not be gh's is refused rather than read: a quote not wrapping a whole word (a
+# multi-word value such as `--body "Merged by autopilot"`, whose words could supply a
+# `--help` or a pin gh never sees), an empty quoted value (`""`, which older PowerShell
+# drops), PowerShell's typographic quotes, any backslash or backtick (an escaped blank; a
+# Windows path too), a word starting with `#` (a comment) or `@` (a splat), a process
+# substitution (`<(`, `>(`), a `$` outside single quotes or an unquoted `{`, `*`, `?` or `[`
+# (an expansion; a word the guard reads as a redirection, `2>$null` or PowerShell's
+# `*>$null`, excepted), and any word after a redirection, value slots included, which the
+# shell may take as the target (`<> 1234`, `--body 2>x --help`) -- a real `--help` after one
+# too. These are signs read, not a parse: what a shell makes of a word showing none of them
+# (PowerShell's `--%` or array commas) stays in the indirection class above. `--body-file`,
+# forward slashes and redirections last are the workarounds; the `git restore --staged`
+# whole-tree exemption is dropped on the same signs, or any `<` or `>`, in its segment, and
+# carries the same concession: PowerShell's `--%` or array commas stay unread there too. The
+# facts come from `gh`
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
 # not read.
@@ -971,6 +986,62 @@ gh_approve_words() {
 gh_wrapped=0
 gh_env=0
 
+# Are the segment's words, split at blanks, the words the command gets? Not when a quote
+# opens in one word and closes in a later one (a quoted value with a blank); a backslash or
+# backtick escapes a blank and joins two words; a word starting with `#` begins a comment
+# that drops the rest; and an expansion (`$`, a brace, a glob, PowerShell's `@` splat) can
+# vanish, multiply or move a word. Read bluntly, since a miss only refuses: a word carrying
+# a quote passes only when quoted whole (`"x"`, `'x'`, no further quote of its kind inside,
+# no `$` inside double quotes); PowerShell's typographic quotes, any backslash or backtick,
+# a leading `#` or `@`, a process substitution (`<(`, `>(`, which runs a command; defence in
+# depth for a merge, whose segment the substitution check in the scan refuses first), and an
+# unquoted `$`, `{`, `*`, `?` or `[` fail. A word redir_words reads as a redirection
+# (`2>$null`, PowerShell's `*>$null`) is spared the expansion test: the shell drops it before
+# the command runs. A subshell, so the default IFS it splits by stays its own.
+split_trusted() (
+  unset IFS
+  for _w in $1; do
+    case "$_w" in
+      *\\* | *\`* | *‘* | *’* | *‚* | *‛* | *“* | *”* | *„*) return 1 ;;
+      '#'* | '@'* | *'<('* | *'>('*) return 1 ;;
+      *[\"\']*)
+        case "$_w" in
+          \'?*\') _i=${_w#\'}; _i=${_i%\'}; case "$_i" in *\'*) return 1 ;; esac ;;
+          \"?*\") _i=${_w#\"}; _i=${_i%\"}; case "$_i" in *\"* | *'$'*) return 1 ;; esac ;;
+          *) return 1 ;;
+        esac
+        ;;
+      *'$'* | *'{'* | *\** | *\?* | *\[*)
+        redir_words "$_w"
+        [ "$_rw" != 0 ] || return 1
+        ;;
+    esac
+  done
+  return 0
+)
+
+# Past a redirection the guard reads nothing more as gh's: a word after one may be its target
+# or a piece of it, and a flag's value slot is no exception (`--body 2>x --help` hands gh
+# `--body --help`). Over the segment's raw words, so a word quoted whole is no redirection: once
+# one is met, only further redirections and a target standing alone after its operator may
+# follow, or the merge refuses.
+merge_redir_last() { # merge_redir_last <segment>
+  _gr=''
+  _skipt=0
+  # shellcheck disable=SC2086  # deliberate word splitting; globbing is off by then
+  for _a in $1; do
+    if [ "$_skipt" = 1 ]; then _skipt=0; continue; fi
+    if has_redir "$_a"; then
+      _gr=$_a
+      redir_words "$_a"
+      [ "$_rw" != 2 ] || _skipt=1
+      continue
+    fi
+    [ -z "$_gr" ] ||
+      deny_merge "$1" "'gh pr merge' with '$_a' after the redirection '$_gr': the shell may take it as the target, so the guard cannot show gh gets it; put redirections last"
+  done
+}
+
 gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   seg=$1
   shift
@@ -1016,6 +1087,13 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
     deny_merge "$seg" "'gh pr merge' behind a wrapper (xargs, sudo, env, ...) or an interpreter: the guard cannot see what reaches gh, so the auto-merge conditions cannot be shown to hold"
   [ "$gh_env" = 0 ] ||
     deny_merge "$seg" "a GH_* assignment on the merge redirects gh in a way the guard's own gh calls do not follow; drop it and name the pull request by number"
+  # Every word below is trusted alone -- an early exit, the pin, a selector -- so the words
+  # must be the ones gh gets. Refused, not parsed: words the shell may split, join, drop or
+  # expand otherwise (split_trusted), and any word after a redirection, since what the shell
+  # takes as its target (`<> 1234`, `> out\ --help`) is not gh's (merge_redir_last).
+  split_trusted "$seg" ||
+    deny_merge "$seg" "'gh pr merge' with a quoted value spanning a blank, an escape, a comment or an expansion: the guard cannot show gh gets the words it splits, so the auto-merge conditions cannot be shown to hold; use --body-file and forward slashes"
+  merge_redir_last "$seg"
   selector=''
   selectors=0
   squash=0
@@ -1023,7 +1101,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
   while [ $# -gt 0 ]; do
     case "$1" in
       # No merge runs: help prints and exits, and gh's `--disable-auto` only cancels a pending
-      # auto-merge, returning before any merge, so neither needs the conditions below.
+      # auto-merge, returning before any merge, so neither needs the conditions below. Read
+      # only where the words were shown to be gh's own, above.
       --help | -h | --disable-auto) return 0 ;;
       --squash | --squash=true) squash=1 ;;
       --squash=* | --merge | --rebase | --merge=* | --rebase=*) deny_merge "$seg" "'gh pr merge $1': every merge in this project is a squash" ;;
@@ -1031,8 +1110,8 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
       -R | --repo) shift; gh_repo=${1:-} ;;
       --match-head-commit=*) match_head=${1#--match-head-commit=} ;;
       --match-head-commit) shift; match_head=${1:-} ;;
-      # Flags that take a value: skip it so a value is never read as a selector or flag. Only
-      # its first word is skipped: a quoted value with a space is already split (conceded above).
+      # Flags that take a value: skip it so a value is never read as a selector or flag. One
+      # word is skipped: a quoted value with a blank was refused above.
       -b | --body | -t | --subject | -F | --body-file | -A | --author-email) shift ;;
       --*) ;;
       # gh (cobra) clusters short flags: `-sd` is `--squash --delete-branch`. A letter that
@@ -1063,9 +1142,27 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
         done
         ;;
       # A redirection or a trailing & is the shell's, never a selector; a bare operator's
-      # target is the next word.
-      '>' | '>>' | '<' | [0-9]'>' | [0-9]'>>' | '&>') shift ;;
-      '&' | '>'* | '<'* | [0-9]'>'* | '&>'*) ;;
+      # target is the next word, read as merge_redir_last reads it. Two readings here are
+      # safe only through others: a value slot above can swallow a bare operator, leaving its
+      # target to count as a selector, which holds because merge_redir_last refuses any word
+      # after that target; and a quoted-whole `'>'` reaches this loop unquoted, read as an
+      # operator where gh gets an argument, which holds because `pr merge` takes at most one
+      # argument, so gh refuses a second one rather than merging.
+      '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'*)
+        redir_words "$1"
+        [ "$_rw" != 2 ] || shift
+        ;;
+      # `*>` is a redirection under PowerShell alone (all streams); under Bash the word is a
+      # glob gh gets, so it counts as a selector and the merge refuses.
+      '*>'*)
+        if [ "$tool" = PowerShell ]; then
+          redir_words "$1"
+          [ "$_rw" != 2 ] || shift
+        else
+          selectors=$((selectors + 1)); selector=$1
+        fi
+        ;;
+      '&') ;;
       *)
         if [ "$path" = 0 ] && [ "$1" = pr ]; then path=1
         elif [ "$path" = 1 ] && [ "$1" = merge ]; then path=2
@@ -1884,8 +1981,10 @@ for seg in $1; do
   # guard reads shell words without a shell's parser, and each rule that tried to read a
   # redirection's extent opened a misreading elsewhere. The chain never types one there; a
   # redirection after the subcommand (`git status >/dev/null 2>&1`) is untouched. For gh, one
-  # after its command path (`pr merge`, `api <endpoint>`) is untouched; one before or inside
-  # it refuses once any later word follows that is neither a redirection nor its target.
+  # after its command path (`pr merge`, `api <endpoint>`) is left to the rule that reads the
+  # command -- the merge rule refuses any word after one (merge_redir_last); one before or
+  # inside the path refuses once any later word follows that is neither a redirection nor its
+  # target.
   if [ -n "$found" ] && [ "$redir_seen" = 1 ]; then
     deny "$seg" "a redirection before $found, or attached to it, is refused rather than read: the guard cannot show what it hides; put the redirection after the subcommand"
   fi
@@ -2289,13 +2388,19 @@ EOF
       ;;
     checkout | restore)
       # Whole-tree discards only. 'git restore --staged .' merely unstages, so it is
-      # left alone unless the working tree is in scope too.
+      # left alone unless the working tree is in scope too. The exemption trusts one word, so
+      # it holds only where the words are the shell's own: not across a quote spanning a blank
+      # or an escaped blank (split_trusted), and not beside any `<` or `>`, whose target the
+      # `--staged` may be (`git restore . <> --staged`).
       if has_exact . "$@" || has_exact ./ "$@" || has_exact :/ "$@"; then
-        if [ "$sub" = restore ] && has_long '--sta*' "$@" && ! has_long '--w*' "$@"; then
-          : # unstaging the whole tree changes no file content
-        else
-          deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
+        unstage=0
+        if [ "$sub" = restore ] && has_long '--sta*' "$@" && ! has_long '--w*' "$@" &&
+          split_trusted "$seg"; then
+          case "$seg" in *'<'* | *'>'*) ;; *) unstage=1 ;; esac
         fi
+        # unstaging the whole tree changes no file content
+        [ "$unstage" = 1 ] ||
+          deny "$seg" "discarding the whole working tree throws away uncommitted work; name the specific files instead"
       fi
       ;;
     stash)
