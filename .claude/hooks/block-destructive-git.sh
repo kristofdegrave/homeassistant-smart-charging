@@ -178,7 +178,8 @@
 # too. These are signs read, not a parse: what a shell makes of a word showing none of them
 # (PowerShell's `--%` or array commas) stays in the indirection class above. `--body-file`,
 # forward slashes and redirections last are the workarounds; the `git restore --staged`
-# whole-tree exemption is dropped on the same signs, or any `<` or `>`, in its segment. The
+# whole-tree exemption is dropped on the same signs, or any `<` or `>`, in its segment, and
+# carries the same concession: PowerShell's `--%` or array commas stay unread there too. The
 # facts come from `gh`
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
@@ -955,7 +956,8 @@ gh_env=0
 # vanish, multiply or move a word. Read bluntly, since a miss only refuses: a word carrying
 # a quote passes only when quoted whole (`"x"`, `'x'`, no further quote of its kind inside,
 # no `$` inside double quotes); PowerShell's typographic quotes, any backslash or backtick,
-# a leading `#` or `@`, a process substitution (`<(`, `>(`, which runs a command), and an
+# a leading `#` or `@`, a process substitution (`<(`, `>(`, which runs a command; defence in
+# depth for a merge, whose segment the substitution check in the scan refuses first), and an
 # unquoted `$`, `{`, `*`, `?` or `[` fail. A word redir_words reads as a redirection
 # (`2>$null`, PowerShell's `*>$null`) is spared the expansion test: the shell drops it before
 # the command runs. A subshell, so the default IFS it splits by stays its own.
@@ -1109,9 +1111,19 @@ gh_merge_rule() { # gh_merge_rule <segment> <arguments after gh>
       # after that target; and a quoted-whole `'>'` reaches this loop unquoted, read as an
       # operator where gh gets an argument, which holds because `pr merge` takes at most one
       # argument, so gh refuses a second one rather than merging.
-      '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'* | '*>'*)
+      '>'* | '<'* | [0-9]'>'* | [0-9]'<'* | '&>'*)
         redir_words "$1"
         [ "$_rw" != 2 ] || shift
+        ;;
+      # `*>` is a redirection under PowerShell alone (all streams); under Bash the word is a
+      # glob gh gets, so it counts as a selector and the merge refuses.
+      '*>'*)
+        if [ "$tool" = PowerShell ]; then
+          redir_words "$1"
+          [ "$_rw" != 2 ] || shift
+        else
+          selectors=$((selectors + 1)); selector=$1
+        fi
         ;;
       '&') ;;
       *)

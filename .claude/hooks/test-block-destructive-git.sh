@@ -826,6 +826,8 @@ TOOL=Bash
 runr "process substitution" 'gh pr merge 1234 --squash --admin --help >(cat)'                  # a process substitution runs a command
 runr "process substitution" 'gh pr merge 1234 --squash --admin --help <(true)'
 runr "process substitution" 'echo gh pr merge 1234 > >(sh)'                                    # ... prose fed to one
+runr "names 2 pull requests" "gh pr merge 1234 --squash --admin --match-head-commit abc123 '*>x'"  # under Bash *> is no redirection: gh gets the word
+runr "words it splits" 'gh pr merge 1234 --squash --admin --match-head-commit abc123 *>$null'     # ... and unquoted it is a glob
 run ALLOW 'gh pr merge 1234 --squash --admin --match-head-commit abc123 <> --help'    # a target is the shell's: the merge gh gets is read
 run ALLOW "gh pr merge 1234 --squash --admin --body '\$5' --match-head-commit abc123"  # single quotes expand nothing
 run ALLOW 'gh pr merge --help 2>&1'                                                    # a real early exit, redirection last
