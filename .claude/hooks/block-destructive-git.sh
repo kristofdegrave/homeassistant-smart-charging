@@ -30,7 +30,29 @@
 # shell separator, since the split on ; && || | happens first and a mention after one starts
 # a segment of its own.
 # A line continuation is joined before that split: a backslash-newline for sh, a
-# backtick-newline for PowerShell, a newline after a trailing pipe for both.
+# backtick-newline for PowerShell, a newline after a trailing pipe for both. The join does not
+# read where bash leaves a line unjoined -- a backslash run of even length, the last one
+# escaped, or a backslash inside a comment -- so there, under sh, a command naming git or gh
+# as a command word on a line the join pulls in (the next one, and on while each ends in a
+# backslash) is refused rather than read, in and out of the loop
+# (the loop's second reading splits such a line correctly, but the plain reading alone guards
+# an interactive session). Quotes (`'`, `"`, `$'...'`) are read across lines, so a `#` inside
+# them is no comment; an unquoted heredoc body is read for quotes too, so an apostrophe in
+# one can misread what follows. Conceded: a line inside a multi-line quote whose text ends in
+# `\\` refuses when the next line names git or gh (`commit -F <file>` is the workaround); a
+# bare directory word whose last part is `git` or `gh` (`cd /d/GIT`) on that line counts as
+# naming one; and PowerShell's form of the hole (a backtick inside a comment, or an escaped
+# one) is left open. Likewise refused rather than parsed: a segment whose walk stops on
+# `case`, `in`, `function`, `coproc` or a word carrying `)` (a case arm's pattern, `f()`), or
+# on a word followed by one that is `)` or, under sh, starts with `(` (`x ) git ...`, `f ()
+# {`; a PowerShell grouping, `echo (gh ...)`, is left to the merge and approval words' grouping
+# rule, so `Write-Output (git push --force)` is conceded) -- a command the walk does not read through -- when
+# any later word names git or gh. Conceded: `case "$(git branch --show-current)" in` refuses
+# (set a variable first), and so does a body line kept in the scan -- a wrapped line of a
+# multi-line `-m` or `--body` -- that starts with one of those words or a `)`-word, or whose
+# first word is followed by a `(`-word (`in the git rule ...`, `1) the git rule ...`, `see
+# (the gh docs)`), when a later word on it names git or gh; `-F <file>` or `--body-file` is
+# the workaround.
 # The first word is found by stepping over environment assignments, redirections with their
 # targets (redir_words; one into a process substitution is never stepped over), the
 # transparent wrappers listed at the scan loop, shell reserved words (`if`, `then`, `!`,
@@ -1438,6 +1460,71 @@ stripped=$(strip_heredoc_bodies "$cmd")
 # shell, since the other reads the character as text), and a newline after a trailing
 # pipe for both. Otherwise `gh pr \` and `merge ...` on the next line are two segments.
 tool=$(extract tool_name)
+# The join is blind to where bash does *not* continue a line: a backslash run of even length
+# ends in an escaped backslash, and one inside a comment is comment text. There the line
+# after it is a command of its own, which the join below would read as more words of the one
+# before (`git status # see \`, then `git push --force`). Refused rather than read, in and
+# out of the loop: a backslash ending a line where its run is even, or where a `#` starts a
+# word earlier on that line outside quotes, refuses the command when a line the join pulls
+# into it carries git or gh as a command word (the last path part of a word). Bash only; an awk that fails
+# refuses.
+if [ "$tool" != PowerShell ]; then
+  _dj=$(printf '%s\n' "$cmd" | awk -v dj=1 -v q="'" '
+    # Read line _s on from the quote state st the lines before it left (0 none, 1 single, 2
+    # double, 3 `$'"'"'...'"'"'`); cm is set when a `#` outside quotes starts a comment, the
+    # rest of the line then unread.
+    function scanline(_s,   _x, _c, _pv) {
+      cm = 0; _pv = " "
+      for (_x = 1; _x <= length(_s); _x++) {
+        _c = substr(_s, _x, 1)
+        if (st == 0) {
+          if (_c == "\\") { _x++; _pv = "x"; continue }
+          if (_c == "$" && substr(_s, _x + 1, 1) == q) { st = 3; _x++; _pv = q; continue }
+          if (_c == q) st = 1
+          else if (_c == "\"") st = 2
+          else if (_c == "#" && _pv ~ /[ \t;&|()<>]/) { cm = 1; return }
+        } else if (st == 1) {
+          if (_c == q) st = 0
+        } else if (st == 3) {
+          if (_c == "\\") _x++
+          else if (_c == q) st = 0
+        } else {
+          if (_c == "\\") _x++
+          else if (_c == "\"") st = 0
+        }
+        _pv = _c
+      }
+    }
+    { line[NR] = $0 }
+    END {
+      st = 0
+      for (i = 1; i < NR; i++) {
+        l = line[i]
+        scanline(l)
+        if (l !~ /\\$/) continue
+        t = l; sub(/\\+$/, "", t)
+        if ((length(l) - length(t)) % 2 == 1 && !cm) continue
+        # Only the lines the join below pulls in hide: the next one, and each after it while
+        # the one before ends in a backslash. Later lines are split off as their own segments.
+        for (k = i + 1; k <= NR; k++) {
+          if (k > i + 1 && line[k - 1] !~ /\\$/) break
+          nw = split(tolower(line[k]), w, /[ \t;&|()<>`]+/)
+          for (m = 1; m <= nw; m++) {
+            x = w[m]
+            sub(/^["'"'"'$({]+/, "", x); sub(/["'"'"')}]+$/, "", x)
+            sub(/.*[\/\\]/, "", x); sub(/\.exe$/, "", x)
+            if (x == "git" || x == "gh") { print 1; exit }
+          }
+        }
+      }
+      print 0
+    }')
+  case "$_dj" in
+    0) ;;
+    1) deny "$cmd" "a backslash ends a line where bash does not continue it -- an even run of backslashes, or one inside a comment -- and git or gh is named after it: the guard joins that line into the one before, so it is refused rather than read; end the line without the backslash" ;;
+    *) deny "$cmd" "the guard could not read where a backslash at a line's end continues the line, so a git or gh on the next line could go unread" ;;
+  esac
+fi
 joined=$(printf '%s\n' "$cmd" | awk -v ps="$([ "$tool" = PowerShell ] && echo 1)" '
   { buf = (NR > 1) ? buf "\n" $0 : $0 }
   END {
@@ -1812,6 +1899,35 @@ for seg in $1; do
     # One attached to the last path word read (`gh pr merge>/dev/null`) has no word after it.
     [ -z "$_gr" ] || [ "$_np" = 0 ] ||
       deny "$seg" "a redirection inside gh's command path ('$_gr') is refused rather than read: the guard cannot show what it hides; put it after the path"
+  fi
+  # A walk that stopped on a word heading a command it does not read through -- `case` or `in`
+  # (a case statement's head), a word carrying `)` (a case arm's pattern, a function's `f()`,
+  # a subshell's close), `function` or `coproc` -- may have stopped short of a git or gh that
+  # bash runs. So may one followed by a word that is `)` (a case arm `x ) git ...`) or, under
+  # sh, starts with `(` (`f () {`); a PowerShell grouping (`echo (gh ...)`) is left to the
+  # merge and approval words' grouping rule. Refused rather than parsed: any later word naming
+  # one, or the part of the stop word after its last `)`, refuses the segment, prose too.
+  _stop=0
+  if [ -z "$found" ] && [ -n "$interp" ]; then
+    case "$interp" in case | in | function | coproc | *')'*) _stop=1 ;; esac
+    case "${2:-}" in ')') _stop=1 ;; esac
+    [ "$tool" = PowerShell ] || case "${2:-}" in '('*) _stop=1 ;; esac
+  fi
+  if [ "$_stop" = 1 ]; then
+    _rest=''
+    case "$interp" in *')'*) _rest=${interp##*')'} ;; esac
+    for _a in "$_rest" "$@"; do
+      _n=$_a
+      while :; do
+        case "$_n" in [\"\'\(\`\$]*) _n=${_n#?} ;; *) break ;; esac
+      done
+      _n=${_n%%[\<\>\"\'\)\;\`]*}
+      _n=${_n##*[/\\]}
+      case "${_n%.[eE][xX][eE]}" in
+        [gG][iI][tT] | [gG][hH])
+          deny "$seg" "a git or gh after '$interp' -- a case statement, a case arm's pattern, a function body or a coproc, which the guard does not read through -- is refused rather than read: run the git or gh as a command of its own" ;;
+      esac
+    done
   fi
   first=$(printf '%s' "${interp##*[/\\]}" | tr 'A-Z' 'a-z')
   first=${first%.exe}
