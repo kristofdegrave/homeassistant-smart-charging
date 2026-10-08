@@ -792,12 +792,17 @@ LR=$STUB/loop
 git init -q -b main "$LR/origin.git" --bare
 git init -q -b main "$LR/wt"
 # A fixture step that fails is reported as a fixture failure: left silent, it would surface as
-# the next case's verdict instead. A step meant to stop in a conflict uses gc, which is quiet.
+# the next case's verdict instead. A merge meant to stop in a conflict uses gc, which fails the
+# same way when the merge does not leave one.
 g() {
   git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1 && return
-  printf 'FAIL fixture: git %s\n' "$*"; fail=1
+  printf 'FAIL fixture: git %s\n' "$*"; fail=1; return 1
 }
-gc() { git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1; }
+gc() {
+  git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1
+  git -C "$LR/wt" rev-parse -q --verify MERGE_HEAD >/dev/null && return
+  printf 'FAIL fixture: git %s left no conflict\n' "$*"; fail=1; return 1
+}
 mkdir -p "$LR/wt/src" "$LR/wt/.github" "$LR/wt/docs"
 echo a > "$LR/wt/src/a.py"; echo a > "$LR/wt/.github/ci.yml"; echo a > "$LR/wt/CLAUDE.md"
 g add -A; g commit -qm base; g remote add origin "$LR/origin.git"; g push -q origin main
