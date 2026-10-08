@@ -1171,10 +1171,12 @@ async def test_monthly_peak_tracker_updates_every_cycle_regardless_of_mode(hass)
 async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     """entity-catalog.md's `sensor.smart_charging_solar_surplus_w` row / glossary --
     `charger_power - net_power`, raw, distinct from R10's
-    smoothed control-path `surplus_w` (#602 T1). Cycle 2's baseline (net_w - charger_w =
-    2000 - 3000 = -1000) happens to sit ABOVE cycle 1's (1000 - 3000 = -2000), so issue #990's
-    debounce (which only delays a LOWER baseline) never engages here -- if a future edit
-    reverses that ordering, a failure here would be about the debounce, not this test's own
+    smoothed control-path `surplus_w` (#602 T1). The raw surplus is formed from R3's baseline
+    (ADR-0059): cycle 1 has no set current yet, so its baseline is the reading's
+    (1000 - 3000 = -2000); cycle 2's reading still shows 3000 W but the set current is
+    10 A = 2300 W, so its baseline is 2000 - 2300 = -300, which sits ABOVE cycle 1's, so
+    issue #990's debounce (which only delays a LOWER baseline) never engages here -- if a future
+    edit reverses that ordering, a failure here would be about the debounce, not this test's own
     smoothing claim."""
     config = _config()
     config = dataclasses.replace(config, smoothing_window=2)
@@ -1190,11 +1192,12 @@ async def test_solar_surplus_w_uses_raw_not_smoothed_net_power(hass):
     await coord._async_update_data()
 
     # cycle 2: household window=(-2000.0, -1000.0), smoothed surplus 1500.0 != raw surplus
-    # 1000.0 (ADR-0049: the joint window, not a net-only one)
+    # 300.0 (ADR-0049: the joint window, not a net-only one; ADR-0059: the raw one from the
+    # set current)
     adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0)
     result = await coord._async_update_data()
 
-    assert result.solar_surplus_w == 3000.0 - 2000.0
+    assert result.solar_surplus_w == 2300.0 - 2000.0
 
 
 async def test_solar_surplus_w_defaults_to_zero_on_required_role_fault(hass):
@@ -1206,9 +1209,10 @@ async def test_solar_surplus_w_defaults_to_zero_on_required_role_fault(hass):
 async def test_peak_headroom_a_does_not_spike_from_a_transient_stale_charger_power_reading(hass):
     """Issue #990: right after a charger current step-down, the fast net-meter reading can
     reflect the drop before the slower-polled charger_power sensor does, for one extra
-    coordinator cycle -- swinging baseline_w (net_w - charger_w) artificially negative,
-    inflating peak_headroom_a and producing a phantom positive solar_surplus_w. Both must hold
-    at the prior, safety-conservative reading until the improved reading has held for
+    coordinator cycle. ADR-0059's lower charger term takes the set current (8 A = 1840 W) over
+    the stale 3000 W reading, so the baseline swings only to 1500 - 1840 = -340 rather than
+    -1500 -- still a headroom increase, still a phantom positive solar_surplus_w. Both must
+    hold at the prior, safety-conservative reading until the improved reading has held for
     BASELINE_DEBOUNCE_CYCLES."""
     config = _config()
     adapters = _adapters(status=STATE_CHARGING, net_w=3500.0, charger_w=3000.0, ev_soc=50.0)
@@ -1227,8 +1231,8 @@ async def test_peak_headroom_a_does_not_spike_from_a_transient_stale_charger_pow
     # Step-down: net_w already reflects the drop; charger_w still reports the prior value.
     adapters[ROLE_NET_POWER] = _FakeNumeric(1500.0)
     cycle2 = await coord._async_update_data()
-    # Undebounced, raw baseline = 1500 - 3000 = -1500 would inflate headroom to 440 and spike
-    # solar_surplus_w to a phantom 1500 -- both must stay at cycle1's values instead.
+    # Undebounced, baseline = 1500 - 1840 = -340 would inflate headroom to 435 and spike
+    # solar_surplus_w to a phantom 340 -- both must stay at cycle1's values instead.
     assert cycle2.peak_headroom_a == 431.0
     assert cycle2.solar_surplus_w == 0.0
 
@@ -1256,13 +1260,14 @@ async def test_peak_headroom_a_accepts_a_sustained_lower_baseline_after_the_debo
     await coord._async_update_data()  # cycle 1: baseline 500, accepted (first reading)
 
     adapters[ROLE_NET_POWER] = _FakeNumeric(1500.0)
-    cycle2 = await coord._async_update_data()  # raw baseline -1500, 1st consecutive cycle
+    # baseline = 1500 - min(3000, 8 A * 230 V = 1840) = -340 (ADR-0059), 1st consecutive cycle
+    cycle2 = await coord._async_update_data()
     assert cycle2.peak_headroom_a == 431.0  # still held
 
-    cycle3 = await coord._async_update_data()  # raw baseline -1500 again, 2nd consecutive cycle
-    # BASELINE_DEBOUNCE_CYCLES == 2 -> now accepted: floor((99750 - (-1500)) / 230) = 440
-    assert cycle3.peak_headroom_a == 440.0
-    assert cycle3.solar_surplus_w == 1500.0
+    cycle3 = await coord._async_update_data()  # baseline -340 again, 2nd consecutive cycle
+    # BASELINE_DEBOUNCE_CYCLES == 2 -> now accepted: floor((99750 - (-340)) / 230) = 435
+    assert cycle3.peak_headroom_a == 435.0
+    assert cycle3.solar_surplus_w == 340.0
 
 
 async def test_r3_clamp_does_not_grant_extra_current_from_a_transient_stale_reading(hass):
@@ -1279,7 +1284,7 @@ async def test_r3_clamp_does_not_grant_extra_current_from_a_transient_stale_read
     )
     coord.active_mode = MODE_POWER
     # target(16 A) sits above the true headroom (10 A) but below the transient's inflated one
-    # (27 A) -- discriminates a still-clamped cycle from an unclamped one.
+    # (24 A) -- discriminates a still-clamped cycle from an unclamped one.
     coord.target_current = 16.0
     _seed_ample_peak_headroom(coord, kw=3.56)
 
@@ -1288,9 +1293,10 @@ async def test_r3_clamp_does_not_grant_extra_current_from_a_transient_stale_read
     assert cycle1.commanded_current == 10.0
 
     # A charger current step-down: net_w already reflects the drop, charger_w still reports a
-    # much higher prior value for one extra cycle -- raw baseline swings to 0 - 3000 = -3000,
-    # which would inflate headroom to floor((3310 + 3000) / 230) = 27 (>= the 16 A request,
-    # i.e. an UNCLAMPED cycle) without the fix.
+    # much higher prior value for one extra cycle -- the set current (10 A = 2300 W) bounds it
+    # (ADR-0059), so baseline swings to 0 - 2300 = -2300, which would inflate headroom to
+    # floor((3310 + 2300) / 230) = 24 (still >= the 16 A request, i.e. an UNCLAMPED cycle)
+    # without the debounce.
     adapters[ROLE_NET_POWER] = _FakeNumeric(0.0)
     adapters[ROLE_CHARGER_POWER] = _FakeNumeric(3000.0)
     cycle2 = await coord._async_update_data()
@@ -4823,9 +4829,10 @@ async def _prime_household_spike_setup(hass, monkeypatch, *, captar_available, a
     the C4 bound's own literal `charger_w=0.0` stays distinguishable from a mutation that
     passed `ctx.charger_w` instead). Returns `(coord, calls)`; each caller's own `# Act`
     spikes the 4th cycle's household to 5000 W (charger draw held at the same 500 W) --
-    sized so the raw (debounced immediately, since a HIGHER baseline is the
-    safety-conservative direction) and smoothed (2000 W, three parts of the old mean to one
-    of the new) readings genuinely differ.
+    sized so R3's raw baseline (debounced immediately, since a HIGHER baseline is the
+    safety-conservative direction; 5500 W under `Off`, where ADR-0059's lower charger term is
+    0 W) and R10's smoothed household (2000 W, three parts of the old mean to one of the new;
+    its raw is the 5000 W) genuinely differ.
 
     Split into a shared helper, rather than one bundled test, because the behaviours it feeds
     (the escalated rate's own bounds move to smoothed; the real clamps stay raw; the readout
@@ -4927,11 +4934,11 @@ async def test_should_keep_the_real_clamps_on_raw_when_the_smoothed_baseline_dif
     hass, monkeypatch
 ):
     """The real R3 clamp (`apply_peak_clamp`) and the real C4 clamp (`clamp_to_ceiling`) must
-    stay on their unsmoothed operands -- R3's raw, debounced baseline, and C4's raw `net_w` with
-    ADR-0058's lower charger operand -- even on a cycle where the smoothed household baseline
-    genuinely differs from them -- only the escalated rate's own bounds move (companion test
-    above); the readout's own raw operand is a separate, display-only call site (its own
-    companion test below)."""
+    stay on their unsmoothed operands -- R3's raw, debounced baseline (ADR-0059's lower charger
+    term), and C4's raw `net_w` with ADR-0058's lower charger operand -- even on a cycle where
+    the smoothed household baseline genuinely differs from them -- only the escalated rate's own
+    bounds move (companion test above); the readout's own raw operand is a separate, display-only
+    call site (its own companion test below)."""
     # Arrange
     coord, calls = await _prime_household_spike_setup(
         hass, monkeypatch, captar_available=True, active_mode=MODE_OFF
@@ -4941,9 +4948,9 @@ async def test_should_keep_the_real_clamps_on_raw_when_the_smoothed_baseline_dif
     coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
     await coord._async_update_data()
 
-    # Assert -- the spike cycle's raw, debounced baseline is the spike itself
-    # (5500 - 500 = 5000 W).
-    assert calls["apply_peak_clamp"][-1]["baseline_w"] == 5000.0
+    # Assert -- the spike cycle's raw, debounced baseline is the spike itself. Under `Off` the
+    # set current is 0 A, so the lower charger term is 0 W (ADR-0059): 5500 - 0 = 5500 W.
+    assert calls["apply_peak_clamp"][-1]["baseline_w"] == 5500.0
     assert calls["clamp_to_ceiling"][-1]["net_w"] == 5500.0
 
 
@@ -4963,12 +4970,11 @@ async def test_should_keep_the_peak_headroom_readout_on_raw_when_the_smoothed_ba
     coord._adapters = _adapters(net_w=5500.0, charger_w=500.0)
     result = await coord._async_update_data()
 
-    # Assert -- the spike cycle's raw, debounced baseline is the spike itself
-    # (5500 - 500 = 5000 W).
-    assert calls["peak_headroom_a"][-1]["baseline_w"] == 5000.0
-    # floor((4000 - 250 - 5000) / 230) = floor(-5.43) = -6 -- the raw-based readout, unmoved
-    # by this task.
-    assert result.peak_headroom_a == -6.0
+    # Assert -- the spike cycle's raw, debounced baseline is the spike itself. Under `Off` the
+    # set current is 0 A, so the lower charger term is 0 W (ADR-0059): 5500 - 0 = 5500 W.
+    assert calls["peak_headroom_a"][-1]["baseline_w"] == 5500.0
+    # floor((4000 - 250 - 5500) / 230) = floor(-7.61) = -8 -- the raw-based readout.
+    assert result.peak_headroom_a == -8.0
 
 
 async def test_should_keep_the_c4_bound_smoothed_when_captar_capability_is_absent(
@@ -6154,3 +6160,119 @@ async def test_should_clamp_c4_on_the_reading_when_no_charger_current_has_been_s
 
     # Assert
     assert calls[-1]["charger_w"] == reading_w
+
+
+# --- ADR-0059: R3's charger draw is the lower of the charger power reading and the last set
+# charger current, at the supply voltage -- the same operand as C4's (`_charger_draw_w`),
+# handed to the baseline debounce. Four cases, one test each (R3's baseline criterion,
+# docs/analysis/requirements.md#r3--captar-peak-protection) -------------------------------------
+
+
+def _spy_baseline_debounce(monkeypatch) -> list[float]:
+    """Records the raw baseline every `debounce_baseline_w` call receives -- R3's baseline
+    before the debounce, which is what ADR-0059 decides."""
+    raw_baselines: list[float] = []
+    real = coordinator_module.debounce_baseline_w
+
+    def spy(raw_baseline_w, *args, **kwargs):
+        raw_baselines.append(raw_baseline_w)
+        return real(raw_baseline_w, *args, **kwargs)
+
+    monkeypatch.setattr(coordinator_module, "debounce_baseline_w", spy)
+    return raw_baselines
+
+
+@pytest.mark.parametrize("voltage_v", [_C4_VOLTAGE_V, 240.0])
+async def test_should_debounce_r3s_baseline_on_the_last_set_current_when_the_charger_reading_still_shows_the_higher_draw(  # noqa: E501
+    hass, monkeypatch, voltage_v
+):
+    """The charger power reading shows a 16 A draw while the last set current is 10 A (staged
+    as in C4's test above): R3's baseline is the net import minus the set current at the supply
+    voltage, so the stale reading cannot widen the headroom. Run at the nominal voltage and at
+    a measured 240 V, so a caller passing the nominal voltage instead of the resolved one fails."""
+    # Arrange
+    raw_baselines = _spy_baseline_debounce(monkeypatch)
+    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=voltage_v)
+    coord = _power_coordinator(hass, adapters)
+    await coord._async_update_data()
+    # Arrange (precondition guard)
+    assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
+    # Arrange
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(16.0 * voltage_v)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + 16.0 * voltage_v)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert raw_baselines[-1] == 2000.0 + (16.0 - _C4_SET_CURRENT_A) * voltage_v
+
+
+async def test_should_debounce_r3s_baseline_on_the_reading_when_the_car_draws_less_than_it_was_set_to(  # noqa: E501
+    hass, monkeypatch
+):
+    """Set to 10 A, the car draws 4 A: the reading is the lower of the two, so R3's baseline
+    takes the car at its reading (ADR-0059, Option C's Con)."""
+    # Arrange
+    raw_baselines = _spy_baseline_debounce(monkeypatch)
+    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=_C4_VOLTAGE_V)
+    coord = _power_coordinator(hass, adapters)
+    await coord._async_update_data()
+    # Arrange (precondition guard)
+    assert adapters[ROLE_CHARGER_CURRENT].written[-1] == _C4_SET_CURRENT_A
+    # Arrange
+    reading_w = 4.0 * _C4_VOLTAGE_V
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(reading_w)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + reading_w)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert raw_baselines[-1] == 2000.0
+
+
+async def test_should_debounce_r3s_baseline_on_the_reading_when_no_charger_current_has_been_set_yet(  # noqa: E501
+    hass, monkeypatch
+):
+    """The first cycle after a start has no set current to compare against: the reading alone
+    stands in R3's baseline, even when it shows a draw."""
+    # Arrange
+    raw_baselines = _spy_baseline_debounce(monkeypatch)
+    reading_w = 6.0 * _C4_VOLTAGE_V
+    adapters = _adapters(net_w=2000.0 + reading_w, charger_w=reading_w, voltage=_C4_VOLTAGE_V)
+    coord = _power_coordinator(hass, adapters)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert raw_baselines[-1] == 2000.0
+
+
+async def test_should_debounce_r3s_baseline_on_0_a_when_the_previous_cycle_wrote_0_a_on_a_fault(
+    hass, monkeypatch
+):
+    """ADR-0059: a successful fault-path write of 0 A counts as a set current. On the recovery
+    cycle the reading still shows the earlier 10 A draw, but the set current is 0 A, so R3's
+    baseline subtracts nothing."""
+    # Arrange
+    raw_baselines = _spy_baseline_debounce(monkeypatch)
+    adapters = _adapters(net_w=0.0, charger_w=0.0, voltage=_C4_VOLTAGE_V)
+    coord = _power_coordinator(hass, adapters)
+    await coord._async_update_data()
+    draw_w = _C4_SET_CURRENT_A * _C4_VOLTAGE_V
+    adapters[ROLE_CHARGER_POWER] = _FakeNumeric(draw_w)
+    adapters[ROLE_NET_POWER] = _FakeNumeric(2000.0 + draw_w)
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(None)
+    await coord._async_update_data()  # the fault cycle writes 0 A
+    # Arrange (precondition guard)
+    assert adapters[ROLE_CHARGER_CURRENT].written[-1] == 0.0
+    # Arrange
+    adapters[ROLE_CHARGER_STATUS] = _FakeStatus(STATE_CHARGING)
+
+    # Act
+    await coord._async_update_data()
+
+    # Assert
+    assert raw_baselines[-1] == 2000.0 + draw_w
