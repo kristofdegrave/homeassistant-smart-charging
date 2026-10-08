@@ -123,18 +123,17 @@ with the product. This record does not decide what a milestone means; ADR-0052 s
 
 ## Consequences
 
-- **Follow-up**: the concept document; a GitHub work-tracker file, with the board as an
-  opt-in setup section; a GitHub change-host file, with CI wiring and release setup; the profile
-  selecting a product per role, and the method check's coverage rule; the contribution workflow,
-  step skills, filing and decomposition, and the autopilot rewritten against concepts; `cleanup`
-  closing the item and taking the close guard's rule; the guard split.
+- **Follow-up**: the concept document; a GitHub work-tracker file, the board an opt-in setup
+  section; a GitHub change-host file, with CI wiring and release setup; the profile selecting a
+  product per role, and the method check's coverage rule; the rewrites the Blast radius rows.
 - **`tracker-mechanics.md` splits**: its commands become the GitHub product files' content, its
   rules move into the method. "Never `gh issue close`" leaves the method.
 - **ADR-0054 is narrowed**, not superseded: A3's one author test moves from beside the tracker
   recipe into the method, the product file keeping how the write-access association is read.
   The autopilot's settings allow-list each product's MCP tools under its model.
-- **ADR-0052 is not narrowed**: E2 keeps C2's merge conditions and its accident-guard Con, and
-  moves only which commands and tools are read into the host file.
+- **ADR-0052 is not narrowed**: E2 keeps its B2 merge conditions, their C2 guard and its
+  accident-guard Con, moving only which commands and tools merge, and how each condition is
+  read, into the host file.
 - **Easier**: a second product is one file per role and a profile mapping. **Harder**: every new
   method rule that touches a product names its concept first, and a project without CI wiring
   has no gate outside a session.
@@ -145,37 +144,42 @@ with the product. This record does not decide what a milestone means; ADR-0052 s
 
 ```sh
 rg -n --hidden \
-  -e '\bgh\b|\bCloses\b|auto-close|never closes|close-guard' \
-  -e '\blabel|needs-approval|needs-decision' \
-  -e '\bboard\b|\bSize\b|\bEstimate\b|sub-issue' \
+  -e '\bgh\b|GitHub|GraphQL|\bREST\b' \
+  -e '(?i:\bclos(e[sd]?|ing)\b)|Part of\b' \
+  -e '(?i:\blabel)|needs-approval|needs-decision' \
+  -e '(?i:\bboard\b|backlog|\bin (review|progress)\b|sub-issue)|\*done\*|\bSize\b|\bEstimate\b' \
   CLAUDE.md .claude/ .github/ docs/reference/
 ```
 
-Wide enough because each pattern covers one thing the decision moves: how the method reaches a
-product — the `gh` CLI however spelt, its bot wrapper, the close keyword and the rules built on
-it (A3, B2, D2, E2); the labels its gates and routing key on (C2's work type, level and kind);
-the board and nesting C2 makes optional. No MCP server is configured, and
-`.github/check-upstream-drift.py` calls GitHub's REST API only for upstream releases, which no
-role covers. Outside the four paths the patterns find only product code and documents, whose
-labels and sizes are Home Assistant's or the domain's, and dated text: `CHANGELOG.md`,
-`docs/postmortems/` and `docs/adl/`, this record and its ADL row included. It returns
-**1611** hits on `origin/main`.
+Wide enough because each pattern covers one thing the decision moves, prose words in any case
+and names as spelt: how the method reaches a product — `gh` however spelt, its bot wrapper,
+GitHub and its APIs (A3, B2, E2); closing in every form and the reference keywords (D2); the
+labels its gates and routing key on (C2); the board by field and column (bare Status would add
+mostly ADR lines), and C2's nesting. Issue, PR and epic are concept names the concept document
+may keep. No MCP server is configured. Outside the four paths the patterns find no site: code,
+tests, analysis, design and README use the words in a plain, Home Assistant or domain sense or
+recount a past record, as §8.3's ADR-0048 row does; `CHANGELOG.md`, `docs/postmortems/` and
+`docs/adl/`, this record included, are dated text. It returns **1907** hits on `origin/main`.
 
 | Site | Today | Follow-up |
 |---|---|---|
-| `.claude/hooks/block-destructive-git.sh` (245) and its test (408) | One guard matches `gh` merge, approval and label commands beside the destructive-git refusals | Split into the method half and the GitHub host half, failing closed |
-| `docs/reference/method/tracker-mechanics.md` (136) | GitHub commands, with method rules among them — the author test | Commands into the GitHub product files, rules into the method |
-| `docs/reference/method/`: `contribution-workflow.md` (81), `ci-pipeline.md` (59), `idea-to-product.md` (24), `model-selection.md` (18), `ai-authoring.md` (13), `definition-of-done.md` (5), `source-lines.md` (1) | State labels, board fields, sub-issue nesting, `Closes #N`, the close rules and `gh` commands as method rules | Restated as concepts; label, field and syntax move to the product files |
-| `CLAUDE.md` (21) | Keys Model selection by context label; names `gh pr merge`, `gh` refusals and board fields in method rules | Keyed by work type; names the concepts |
-| `docs/reference/work-types/` (124, in 24 files) | Keys its directories and rules by context label; `decompose` parks with `needs-approval`, sub-issue edges and Size | Keyed by work type; gates and edges named as concepts |
-| `.claude/skills/` and `.claude/agents/` (116, in 14 files) | Step skills spell `gh` commands, `Closes #`, labels and board moves | Rewritten against concepts, the commands moving to the product files; `cleanup` closes the item |
-| `.github/workflows/close-guard.yml` (13) | Holds the docs-only close rule in CI alone | The rule moves into `cleanup`; the workflow may stay as its GitHub wiring |
-| `.github/check-source-lines.py` (6) and its test (4) | A method check fetches the issue through `gh api` | Reaches the tracker through its product file's CLI/REST route |
-| `.github/check-method.py` (64) and its test (16) | Checks the profile's context labels against the Model selection rows | Checks work types, and gains the product-file coverage rule |
+| `.claude/hooks/block-destructive-git.sh` (272) and its test (420) | One guard matches `gh` merge, approval and label commands beside the destructive-git refusals | Split into the method half and the GitHub host half, failing closed |
+| `docs/reference/method/tracker-mechanics.md` (162) | GitHub commands, with method rules among them — the author test | Commands into the GitHub product files, rules into the method |
+| `docs/reference/method/`: `contribution-workflow.md` (105), `ci-pipeline.md` (71), `idea-to-product.md` (45), `model-selection.md` (21), `ai-authoring.md` (16), `definition-of-done.md` (6), `source-lines.md` (4) | State labels, board fields and columns, sub-issue nesting, the close keywords and rules, and `gh` commands as method rules | Restated as concepts; label, field and syntax move to the product files |
+| `CLAUDE.md` (24) | Keys Model selection by context label; names `gh pr merge`, `gh` refusals and board fields in method rules | Keyed by work type; names the concepts |
+| `docs/reference/work-types/` (152, in 24 files), and its overlay path in `profile.md` and `profile.yml` (2) | Keys its directories and rules by context label; `decompose` parks with `needs-approval`, sub-issue edges and Size | Keyed by work type; gates and edges named as concepts |
+| `.claude/skills/` and `.claude/agents/` (149, in 15 files) | Step skills spell `gh` commands, `Closes #`, labels, board moves and who closes an item | Rewritten against concepts, the commands moving to the product files; `cleanup` closes the item |
+| `.github/workflows/close-guard.yml` (28) | Holds the docs-only close rule in CI alone | The rule moves into `cleanup`; the workflow may stay as its GitHub wiring |
+| `.github/check-source-lines.py` (8) and its test (8) | A method check fetches the issue through `gh api` | Reaches the tracker through its product file's CLI/REST route |
+| `.github/check-method.py` (67) and its test (24) | Checks the profile's context labels against the Model selection rows | Checks work types, and gains the product-file coverage rule |
+| `.github/workflows/upstream-drift.yml` (17), `check-upstream-drift.py` (7) and its test (1) | Files and updates its report issue outside a session via `gh issue` and the `workflow` label; the report expects a closing PR and GitHub's body format | Reaches the tracker through its product file's CLI/REST route, the label mapped to the work type; its upstream commit reads are no role's |
 
-246 hits conform: the bot wrapper, its test and its CI step (31), `setup-labels.sh` (36), the
-issue forms (34), `upstream-drift.yml` (12) and `release.yml` (2) are GitHub-side content or
-wiring; `profile.md` (37), `profile.yml` (20), `profile-env.sh` (5) and `.claude/settings.json`
-(69) are the instance and harness side. Out of scope: 11 hits whose label or size is no
-tracker's — the vendored `domain-driven-design` skill (6), `.claude/vendor/` (3) and two badge
-labels in `ci.yml` and `coverage.yml` — keep their own sense.
+269 hits conform: the bot wrapper, its test and its CI step (34), `setup-labels.sh` (38), the
+issue forms (34), `release.yml` (3), `release-please.yml`, `dependabot.yml` and `SECURITY.md` (1
+each) are GitHub-side content or wiring; `profile.md` (57), `profile.yml` (25), `profile-env.sh`
+(6) and `.claude/settings.json` (69) are the instance and harness side. Out of scope: 29 hits
+keep a non-tracker sense — the `domain-driven-design` skill (9), `.claude/vendor/` (4), two
+badge labels in `ci.yml` and `coverage.yml`, the flow's closing step and a closed set in
+`decomposition-checklist.md` (10) and `decompose/review.md` (1), a fail-closed gate in
+`check-authoring-rules.sh` (1), and a close in `async-python-patterns` and
+`python-anti-patterns` (1 each).
