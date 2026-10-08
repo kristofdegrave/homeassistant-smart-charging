@@ -842,7 +842,18 @@ run ALLOW "gh pr merge 1234 --squash --admin --subject 'fix' --match-head-commit
 LR=$STUB/loop
 git init -q -b main "$LR/origin.git" --bare
 git init -q -b main "$LR/wt"
-g() { git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1; }
+# A fixture step that fails is reported as a fixture failure: left silent, it would surface as
+# the next case's verdict instead. A merge meant to stop in a conflict uses gc, which fails the
+# same way when the merge does not leave one.
+g() {
+  git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1 && return
+  printf 'FAIL fixture: git %s\n' "$*"; fail=1; return 1
+}
+gc() {
+  git -C "$LR/wt" -c user.name=t -c user.email=t@t "$@" >/dev/null 2>&1
+  git -C "$LR/wt" rev-parse -q --verify MERGE_HEAD >/dev/null && return
+  printf 'FAIL fixture: git %s left no conflict\n' "$*"; fail=1; return 1
+}
 mkdir -p "$LR/wt/src" "$LR/wt/.github" "$LR/wt/docs"
 echo a > "$LR/wt/src/a.py"; echo a > "$LR/wt/.github/ci.yml"; echo a > "$LR/wt/CLAUDE.md"
 g add -A; g commit -qm base; g remote add origin "$LR/origin.git"; g push -q origin main
@@ -1080,7 +1091,7 @@ run ALLOW "git push origin task" "$LR/wt"                              # main mo
 g merge -q --no-edit main
 run ALLOW "git push origin task" "$LR/wt"                              # a merge of main brings harness content in: not the branch's
 g checkout -q main; echo m2 > "$LR/wt/.github/ci.yml"; echo mainside > "$LR/wt/src/a.py"; g commit -qam main2; g push -q origin main
-g checkout -q task; echo taskside > "$LR/wt/src/a.py"; g commit -qam taskside; g merge main
+g checkout -q task; echo taskside > "$LR/wt/src/a.py"; g commit -qam taskside; gc merge main   # conflicts on src/a.py, as meant
 echo resolved > "$LR/wt/src/a.py"; g add src/a.py
 run ALLOW "git commit -m x" "$LR/wt"                                   # finishing a conflicted merge of main: its harness change is main's
 echo mine > "$LR/wt/.github/ci.yml"; g add .github/ci.yml
@@ -1092,7 +1103,7 @@ rm -f "$LR/wt/src/a b.py"
 g checkout -q main; echo s > "$LR/wt/.github/a b.yml"; g add -A; g commit -qm spaced; g push -q origin main
 g checkout -q task; g merge -q --no-edit main; echo t > "$LR/wt/src/a.py"; g commit -qam t2
 g checkout -q main; g rm -q ".github/a b.yml"; echo u > "$LR/wt/src/a.py"; g commit -qam unspace; g push -q origin main
-g checkout -q task; g merge main; echo r > "$LR/wt/src/a.py"; g add src/a.py
+g checkout -q task; gc merge main; echo r > "$LR/wt/src/a.py"; g add src/a.py
 run BLOCK "git commit -m x" "$LR/wt"                                   # a merge's staged deletion of a quoted harness path: closed, not excepted
 g commit -qm merged2
 run BLOCK "git push origin nosuchbranch" "$LR/wt"                      # a source git cannot diff: closed
