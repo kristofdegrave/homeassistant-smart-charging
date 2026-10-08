@@ -75,8 +75,8 @@ board.
 
 **C2 — Shapes Jira also fits**: context is three concepts — work type (the Model selection
 row), level (idea, epic, task), kind (bug, enhancement) — each mapped per product; exactly two
-levels, epic → task, a strand too large for one epic becoming sibling epics; the board (Size,
-Estimate, Status, Priority) is an optional tracker capability the profile declares.
+nesting levels, epic → task, a strand too large for one epic becoming sibling epics; the board
+(Size, Estimate, Status, Priority) is an optional tracker capability the profile declares.
 - Pro: maps onto GitHub sub-issues and Jira Epic → Story without a paid tier.
 - Con: no nested epics, and every board rule applies only where the profile declares the board.
 
@@ -125,9 +125,11 @@ with the product. This record does not decide what a milestone means; ADR-0052 s
 
 - **Follow-up**: the concept document; a GitHub work-tracker file, the board an opt-in setup
   section; a GitHub change-host file, with CI wiring and release setup; the profile selecting a
-  product per role, and the method check's coverage rule; the rewrites the Blast radius rows.
+  product per role, and the method check's coverage rule; the rewrites the Blast radius rows
+  list.
 - **`tracker-mechanics.md` splits**: its commands become the GitHub product files' content, its
-  rules move into the method. "Never `gh issue close`" leaves the method.
+  rules move into the method. `contribution-workflow.md`'s "never `gh issue close`" leaves the
+  method.
 - **ADR-0054 is narrowed**, not superseded: A3's one author test moves from beside the tracker
   recipe into the method, the product file keeping how the write-access association is read.
   The autopilot's settings allow-list each product's MCP tools under its model.
@@ -154,8 +156,8 @@ rg -n --hidden \
 Wide enough because each pattern covers one thing the decision moves, prose words in any case
 and names as spelt: how the method reaches a product — `gh` however spelt, its bot wrapper,
 GitHub and its APIs (A3, B2, E2); closing in every form and the reference keywords (D2); the
-labels its gates and routing key on (C2); the board by field and column (bare Status would add
-mostly ADR lines), and C2's nesting. Issue, PR and epic are concept names the concept document
+labels its gates and routing key on (C2); the board by field and column (board-Status lines
+all lie in hit files), and C2's nesting. Issue, PR and epic are concept names the concept document
 may keep. No MCP server is configured. Outside the four paths the patterns find no site: code,
 tests, analysis, design and README use the words in a plain, Home Assistant or domain sense or
 recount a past record, as §8.3's ADR-0048 row does; `CHANGELOG.md`, `docs/postmortems/` and
