@@ -213,11 +213,13 @@ MAX_CONTROL_INTERVAL_S = 30
 # `peak_window_size` derivation (SmartChargingConfig, issue #570) is this constant's only reader.
 PEAK_WINDOW_SECONDS = 900
 # Issue #990: how many consecutive cycles a lower (more permissive) baseline_w reading must
-# hold before `debounce_baseline_w` accepts it -- covers the charger_power adapter's own
-# slow Modbus poll lagging one extra cycle behind the fast net-meter reading after a charger
-# current step-down. Not user-configurable -- an internal tuning constant, not a config value.
-# Must be >= 2: `debounce_baseline_w`'s own pending-cycle count starts at 1 on the very first
-# below-accepted reading, so 1 (or 0) would make the debounce a silent no-op.
+# hold before `debounce_baseline_w` accepts it -- covers a headroom increase a reading alone can
+# show: the charger_power adapter's own slow Modbus poll lagging behind the fast net-meter
+# reading, which ADR-0059's lower charger term (the set current bounds the reading) now keeps
+# out of the baseline for a step down, leaving case (b) the increases that remain. Not
+# user-configurable -- an internal tuning constant, not a config value. Must be >= 2:
+# `debounce_baseline_w`'s own pending-cycle count starts at 1 on the very first below-accepted
+# reading, so 1 (or 0) would make the debounce a silent no-op.
 BASELINE_DEBOUNCE_CYCLES = 2
 # ADR-0039/R3: this value is also load-bearing for R3's "no run of consecutive deferrals exceeds
 # 3 control cycles" criterion, which holds only at exactly 2 (worst case: case (a) defers, case

@@ -1,7 +1,7 @@
 """T3 (epic #996): a whole-stack scenario runs R3 and C4 live and binding under charger-power
 lag -- the tier's ADR-0037 placement rule for a tier-3 scenario (every engine live, R3 and C4
 both binding at the start), on top of T1's single-clamp C4 reproduction and T2's per-member
-mutation tests. Both bind only until step 4 (see "R3's own exposure").
+mutation tests. Both clamps run on every step (see "R3 and this run").
 
 `Power` with CapTar present and its own peak-protection option left at its default (R17's
 default, `DEFAULT_POWER_RESPECT_PEAK = True`): both clamps run on every cycle (`_apply_peak_clamp`
@@ -19,18 +19,17 @@ set charger current (ADR-0058; requirements.md's C4 row,
 on every step while C4 binds on the lagging reading (ADR-0058's Option D accepts this), but true
 import stays within both limits every step, so the whole invariant set judges every step green.
 
-**R3's own exposure.** R3's debounce still commits the corrupted baseline (-690 W) at step 4;
-from then on R3's headroom is 26 A, above the 16 A target, so R3 stops binding and C4 alone
-holds both limits, step for step as in the C4-alone run. That R3's debounce commits a corrupted
-reading under a sustained command oscillation is R3's criteria at work, not only C4's: any
-oscillating command, Solar's moving request among them (`debounce_baseline_w`'s docstring), can
-trigger it. #1584 records it; this world still oscillates, so it still exercises that exposure,
-and what it shows is that the oscillation now stays within both limits here.
+**R3 and this run.** Since ADR-0059, R3's baseline takes the same lower charger term as C4's
+(the lower of the reading and the last set current), so the commanded 13 A / 0 A alternation no
+longer corrupts the baseline its debounce commits. The run is consistent with R3 binding at 13 A
+on every step, but cannot tell it from C4 here (both headrooms are 13 A, and the test asserts
+neither): it passed on main too, where C4 alone held both limits. Before ADR-0059 the debounce
+committed a corrupted baseline (-690 W) at step 4 and R3's headroom became 26 A.
 
 **Attribution.** The R3-alone test (C4 bypassed) shows R3 holding its own headroom on this
-world under a *steady* command; it does not show R3 stable under an oscillating one (#1584). The
-C4-alone test (R3 bypassed) shows C4 alone holding the grid supply ceiling on this world, where
-Power's target alone would exceed it.
+world under a *steady* command. The C4-alone test (R3 bypassed) shows C4 alone holding the grid
+supply ceiling on this world, where Power's target alone would exceed it. R3's hold under a
+command oscillation with C4 *not* a backstop is `test_peak_under_command_oscillation.py`'s.
 
 **Parameters** (ADR-0037's invariant-oracle rule: honest, not tuned to dodge a member). One
 steady household load, no step: the oscillation is self-sustaining from the startup transient
