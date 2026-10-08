@@ -1346,6 +1346,14 @@ runr "approve flag behind a command" "A=x\\ git gh pr review 5 --approve" # ... 
 runr "behind a command the guard does not read" "A=x\\ gh gh pr merge 5 --merge --admin" # ... a gh piece
 runr "behind a command the guard does not read" "A=\"x\"\\ git gh pr merge 5 --merge --admin" # ... after a quote
 runr "behind a command the guard does not read" "env A=x\\ git gh pr merge 5 --merge --admin" # ... behind a wrapper
+runr "behind a command the guard does not read" "A=x\\\\\\ git gh pr merge 5 --merge --admin" # ... an odd run of three
+runr "force-pushing" "A=x\\\\ git push --force"                       # an even run is a real blank: git is found
+runr "force-pushing" "A='x\\ ' git push --force"                      # a backslash inside single quotes escapes nothing
+runr "force-pushing" "A=\"x\\ \" git push --force"                    # ... inside double quotes, the blank is quoted
+runr "force-pushing" "A=\$'x\\ ' git push --force"                    # ... inside an ANSI-C quote too
+TOOL=PowerShell
+runr "force-pushing" "env -C D:\\GIT\\repo\\ git push --force"         # under PowerShell a backslash is a path separator
+TOOL=Bash
 runr "force-pushing" "\\git push --force"                              # a leading backslash still names git
 run ALLOW "A=x git status" "$LR/wt"                                    # a plain prefix assignment
 run ALLOW "git log -- a\\ b" "$LR/wt"                                  # an escaped blank after git

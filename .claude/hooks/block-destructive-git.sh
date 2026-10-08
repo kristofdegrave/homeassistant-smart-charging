@@ -134,7 +134,8 @@
 # `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. A git or gh that is the
 # second piece of a quoted or escaped blank (`A="x git" gh ...`, `A=x\ git gh ...`) is no
 # first word, here as in the loop: the walk stops on it as on an unknown word, so the words
-# alone decide. Even then a segment that
+# alone decide. The escaped blank is read for sh only, outside quotes: PowerShell's backtick
+# escape (`` A=x` git gh ... ``) is not read, conceded. Even then a segment that
 # carries a command or process substitution (`$(`, a backtick, `<(`, `>(`; under PowerShell
 # any `(`) or a background `&` is refused, since the command it starts runs whatever word
 # heads the segment, and so is prose carrying the
@@ -1913,15 +1914,35 @@ for seg in $1; do
   # `$`, a backtick, a quote, a backslash, `)` or `}`: the shell may build or join words there
   # that the walk's split does not see (see below the walk).
   wodd=0
-  # Set when the word the walk last stepped over ends in an odd run of backslashes: an escaped
-  # blank (`A=x\ git gh ...`) joins it to the next word, which is then no command word.
+  # Set when the word the walk last stepped over ends in an odd run of backslashes outside
+  # quotes: an escaped blank (`A=x\ git gh ...`) joins it to the next word, which is then no
+  # command word. Inside a quote it left open (`A='x\ ' git`, `A=$'x\ ' git`) the blank is
+  # quoted, not escaped, and under PowerShell a backslash is a path separator, not an escape.
   _cont=0
   while [ $# -gt 0 ]; do
     case "$1" in *[\$\`\'\"\)\}\\]*) wodd=1 ;; esac
     if [ "$_cont" = 1 ]; then interp=$1; break; fi
     _b=$1
     while :; do case "$_b" in *'\\') _b=${_b%??} ;; *) break ;; esac; done
-    case "$_b" in *'\') _cont=1 ;; esac
+    case "$tool:$_b" in
+      PowerShell:*) ;;
+      *'\')
+        # Whether the word leaves a quote open, read as `expands` reads quotes, with `$'`
+        # opening an ANSI-C quote in which a backslash escapes; exit 0 is open.
+        printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+          q = ""
+          for (i = 1; i <= length(s); i++) {
+            c = substr(s, i, 1)
+            if (q == sq) { if (c == sq) q = ""; continue }
+            if (q == "a") { if (c == bs) i++; else if (c == sq) q = ""; continue }
+            if (c == bs) { i++; continue }
+            if (q == dq) { if (c == dq) q = ""; continue }
+            if (c == "$" && substr(s, i + 1, 1) == sq) { q = "a"; i++; continue }
+            if (c == sq || c == dq) q = c
+          }
+          exit (q == "") ? 1 : 0 }'
+        [ $? = 0 ] || _cont=1 ;;
+    esac
     tok=$1
     # Surrounding quotes, a leading & (`"gh"`, `&gh`), and the opener of a substitution or
     # subshell are not part of the command's name; the cut to the last path part below
@@ -2020,9 +2041,9 @@ for seg in $1; do
     done
   fi
   # In the loop, a walk that found no git or gh after reaching a word carrying `$`, a
-  # backtick, a quote, `)` or `}` may have stopped on a substitution's command (`A=$( x )
-  # git`, `$(x) git`, a segment a split cut inside one) or on a quoted blank's second piece
-  # (`A="x y" git`), so the git or gh behind it would meet no loop rule. Refuse, don't parse:
+  # backtick, a quote, a backslash, `)` or `}` may have stopped on a substitution's command
+  # (`A=$( x ) git`, `$(x) git`, a segment a split cut inside one) or on a quoted or escaped
+  # blank's second piece (`A="x y" git`, `A=x\ y git`), so the git or gh behind it would meet no loop rule. Refuse, don't parse:
   # any later word naming one -- its last path part, quotes and a substitution's opener or
   # closer stripped -- refuses the segment. The match is loose on purpose (`echo git`, a bare
   # `D:/GIT` refuse too); the header concedes it.
