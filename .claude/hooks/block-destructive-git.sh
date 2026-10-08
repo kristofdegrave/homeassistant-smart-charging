@@ -131,7 +131,11 @@
 # `$`, `&`, `{` or path separator are stripped; case ignored) is refused unless its first
 # word is gh itself -- inspected under the rule above, and refused if a wrapper (`sudo`,
 # `env`, `xargs`, `timeout`, ...) sat before it -- or one of the prose commands `echo`,
-# `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. Even then a segment that
+# `printf`, `grep`, `rg`, `cat` and `git`, whose text is a mention. A git or gh that is the
+# second piece of a quoted or escaped blank (`A="x git" gh ...`, `A=x\ git gh ...`) is no
+# first word, here as in the loop: the walk stops on it as on an unknown word, so the words
+# alone decide. The escaped blank is read for sh only, outside quotes: PowerShell's backtick
+# escape (`` A=x` git gh ... ``) is not read, conceded. Even then a segment that
 # carries a command or process substitution (`$(`, a backtick, `<(`, `>(`; under PowerShell
 # any `(`) or a background `&` is refused, since the command it starts runs whatever word
 # heads the segment, and so is prose carrying the
@@ -251,11 +255,20 @@
 # -- quotes and backslashes removed (unq), and case ignored where gh or the rule ignores it --
 # where the loop file's text rules read what was typed (see loop_git_rule and
 # gh_loop_label_rule); a git or gh word carrying `$`, which the shell builds (an ANSI-C quote,
-# a variable), is refused rather than read, and so is a git or gh command bash would expand
-# -- a brace list or range, or a glob, outside quotes (`expands`), which git or gh would get
-# expanded. Every rule also reads a second split of the command, on `;`, `&&`, `||`, `|`, a
-# background `&` and a newline outside quotes and not escaped, a comment and a heredoc's body
-# dropped (`split_unquoted`). So a quoted or escaped separator (`git --namespace ';' -c ...`)
+# a variable), is refused rather than read, and so is a git or gh segment carrying a backtick
+# outside single quotes or a process substitution (`<(`, `>(`) outside quotes, whose command
+# the shell runs to build a word (`substitutes`). A walk that finds no git or gh after
+# reaching a word -- stepped over or stopped on -- carrying `$`, a backtick, a quote, a
+# backslash, `)` or `}` may have stopped inside a substitution (`A=$( x ) git`, `$(x) git`,
+# `A=${ x; } git`, a segment a split cut inside one) or on a quoted or escaped blank's second
+# piece (`A="x y" git`, `A=x\ y git`), so any later word naming git or gh refuses; a git or gh
+# carrying a quote that does not wrap it whole (`A="x git" gh ...`, whose `git"` is that
+# second piece), or following a stepped-over word that ends in an odd run of backslashes
+# (`A=x\ git gh ...`), is no git or gh found. A git or gh command bash would expand -- a
+# brace list or range, or a glob, outside quotes (`expands`) -- is refused too, since git or
+# gh would get it expanded. Every rule also reads a second split of the command, on `;`,
+# `&&`, `||`, `|`, a background `&` and a newline outside quotes and not escaped, a comment
+# and a heredoc's body dropped (`split_unquoted`). So a quoted or escaped separator (`git --namespace ';' -c ...`)
 # does not leave the rest of a git or gh command in a segment no git rule reads -- except
 # after a quote inside a command substitution within double quotes, which neither reading
 # reads as bash does. The plain split still runs, since it is the one that splits inside a
@@ -290,8 +303,8 @@
 # diffs against the fully named `refs/remotes/origin/main`, so a tag or branch called
 # `origin/main` does not shadow it; a fetch of origin moves it, and so can a push into it,
 # whose own diff against the ref as it stands still guards that push. `gh pr edit
-# --remove-label` passes: it is the admitted gesture. Conceded: the reading is lossy -- a backslash the shell keeps inside
-# single quotes is dropped, so a Windows path spelled with backslashes refuses; a fetch
+# --remove-label` passes: it is the admitted gesture. Conceded: the reading is lossy -- a
+# backslash the shell keeps inside single quotes is dropped, so a Windows path spelled with backslashes refuses; a fetch
 # option given its value as a separate word (`--depth 1`) refuses as unread, `--depth=1` is
 # the workaround; a request body read from a file (`-F query=@file`, `--input`) is not read
 # by the label and GraphQL rules -- the settings file's `ask` rules hold those forms; a
@@ -301,12 +314,24 @@
 # -F <file>` is the workaround; an unquoted `?`, `*` or `[`, `@(`, `+(` or `!(`, or a `{`
 # with a later `,` or `..` and `}`, refuses where bash would leave it as typed (a `gh api`
 # path with a query string, `@{1}..x@{1}`, a trailing `# why?`) -- quoting it is the
-# workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too; a
-# redirection attached to a checkout operand (`task>/dev/null`) refuses -- a space before
-# it is the workaround; a heredoc under an unquoted delimiter whose body has a line ending
-# in a single backslash (a commit message or PR body fed by `<<EOF`) refuses -- quoting the
-# delimiter (`<<'EOF'`) is the workaround; a checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is not read, and the loop admits
-# no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
+# workaround; a `$` anywhere in a git or gh segment refuses, a prefix assignment's too, and so
+# does a backtick that is not inside single quotes, an escaped one or one in a comment
+# included -- so a `-m` message holding a backtick inside double quotes refuses, `commit -F
+# <file>` is the workaround, and so does a gh `--body` or `--title` holding Markdown
+# backticks in double quotes, `--body-file` or single quotes the workaround -- and a `<(`
+# or `>(` outside quotes, though `git diff --no-index <(...) <(...)` only reads; when a
+# segment's leading words up to its command word carry `$`, a backtick, a quote, a
+# backslash, `)` or `}` (a quoted assignment value, a quoted or Windows command path, a
+# substitution's close) and it names no git or gh first, any later word whose last path part
+# is `git` or `gh` refuses, a mention too (`A="x y" echo git`, `"/opt/x" log D:/GIT`,
+# `C:\tools\x.exe git`), and so does a git behind a quoted or escaped blank in a prefix value
+# (`A="x y" git status`, `A="x git" git status`, `A=x\ y git status`) and a quoted command
+# path split at a blank (`"C:/Program Files/gh.exe" ...`); a redirection attached to a checkout
+# operand (`task>/dev/null`) refuses -- a space before it is the workaround; a heredoc under
+# an unquoted delimiter whose body has a line ending in a single backslash (a commit message
+# or PR body fed by `<<EOF`) refuses -- quoting the delimiter (`<<'EOF'`) is the workaround;
+# a checkout of a branch that is also a tracked path refuses; PowerShell's backtick escape is
+# not read, and the loop admits no PowerShell; the repository is the hook's own as checked out, or a `GUARD_REPO` in the
 # environment, which the test suite sets; `--path-format=absolute` needs git 2.31, and an
 # older git refuses every loop git; and a word the scan does not see (the indirection class
 # above), a brace or glob in the command word itself (`{gh,}`, `g?t`) included.
@@ -603,6 +628,25 @@ expands() {
       o = o c
     }
     exit (o ~ /[{].*(,|[.][.]).*[}]|[[*?]|[+@!][(]/) ? 0 : 1 }'
+  [ $? != 1 ]
+}
+# In the loop, whether a segment runs a command the guard does not read: a backtick anywhere
+# but inside single quotes -- escaped or not, so no escape is weighed -- or a `<(` or `>(`
+# outside quotes. Quotes are tracked as `expands` tracks them; any exit but 1 -- an awk that
+# fails -- counts as substituting.
+substitutes() {
+  printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' -v bt='`' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+    q = ""
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (q == sq) { if (c == sq) q = ""; continue }
+      if (c == bt || c == bs && substr(s, i + 1, 1) == bt) exit 0
+      if (c == bs) { i++; continue }
+      if (q == dq) { if (c == dq) q = ""; continue }
+      if (c == sq || c == dq) { q = c; continue }
+      if ((c == "<" || c == ">") && substr(s, i + 1, 1) == "(") exit 0
+    }
+    exit 1 }'
   [ $? != 1 ]
 }
 
@@ -1866,7 +1910,39 @@ for seg in $1; do
   # Set once the walk steps over a redirection, or meets git or gh with one attached: a git
   # or gh it then reaches is refused, not read (see below the walk).
   redir_seen=0
+  # Set once a word the walk reaches -- one it steps over, or the one it stops on -- carries
+  # `$`, a backtick, a quote, a backslash, `)` or `}`: the shell may build or join words there
+  # that the walk's split does not see (see below the walk).
+  wodd=0
+  # Set when the word the walk last stepped over ends in an odd run of backslashes outside
+  # quotes: an escaped blank (`A=x\ git gh ...`) joins it to the next word, which is then no
+  # command word. Inside a quote it left open (`A='x\ ' git`, `A=$'x\ ' git`) the blank is
+  # quoted, not escaped, and under PowerShell a backslash is a path separator, not an escape.
+  _cont=0
   while [ $# -gt 0 ]; do
+    case "$1" in *[\$\`\'\"\)\}\\]*) wodd=1 ;; esac
+    if [ "$_cont" = 1 ]; then interp=$1; break; fi
+    _b=$1
+    while :; do case "$_b" in *'\\') _b=${_b%??} ;; *) break ;; esac; done
+    case "$tool:$_b" in
+      PowerShell:*) ;;
+      *'\')
+        # Whether the word leaves a quote open, read as `expands` reads quotes, with `$'`
+        # opening an ANSI-C quote in which a backslash escapes; exit 0 is open.
+        printf '%s' "$1" | awk -v sq="'" -v dq='"' -v bs='\\' '{ s = s (NR > 1 ? "\n" : "") $0 } END {
+          q = ""
+          for (i = 1; i <= length(s); i++) {
+            c = substr(s, i, 1)
+            if (q == sq) { if (c == sq) q = ""; continue }
+            if (q == "a") { if (c == bs) i++; else if (c == sq) q = ""; continue }
+            if (c == bs) { i++; continue }
+            if (q == dq) { if (c == dq) q = ""; continue }
+            if (c == "$" && substr(s, i + 1, 1) == sq) { q = "a"; i++; continue }
+            if (c == sq || c == dq) q = c
+          }
+          exit (q == "") ? 1 : 0 }'
+        [ $? = 0 ] || _cont=1 ;;
+    esac
     tok=$1
     # Surrounding quotes, a leading & (`"gh"`, `&gh`), and the opener of a substitution or
     # subshell are not part of the command's name; the cut to the last path part below
@@ -1909,9 +1985,18 @@ for seg in $1; do
     esac
     case "$tok" in
       # An assignment whose value is a command substitution (`r=$(gh pr merge ...)`) runs
-      # that command: read it as the next word, and a merge there as a wrapped one.
-      *='$('?* | *='`'?* | *='"$('?*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; continue ;;
+      # that command: read it as the next word, and a merge there as a wrapped one. A bare
+      # opener (`A=$( cmd )`) reads as an empty word, stepped over like `&`.
+      *='$('* | *='`'* | *='"$('*) tok=${tok#*=}; shift; set -- "$tok" "$@"; gh_wrapped=1; continue ;;
       *=*) shift; continue ;;
+    esac
+    # A git or gh carrying a quote that does not wrap it whole (`git"`, `'gh`) is a quoted
+    # blank's second piece (`A="x git" ...`), not a command word: the walk stops on it as on
+    # an unknown word, so the word rules below the walk read what follows.
+    _qw=${1%%[<>]*}
+    case "$_qw" in \"*\" | \'*\') _qw=${_qw#?}; _qw=${_qw%?} ;; esac
+    case "$name:$_qw" in
+      [gG][iI][tT]:*[\"\']* | [gG][hH]:*[\"\']*) interp=$tok; break ;;
     esac
     case "$name" in
       [gG][iI][tT]) found=git; shift; break ;;
@@ -1952,6 +2037,28 @@ for seg in $1; do
       case "${_n%.[eE][xX][eE]}" in
         [gG][iI][tT] | [gG][hH])
           deny "$seg" "a git or gh behind a redirection the guard could not read past is refused rather than read: put the redirection after the subcommand" ;;
+      esac
+    done
+  fi
+  # In the loop, a walk that found no git or gh after reaching a word carrying `$`, a
+  # backtick, a quote, a backslash, `)` or `}` may have stopped on a substitution's command
+  # (`A=$( x ) git`, `$(x) git`, a segment a split cut inside one) or on a quoted or escaped
+  # blank's second piece (`A="x y" git`, `A=x\ y git`), so the git or gh behind it would meet no loop rule. Refuse, don't parse:
+  # any later word naming one -- its last path part, quotes and a substitution's opener or
+  # closer stripped -- refuses the segment. The match is loose on purpose (`echo git`, a bare
+  # `D:/GIT` refuse too); the header concedes it.
+  if [ -z "$found" ] && [ "$wodd" = 1 ] && in_loop; then
+    for _a in "$@"; do
+      _n=${_a#[\"\']}
+      _n=${_n#'$('}
+      _n=${_n#[\`(]}
+      _n=${_n%%[\`)\"\']*}
+      _n=${_n##*[/\\]}
+      case "${_n%.[eE][xX][eE]}" in
+        [gG][iI][tT])
+          deny "$seg" "in the autopilot loop a git or gh behind a word carrying \$, a backtick, a quote, a backslash, ) or } is refused rather than read: the shell may build its command there, so no loop rule reaches it" "$HARNESS_TAIL" ;;
+        [gG][hH])
+          deny "$seg" "in the autopilot loop a git or gh behind a word carrying \$, a backtick, a quote, a backslash, ) or } is refused rather than read: the shell may build its command there, so no loop rule reaches it" "$LABEL_TAIL" ;;
       esac
     done
   fi
@@ -2091,6 +2198,10 @@ for seg in $1; do
     esac
     expands "$seg" &&
       deny "$seg" "in the autopilot loop a $found command bash would expand (a brace list or range, or a glob, outside quotes) is refused: the guard reads it as typed, $found gets what it expands to" "$_tail"
+    # A backtick or a process substitution runs a command whose output -- or a file naming
+    # it -- becomes a word, so it is refused the way `$` is, not parsed.
+    substitutes "$seg" &&
+      deny "$seg" "in the autopilot loop a $found segment carrying a backtick (outside single quotes) or a process substitution is refused: the shell runs a command there and builds words from it where the guard cannot read them" "$_tail"
   fi
   if [ "$found" = gh ]; then
     [ "$wrapper" = 0 ] || gh_wrapped=1
