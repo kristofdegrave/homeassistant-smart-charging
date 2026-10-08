@@ -179,7 +179,11 @@
 # (PowerShell's `--%` or array commas) stays in the indirection class above. `--body-file`,
 # forward slashes and redirections last are the workarounds; the `git restore --staged`
 # whole-tree exemption is dropped on the same signs, or any `<` or `>`, in its segment, and
-# carries the same concession: PowerShell's `--%` or array commas stay unread there too. The
+# carries the same concession: PowerShell's `--%` or array commas stay unread there too. It
+# holds only for a `--staged` (or abbreviation) before any `--`, and is dropped by any
+# `--worktree` abbreviation or by a `W` in any single-dash word (`-W`, `-SW`, `-Ws HEAD`), a
+# `-s` value carrying one (`-sWIP`) refused too; the short `-S` is not read as `--staged`, so
+# `git restore -S .` is refused (conceded: spell it `--staged`). The
 # facts come from `gh`
 # as the account running the session; the merge itself is the human's `--admin` merge. Not
 # checked here: the lane cap (`autopilot.lanes`) and what gh does with flags this rule does
@@ -2314,11 +2318,22 @@ EOF
       # left alone unless the working tree is in scope too. The exemption trusts one word, so
       # it holds only where the words are the shell's own: not across a quote spanning a blank
       # or an escaped blank (split_trusted), and not beside any `<` or `>`, whose target the
-      # `--staged` may be (`git restore . <> --staged`).
+      # `--staged` may be (`git restore . <> --staged`). `--staged` counts only before a `--`
+      # (after it, a pathspec); `--worktree` in any abbreviation, or a `W` in any single-dash
+      # word -- git's short `-W`, alone or clustered -- puts the working tree in scope. A `-s`
+      # value carrying a W (`-sWIP`) is refused too, and the short `-S` is not read as
+      # `--staged`: both false refusals, conceded in the header.
       if has_exact . "$@" || has_exact ./ "$@" || has_exact :/ "$@"; then
         unstage=0
-        if [ "$sub" = restore ] && has_long '--sta*' "$@" && ! has_long '--w*' "$@" &&
-          split_trusted "$seg"; then
+        staged=0
+        for t in "$@"; do
+          case "$t" in
+            --) break ;;
+            --sta*) staged=1 ;;
+          esac
+        done
+        if [ "$sub" = restore ] && [ "$staged" = 1 ] && ! has_long '--w*' "$@" &&
+          ! has_short_flag W "$@" && split_trusted "$seg"; then
           case "$seg" in *'<'* | *'>'*) ;; *) unstage=1 ;; esac
         fi
         # unstaging the whole tree changes no file content

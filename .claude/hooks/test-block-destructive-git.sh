@@ -191,6 +191,13 @@ run BLOCK 'git branch -df some-branch'
 run BLOCK 'git branch -d --force some-branch'
 run BLOCK 'git branch --delete -f some-branch'
 run BLOCK 'git restore --staged --work .'
+# git's short -W is --worktree, alone or in a cluster; the short -S is not read as --staged.
+runr "whole working tree" 'git restore --staged -W .'
+runr "whole working tree" 'git restore -SW .'
+runr "whole working tree" 'git restore --staged -SW .'
+runr "whole working tree" 'git restore --staged -Ws HEAD .'     # -s takes HEAD
+runr "whole working tree" 'git restore -S .'                    # conceded: spell it --staged
+runr "whole working tree" 'git restore -- --staged .'           # after --, a pathspec
 # The unstage exemption trusts the word --staged only where it is the shell's own word.
 runr "whole working tree" 'git restore "a --staged" .'          # a piece of a quoted pathspec
 runr "whole working tree" 'git restore . > out\ --staged'       # a target continued through an escaped blank
@@ -244,6 +251,8 @@ run ALLOW 'git rebase --abort'
 run ALLOW 'git rebase --continue'
 run ALLOW 'git rebase --autostash --continue'
 run ALLOW 'git restore --stage .'
+run ALLOW 'git restore --staged -- .'
+run ALLOW 'git restore --staged --no-worktree .'
 run ALLOW 'sudo -u someone git status'
 run ALLOW 'gh pr create --base main --title x'
 run ALLOW 'ruff check .'
